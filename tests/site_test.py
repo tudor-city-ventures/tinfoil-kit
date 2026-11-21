@@ -63,6 +63,7 @@ with sync_playwright() as p:
         page.wait_for_timeout(250)
         check(f"{name}: hero draws and moves", inked > 5000 and page.evaluate(FRAME) != before, f"{inked} inked pixels")
         page.click(".viz-pause")
+        page.evaluate("new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")   # let a queued redraw land
         before = page.evaluate(FRAME)
         page.wait_for_timeout(250)
         check(f"{name}: Pause holds the hero still", page.evaluate(FRAME) == before and page.inner_text(".viz-pause") == "Play")

@@ -1,0 +1,150 @@
+name: drive test
+# The kit on a real exFAT disk: set up on a Mac, then plugged into Windows and Linux (tests/drive_test.sh).
+# Nightly, and by hand (Actions > drive test > Run workflow) once the bulk of a change is done.
+# Mac minutes cost money while the repo is private, so pushes run it only once the repo is public.
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [tools/**, kit, kit.json, SETUP.command, START-HERE.command, START-HERE-Windows.bat, tests/drive*,
+            tests/build_fixtures.sh, tests/mock_remote.py, tests/ui_test.py, .github/workflows/drive.yml]
+concurrency:
+  group: drive-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  fixtures:
+    if: github.event_name != 'push' || !github.event.repository.private
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install gguf numpy libzim
+      - uses: actions/cache@v5
+        with:
+          path: tests/work/downloads
+          key: drive-downloads-${{ hashFiles('tests/build_fixtures.sh') }}
+      - run: tests/build_fixtures.sh drive
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v5
+        with:
+          name: mock-internet
+          path: tests/work/remote
+          retention-days: 1
+
+  mac:
+    needs: fixtures
+    runs-on: macos-26
+    timeout-minutes: 30
+    outputs:
+      drive: ${{ steps.made.outputs.drive }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install playwright && python -m playwright install webkit
+      - uses: actions/download-artifact@v5
+        with:
+          name: mock-internet
+          path: tests/work/remote
+      - run: tests/drive_test.sh mac
+      - id: made
+        if: ${{ !cancelled() }}
+        run: if [ -f tests/work/drive.vhd ]; then echo "drive=yes" >> "$GITHUB_OUTPUT"; fi
+      - if: ${{ !cancelled() && steps.made.outputs.drive == 'yes' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: drive
+          path: tests/work/drive.vhd
+          retention-days: 1
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: mac-logs-and-screenshots
+          path: |
+            tests/work/logs
+            tests/work/shots
+
+  windows:
+    needs: mac
+    if: ${{ !cancelled() && needs.mac.outputs.drive == 'yes' }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install playwright
+      - uses: actions/download-artifact@v5
+        with:
+          name: drive
+          path: tests/work
+      - name: Plug in the drive the Mac made and double-click START-HERE-Windows.bat
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force tests/work/logs, tests/work/shots | Out-Null
+          $disk = Mount-DiskImage -ImagePath (Resolve-Path tests/work/drive.vhd) -PassThru | Get-Disk
+          $part = Get-Partition -DiskNumber $disk.Number | Where-Object { (Get-Volume -Partition $_ -ErrorAction SilentlyContinue).FileSystem -eq 'exFAT' } | Select-Object -First 1
+          if (-not $part) { Get-Partition -DiskNumber $disk.Number | Format-List; throw "no exFAT partition on the drive" }
+          if (-not $part.DriveLetter) {
+            $part | Add-PartitionAccessPath -AssignDriveLetter
+            $part = Get-Partition -DiskNumber $disk.Number -PartitionNumber $part.PartitionNumber
+          }
+          $kit = "$($part.DriveLetter):\TinfoilKit"
+          "The drive is $($part.DriveLetter):"
+          Get-ChildItem -Force "$kit\library", "$kit\models" -Recurse | Select-Object -ExpandProperty FullName
+          Start-Process -FilePath "$kit\START-HERE-Windows.bat" -WorkingDirectory $kit
+          python tests/drive.py check 8888 8080
+          $checked = $LASTEXITCODE
+          Start-Sleep 5
+          try {
+            Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("tests/work/shots/windows-desktop.png")
+          } catch { "(no desktop screenshot here: $_)" }
+          $env:KIT_BROWSER = "msedge"; $env:KIT_LIBRARY_PORT = "8888"; $env:KIT_AI_PORT = "8080"
+          $env:KIT_TEST_SHOTS = "tests/work/shots/windows"
+          python tests/ui_test.py
+          if ($checked -ne 0 -or $LASTEXITCODE -ne 0) { exit 1 }
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: windows-screenshots
+          path: tests/work/shots
+
+  linux:
+    needs: mac
+    if: ${{ !cancelled() && needs.mac.outputs.drive == 'yes' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v5
+        with:
+          name: drive
+          path: tests/work
+      - run: tests/drive_test.sh linux
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: linux-logs
+          path: tests/work/logs

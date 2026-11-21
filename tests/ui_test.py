@@ -1,4 +1,5 @@
-"""Drive the real portal page in headless Chrome against the live kit servers."""
+"""Drive the real portal page in a headless browser against the live kit servers.
+KIT_BROWSER picks chromium (default), webkit (Safari's engine) or msedge; KIT_LIBRARY_PORT and KIT_AI_PORT the ports."""
 import os
 import sys
 from playwright.sync_api import sync_playwright
@@ -6,7 +7,10 @@ from playwright.sync_api import sync_playwright
 SHOTS = os.environ.get("KIT_TEST_SHOTS", os.path.join(os.path.dirname(__file__), "work", "shots"))
 os.makedirs(SHOTS, exist_ok=True)
 
-URL = "http://localhost:18888/?model=Tiny&ai=18080"   # localhost on purpose: must redirect to 127.0.0.1
+LIB = os.environ.get("KIT_LIBRARY_PORT", "18888")
+AI = os.environ.get("KIT_AI_PORT", "18080")
+BROWSER = os.environ.get("KIT_BROWSER", "chromium")
+URL = f"http://localhost:{LIB}/?model=Tiny&ai={AI}"   # localhost on purpose: must redirect to 127.0.0.1
 fails = 0
 
 
@@ -17,7 +21,12 @@ def check(name, ok, detail=""):
 
 
 with sync_playwright() as p:
-    b = p.chromium.launch(args=["--no-sandbox"])
+    if BROWSER == "webkit":
+        b = p.webkit.launch()
+    elif BROWSER == "msedge":
+        b = p.chromium.launch(channel="msedge")
+    else:
+        b = p.chromium.launch(args=["--no-sandbox"])
     page = b.new_page(viewport={"width": 1100, "height": 900})
     errors = []
     page.on("console", lambda m: errors.append(m.text + " @ " + str(m.location)) if m.type == "error" else None)
@@ -25,7 +34,7 @@ with sync_playwright() as p:
     page.on("response", lambda r: print("   HTTP", r.status, r.url) if r.status >= 400 else None)
     page.goto(URL)
     page.wait_for_function("document.getElementById('aiStatus').textContent.includes('ready')", timeout=20000)
-    check("redirected localhost -> 127.0.0.1", page.url.startswith("http://127.0.0.1:18888/"), page.url)
+    check("redirected localhost -> 127.0.0.1", page.url.startswith(f"http://127.0.0.1:{LIB}/"), page.url)
     check("AI status pill", "ready" in page.inner_text("#aiStatus"))
     opts = page.eval_on_selector_all("#scope option", "els => els.map(e => e.textContent)")
     check("scope options", len(opts) >= 3, " | ".join(opts))
@@ -38,7 +47,7 @@ with sync_playwright() as p:
     check("answer rendered", len(page.inner_text("#answer")) > 0)
     page.screenshot(path=os.path.join(SHOTS, "shot_ask.png"), full_page=True)
     href = page.get_attribute("#sources li a", "href")
-    r = page.request.get("http://127.0.0.1:18888" + href)
+    r = page.request.get(f"http://127.0.0.1:{LIB}" + href)
     check("source link opens the article", r.ok and "8 drops" in r.text(), href)
     page.click("nav a[data-tab=library]")
     cards = page.eval_on_selector_all(".book-card a", "els => els.map(e => e.textContent)")
@@ -54,7 +63,7 @@ with sync_playwright() as p:
     if os.environ.get("KIT_AXE"):     # axe-core's axe.min.js
         for scheme in ("light", "dark"):
             pa = b.new_page(color_scheme=scheme)
-            pa.goto("http://127.0.0.1:18888/?model=Tiny&ai=18080")
+            pa.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai={AI}")
             pa.wait_for_function("document.querySelectorAll('#scope option').length > 1", timeout=20000)
             pa.add_script_tag(path=os.environ["KIT_AXE"])
             for tab in ("ask", "map", "library", "help"):
@@ -65,7 +74,7 @@ with sync_playwright() as p:
 
     # AI down, on a phone (how family members use a shared kit): answers fall back to library passages
     page2 = b.new_page(viewport={"width": 390, "height": 844})
-    page2.goto("http://127.0.0.1:18888/?model=Tiny&ai=18999")
+    page2.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai=18999")    # nothing listens on 18999
     page2.wait_for_function("document.getElementById('aiStatus').textContent.includes('off')", timeout=15000)
     page2.fill("#q", "tourniquet placement")
     page2.click("#askBtn")

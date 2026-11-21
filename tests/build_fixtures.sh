@@ -1,5 +1,6 @@
 #!/bin/bash
 # Build everything the end-to-end suite's mock internet serves, into tests/work/remote.
+# With "drive", also the real Mac, Windows and Linux Vulkan builds the drive test installs (tests/drive_test.sh).
 # Linux x86_64 only. Needs internet (GitHub, download.kiwix.org, npm, PyPI) the first time.
 # Python deps: pip install gguf numpy libzim playwright && playwright install chromium
 set -eo pipefail
@@ -95,6 +96,28 @@ python3 "$TESTS/make_tiny_model.py" "$R/hf/tiny_v2/Tiny-Q4_K_M.gguf" 2
 cp "$R/hf/tiny/Tiny-Q8_0.gguf" "$R/hf/tiny_v2/"
 python3 "$TESTS/make_tiny_model.py" "$R/hf/two/Two-Q4_K_M.gguf" 3
 (cd "$R/zim" && python3 "$TESTS/make_zims.py")
+
+if [ "${1:-}" = drive ]; then
+  echo "== drive test: the Mac, Windows and Linux builds kit.json names, as published (one version each)"
+  curl -fsSL "${GH_AUTH[@]}" "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=15" > "$TMP/llama.json"
+  for suffix in macos-arm64.tar.gz win-vulkan-x64.zip ubuntu-vulkan-x64.tar.gz; do
+    url=$(python3 -c '
+import json, sys
+for rel in json.load(open(sys.argv[1])):    # newest nightly that has this build
+    hits = sorted(a["browser_download_url"] for a in rel["assets"] if a["name"].endswith("-bin-" + sys.argv[2]))
+    if hits:
+        print(hits[0])
+        break
+else:
+    sys.exit("no llama.cpp build ends in -bin-" + sys.argv[2])' "$TMP/llama.json" "$suffix")
+    get "$url" "$DL/$(basename "$url")"
+    cp "$DL/$(basename "$url")" "$R/gh/llama-b99990-bin-$suffix"
+  done
+  for plat in macos-arm64.tar.gz win-x86_64.zip; do
+    get "https://download.kiwix.org/release/kiwix-tools/kiwix-tools_$plat" "$DL/kiwix-tools_$plat"
+    cp "$DL/kiwix-tools_$plat" "$R/release/kiwix-tools/kiwix-tools_${plat%%.*}-3.8.2.${plat#*.}"
+  done
+fi
 
 rm -rf "$TMP"
 (cd "$R" && find . -type f | sed 's|^\./||' | sort | while read -r f; do printf '%s\t%s bytes\n' "$f" "$(wc -c < "$f" | tr -d ' ')"; done) > "$W/FIXTURES.txt"
