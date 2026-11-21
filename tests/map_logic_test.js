@@ -8,7 +8,7 @@ new Function("module", "exports", script)(m, m.exports);
 const Kit = m.exports;
 let failures = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ": " + detail : ""}`); if (!ok) failures++; };
-const home = { lat: 41.0, lon: -73.78, label: "Westchester, NY" };
+const home = { lat: 40.7128, lon: -74.006, label: "New York, NY" };
 const opts = { geoBase: "http://127.0.0.1:12322", routeBase: "http://127.0.0.1:18989", home, units: "imperial", label: "US Northeast" };
 
 (async () => {
@@ -17,24 +17,24 @@ const opts = { geoBase: "http://127.0.0.1:12322", routeBase: "http://127.0.0.1:1
         [50, 3000, 16093].map(x => Kit.fmtDist(x, "imperial")).join(" | "));
   check("fmtDist metric", Kit.fmtDist(420, "metric") === "420 m" && Kit.fmtDist(3456, "metric") === "3.5 km", Kit.fmtDist(3456, "metric"));
   check("fmtTime", Kit.fmtTime(20000) === "1 min" && Kit.fmtTime(95 * 60000) === "1 h 35 min", Kit.fmtTime(95 * 60000));
-  check("parseLatLon", JSON.stringify(Kit.parseLatLon("41.03, -73.76")) === JSON.stringify({ lat: 41.03, lon: -73.76, name: "41.03, -73.76", address: "" }) &&
+  check("parseLatLon", JSON.stringify(Kit.parseLatLon("40.7428, -73.986")) === JSON.stringify({ lat: 40.7428, lon: -73.986, name: "40.7428, -73.986", address: "" }) &&
         Kit.parseLatLon("100 Main St") === null);
   check("haversine ~1 deg lat = 111 km", Math.abs(Kit.haversine({ lat: 40, lon: -74 }, { lat: 41, lon: -74 }) - 111195) < 200);
   check("categoryFor", Kit.categoryFor("hospital") === "hospital" && Kit.categoryFor("drug store") === "pharmacy" &&
         Kit.categoryFor("Gas Station") === "gas" && Kit.categoryFor("urgent care") === "urgent_care" && Kit.categoryFor("pizza") === null);
   const intents = {
-    "Directions to Westchester Medical Center": ["get_directions", a => a.to === "Westchester Medical Center" && a.from === "home" && a.mode === "car"],
-    "walk from 100 Main St White Plains to White Plains Hospital?": ["get_directions", a => a.from === "100 Main St White Plains" && a.to === "White Plains Hospital" && a.mode === "foot"],
+    "Directions to Kestrel Bay Medical Center": ["get_directions", a => a.to === "Kestrel Bay Medical Center" && a.from === "home" && a.mode === "car"],
+    "walk from 100 Main St Testville to Larkspur General Hospital?": ["get_directions", a => a.from === "100 Main St Testville" && a.to === "Larkspur General Hospital" && a.mode === "foot"],
     "where is the nearest pharmacy": ["find_nearby", a => a.category === "pharmacy"],
     "closest hospital": ["find_nearby", a => a.category === "hospital"],
-    "Where is Lawrence Hospital?": ["search_places", a => a.query === "Lawrence Hospital"],
+    "Where is Pellwood Hospital?": ["search_places", a => a.query === "Pellwood Hospital"],
   };
   for (const [q, [tool, ok]] of Object.entries(intents)) {
     const g = Kit.guessMapIntent(q);
     check(`intent: ${q}`, g.tool === tool && ok(g.args), JSON.stringify(g));
   }
-  const mapQs = ["how do I get to the hospital", "nearest gas station", "directions to 41 East Post Rd", "how far is White Plains",
-    "What's the nearest hospital and how do I get there?", "Where is the closest ER?", "where is Lawrence Hospital?",
+  const mapQs = ["how do I get to the hospital", "nearest gas station", "directions to 41 East Lark Rd", "how far is Testville",
+    "What's the nearest hospital and how do I get there?", "Where is the closest ER?", "where is Pellwood Hospital?",
     "walking directions to the shelter", "how do I drive to Albany", "address of 100 Main St"];
   const libQs = ["how do I purify water", "treating a burn", "what is the dose of ibuprofen for a child",
     "how far should I stay from a downed power line", "where is the femoral artery", "where's the best place to apply a tourniquet",
@@ -43,14 +43,14 @@ const opts = { geoBase: "http://127.0.0.1:12322", routeBase: "http://127.0.0.1:1
   check("library questions not taken by the map", libQs.every(q => !Kit.isMapQuestion(q)), libQs.filter(q => Kit.isMapQuestion(q)).join(" | "));
 
   // address search
-  const hits = await Kit.searchPlaces(opts, "100 Main Street White Plains", 5);
-  check("address search", hits.length >= 1 && hits[0].name === "100 Main Street" && /White Plains/.test(hits[0].address) && hits[0].distance_m > 0,
+  const hits = await Kit.searchPlaces(opts, "100 Main Street Testville", 5);
+  check("address search", hits.length >= 1 && hits[0].name === "100 Main Street" && /Testville/.test(hits[0].address) && hits[0].distance_m > 0,
         JSON.stringify(hits[0]));
-  const named = await Kit.searchPlaces(opts, "Westchester Medical", 5);
-  check("place-name search", named[0] && named[0].name === "Westchester Medical Center" && named[0].direction,
+  const named = await Kit.searchPlaces(opts, "Kestrel Bay Medical", 5);
+  check("place-name search", named[0] && named[0].name === "Kestrel Bay Medical Center" && named[0].direction,
         named[0] && `${named[0].name}, ${Kit.fmtDist(named[0].distance_m, "imperial")} ${named[0].direction}`);
-  const coords = await Kit.searchPlaces(opts, "41.05,-73.70", 5);
-  check("coordinates accepted as a place", coords.length === 1 && coords[0].lat === 41.05);
+  const coords = await Kit.searchPlaces(opts, "40.76,-73.93", 5);
+  check("coordinates accepted as a place", coords.length === 1 && coords[0].lat === 40.76);
   let err = null;
   try { await Kit.resolvePlace(opts, "Nowhereville Zzz"); } catch (e) { err = e; }
   check("unknown place gives a clear error", err && /Couldn't find/.test(err.message), err && err.message);
@@ -60,21 +60,21 @@ const opts = { geoBase: "http://127.0.0.1:12322", routeBase: "http://127.0.0.1:1
   check("nearest hospitals, sorted by distance", near.places.length === 3 && near.places.every((p, i, a) => !i || a[i - 1].distance_m <= p.distance_m),
         near.places.map(p => `${p.name} ${Kit.fmtDist(p.distance_m, "imperial")}`).join(" | "));
   const oldPhoton = await Kit.findNearby({ ...opts, geoBase: "http://127.0.0.1:12323" }, "pharmacy", "", 5);
-  check("nearest works on an older Photon (tag filter fallback)", oldPhoton.places.length === 1 && oldPhoton.places[0].name === "CVS Pharmacy",
+  check("nearest works on an older Photon (tag filter fallback)", oldPhoton.places.length === 1 && oldPhoton.places[0].name === "Corner Pharmacy",
         oldPhoton.places.map(p => p.name).join(", "));
 
   // directions
-  const r = await Kit.getDirections(opts, "home", "Westchester Medical Center", "car");
-  check("driving directions", r.distance_m > 1000 && r.steps.length === 3 && r.coordinates.length === 20 && r.steps[1].at && r.to.name === "Westchester Medical Center",
+  const r = await Kit.getDirections(opts, "home", "Kestrel Bay Medical Center", "car");
+  check("driving directions", r.distance_m > 1000 && r.steps.length === 3 && r.coordinates.length === 20 && r.steps[1].at && r.to.name === "Kestrel Bay Medical Center",
         `${Kit.fmtDist(r.distance_m, "imperial")}, ${Kit.fmtTime(r.time_ms)}, ${r.steps.map(s => s.text).join(" / ")}`);
-  const w = await Kit.getDirections(opts, { lat: 41.03, lon: -73.76, name: "A" }, "White Plains Hospital", "walk");
+  const w = await Kit.getDirections(opts, { lat: 40.7428, lon: -73.986, name: "A" }, "Larkspur General Hospital", "walk");
   check("walking directions use the foot profile", w.profile === "foot" && w.time_ms > r.time_ms * 0 && w.from.name === "A");
 
   // tool results for the AI
   const t1 = await Kit.runMapTool(opts, "find_nearby", { category: "hospital" });
   check("find_nearby tool output", t1.display.type === "places" && t1.model.results.length === 3 && /mi (north|south|east|west|northeast|northwest|southeast|southwest)/.test(t1.model.results[0].distance),
         JSON.stringify(t1.model).slice(0, 160));
-  const t2 = await Kit.runMapTool(opts, "get_directions", { to: "Westchester Medical Center" });
+  const t2 = await Kit.runMapTool(opts, "get_directions", { to: "Kestrel Bay Medical Center" });
   check("get_directions tool output", t2.display.type === "route" && t2.model.steps.length === 3 && /mi$/.test(t2.model.distance), JSON.stringify(t2.model).slice(0, 160));
 
   // full AI tool loop (mock model calls find_nearby, then get_directions, then answers)

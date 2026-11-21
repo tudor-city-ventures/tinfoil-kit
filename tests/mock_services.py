@@ -16,13 +16,13 @@ MODE, PORT = sys.argv[1], int(sys.argv[2])
 
 PLACES = [
     # name, housenumber, street, city, postcode, lat, lon, osm_key, osm_value
-    ("Westchester Medical Center", "100", "Woods Road", "Valhalla", "10595", 41.0846, -73.8038, "amenity", "hospital"),
-    ("White Plains Hospital", "41", "East Post Road", "White Plains", "10601", 41.0287, -73.7615, "amenity", "hospital"),
-    ("Lawrence Hospital", "55", "Palmer Avenue", "Bronxville", "10708", 40.9450, -73.8240, "amenity", "hospital"),
-    ("CVS Pharmacy", "1", "Main Street", "White Plains", "10601", 41.0330, -73.7650, "amenity", "pharmacy"),
-    ("Scarsdale Police Department", "2", "Tompkins Road", "Scarsdale", "10583", 40.9890, -73.8080, "amenity", "police"),
-    (None, "100", "Main Street", "White Plains", "10601", 41.0325, -73.7660, "place", "house"),
-    ("Shell", "300", "Central Avenue", "White Plains", "10606", 41.0200, -73.7900, "amenity", "fuel"),
+    ("Kestrel Bay Medical Center", "100", "Heron Road", "Kestrel Bay", "00595", 40.7974, -74.0298, "amenity", "hospital"),
+    ("Larkspur General Hospital", "41", "East Lark Road", "Testville", "00601", 40.7415, -73.9875, "amenity", "hospital"),
+    ("Pellwood Hospital", "55", "Fennel Avenue", "Pellwood", "00708", 40.6578, -74.0500, "amenity", "hospital"),
+    ("Corner Pharmacy", "1", "Main Street", "Testville", "00601", 40.7458, -73.9910, "amenity", "pharmacy"),
+    ("Quarry Hill Police Department", "2", "Quarry Road", "Quarry Hill", "00583", 40.7018, -74.0340, "amenity", "police"),
+    (None, "100", "Main Street", "Testville", "00601", 40.7453, -73.9920, "place", "house"),
+    ("Fuel Stop", "300", "Central Avenue", "Testville", "00606", 40.7328, -74.0160, "amenity", "fuel"),
 ]
 
 
@@ -149,7 +149,7 @@ class H(BaseHTTPRequestHandler):
                 d = dist(a, b) * 1.3
                 t = d / (13.4 if prof == "car" else 1.4) * 1000
                 ins = [{"text": "Continue onto Main Street", "street_name": "Main Street", "distance": d * 0.3, "time": t * 0.3, "sign": 0, "interval": [0, 5]},
-                       {"text": "Turn left onto Woods Road", "street_name": "Woods Road", "distance": d * 0.7, "time": t * 0.7, "sign": -2, "interval": [5, 19]},
+                       {"text": "Turn left onto Heron Road", "street_name": "Heron Road", "distance": d * 0.7, "time": t * 0.7, "sign": -2, "interval": [5, 19]},
                        {"text": "Arrive at destination", "street_name": "", "distance": 0, "time": 0, "sign": 4, "interval": [19, 19]}]
                 return self.reply(200, {"paths": [{"distance": d, "time": t, "points_encoded": False,
                                                    "points": {"type": "LineString", "coordinates": coords},

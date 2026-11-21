@@ -206,7 +206,7 @@ Everything passed on 2026-11-21 in the Linux sandbox. The scripts are in `tests/
   - fetches the npm tarballs and basemaps-assets;
   - packs the fake release archives the mock serves.
 - `run_all.sh` still copies the kit from the old `OfflineKit` folder. Point it at the repo root.
-- The mock places (hospitals and streets) are real places near White Plains and Westchester. Swap them for made-up places near the new New York default, and update what the tests expect.
+- Done: the mock places are made up and sit around the New York default.
 - Then add GitHub Actions: the quick gate on every pull request, and the end-to-end suite on pull requests that touch `tools/` or `kit.json`.
 
 **Never verified. Needs a real Mac and the internet:**

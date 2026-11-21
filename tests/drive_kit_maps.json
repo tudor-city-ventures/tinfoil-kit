@@ -133,10 +133,10 @@
     "enabled": true,
     "label": "US Northeast",
     "home": {
-      "lat": 41.0,
-      "lon": -73.78,
+      "lat": 40.7128,
+      "lon": -74.006,
       "zoom": 10,
-      "label": "Westchester, NY"
+      "label": "New York, NY"
     },
     "detail_bbox": [
       -80.6,
