@@ -21,7 +21,6 @@ COPY = {
     "Gemma-4-E4B": ("Gemma 4 E4B", "Small and light. Runs on an 8 to 16 GB laptop or on battery."),
     "maps": ("Offline maps", "Street maps, address search and driving or walking directions for your region."),
     "mdwiki_en_all_maxi": ("WikiMed", "A medical encyclopedia: conditions, drugs, procedures."),
-    "wikem_en_all_maxi": ("WikEM", "Emergency medicine notes written for clinicians."),
     "zimgit-medicine_en": ("Field medicine books", "First aid and medicine for when help is far away."),
     "irp.fas.org_en_military-medicine": ("Military medicine", "Trauma care manuals from the US military."),
     "zimgit-post-disaster_en": ("Post-disaster guides", "Shelter, sanitation and recovery after a disaster."),
@@ -29,7 +28,7 @@ COPY = {
     "zimgit-food-preparation_en": ("Food preparation", "Storing, preserving and cooking food without power."),
     "zimgit-knots_en": ("Knots", "Illustrated knots for rope, tarps and rescue."),
     "ready.gov_en_all": ("Ready.gov", "FEMA's guides for every kind of emergency."),
-    "who.int_en_all": ("World Health Organization", "Public health guidance and disease facts."),
+    "urban-prepper_en_all": ("Urban Prepper", "Getting through an emergency in a city."),
     "ifixit_en_all": ("iFixit", "Step-by-step repair guides for phones, appliances, cars and tools."),
     "appropedia_en_all_maxi": ("Appropedia", "Off-grid and low-tech solutions: solar, water, building."),
     "energypedia_en_all_nopic": ("Energypedia", "Solar panels, batteries and small power systems."),
@@ -40,12 +39,12 @@ COPY = {
     "wikivoyage_en_all_maxi": ("Wikivoyage", "Travel guides for places you might need to go."),
     "survivorlibrary.com_en_all": ("Survivor Library", "Historical how-to books on farming, tools and trades."),
     "khanacademy_en_all": ("Khan Academy", "Video lessons for school-age kids."),
-    "gutenberg_en_all": ("All of Project Gutenberg", "Every English public-domain book. Replaces the subsets."),
+    "gutenberg_en_all": ("All of Project Gutenberg", "Every English public-domain book."),
 }
 
 GROUPS = [
-    ("Medical", r"med|mdwiki|wikem|who\.int"),
-    ("Preparedness", r"ready|post-disaster|water|food|knots|army|outdoors"),
+    ("Medical", r"med|mdwiki"),
+    ("Preparedness", r"ready|prepper|post-disaster|water|food|knots|army|outdoors"),
     ("Repair and skills", r"ifixit|appropedia|energypedia|diy|gardening|cooking|electronics|ham\.|mechanics|bicycles|sustainab"),
     ("Books and courses", r"gutenberg|survivor|khan|libretexts|wikiversity|wikibooks"),
     ("Reference", r"."),

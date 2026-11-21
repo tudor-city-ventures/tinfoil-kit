@@ -78,19 +78,6 @@
    ]
   },
   {
-   "id": "wikem_en_all_maxi",
-   "group": "Medical",
-   "title": "WikEM",
-   "why": "Emergency medicine notes written for clinicians.",
-   "bytes": 100000000,
-   "estimated": true,
-   "presets": [
-    "essentials",
-    "recommended",
-    "everything"
-   ]
-  },
-  {
    "id": "zimgit-medicine_en",
    "group": "Medical",
    "title": "Field medicine books",
@@ -182,14 +169,13 @@
    ]
   },
   {
-   "id": "who.int_en_all",
-   "group": "Medical",
-   "title": "World Health Organization",
-   "why": "Public health guidance and disease facts.",
-   "bytes": 500000000,
+   "id": "urban-prepper_en_all",
+   "group": "Preparedness",
+   "title": "Urban Prepper",
+   "why": "Getting through an emergency in a city.",
+   "bytes": 2200000000,
    "estimated": true,
    "presets": [
-    "essentials",
     "recommended",
     "everything"
    ]
@@ -509,54 +495,6 @@
    ]
   },
   {
-   "id": "gutenberg_en_lcc-s",
-   "group": "Books and courses",
-   "title": "Project Gutenberg",
-   "why": "Project Gutenberg: agriculture books (~4 GB)",
-   "bytes": 4000000000,
-   "estimated": true,
-   "presets": [
-    "recommended",
-    "everything"
-   ]
-  },
-  {
-   "id": "gutenberg_en_lcc-t",
-   "group": "Books and courses",
-   "title": "Project Gutenberg",
-   "why": "Project Gutenberg: technology books (~12 GB)",
-   "bytes": 12000000000,
-   "estimated": true,
-   "presets": [
-    "recommended",
-    "everything"
-   ]
-  },
-  {
-   "id": "gutenberg_en_lcc-r",
-   "group": "Books and courses",
-   "title": "Project Gutenberg",
-   "why": "Project Gutenberg: medicine books",
-   "bytes": null,
-   "estimated": true,
-   "presets": [
-    "recommended",
-    "everything"
-   ]
-  },
-  {
-   "id": "gutenberg_en_lcc-q",
-   "group": "Books and courses",
-   "title": "Project Gutenberg",
-   "why": "Project Gutenberg: science books (~16 GB)",
-   "bytes": 16000000000,
-   "estimated": true,
-   "presets": [
-    "recommended",
-    "everything"
-   ]
-  },
-  {
    "id": "survivorlibrary.com_en_all",
    "group": "Books and courses",
    "title": "Survivor Library",
@@ -582,7 +520,7 @@
    "id": "gutenberg_en_all",
    "group": "Books and courses",
    "title": "All of Project Gutenberg",
-   "why": "Every English public-domain book. Replaces the subsets.",
+   "why": "Every English public-domain book.",
    "bytes": 221251591168,
    "estimated": false,
    "presets": [

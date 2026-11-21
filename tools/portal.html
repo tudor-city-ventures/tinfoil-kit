@@ -205,8 +205,8 @@ var Kit = (function () {
 
   function classify(id, title) {
     var s = (id + " " + title).toLowerCase();
-    if (/(mdwiki|wikem|medicine|medical|_med\b|libretexts\.org_en_med|who\.int|pathology|health|military-medicine|lcc-r)/.test(s)) return "Medical";
-    if (/(zimgit|ready\.gov|armypubs|appropedia|energypedia|ifixit|stackexchange|survivor|lcc-s|lcc-t|outdoors|diy|gardening|cooking|knots|water|disaster)/.test(s)) return "Survival & how-to";
+    if (/(mdwiki|medicine|medical|_med\b|libretexts\.org_en_med|pathology|health|military-medicine)/.test(s)) return "Medical";
+    if (/(zimgit|ready\.gov|armypubs|appropedia|energypedia|ifixit|stackexchange|survivor|prepper|outdoors|diy|gardening|cooking|knots|water|disaster)/.test(s)) return "Survival & how-to";
     if (/(wikipedia|wiktionary|wikibooks|wikivoyage|wikiversity|libretexts|gutenberg|khanacademy)/.test(s)) return "Reference & learning";
     return "Other";
   }

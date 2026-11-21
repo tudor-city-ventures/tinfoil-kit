@@ -166,7 +166,6 @@
 
   "library": [
     {"zim": "mdwiki_en_all_maxi",            "priority": 1, "note": "WikiMed: medical encyclopedia (~2 GB)"},
-    {"zim": "wikem_en_all_maxi",             "priority": 1, "note": "WikEM: emergency medicine (small)"},
     {"zim": "zimgit-medicine_en",            "priority": 1, "note": "Medical library: field medicine books (small)"},
     {"zim": "irp.fas.org_en_military-medicine","priority": 1, "note": "Military medicine manuals (small)"},
     {"zim": "zimgit-post-disaster_en",       "priority": 1, "note": "Post-disaster resources (~0.6 GB)"},
@@ -174,7 +173,7 @@
     {"zim": "zimgit-food-preparation_en",    "priority": 1, "note": "Food for preppers (small)"},
     {"zim": "zimgit-knots_en",               "priority": 1, "note": "Knots (small)"},
     {"zim": "ready.gov_en_all",              "priority": 1, "note": "Ready.gov disaster preparedness (~2.1 GB)"},
-    {"zim": "who.int_en_all",                "priority": 1, "note": "World Health Organization (~0.5 GB)"},
+    {"zim": "urban-prepper_en_all",          "priority": 2, "note": "Urban Prepper: emergency preparedness (~2.2 GB)"},
     {"zim": "ifixit_en_all",                 "priority": 1, "note": "iFixit repair guides (a few GB)"},
     {"zim": "appropedia_en_all_maxi",        "priority": 1, "note": "Appropedia: off-grid / appropriate technology (~0.6 GB)"},
     {"zim": "energypedia_en_all_nopic",      "priority": 2, "note": "Energypedia: solar, power, energy (~0.7 GB)"},
@@ -205,14 +204,9 @@
     {"zim": "sustainability.stackexchange.com_en_all", "priority": 3, "note": "Sustainable living Q&A"},
     {"zim": "medicalsciences.stackexchange.com_en_all", "priority": 3, "note": "Medical sciences Q&A"},
 
-    {"zim": "gutenberg_en_lcc-s",            "priority": 3, "note": "Project Gutenberg: agriculture books (~4 GB)"},
-    {"zim": "gutenberg_en_lcc-t",            "priority": 3, "note": "Project Gutenberg: technology books (~12 GB)"},
-    {"zim": "gutenberg_en_lcc-r",            "priority": 3, "note": "Project Gutenberg: medicine books"},
-    {"zim": "gutenberg_en_lcc-q",            "priority": 3, "note": "Project Gutenberg: science books (~16 GB)"},
-
     {"zim": "survivorlibrary.com_en_all",    "priority": 3, "enabled": false, "note": "Survivor Library: old how-to books, mostly PDFs (~232 GB)"},
     {"zim": "khanacademy_en_all",            "priority": 3, "enabled": false, "note": "Khan Academy videos for school-age kids (~168 GB)"},
-    {"zim": "gutenberg_en_all",              "priority": 3, "enabled": false, "note": "All English Project Gutenberg (~206 GB; replaces the lcc-* subsets)"}
+    {"zim": "gutenberg_en_all",              "priority": 3, "enabled": false, "note": "All English Project Gutenberg books (~206 GB)"}
   ],
 
   "extras": [
