@@ -25,7 +25,15 @@ mkdir -p "$DL" "$TMP" "$R"/{zim,gh,gh2,hf/tiny,hf/tiny_v2,hf/two,npm,adoptium,fi
 
 echo "== llama.cpp (real Linux CPU build, repacked as two fake nightly builds)"
 url=$(curl -fsSL "${GH_AUTH[@]}" https://api.github.com/repos/ggml-org/llama.cpp/releases/latest |
-      python3 -c 'import json,re,sys; print(next(a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if re.fullmatch(r"llama-b\d+-bin-ubuntu-x64\.(zip|tar\.gz)", a["name"])))')
+      python3 -c '
+import json, re, sys
+names = {a["name"]: a["browser_download_url"] for a in json.load(sys.stdin)["assets"]}
+# the plain CPU build for x86_64 Linux; skip GPU and other-arch variants
+ok = [n for n in names if re.search(r"bin-ubuntu-x64", n) and n.endswith((".zip", ".tar.gz"))]
+ok = ok or [n for n in names if "ubuntu" in n and "x64" in n and not re.search(r"vulkan|cuda|rocm|sycl|hip|openvino", n)]
+if not ok:
+    sys.exit("no Linux x64 CPU asset in the latest llama.cpp release: " + ", ".join(sorted(names)))
+print(names[sorted(ok)[0]])')
 get "$url" "$DL/$(basename "$url")"
 mkdir -p "$TMP/llama"
 case "$url" in *.zip) unzip -q "$DL/$(basename "$url")" -d "$TMP/llama";; *) tar -xzf "$DL/$(basename "$url")" -C "$TMP/llama";; esac
