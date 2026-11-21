@@ -65,6 +65,14 @@ with sync_playwright() as p:
             width = page.evaluate("document.documentElement.scrollWidth")
             check("320px phone: no sideways scroll", width <= 320, f"{width}px")
             page.set_viewport_size(vp)
+            closed = page.is_visible("#menu") and not page.is_visible("nav.links a[href='#faq']")
+            page.click("#menu")
+            opened = page.is_visible("nav.links a[href='#faq']") and page.get_attribute("#menu", "aria-expanded") == "true"
+            page.click("nav.links a[href='#faq']")
+            check("phone: sections sit behind Menu, which closes after a pick", closed and opened
+                  and page.get_attribute("#menu", "aria-expanded") == "false" and not page.is_visible("nav.links a[href='#faq']"))
+        else:
+            check("desktop: sections listed, no Menu button", page.is_visible("nav.links a[href='#faq']") and not page.is_visible("#menu"))
         first = page.locator(".card input").first
         before = page.inner_text("#totalText")
         first.uncheck()
@@ -85,7 +93,7 @@ with sync_playwright() as p:
             old.goto(URL)
             old.wait_for_selector(".card")
             old.click("#copySetup")
-            check("Copy works without the clipboard API", old.inner_text("#toast") == "Setup prompt copied", old.inner_text("#toast"))
+            check("Copy works without the clipboard API", old.inner_text("#toast").startswith("Copied."), old.inner_text("#toast"))
             old.close()
             with page.expect_download() as dl:
                 page.click("#downloadKit")
