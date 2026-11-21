@@ -39,6 +39,9 @@ handler = functools.partial(Quiet, directory=SITE)
 srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 URL = f"http://127.0.0.1:{srv.server_address[1]}/"
+FRAME = "document.querySelector('.fig canvas').toDataURL()"
+INKED = """(() => { const c = document.querySelector('.fig canvas'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  let n = 0; for (let i = 3; i < d.length; i += 4) n += d[i] > 0; return n; })()"""
 
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path=os.environ.get("KIT_CHROMIUM") or None)
@@ -53,6 +56,17 @@ with sync_playwright() as p:
         faces = page.evaluate("document.fonts.ready.then(() => [...document.fonts].map(f => f.family.replace(/\"/g, '') + ' ' + f.weight + ': ' + f.status))")
         check(f"{name}: fonts load from the site", not [f for f in faces if f.endswith("error")]
               and all(any(f.startswith(fam) and f.endswith("loaded") for f in faces) for fam in ("IBM Plex Sans", "IBM Plex Mono")), ", ".join(faces))
+        # the hero is drawn on a canvas each frame: it should move, and hold still once paused
+        page.locator(".fig canvas").scroll_into_view_if_needed()
+        inked = page.evaluate(INKED)
+        before = page.evaluate(FRAME)
+        page.wait_for_timeout(250)
+        check(f"{name}: hero draws and moves", inked > 5000 and page.evaluate(FRAME) != before, f"{inked} inked pixels")
+        page.click(".viz-pause")
+        before = page.evaluate(FRAME)
+        page.wait_for_timeout(250)
+        check(f"{name}: Pause holds the hero still", page.evaluate(FRAME) == before and page.inner_text(".viz-pause") == "Play")
+        page.click(".viz-pause")
         totals = {}
         for preset in ("essentials", "everything", "recommended"):
             page.click(f"[data-preset={preset}]")
@@ -101,6 +115,15 @@ with sync_playwright() as p:
             off = [m["id"] for m in kit["models"] if not m["enabled"]]
             check("downloaded kit.json reflects the picks", len(off) == 1 and kit["settings"]["default_model"] != off[0], str(off))
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}.png"), full_page=True)
+    still = b.new_page(reduced_motion="reduce")
+    still.goto(URL)
+    still.wait_for_selector(".card")
+    still.wait_for_timeout(500)        # it redraws once its sizes and fonts arrive, then should stop
+    before = still.evaluate(FRAME)
+    still.wait_for_timeout(300)
+    check("reduced motion: the hero holds one still frame", still.evaluate(INKED) > 5000 and still.evaluate(FRAME) == before
+          and still.inner_text(".viz-pause") == "Play")
+    still.close()
     nf = b.new_page()     # Vercel serves 404.html for any unknown address
     nf.goto(URL + "404.html")
     check("404 page links home", nf.get_attribute("a", "href") == "/" and "isn't here" in nf.inner_text("h1"))
