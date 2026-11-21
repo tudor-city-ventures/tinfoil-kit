@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#F3F0E6">
 <title>Tinfoil Kit: the internet's knowledge, offline, on one drive</title>
 <meta name="description" content="An open-source offline kit for Apple Silicon Macs: a local AI assistant, Wikipedia, medical and repair guides, and offline maps with directions, all on one external SSD.">
 <meta property="og:title" content="Tinfoil Kit">
@@ -16,10 +17,13 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://tinfoilkit.com/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='3' y='7' width='22' height='14' rx='2' fill='%23F3F0E6' stroke='%231C1F1A' stroke-width='2'/%3E%3Crect x='7' y='11' width='6' height='6' fill='%23D9531E'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" href="/fonts/plex-sans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+@font-face{font-family:'IBM Plex Sans';font-weight:400 700;font-display:swap;src:url(/fonts/plex-sans.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-weight:400;font-display:swap;src:url(/fonts/plex-mono-400.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-weight:500;font-display:swap;src:url(/fonts/plex-mono-500.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-weight:600;font-display:swap;src:url(/fonts/plex-mono-600.woff2) format('woff2')}
 :root{--paper:#F3F0E6;--paper2:#EAE6D8;--ink:#1C1F1A;--ink2:#3A3E36;--mute:#6B6F63;--olive:#4A5A2A;--signal:#D9531E;--signal-text:#9A3A10;--rule:2px solid var(--ink);--mono:'IBM Plex Mono',ui-monospace,monospace;--sans:'IBM Plex Sans',system-ui,sans-serif}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -363,9 +367,18 @@ View the code on GitHub</a>
     var t = document.getElementById("toast"); t.textContent = msg;
     clearTimeout(toast.t); toast.t = setTimeout(function () { t.textContent = ""; }, 3000);
   }
+  // The clipboard API needs https and a focused page; the old copy command covers the rest.
+  function copyText(text) {
+    function legacy() {
+      var ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0"; document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      ta.remove(); return ok ? Promise.resolve() : Promise.reject();
+    }
+    return navigator.clipboard ? navigator.clipboard.writeText(text).catch(legacy) : legacy();
+  }
   function copy(text, what) {
-    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
-      .then(function () { toast(what + " copied"); }, function () { toast("Copy failed. Select the text and copy it yourself."); });
+    copyText(text).then(function () { toast(what + " copied"); }, function () { toast("Couldn't copy here. Try another browser, or download kit.json."); });
   }
   function picks() { return state.sources.filter(function (s) { return state.picked[s.id]; }); }
   function setupPrompt() {
@@ -390,9 +403,12 @@ View the code on GitHub</a>
   });
   document.querySelectorAll("[data-copy]").forEach(function (b) {
     b.addEventListener("click", function () {
-      var t = document.getElementById(b.dataset.copy).textContent;
-      navigator.clipboard && navigator.clipboard.writeText(t).then(function () {
+      var pre = document.getElementById(b.dataset.copy);
+      copyText(pre.textContent).then(function () {
         b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy"; }, 2000);
+      }, function () {   // leave it selected, so Cmd-C copies it
+        var r = document.createRange(); r.selectNodeContents(pre); getSelection().removeAllRanges(); getSelection().addRange(r);
+        toast("Selected. Press Cmd-C (Ctrl-C on Windows) to copy.");
       });
     });
   });
