@@ -355,7 +355,9 @@ Each step needs Travis's go-ahead, because none of them can be quietly undone.
 1. Travis runs `SETUP.command` on his Mac and `./kit test` passes.
 2. tinfoilkit.com is on the tudor-city-ventures Vercel team. Add it (and `www`, redirecting to the bare domain) to the `tinfoilkit` project.
 3. Turn off Vercel Authentication for production on the `tinfoilkit` project, so the public can see the site. Previews can stay protected.
-4. Make the GitHub repo public. The site's GitHub button and the install prompt point at it.
+4. Make the GitHub repo public. The site's GitHub button and the install prompt point at it. First:
+   - switch the default branch to `main` (visitors land on it) and delete `claude/project-thread-ew0j18`;
+   - decide whether this file stays public. Sections 8 and 9 are internal (accounts, how the project started); trim them if not. Commit authors are all `Claude <noreply@anthropic.com>` or the Actions bot, so no personal email is in the history.
 5. Check the social card (https://tinfoilkit.com/og.png) with a link preview, and that the builder loads sources.json.
 6. Switch to PRs and review from then on (update AGENTS.md's Workflow section).
 
