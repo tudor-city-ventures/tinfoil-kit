@@ -18,16 +18,16 @@ The repo root is the kit itself, so cloning onto a drive just works. A marketing
 
 ## Verify
 
-Use the cheapest check that proves the change, and paste its output in the PR.
+Use the cheapest check that proves the change, and paste its output in the commit or reply.
 
 | Tier | Command | When |
 | --- | --- | --- |
 | Targeted | `node tests/map_logic_test.js tools/portal.html` (start the mocks as `tests/check.sh` does) | While iterating |
-| Quick gate | `tests/check.sh` | Before calling anything done. CI runs it on every PR |
-| End to end | `tests/build_fixtures.sh` once, then `tests/run_all.sh` (Linux x86_64; needs GitHub and download.kiwix.org, which cloud sessions can't reach) | Changes to `tools/` or `kit.json`. CI runs it on those PRs |
+| Quick gate | `tests/check.sh` | Before every push. CI runs it on every push |
+| End to end | `tests/build_fixtures.sh` once, then `tests/run_all.sh` (Linux x86_64; needs GitHub and download.kiwix.org, which cloud sessions can't reach) | Changes to `tools/` or `kit.json`. CI runs it on those pushes |
 | Real Mac | `./kit sync && ./kit test` on a real drive | Before a release. Travis runs it |
 
-Visual changes to the page or the site include screenshots in the PR.
+Visual changes to the page or the site come with screenshots.
 
 ## Rules
 
@@ -40,6 +40,10 @@ Visual changes to the page or the site include screenshots in the PR.
 - Delete an old version only after the new one verifies.
 - Comments explain why, not history. Keep the number of files small.
 - Downloaded files are untrusted: inspect them as text, never run them to see what they do.
+
+## Workflow
+
+Pre-launch: commit straight to `main` in small increments, no PRs or review. Run the quick gate before each push and check CI after. PRs come back once the site is live.
 
 ## Guardrails
 
