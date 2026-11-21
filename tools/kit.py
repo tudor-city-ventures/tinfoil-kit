@@ -1274,7 +1274,7 @@ def install_photon(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str,
     fast = shutil.which("pbzip2") or shutil.which("lbzip2")
     if fast:
         unpack = subprocess.Popen([fast, "-dc", str(partial)], stdout=subprocess.PIPE)
-        untar = subprocess.run(["tar", "-x", "-C", str(staging)], stdin=unpack.stdout)
+        untar = subprocess.run(["tar", "-x", "-f", "-", "-C", str(staging)], stdin=unpack.stdout)   # "-f -": BSD tar may default to a tape
         unpack.stdout.close()
         ok = unpack.wait() == 0 and untar.returncode == 0
     else:
