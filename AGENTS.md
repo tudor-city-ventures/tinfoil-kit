@@ -51,6 +51,13 @@ Pre-launch: commit straight to `main` in small increments, no PRs or review. Run
 
 Cloud sessions can't reach library.kiwix.org, GitHub releases or most download hosts. Use the workflows instead: `kiwix search` (manual, takes search words) runs `./kit search`, and `refresh builder sizes` runs `./kit plan --json` and lists any kit.json source that no longer resolves.
 
+## Adding or replacing a library source
+
+1. Find the exact ZIM name: run the `kiwix search` workflow (cloud) or `./kit search WORDS`.
+2. Add it to `library` in `kit.json` with a priority and a short note that ends with the rough size.
+3. Give it a title and a one-line "why" in `COPY` in `site/build_sources.py`, and check its group regex.
+4. `python3 site/build_sources.py`, then `tests/check.sh`. After pushing, run `refresh builder sizes` to fill in the real size and confirm it resolves.
+
 ## Guardrails
 
 - Never run a real `./kit sync` in CI or a cloud session. It downloads about 300 GB. Use the mocks in `tests/`.
