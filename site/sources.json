@@ -281,8 +281,8 @@
   {
    "id": "wikiversity_en_all_maxi",
    "group": "Books and courses",
-   "title": "Wikiversity courses",
-   "why": "Wikiversity courses (~2 GB)",
+   "title": "Wikiversity",
+   "why": "Free courses and study guides on hundreds of subjects.",
    "bytes": 2110168064,
    "estimated": false,
    "presets": [
@@ -293,8 +293,8 @@
   {
    "id": "libretexts.org_en_med",
    "group": "Medical",
-   "title": "LibreTexts medicine textbooks",
-   "why": "LibreTexts medicine textbooks (~1 GB)",
+   "title": "LibreTexts Medicine",
+   "why": "College textbooks on anatomy, nursing, pharmacology and more.",
    "bytes": 1192567808,
    "estimated": false,
    "presets": [
@@ -305,8 +305,8 @@
   {
    "id": "libretexts.org_en_bio",
    "group": "Books and courses",
-   "title": "LibreTexts biology",
-   "why": "LibreTexts biology (~2 GB)",
+   "title": "LibreTexts Biology",
+   "why": "College biology textbooks, from cells to ecosystems.",
    "bytes": 2240947200,
    "estimated": false,
    "presets": [
@@ -317,8 +317,8 @@
   {
    "id": "libretexts.org_en_chem",
    "group": "Books and courses",
-   "title": "LibreTexts chemistry",
-   "why": "LibreTexts chemistry (~2 GB)",
+   "title": "LibreTexts Chemistry",
+   "why": "College chemistry textbooks, general to organic.",
    "bytes": 2182917120,
    "estimated": false,
    "presets": [
@@ -329,8 +329,8 @@
   {
    "id": "libretexts.org_en_eng",
    "group": "Books and courses",
-   "title": "LibreTexts engineering",
-   "why": "LibreTexts engineering (~0.7 GB)",
+   "title": "LibreTexts Engineering",
+   "why": "Engineering textbooks: circuits, materials, mechanics.",
    "bytes": 678394880,
    "estimated": false,
    "presets": [
@@ -341,8 +341,8 @@
   {
    "id": "libretexts.org_en_phys",
    "group": "Books and courses",
-   "title": "LibreTexts physics",
-   "why": "LibreTexts physics (~0.5 GB)",
+   "title": "LibreTexts Physics",
+   "why": "College physics textbooks.",
    "bytes": 559554560,
    "estimated": false,
    "presets": [
@@ -353,8 +353,8 @@
   {
    "id": "libretexts.org_en_geo",
    "group": "Books and courses",
-   "title": "LibreTexts earth science",
-   "why": "LibreTexts earth science (~1 GB)",
+   "title": "LibreTexts Earth Science",
+   "why": "Geology, weather and climate textbooks.",
    "bytes": 1188117504,
    "estimated": false,
    "presets": [
@@ -365,8 +365,8 @@
   {
    "id": "libretexts.org_en_math",
    "group": "Books and courses",
-   "title": "LibreTexts math",
-   "why": "LibreTexts math (~0.8 GB)",
+   "title": "LibreTexts Math",
+   "why": "Math textbooks from arithmetic to calculus and statistics.",
    "bytes": 830646272,
    "estimated": false,
    "presets": [
@@ -378,7 +378,7 @@
    "id": "diy.stackexchange.com_en_all",
    "group": "Repair and skills",
    "title": "Home improvement Q&A",
-   "why": "Home improvement Q&A",
+   "why": "Plumbing, wiring, heating and repairs around the house.",
    "bytes": 2086025216,
    "estimated": false,
    "presets": [
@@ -390,7 +390,7 @@
    "id": "gardening.stackexchange.com_en_all",
    "group": "Repair and skills",
    "title": "Gardening Q&A",
-   "why": "Gardening Q&A",
+   "why": "Growing food, plant problems and soil, answered by gardeners.",
    "bytes": 933097472,
    "estimated": false,
    "presets": [
@@ -402,7 +402,7 @@
    "id": "cooking.stackexchange.com_en_all",
    "group": "Repair and skills",
    "title": "Cooking Q&A",
-   "why": "Cooking Q&A",
+   "why": "Food safety, substitutions and techniques, answered by cooks.",
    "bytes": 238098432,
    "estimated": false,
    "presets": [
@@ -413,8 +413,8 @@
   {
    "id": "outdoors.stackexchange.com_en_all",
    "group": "Preparedness",
-   "title": "Outdoors / wilderness Q&A",
-   "why": "Outdoors / wilderness Q&A",
+   "title": "Outdoors Q&A",
+   "why": "Camping, hiking, navigation and wilderness safety.",
    "bytes": 141820928,
    "estimated": false,
    "presets": [
@@ -426,7 +426,7 @@
    "id": "electronics.stackexchange.com_en_all",
    "group": "Repair and skills",
    "title": "Electronics Q&A",
-   "why": "Electronics Q&A (~4 GB)",
+   "why": "Circuits, batteries, solar and fixing electronics.",
    "bytes": 4261398528,
    "estimated": false,
    "presets": [
@@ -438,7 +438,7 @@
    "id": "ham.stackexchange.com_en_all",
    "group": "Repair and skills",
    "title": "Amateur radio Q&A",
-   "why": "Amateur radio Q&A",
+   "why": "Ham radio licenses, antennas and emergency communication.",
    "bytes": 77109248,
    "estimated": false,
    "presets": [
@@ -450,7 +450,7 @@
    "id": "mechanics.stackexchange.com_en_all",
    "group": "Repair and skills",
    "title": "Car repair Q&A",
-   "why": "Car repair Q&A",
+   "why": "Diagnosing and fixing cars, answered by mechanics.",
    "bytes": 341672960,
    "estimated": false,
    "presets": [
@@ -462,7 +462,7 @@
    "id": "bicycles.stackexchange.com_en_all",
    "group": "Repair and skills",
    "title": "Bicycle repair Q&A",
-   "why": "Bicycle repair Q&A",
+   "why": "Keeping a bike running when it's your only way around.",
    "bytes": 499255296,
    "estimated": false,
    "presets": [
@@ -474,7 +474,7 @@
    "id": "sustainability.stackexchange.com_en_all",
    "group": "Repair and skills",
    "title": "Sustainable living Q&A",
-   "why": "Sustainable living Q&A",
+   "why": "Saving energy and water, composting, living on less.",
    "bytes": 27687936,
    "estimated": false,
    "presets": [
@@ -486,7 +486,7 @@
    "id": "medicalsciences.stackexchange.com_en_all",
    "group": "Medical",
    "title": "Medical sciences Q&A",
-   "why": "Medical sciences Q&A",
+   "why": "How the body, diseases and medicines work.",
    "bytes": 60660736,
    "estimated": false,
    "presets": [

@@ -12,8 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 GB = 1e9
 
-# What it is and why you'd want it, for the sources people ask about most. Everything else
-# falls back to its kit.json note.
+# What it is and why you'd want it. A source missing here falls back to its kit.json note.
 COPY = {
     "Inkling-2-Mini": ("Inkling 2 Mini", "The default AI. Fast, reads photos, built for a 32 GB Mac."),
     "Qwen3.8-27B": ("Qwen 3.8 27B", "A second opinion from a different lab. Slower, but strong."),
@@ -40,6 +39,24 @@ COPY = {
     "survivorlibrary.com_en_all": ("Survivor Library", "Historical how-to books on farming, tools and trades."),
     "khanacademy_en_all": ("Khan Academy", "Video lessons for school-age kids."),
     "gutenberg_en_all": ("All of Project Gutenberg", "Every English public-domain book."),
+    "wikiversity_en_all_maxi": ("Wikiversity", "Free courses and study guides on hundreds of subjects."),
+    "libretexts.org_en_med": ("LibreTexts Medicine", "College textbooks on anatomy, nursing, pharmacology and more."),
+    "libretexts.org_en_bio": ("LibreTexts Biology", "College biology textbooks, from cells to ecosystems."),
+    "libretexts.org_en_chem": ("LibreTexts Chemistry", "College chemistry textbooks, general to organic."),
+    "libretexts.org_en_eng": ("LibreTexts Engineering", "Engineering textbooks: circuits, materials, mechanics."),
+    "libretexts.org_en_phys": ("LibreTexts Physics", "College physics textbooks."),
+    "libretexts.org_en_geo": ("LibreTexts Earth Science", "Geology, weather and climate textbooks."),
+    "libretexts.org_en_math": ("LibreTexts Math", "Math textbooks from arithmetic to calculus and statistics."),
+    "diy.stackexchange.com_en_all": ("Home improvement Q&A", "Plumbing, wiring, heating and repairs around the house."),
+    "gardening.stackexchange.com_en_all": ("Gardening Q&A", "Growing food, plant problems and soil, answered by gardeners."),
+    "cooking.stackexchange.com_en_all": ("Cooking Q&A", "Food safety, substitutions and techniques, answered by cooks."),
+    "outdoors.stackexchange.com_en_all": ("Outdoors Q&A", "Camping, hiking, navigation and wilderness safety."),
+    "electronics.stackexchange.com_en_all": ("Electronics Q&A", "Circuits, batteries, solar and fixing electronics."),
+    "ham.stackexchange.com_en_all": ("Amateur radio Q&A", "Ham radio licenses, antennas and emergency communication."),
+    "mechanics.stackexchange.com_en_all": ("Car repair Q&A", "Diagnosing and fixing cars, answered by mechanics."),
+    "bicycles.stackexchange.com_en_all": ("Bicycle repair Q&A", "Keeping a bike running when it's your only way around."),
+    "sustainability.stackexchange.com_en_all": ("Sustainable living Q&A", "Saving energy and water, composting, living on less."),
+    "medicalsciences.stackexchange.com_en_all": ("Medical sciences Q&A", "How the body, diseases and medicines work."),
 }
 
 GROUPS = [
