@@ -915,6 +915,12 @@ def download(url: str, partial: Path, size: Optional[int], downloader: str) -> N
         got = partial.stat().st_size if partial.exists() else 0
         if rc == 0 and (not size or got == size):
             return
+        if (use_aria and rc == 9) or (not use_aria and rc == 23):    # retrying won't help
+            try:
+                free = f" ({fmt_size(shutil.disk_usage(partial.parent).free)} free)"
+            except OSError:
+                free = ""
+            raise RuntimeError(f"couldn't write {partial.name} to the drive{free}. Is it full, or was it unplugged?")
         if not use_aria and (rc == 33 or status == "416"):   # can't resume this partial file: start over
             partial.unlink(missing_ok=True)
         log(f"    download interrupted (exit {rc}, {fmt_size(got)} of {fmt_size(size)}); "
