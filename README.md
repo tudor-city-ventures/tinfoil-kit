@@ -33,7 +33,7 @@ Then turn Wi-Fi off and double-click `START-HERE.command`. [GUIDE.md](GUIDE.md) 
 
 ## Keep it fresh
 
-Double-click `SETUP.command` (or run `./kit sync` and then `./kit test`) every two to three months. Downloads resume, every file is checked against its published checksum, and the old version stays until the new one verifies.
+Double-click `SETUP.command` (or run `./kit update`, `./kit sync` and then `./kit test`) every two to three months. It first installs the newest release of the kit's own code, keeping your kit.json changes. Downloads resume, every file is checked against its published checksum, and the old version stays until the new one verifies.
 
 ## Customize
 

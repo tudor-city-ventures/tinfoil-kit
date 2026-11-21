@@ -10,6 +10,8 @@ Commands (run from the kit folder, e.g.  ./kit sync):
   status             What's installed, when it was last updated, free space.
   search WORDS...    Search the Kiwix catalog for more library content to add to kit.json.
   test               Start the offline servers briefly and check they actually work.
+  update             Replace the kit's own code with its newest release on GitHub, keeping
+                     this drive's kit.json changes. SETUP.command runs it first.
 
 Only needs python3 (3.9+) and curl, both standard on macOS. aria2c is used if installed
 (brew install aria2) for faster multi-connection downloads.
@@ -23,6 +25,7 @@ import datetime as dt
 import email.utils
 import fnmatch
 import hashlib
+import io
 import json
 import math
 import os
@@ -32,18 +35,21 @@ import shutil
 import socket
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from pathlib import Path, PurePosixPath
+from typing import Any, Dict, List, Optional, Tuple
 
 USER_AGENT = "TinfoilKit/1.0 (+https://github.com/tudor-city-ventures/tinfoilkit)"
 KIWIX_CATALOG = os.environ.get("KIT_KIWIX_CATALOG", "https://library.kiwix.org/catalog/v2/entries?count=-1")
 KIWIX_RELEASES = os.environ.get("KIT_KIWIX_RELEASES", "https://download.kiwix.org/release/{product}/")
 GITHUB_API = os.environ.get("KIT_GITHUB_API", "https://api.github.com")
+KIT_REPO = os.environ.get("KIT_REPO", "tudor-city-ventures/tinfoilkit")    # where ./kit update gets the kit's code
+KIT_COMMIT = "$Format:%H$"    # git archive (a release, or Code > Download ZIP) writes the commit it packed here
 HF = os.environ.get("KIT_HF", "https://huggingface.co")
 ADOPTIUM_API = os.environ.get("KIT_ADOPTIUM_API", "https://api.adoptium.net")
 MAVEN = os.environ.get("KIT_MAVEN", "https://repo1.maven.org/maven2")
@@ -1477,6 +1483,137 @@ class Lock:
             self.fh.close()
 
 
+# ----------------------------------------------------------------------------- self-update
+
+# ./kit update never writes here, whatever a release holds: the downloads, the kit's state and logs, a git checkout.
+KEEP = {".git", ".kit", "bin", "installers", "library", "logs", "maps", "models", "INVENTORY.md"}
+NEEDED = ("kit", "kit.json", "SETUP.command", "START-HERE.command", "tools/kit.py", "tools/launch.sh", "tools/portal.html")
+MISSING = object()
+
+
+def item_key(x: Any) -> Any:
+    return (x.get("id") or x.get("zim")) if isinstance(x, dict) else None
+
+
+def keyed(x: Any) -> bool:
+    """A kit.json list of items (models, books...): these merge item by item."""
+    return isinstance(x, list) and bool(x) and all(item_key(i) for i in x)
+
+
+def merge3(base: Any, ours: Any, theirs: Any) -> Any:
+    """Three-way merge of kit.json values: this drive's changes (base to ours) win, and the new version's
+    (base to theirs) apply everywhere else. MISSING stands for a key or item that isn't there."""
+    if ours == base:
+        return theirs
+    if theirs == base or theirs == ours:
+        return ours
+    if isinstance(ours, dict) and isinstance(theirs, dict):
+        b = base if isinstance(base, dict) else {}
+        merged = {}
+        for k in [*theirs, *(k for k in ours if k not in theirs)]:
+            v = merge3(b.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING))
+            if v is not MISSING:
+                merged[k] = v
+        return merged
+    if keyed(ours) and keyed(theirs):
+        b = {item_key(i): i for i in base} if keyed(base) else {}
+        o, t = {item_key(i): i for i in ours}, {item_key(i): i for i in theirs}
+        items = []
+        for k in [*t, *(k for k in o if k not in t)]:
+            if k not in t and k in b and k in o and {**o[k], "enabled": 0} == {**b[k], "enabled": 0}:
+                continue    # the new version dropped it (gone from its source): being switched on or off doesn't keep it
+            v = merge3(b.get(k, MISSING), o.get(k, MISSING), t.get(k, MISSING))
+            if v is not MISSING:
+                items.append(v)
+        return items
+    return ours
+
+
+def merge_kit_json(root: Path, theirs_text: str) -> Tuple[str, str]:
+    """This drive's kit.json with the new version's changes, and a line on what happened. The copy of kit.json
+    that came with the kit's current version (site/kit.json) shows which parts this drive changed."""
+    mine = root / "kit.json"
+    if not mine.exists():
+        return theirs_text, "kit.json is the new version's."
+    ours_text = mine.read_text(encoding="utf-8")
+    try:
+        ours = json.loads(ours_text)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"kit.json has a syntax error on line {e.lineno}, column {e.colno}: {e.msg}. "
+                         "Fix it, or delete it to start from the standard list, then run this again") from None
+    try:
+        base = json.loads((root / "site" / "kit.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ours_text, "kit.json stays exactly as it was (there's no copy of the old version's to compare with)."
+    theirs = json.loads(theirs_text)
+    merged = merge3(base, ours, theirs)
+    text = theirs_text if merged == theirs else json.dumps(merged, indent=2, ensure_ascii=False) + "\n"
+    return text, ("kit.json is the new version's, with this drive's changes kept." if ours != base else
+                  "kit.json is the new version's.")
+
+
+def unpack_release(data: bytes, dest: Path) -> None:
+    """Unpack a GitHub release archive into dest without trusting it: plain files and folders only, all inside
+    its one top folder, and nothing for the drive's own folders (KEEP)."""
+    total, top = 0, None
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+        for m in tf:
+            parts = PurePosixPath(m.name).parts
+            if not parts or m.name.startswith("/") or ".." in parts or parts[0] != (top or parts[0]):
+                raise ValueError(f"the archive has an unexpected path in it: {m.name}")
+            top = parts[0]
+            if not (m.isfile() or m.isdir()):
+                raise ValueError(f"the archive has a link in it ({m.name}), which an exFAT drive can't hold")
+            if len(parts) < 2 or parts[1] in KEEP:
+                continue
+            path = dest.joinpath(*parts[1:])
+            if m.isdir():
+                path.mkdir(parents=True, exist_ok=True)
+                continue
+            total += m.size
+            if total > 500 * 10**6:
+                raise ValueError("the archive is far bigger than a kit release")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tf.extractfile(m) as src, open(path, "wb") as out:
+                shutil.copyfileobj(src, out)
+            with contextlib.suppress(OSError):    # exFAT keeps no permissions
+                path.chmod(0o755 if m.mode & 0o111 else 0o644)
+
+
+def check_release(new: Path) -> None:
+    """Refuse a release that's incomplete or that this computer couldn't run."""
+    missing = [rel for rel in NEEDED if not (new / rel).is_file()]
+    if missing:
+        raise ValueError(f"the release is missing {', '.join(missing)}")
+    try:
+        compile((new / "tools" / "kit.py").read_text(encoding="utf-8"), "tools/kit.py", "exec")
+    except SyntaxError as e:
+        raise ValueError(f"its tools/kit.py won't run with this computer's Python {platform.python_version()} "
+                         f"({e.msg}, line {e.lineno})") from None
+    try:
+        json.loads((new / "kit.json").read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise ValueError(f"its kit.json doesn't parse ({e})") from None
+    for script in ("kit", "SETUP.command", "START-HERE.command", "tools/launch.sh"):
+        if subprocess.run(["bash", "-n", str(new / script)], capture_output=True).returncode:
+            raise ValueError(f"its {script} has a syntax error")
+
+
+def install_release(root: Path, new: Path, old_files: List[str]) -> List[str]:
+    """Move the unpacked release over the kit's code (renames on the same drive, so it takes a moment), then
+    remove the files the last update installed that this version no longer has. Returns the files installed."""
+    files = sorted(p.relative_to(new).as_posix() for p in new.rglob("*") if p.is_file())
+    # kit.py goes last: if this stops partway, the old kit.py (which knows it's older) runs the retry.
+    files.sort(key=lambda rel: rel == "tools/kit.py")
+    for rel in files:
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        os.replace(new / rel, root / rel)
+    for rel in sorted(set(old_files) - set(files)):
+        if rel != "kit.json" and PurePosixPath(rel).parts[0] not in KEEP:
+            (root / rel).unlink(missing_ok=True)
+    return files
+
+
 # ----------------------------------------------------------------------------- commands
 
 def cmd_plan(root: Path, args: argparse.Namespace) -> None:
@@ -1641,6 +1778,8 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
         log(f"Last complete sync: {last[:10]} ({age} days ago)." + ("  Time to run ./kit sync." if age >= every else ""))
     else:
         log("Never fully synced. Run ./kit sync.")
+    if state.get("kit_version"):
+        log(f"Kit version: {state['kit_version']}.")
 
 
 def cmd_search(root: Path, args: argparse.Namespace) -> None:
@@ -1883,6 +2022,75 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
     sys.exit(1 if failed else 0)
 
 
+def kit_github(path: str, *keys: str) -> Optional[Dict[str, Any]]:
+    """Ask the kit's own GitHub repo. None if GitHub has no such thing; exits if it can't be reached or makes no sense."""
+    try:
+        answer = http_json(f"{GITHUB_API}/repos/{KIT_REPO}/{path}")
+    except HttpError as e:
+        if e.status == 404:
+            return None
+        log(f"Couldn't reach GitHub, so this version stays. ({e})")
+        sys.exit(1)
+    except ValueError:
+        answer = None
+    if isinstance(answer, dict) and all(isinstance(answer.get(k), str) for k in keys):
+        return answer
+    log("GitHub's answer made no sense (a Wi-Fi sign-in page?), so this version stays.")
+    sys.exit(1)
+
+
+def cmd_update(root: Path, args: argparse.Namespace) -> None:
+    """Exits 3 after installing a new version, so SETUP.command knows to start over on it."""
+    if (root / ".git").exists():
+        log("This kit folder is a git checkout. Update it with:  git pull")
+        return
+    with Lock(root):
+        state = load_state(root)
+        log("Checking GitHub for a newer version of the kit...")
+        release = kit_github("releases/latest", "tag_name", "tarball_url")
+        if release is None:
+            log("No version of the kit is published yet, so this one stays.")
+            return
+        tag, url = release["tag_name"], release["tarball_url"]
+        if tag == state.get("kit_version") and not args.force:
+            log(f"This is the newest version ({tag}).")
+            return
+        if re.fullmatch(r"[0-9a-f]{40}", KIT_COMMIT) and not args.force:
+            # A copy downloaded from the main branch can be newer than the latest release. No answer means GitHub
+            # doesn't know this copy's commit, so the release is the version to have.
+            status = (kit_github(f"compare/{tag}...{KIT_COMMIT}", "status") or {}).get("status")
+            if status == "identical":
+                state["kit_version"] = tag
+                save_state(root, state)
+                log(f"This is the newest version ({tag}).")
+                return
+            if status == "ahead":
+                log(f"This copy of the kit is newer than its latest release ({tag}), so it stays.")
+                return
+        stage = root / ".kit" / "update"
+        shutil.rmtree(stage, ignore_errors=True)
+        try:
+            unpack_release(http_get(url, timeout=600), stage)
+            check_release(stage)
+            text, note = merge_kit_json(root, (stage / "kit.json").read_text(encoding="utf-8"))
+            (stage / "kit.json").write_text(text, encoding="utf-8")
+        except Exception as e:     # whatever goes wrong before the first file moves, the kit stays as it was
+            shutil.rmtree(stage, ignore_errors=True)
+            die(f"couldn't install version {tag}, so this one stays as it was: {e}")
+        try:
+            state["kit_files"] = install_release(root, stage, state.get("kit_files", []))
+        except OSError as e:
+            die(f"the update stopped partway ({e}). Run it again to finish.")
+        state["kit_version"] = tag
+        save_state(root, state)
+        shutil.rmtree(stage, ignore_errors=True)
+    log(f"Installed version {tag}. {note}")
+    news = [line.rstrip() for line in str(release.get("body") or "").splitlines() if line.strip()][:12]
+    if news:
+        log("What's new:\n" + "\n".join("  " + line for line in news))
+    sys.exit(3)
+
+
 # ----------------------------------------------------------------------------- main
 
 def main() -> None:
@@ -1904,12 +2112,14 @@ def main() -> None:
     p.add_argument("words", nargs="+")
     p = sub.add_parser("test", help="check that the offline servers start and answer")
     p.add_argument("--model", help="model folder name to test (default: the smallest)")
+    p = sub.add_parser("update", help="install the newest version of the kit's own code, keeping kit.json changes")
+    p.add_argument("--force", action="store_true", help="reinstall even if this is the newest version")
     args = ap.parse_args()
     root = (args.root or ROOT).resolve()
     if not shutil.which("curl"):
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
-                "search": cmd_search, "test": cmd_test}
+                "search": cmd_search, "test": cmd_test, "update": cmd_update}
     if args.cmd not in commands:
         ap.print_help()
         return

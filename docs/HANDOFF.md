@@ -10,6 +10,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 - `SETUP.command`: the double-click guided setup and refresh, with checks for the drive format and the Command Line Tools. GUIDE, README and the site point to it.
 - kit.json matches the Kiwix catalog. WikEM, WHO and the Gutenberg subject subsets were dropped upstream, two entries were renamed, and Urban Prepper was added. All 60 sources resolve.
 - tinfoilkit.com: bought 2026-11-21 through Vercel on the tudor-city-ventures team (registrant Tudor City Ventures LLC, auto-renews yearly). It's on the `tinfoilkit` project, and `www` redirects to it (308).
+- `./kit update` (Travis chose to build it before launch): `SETUP.command` first installs the newest GitHub release of the kit's code and keeps each drive's kit.json changes. Design in section 3. It does nothing until the repo is public and has a release (launch day, step 5).
 - Launch-day checklist: see section 7.
 - Second thread (robustness, tests, accessibility):
   - Sync tells the truth: it exits 1 when anything failed or couldn't be looked up, stops with one message when offline or behind a Wi-Fi sign-in page, and never resumes a half-download of an older version into a new file. Leftover half-downloads of old versions are cleaned up.
@@ -29,7 +30,6 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 **Decided for now (Travis, 2026-11-21):** llama-server is the only AI runtime (no Ollama or LM Studio), Ask stays one library search then an answer (only map questions use tools), and "AI chat" stays llama-server's own page.
 
 **Ideas not started**
-- The kit can't update its own code. `./kit sync` refreshes content and programs, but a drive set up today keeps today's `tools/` and `kit.json` forever. When a source is renamed or dropped upstream (it happened to four entries in November), that drive's sync reports it as a problem every time until someone edits kit.json by hand. Options: a `./kit update` that fetches the latest release of this repo and keeps the user's kit.json choices, or publishing kit.json entries separately. Needs Travis's call, since it means the drive trusts code from GitHub.
 - Real product screenshots on the site. CI's e2e screenshots use test data (a tiny model, mock places), so they would need real data from Travis's Mac.
 - The CI artifact host (blob.core.windows.net) is blocked from cloud sessions, so artifacts can't be downloaded there.
 
@@ -91,7 +91,19 @@ After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `instal
 - `./kit status`: what's installed, and the size of each item.
 - `./kit search WORDS`: search the Kiwix catalog for more books to add.
 - `./kit test [--model NAME]`: start every server offline and check that each one answers.
+- `./kit update [--force]`: install the newest release of the kit's own code, keeping kit.json changes. `--force` reinstalls the current one.
 - Launcher: `bash START-HERE.command [--share] [--model=NAME] [--no-browser] [--no-maps]`.
+
+### Updating the kit's own code (`./kit update`)
+
+Why: a drive set up once kept its `tools/` and `kit.json` forever, so a source renamed or dropped upstream (four were in November 2026) failed on every sync until someone edited kit.json by hand.
+
+- `SETUP.command` runs it first. It installs the newest GitHub release of this repo (the tarball GitHub makes for `releases/latest`), then SETUP starts over once on its new copy of itself. Exit codes: 3 installed, 0 nothing to do, 1 failed (SETUP carries on with the old code).
+- The archive is untrusted: plain files and folders only, all inside its one top folder, under 500 MB. It's unpacked into `.kit/update` and checked before anything moves: the needed files exist, `kit.py` compiles on this Mac's Python, `kit.json` parses, the scripts pass `bash -n`. The drive's own folders (`models`, `library`, `maps`, `bin`, `logs`, `.kit` and so on) are never touched.
+- kit.json merges three ways: the release's, the drive's, and `site/kit.json` (the untouched copy every version ships) as the base. The drive's changes win and the release's changes land everywhere else. An item the release dropped goes, unless its owner changed more than `enabled`. A changed kit.json is rewritten as plain 2-space JSON, the format the website builder makes.
+- A copy from GitHub knows its commit: `.gitattributes` sets `export-subst` on `tools/kit.py`, so `git archive` (releases and Code > Download ZIP) writes it into `KIT_COMMIT`. If GitHub says that commit is newer than the latest release (a ZIP of `main`), the copy stays.
+- Files the previous release installed and the new one lacks are deleted. A drive set up from a ZIP has no such list, so its first update deletes nothing.
+- A git checkout is told to run `git pull` instead.
 
 ### Sync engine rules (keep these)
 
@@ -359,8 +371,9 @@ Each step needs Travis's go-ahead, because none of them can be quietly undone.
 4. Make the GitHub repo public. The site's GitHub button and the install prompt point at it. First:
    - switch the default branch to `main` (visitors land on it) and delete `claude/project-thread-ew0j18`;
    - decide whether this file stays public. Sections 8 and 9 are internal (accounts, how the project started); trim them if not. Commit authors are all `Claude <noreply@anthropic.com>` or the Actions bot, so no personal email is in the history.
-5. Check the social card (https://tinfoilkit.com/og.png) with a link preview, and that the builder loads sources.json.
-6. Switch to PRs and review from then on (update AGENTS.md's Workflow section).
+5. Publish the first GitHub release from `main` (for example `v1.0.0`), with a few lines on what's in it: SETUP shows them after updating. Until the repo is public and has a release, `./kit update` finds nothing and drives keep their version.
+6. Check the social card (https://tinfoilkit.com/og.png) with a link preview, and that the builder loads sources.json.
+7. Switch to PRs and review from then on (update AGENTS.md's Workflow section).
 
 ## 8. Accounts and access
 

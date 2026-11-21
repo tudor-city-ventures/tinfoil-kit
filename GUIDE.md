@@ -62,12 +62,13 @@ Double-click `SETUP.command`. Or open Terminal in the kit folder (drag the `Tinf
 Terminal icon) and run:
 
 ```
+./kit update    # gets the newest version of the kit itself, keeping your kit.json changes
 ./kit sync      # shows what's new, downloads it, checks every file, then removes old versions
 ./kit test      # starts everything briefly and confirms it works
 ```
 
-Either way it is safe to stop (Ctrl-C or close the window) and re-run; it picks up where it left off. A normal update downloads
-new library editions, the latest AI engine, any re-released models and fresh map data (rebuilding the
+Either way it is safe to stop (Ctrl-C or close the window) and re-run; it picks up where it left off. A normal update gets the
+newest version of the kit itself, new library editions, the latest AI engine, any re-released models and fresh map data (rebuilding the
 directions network takes 10 to 40 minutes). Then pull the plug on Wi-Fi and open the kit once for real.
 
 Other commands:
@@ -89,7 +90,7 @@ Everything the kit keeps is listed in **`kit.json`** (open it in any text editor
   match exactly one file. A new model generation every few months is normal; check which GGUF models fit a
   32 GB Mac (about 20 GB or less) before swapping.
 
-Then run `./kit plan` to preview and `./kit sync` to apply.
+Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit itself keep these changes.
 
 ## First-time setup
 

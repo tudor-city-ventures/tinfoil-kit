@@ -10,7 +10,7 @@ The repo root is the kit itself, so cloning onto a drive just works. The marketi
 | --- | --- |
 | `kit.json` | Single source of truth: settings, runtimes, models, maps, library, extras |
 | `kit` | Wrapper for `python3 tools/kit.py --root <kit folder>` |
-| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`) |
+| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`) |
 | `tools/launch.sh` | Offline launcher, starts every server |
 | `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests |
 | `GUIDE.md` | Printable guide that lives on the drive |
@@ -62,5 +62,6 @@ Cloud sessions can't reach library.kiwix.org, GitHub releases or most download h
 
 - Never run a real `./kit sync` in CI or a cloud session. It downloads about 300 GB. Use the mocks in `tests/`.
 - Vercel: touch only the Tinfoil Kit project in the tudor-city-ventures team. Never change other projects or team settings.
+- A GitHub release reaches every drive at its next SETUP (`./kit update`). Publish one only with Travis's OK, from a commit that passed CI and a real-Mac run.
 - Ask Travis before buying anything (like the domain), before making the repo public, and before anything that can't be undone.
 - If missing access blocks you (GitHub, Vercel, anything else), stop and say exactly what to grant. Don't work around it.

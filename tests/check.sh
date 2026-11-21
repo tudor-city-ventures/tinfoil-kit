@@ -30,6 +30,14 @@ before = open('site/sources.json').read()
 subprocess.run([sys.executable, 'site/build_sources.py'], check=True, stdout=subprocess.DEVNULL)
 sys.exit(0 if open('site/sources.json').read() == before else 'site/sources.json is stale: run python3 site/build_sources.py')"
 
+step "archives of the kit stamp kit.py with their commit (./kit update needs it)"
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  run grep -q '^KIT_COMMIT = "\$Format:%H\$"' tools/kit.py
+  run sh -c 'git check-attr export-subst tools/kit.py | grep -q ": set$"'
+else
+  echo "skipped (not a git checkout)"
+fi
+
 step "Windows launcher keeps CRLF"
 run python3 -c "import sys; d=open('START-HERE-Windows.bat','rb').read(); sys.exit(d.count(b'\n') != d.count(b'\r\n'))"
 
