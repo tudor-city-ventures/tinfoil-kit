@@ -4,10 +4,10 @@ concurrency:
   cancel-in-progress: true
 on:
   pull_request:
-    paths: [tools/**, kit.json, kit, START-HERE.command, tests/**]
+    paths: [tools/**, kit.json, kit, START-HERE.command, SETUP.command, tests/**, .github/workflows/e2e.yml]
   push:
     branches: [main]
-    paths: [tools/**, kit.json, kit, START-HERE.command, tests/**]
+    paths: [tools/**, kit.json, kit, START-HERE.command, SETUP.command, tests/**, .github/workflows/e2e.yml]
   workflow_dispatch:
 permissions:
   contents: read

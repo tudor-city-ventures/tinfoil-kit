@@ -3,11 +3,13 @@
 State "v1" = initial release; touch remote/STATE_V2 to simulate the world 3 months later
 (newer ZIM date, new llama.cpp build, re-uploaded model file).
 """
+import base64
 import hashlib
 import json
 import os
 import re
 import sys
+from email.utils import formatdate
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, unquote
@@ -78,7 +80,6 @@ class H(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         if mtime:
-            from email.utils import formatdate
             self.send_header("Last-Modified", formatdate(mtime, usegmt=True))
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Accept-Ranges", "bytes")
@@ -99,13 +100,13 @@ class H(BaseHTTPRequestHandler):
                 self.send_header("Content-Range", f"bytes */{len(data)}")
                 self.end_headers()
                 return
-            # simulate a flaky connection: the first request for the big file drops halfway
             self.send_response(206)
             self.send_header("Content-Range", f"bytes {start}-{len(data) - 1}/{len(data)}")
             self.send_header("Content-Length", str(len(data) - start))
             self.end_headers()
             self.wfile.write(data[start:])
             return
+        # a flaky connection: the first model download drops halfway
         if p.name.endswith(".gguf") and not head and (R / "FLAKY").exists():
             (R / "FLAKY").unlink()
             self.send_response(200)
@@ -167,7 +168,7 @@ class H(BaseHTTPRequestHandler):
             a2 = R / "gh2" / "photon-1.2.1.jar"
             older = [{"tag_name": "1.2.1", "draft": False, "prerelease": False, "assets": [
                 {"name": a2.name, "size": a2.stat().st_size, "digest": "sha256:" + sha(a2), "browser_download_url": f"{BASE}/gh2/{a2.name}"}]}]
-            return self.send_bytes(json.dumps(older[:0] + [
+            return self.send_bytes(json.dumps([
                 {"tag_name": "2.0.0-beta", "draft": False, "prerelease": True, "assets": [
                     {"name": "photon-2.0.0-beta.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"}]},
                 {"tag_name": "1.3.0", "draft": False, "prerelease": False, "assets": [
@@ -191,7 +192,6 @@ class H(BaseHTTPRequestHandler):
         if path.startswith("/maven/"):
             return self.send_file(R / "maven" / path[len("/maven/"):], head)
         if path in ("/npm/maplibre-gl", "/npm/@protomaps/basemaps"):
-            import base64
             f = next((R / "npm").glob("maplibre-gl-*.tgz" if "maplibre" in path else "basemaps-*.tgz"))
             ver = f.name[:-4].rsplit("-", 1)[1]
             raw = f.read_bytes()

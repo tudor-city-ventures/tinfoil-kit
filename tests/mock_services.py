@@ -7,7 +7,6 @@ import json
 import math
 import os
 import re
-import struct
 import sys
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs

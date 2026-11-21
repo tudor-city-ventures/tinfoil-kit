@@ -353,11 +353,10 @@ var Kit = (function () {
     var queries = opts.queries || fallbackQueries(question);
     var tset = terms(question + " " + queries.join(" "));
     var medicalQ = MEDICAL.test(question), survivalQ = SURVIVAL.test(question);
-    var searchable = books;   // the _ftindex tag isn't reliable; books without an index just return nothing
-    var jobs = [];
-    searchable.forEach(function (b) { queries.forEach(function (q) { jobs.push({ book: b, q: q }); }); });
+    var jobs = [];   // every book: the _ftindex tag isn't reliable, and books without an index just return nothing
+    books.forEach(function (b) { queries.forEach(function (q) { jobs.push({ book: b, q: q }); }); });
     var started = Date.now(), done = 0, budget = opts.searchBudgetMs || 30000;
-    progress("Searching " + searchable.length + " books for: " + queries.join(" | "));
+    progress("Searching " + books.length + " books for: " + queries.join(" | "));
     var results = await pool(jobs, 6, async function (job) {
       if (Date.now() - started > budget || (opts.signal && opts.signal.aborted)) return [];
       var url = base + opts.root + "/search?content=" + encodeURIComponent(job.book.id) + "&pattern=" + encodeURIComponent(job.q) + "&format=xml&pageLength=3";
@@ -587,7 +586,7 @@ var Kit = (function () {
   async function getDirections(opts, fromText, toText, mode) {
     var from = typeof fromText === "object" && fromText ? fromText : await resolvePlace(opts, fromText);
     var to = typeof toText === "object" && toText ? toText : await resolvePlace(opts, toText);
-    var profile = mode === "foot" || /walk|foot/i.test(mode || "") ? "foot" : "car";
+    var profile = /walk|foot/i.test(mode || "") ? "foot" : "car";
     var u = opts.routeBase + "/route?point=" + from.lat + "," + from.lon + "&point=" + to.lat + "," + to.lon +
             "&profile=" + profile + "&locale=en&points_encoded=false&instructions=true";
     var j = await getJson(u, opts.signal);
@@ -864,7 +863,7 @@ if (typeof document !== "undefined") (function () {
   var KM = window.KIT_MAPS || { available: false, reason: "the map isn't set up here. It's added by ./kit sync (on the Mac, while online) and starts with START-HERE.command." };
   var host = location.protocol + "//" + location.hostname + ":";
   var GEO = KM.ports ? host + KM.ports.geocoder : "", ROUTE = KM.ports ? host + KM.ports.routing : "";
-  var map = null, mapReady = false, pending = null, markers = [], homeMk = null, fromPick = null, toPick = null;
+  var map = null, mapReady = false, pending = null, markers = [], homeMk = null, toPick = null;
   var svc = { geocoder: false, routing: false };
   var esc = Kit.escapeHtml;
   function units() { return KM.units || "imperial"; }
@@ -916,7 +915,7 @@ if (typeof document !== "undefined") (function () {
           maxzoom: KM.detailMaxzoom, attribution: "&copy; OpenStreetMap contributors, Protomaps" } },
         layers: basemaps.layers("protomaps", basemaps.namedFlavor("light"), { lang: "en" }) }
     });
-    window.__kitMap = map;   // handy for debugging from the browser console
+    window.__kitMap = map;   // for the UI tests, and handy in the browser console
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: units() === "metric" ? "metric" : "imperial" }), "bottom-left");
     map.on("error", function (e) { if (e && e.error) console.warn("map: " + e.error.message); });
@@ -1014,7 +1013,7 @@ if (typeof document !== "undefined") (function () {
   async function runDirections() {
     $("dirSummary").textContent = "Finding the route..."; $("dirSteps").innerHTML = "";
     try {
-      var r = await Kit.getDirections(mapOpts(), fromPick || $("dirFrom").value, toPick || $("dirTo").value, $("dirMode").value);
+      var r = await Kit.getDirections(mapOpts(), $("dirFrom").value, toPick || $("dirTo").value, $("dirMode").value);
       renderRoute(r); show({ type: "route", route: r });
     } catch (e) {
       $("dirSummary").textContent = "No directions: " + e.message + (svc.routing ? "" : " (the directions server isn't running)");
@@ -1044,7 +1043,7 @@ if (typeof document !== "undefined") (function () {
     var list = $("nearbyList");
     list.innerHTML = "<li>Searching...</li>";
     try {
-      var r = await Kit.findNearby(mapOpts(), cat, fromPick || $("dirFrom").value || "home", 8);
+      var r = await Kit.findNearby(mapOpts(), cat, $("dirFrom").value || "home", 8);
       list.innerHTML = r.places.length ? r.places.map(function (p, i) {
         return "<li data-i=\"" + i + "\"><button type=\"button\" class=\"plain\">" + esc(p.name) + " <small>" + dist(p.distance_m) + " " +
           p.direction + (p.address ? " &middot; " + esc(p.address) : "") + "</small></button></li>"; }).join("") : "<li>None found within 40 km (25 mi).</li>";
@@ -1119,7 +1118,6 @@ if (typeof document !== "undefined") (function () {
       if (ev.key === "Enter") { ev.preventDefault(); clearTimeout(searchTimer); doSearch(true); }
       if (ev.key === "Escape") $("placeResults").hidden = true;
     });
-    $("dirFrom").addEventListener("input", function () { fromPick = null; });
     $("dirTo").addEventListener("input", function () { toPick = null; });
     $("dirTo").addEventListener("keydown", function (ev) { if (ev.key === "Enter") runDirections(); });
     $("dirGo").addEventListener("click", runDirections);

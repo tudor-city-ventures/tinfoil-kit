@@ -270,15 +270,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
 Inspired by the Do They Support It repo, but much smaller and written for people.
 
 - **`AGENTS.md`** is the one set of agent instructions; Codex and Cursor read it natively. **`CLAUDE.md`** contains a single line, `@AGENTS.md`, which Claude Code reads as an import. No symlinks, because people will copy this repo onto exFAT drives.
-- **Verification tiers** go in `AGENTS.md`. Use the cheapest one that proves the change, and paste its output:
-
-  | Tier | Command | When |
-  | --- | --- | --- |
-  | Targeted | `node tests/map_logic_test.js tools/portal.html` (with the mocks running) | While iterating |
-  | Quick gate | `tests/check.sh`: py_compile, `bash -n`, shellcheck, the page script parses, `kit.json` is valid, logic tests against the mocks | Before calling anything done |
-  | End to end | `tests/e2e/run.sh` | Changes to `tools/` or `kit.json`, and in CI |
-  | Real Mac | `./kit sync && ./kit test` on a real drive | Before a release. Travis runs it |
-
+- **Verification tiers** are in `AGENTS.md`: use the cheapest one that proves the change, and paste its output.
 - **Visual changes** to the page or the website include screenshots in the pull request. The UI tests already save them.
 - **CI (GitHub Actions):**
   - The quick gate on every pull request and on `main`.

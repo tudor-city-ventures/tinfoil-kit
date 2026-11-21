@@ -1,5 +1,6 @@
 """Build small but real ZIM files (with full-text index) to test the kit."""
-import sys
+import struct
+import zlib
 from libzim.writer import Creator, Item, StringProvider, Hint
 
 ARTICLES = {
@@ -38,15 +39,9 @@ class Page(Item):
 
 
 def png48():
-    import zlib, struct
     raw = b"".join(b"\x00" + b"\x1f\x5f\x8b\xff" * 48 for _ in range(48))
     def chunk(t, d): return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 48, 48, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
-
-
-_UNUSED = (
-    "89504e470d0a1a0a0000000d4948445200000030000000300806000000570299870000001749444154789cedc1010d000000c2a0f74f6d0e37a00000006e0e3000"
-    "01a5c8b4e80000000049454e44ae426082")
 
 
 def build(prefix, date, extra=""):

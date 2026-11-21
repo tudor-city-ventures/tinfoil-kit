@@ -23,7 +23,6 @@ step "kit.json is valid"
 run python3 -c "import json,sys; [json.load(open(f)) for f in sys.argv[1:]]" kit.json tests/drive_kit.json tests/drive_kit_maps.json
 
 step "site data matches kit.json"
-run python3 -m py_compile site/build_sources.py
 run python3 -c "
 import json, subprocess, sys
 before = open('site/sources.json').read()

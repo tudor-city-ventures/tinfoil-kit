@@ -7,6 +7,7 @@ Commands (run from the kit folder, e.g.  ./kit sync):
   sync [-y]          Download/update everything enabled in kit.json, verify every file
                      (SHA-256), then remove the old versions. Safe to interrupt and re-run.
   verify [--quick]   Re-check every file on the drive against its recorded SHA-256.
+                     --fix deletes the bad ones so the next sync replaces them.
   status             What's installed, when it was last updated, free space.
   search WORDS...    Search the Kiwix catalog for more library content to add to kit.json.
   test               Start the offline servers briefly and check they actually work.
@@ -87,6 +88,7 @@ GH_ENCODED_VALUES = {
 }
 GLYPH_FONTS = ["Noto Sans Regular", "Noto Sans Medium", "Noto Sans Italic"]
 GLYPH_RANGES = ["0-255", "256-511", "8192-8447"]
+ARCHIVE_SUFFIXES = (".tar.gz", ".tgz", ".zip")
 SHARD_RE = re.compile(r"-\d{5}-of-\d{5}\.gguf$")
 ZIM_RE = re.compile(r"^(?P<prefix>.+)_(?P<date>\d{4}-\d{2})\.zim$")
 HEX64 = re.compile(r"\b([0-9a-fA-F]{64})\b")
@@ -158,9 +160,12 @@ def _auth_headers(url: str) -> Dict[str, str]:
     return {}
 
 
-def http_get(url: str, timeout: int = 120, headers: Optional[Dict[str, str]] = None) -> bytes:
+def http_get(url: str, timeout: int = 120, headers: Optional[Dict[str, str]] = None,
+             save_headers: Optional[Path] = None) -> bytes:
     cmd = ["curl", "-fsSL", "--retry", "3", "--retry-delay", "2", "--connect-timeout", "20",
            "--max-time", str(timeout), "-A", USER_AGENT]
+    if save_headers:
+        cmd += ["-D", str(save_headers)]
     for k, v in {**_auth_headers(url), **(headers or {})}.items():
         cmd += ["-H", f"{k}: {v}"]
     cmd.append(url)
@@ -188,6 +193,19 @@ def http_head(url: str) -> Dict[str, str]:
             k, v = line.split(":", 1)
             headers[k.strip().lower()] = v.strip()
     return headers
+
+
+def content_length(h: Dict[str, str]) -> Optional[int]:
+    v = h.get("content-length", "")
+    return (int(v) or None) if v.isdigit() else None
+
+
+def head_size(url: str) -> Optional[int]:
+    """A remote file's size, or None when the server won't say."""
+    try:
+        return content_length(http_head(url))
+    except HttpError:
+        return None
 
 
 def fetch_sha256_sidecar(url: str) -> Optional[str]:
@@ -474,8 +492,7 @@ class Resolver:
             for a in rel.get("assets", []):
                 if fnmatch.fnmatch(a["name"], pattern):
                     digest = a.get("digest") or ""
-                    is_archive = a["name"].endswith((".tar.gz", ".tgz", ".zip"))
-                    item.kind = "archive" if is_archive else "files"
+                    item.kind = "archive" if a["name"].endswith(ARCHIVE_SUFFIXES) else "files"
                     item.dest, item.version = f"bin/{item.id}", rel["tag_name"]
                     item.files = [RemoteFile(name=a["name"], url=a["browser_download_url"], size=a.get("size"),
                                              sha256=digest.split(":", 1)[1] if digest.startswith("sha256:") else None)]
@@ -498,22 +515,17 @@ class Resolver:
             raise ValueError(f"no file matching '{pattern}' in {base}")
         _, version, name = max(found)
         url = base + name
-        size = None
-        try:
-            size = int(http_head(url).get("content-length", "0")) or None
-        except (HttpError, ValueError):
-            pass
-        is_archive = name.endswith((".tar.gz", ".tgz", ".zip"))
+        is_archive = name.endswith(ARCHIVE_SUFFIXES)
         item.kind = "archive" if is_archive else "files"
         item.dest = f"bin/{item.id}" if is_archive else "installers"
         item.version = version
-        item.files = [RemoteFile(name=name, url=url, size=size, sha256_sidecar=True)]
+        item.files = [RemoteFile(name=name, url=url, size=head_size(url), sha256_sidecar=True)]
 
     def _url(self, item: Item) -> None:
         url = item.cfg["url"]
         name = item.cfg.get("filename") or urllib.parse.urlparse(url).path.split("/")[-1]
         h = http_head(url)
-        size = int(h["content-length"]) if h.get("content-length", "").isdigit() else None
+        size = content_length(h)
         item.dest = item.cfg.get("dest", "installers")
         item.version = h.get("etag") or h.get("last-modified") or (str(size) if size else "unknown")
         item.files = [RemoteFile(name=name, url=url, size=size, sha256=item.cfg.get("sha256"))]
@@ -551,13 +563,8 @@ class Resolver:
                 checks["sha1"] = m.group(0)
         except HttpError:
             pass
-        size = None
-        try:
-            size = int(http_head(url).get("content-length", "0")) or None
-        except (HttpError, ValueError):
-            pass
         item.kind, item.dest, item.version = "files", f"bin/{item.id}", v
-        item.files = [RemoteFile(name=jar, url=url, size=size, checks=checks)]
+        item.files = [RemoteFile(name=jar, url=url, size=head_size(url), checks=checks)]
 
     def _npm(self, item: Item) -> None:
         pkg, prefix = item.cfg["package"], str(item.cfg.get("version_prefix", ""))
@@ -573,13 +580,8 @@ class Resolver:
             checks["sha512"] = base64.b64decode(integrity[7:]).hex()
         elif dist.get("shasum"):
             checks["sha1"] = dist["shasum"]
-        size = None
-        try:
-            size = int(http_head(dist["tarball"]).get("content-length", "0")) or None
-        except (HttpError, ValueError):
-            pass
         item.kind, item.dest, item.version = "archive", f"maps/viewer/{item.id}", v
-        item.files = [RemoteFile(name=f"{item.id}-{v}.tgz", url=dist["tarball"], size=size, checks=checks)]
+        item.files = [RemoteFile(name=f"{item.id}-{v}.tgz", url=dist["tarball"], size=head_size(dist["tarball"]), checks=checks)]
 
     def _github_archive(self, item: Item) -> None:
         repo, branch = item.cfg["repo"], item.cfg.get("branch", "main")
@@ -606,7 +608,7 @@ class Resolver:
     def _routing(self, item: Item) -> None:
         url = item.cfg["url"]
         h = http_head(url)
-        size = int(h["content-length"]) if h.get("content-length", "").isdigit() else None
+        size = content_length(h)
         gh = self.resolved.get("graphhopper")
         item.kind, item.dest = "custom", "maps/routing"
         item.version = http_day(h) or str(size)
@@ -647,7 +649,7 @@ class Resolver:
                 h = http_head(url)
             except HttpError:
                 continue
-            size = int(h["content-length"]) if h.get("content-length", "").isdigit() else None
+            size = content_length(h)
             item.kind, item.dest = "custom", "maps/geocoder"
             item.version = f"{ver}/{http_day(h) or size}"
             item.extra["db_version"] = ver
@@ -711,22 +713,12 @@ def select_hf_files(tree: List[Dict[str, Any]], patterns: List[str], repo: str) 
 def hf_tree(repo: str, rev: str) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     url: Optional[str] = f"{HF}/api/models/{repo}/tree/{rev}?recursive=True&expand=False"
-    while url:
-        with tempfile.NamedTemporaryFile(delete=False) as hf:
-            hdr_path = hf.name
-        try:
-            cmd = ["curl", "-fsSL", "--retry", "3", "--connect-timeout", "20", "--max-time", "120",
-                   "-A", USER_AGENT, "-D", hdr_path]
-            for k, v in _auth_headers(url).items():
-                cmd += ["-H", f"{k}: {v}"]
-            p = subprocess.run(cmd + [url], capture_output=True)
-            if p.returncode != 0:
-                raise HttpError(url, p.stderr.decode(errors="replace").strip())
-            out += json.loads(p.stdout.decode("utf-8"))
-            m = re.search(r'<([^>]+)>;\s*rel="next"', Path(hdr_path).read_text(errors="replace"))
+    with tempfile.TemporaryDirectory() as tmp:
+        headers = Path(tmp) / "headers"
+        while url:     # a long list comes in pages, each naming the next in its Link header
+            out += json.loads(http_get(url, save_headers=headers).decode("utf-8"))
+            m = re.search(r'<([^>]+)>;\s*rel="next"', headers.read_text(errors="replace"))
             url = m.group(1) if m else None
-        finally:
-            os.unlink(hdr_path)
     return out
 
 
@@ -772,13 +764,14 @@ def evaluate(item: Item, state: Dict[str, Any], root: Path) -> None:
     if item.kind == "custom":
         d = root / item.dest
         t = item.cfg.get("type")
+        ok = st is not None and st.get("version") == item.version
         if t == "routing":
-            ok = (st is not None and st.get("version") == item.version and (d / "graph-cache" / "properties").exists()
+            ok = (ok and (d / "graph-cache" / "properties").exists()
                   and (not item.extra.get("gh_version") or st.get("gh_version") == item.extra["gh_version"]))
         elif t == "photon_db":
-            ok = st is not None and st.get("version") == item.version and (d / "photon_data").is_dir()
+            ok = ok and (d / "photon_data").is_dir()
         else:
-            ok = st is not None and st.get("version") == item.version and all((d / f.name).exists() for f in item.files)
+            ok = ok and all((d / f.name).exists() for f in item.files)
         item.need = [] if ok else list(item.files)
         item.status = "ok" if ok else ("update" if st else "new")
         return
@@ -849,7 +842,7 @@ def offline(items: List[Item]) -> bool:
     return len(active) > 1 and all(i.status == "error" for i in active)
 
 
-def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[str, Any]) -> int:
+def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[str, Any]) -> None:
     free = shutil.disk_usage(root).free
     total = 0
     labels = {"ok": "ok      ", "new": "NEW     ", "update": "UPDATE  ", "error": "ERROR   "}
@@ -879,14 +872,13 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
     if offline(items):
         log("\nNothing could be looked up. Check that this Mac is online (on hotel or cafe Wi-Fi, "
             "open any web page and sign in first), then try again.")
-        return 0
+        return
     keep = float(cfg["settings"].get("keep_free_gb", 25)) * GB
     log(f"\nTo download: {fmt_size(total)}   Free on drive: {fmt_size(free)}   "
         f"Free afterwards: ~{fmt_size(max(0, free - total))} (before old versions are removed)")
     if free - total < keep:
         log(f"WARNING: that leaves less than keep_free_gb ({fmt_size(keep)}). Items that don't fit "
             "will be skipped; disable some in kit.json or use a bigger drive.")
-    return total
 
 
 # ----------------------------------------------------------------------------- downloading
@@ -965,8 +957,8 @@ def hash_file(path: Path, algos: List[str], label: str = "") -> Dict[str, str]:
     return {a: h.hexdigest() for a, h in hs.items()}
 
 
-def sha256_file(path: Path, label: str = "") -> str:
-    return hash_file(path, ["sha256"], label)["sha256"]
+def sha256_file(path: Path) -> str:
+    return hash_file(path, ["sha256"])["sha256"]
 
 
 def expected_digests(f: RemoteFile) -> Dict[str, str]:
@@ -1090,6 +1082,27 @@ def install_files(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, 
     return downloaded
 
 
+def extract_archive(archive: Path, name: str, target: Path) -> None:
+    """Extract on the internal disk first, then copy with symlinks resolved:
+    exFAT drives (readable by Windows/Linux too) can't store symlinks."""
+    tmp = Path(tempfile.mkdtemp(prefix="tinfoilkit-"))
+    try:
+        if name.endswith(".zip"):
+            cmd = ["unzip", "-q", "-o", str(archive), "-d", str(tmp)]
+        else:
+            cmd = ["tar", "-xzf", str(archive), "-C", str(tmp)]
+        p = subprocess.run(cmd, capture_output=True, text=True)
+        if p.returncode != 0:
+            raise RuntimeError(f"could not extract {name}: {p.stderr.strip()}")
+        staging = target.with_name(target.name + ".partial")
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(tmp, staging, symlinks=False)
+        shutil.rmtree(target, ignore_errors=True)
+        os.replace(staging, target)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def install_archive(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, Any], force: bool) -> int:
     f = item.files[0]
     expected = expected_digests(f)
@@ -1126,7 +1139,6 @@ def install_archive(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
         "dest": item.dest, "archive": f.name, "archive_sha256": got, "verified": bool(expected),
         "binary": str(binary.relative_to(root)) if binary else None, "updated": now_iso(), "note": item.note}
     return f.size or 0
-
 
 
 # ----------------------------------------------------------------------------- maps installers
@@ -1332,7 +1344,6 @@ def installer_for(item: Item):
     return install_archive if item.kind == "archive" else install_files
 
 
-
 # ----------------------------------------------------------------------------- portal page
 
 def current_dir(root: Path, rel: str) -> Optional[Path]:
@@ -1414,27 +1425,6 @@ def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
     return out
 
 
-def extract_archive(archive: Path, name: str, target: Path) -> None:
-    """Extract on the internal disk first, then copy with symlinks resolved:
-    exFAT drives (readable by Windows/Linux too) can't store symlinks."""
-    tmp = Path(tempfile.mkdtemp(prefix="offlinekit-"))
-    try:
-        if name.endswith(".zip"):
-            cmd = ["unzip", "-q", "-o", str(archive), "-d", str(tmp)]
-        else:
-            cmd = ["tar", "-xzf", str(archive), "-C", str(tmp)]
-        p = subprocess.run(cmd, capture_output=True, text=True)
-        if p.returncode != 0:
-            raise RuntimeError(f"could not extract {name}: {p.stderr.strip()}")
-        staging = target.with_name(target.name + ".partial")
-        shutil.rmtree(staging, ignore_errors=True)
-        shutil.copytree(tmp, staging, symlinks=False)
-        shutil.rmtree(target, ignore_errors=True)
-        os.replace(staging, target)
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-
-
 # ----------------------------------------------------------------------------- housekeeping
 
 def prepare_drive(root: Path) -> None:
@@ -1453,7 +1443,12 @@ def prepare_drive(root: Path) -> None:
             pass
 
 
-def write_inventory(root: Path, state: Dict[str, Any], cfg: Dict[str, Any]) -> None:
+def drive_bytes(rec: Dict[str, Any]) -> int:
+    """What an item in state.json takes on the drive."""
+    return sum(f.get("size", 0) for f in rec.get("files", {}).values()) + rec.get("unpacked_size", 0)
+
+
+def write_inventory(root: Path, state: Dict[str, Any]) -> None:
     lines = ["# What's on this drive", "",
              f"Last updated: {state.get('last_sync', 'never')}  ",
              "Generated by `./kit sync`. Start everything by double-clicking START-HERE.command.", ""]
@@ -1463,7 +1458,7 @@ def write_inventory(root: Path, state: Dict[str, Any], cfg: Dict[str, Any]) -> N
             continue
         lines += [f"## {section.capitalize()}", "", "| Item | Version | Size | Notes |", "|---|---|---|---|"]
         for ident, v in rows:
-            size = sum(f.get("size", 0) for f in v.get("files", {}).values()) + v.get("unpacked_size", 0)
+            size = drive_bytes(v)
             lines.append(f"| {ident} | {v.get('version', '')} | {fmt_size(size) if size else ''} | "
                          f"{(v.get('note') or '').replace('|', '/')} |")
         lines.append("")
@@ -1695,7 +1690,7 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
         if not failures and not errors and not args.only:
             state["last_sync"] = now_iso()
         save_state(root, state)
-        write_inventory(root, state, cfg)
+        write_inventory(root, state)
         try:
             build_portal(root, cfg)
         except (OSError, RuntimeError, ValueError) as e:
@@ -1767,7 +1762,7 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
         if rows:
             log(f"\n[{section}]")
         for key, v in rows:
-            size = sum(f.get("size", 0) for f in v.get("files", {}).values()) + v.get("unpacked_size", 0)
+            size = drive_bytes(v)
             total += size
             log(f"  {key.split('/', 1)[1][:44]:<46}{v.get('version', ''):<16}{fmt_size(size) if size else '':>9}"
                 f"   {v.get('updated', '')[:10]}")
@@ -1822,7 +1817,7 @@ def platform_tag() -> str:
     if sysname == "Darwin":
         return "macos-arm64" if mach in ("arm64", "aarch64") else "macos-x64"
     if sysname == "Linux":
-        return "linux-x64" if mach in ("x86_64", "amd64") else f"linux-{mach}"
+        return "linux-x64" if mach in ("x86_64", "amd64") else "linux-arm64" if mach in ("arm64", "aarch64") else f"linux-{mach}"
     return "windows-x64"
 
 
@@ -1830,13 +1825,9 @@ def runtime_binary(root: Path, product: str, name: str) -> Optional[Path]:
     override = os.environ.get(f"KIT_{product.upper().replace('.', '').replace('-', '_')}_BIN")
     if override:
         return Path(override)
-    base = root / "bin" / f"{product}-{platform_tag()}"
-    cur = base / "CURRENT"
-    if cur.exists():
-        found = find_binary(base / cur.read_text().strip(), name)
-        if found:
-            return found
-    return find_binary(base, name)
+    rel = f"bin/{product}-{platform_tag()}"
+    cur = current_dir(root, rel)
+    return (find_binary(cur, name) if cur else None) or find_binary(root / rel, name)
 
 
 def wait_http(url: str, timeout: float) -> bool:
@@ -1856,6 +1847,10 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
+def start_server(procs: List[subprocess.Popen], log: Path, cmd: List[Any], cwd: Optional[Path] = None) -> None:
+    with open(log, "w") as f:    # the server keeps its own handle on the log
+        procs.append(subprocess.Popen([str(c) for c in cmd], cwd=cwd, stdout=f, stderr=subprocess.STDOUT))
+
 
 def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.Popen], logs_dir: Path) -> None:
     home = m["home"]
@@ -1864,9 +1859,8 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
     check("map tiles present", bool(pm) and tiles.exists(), "" if tiles.exists() else "run ./kit sync")
     if pm and tiles.exists():
         port = free_port()
-        procs.append(subprocess.Popen([str(pm), "serve", str(tiles.parent), "--port", str(port),
-                                       "--interface", "127.0.0.1", "--cors", "*"],
-                                      stdout=open(logs_dir / "test-tiles.log", "w"), stderr=subprocess.STDOUT))
+        start_server(procs, logs_dir / "test-tiles.log",
+                     [pm, "serve", tiles.parent, "--port", port, "--interface", "127.0.0.1", "--cors", "*"])
         up = wait_http(f"http://127.0.0.1:{port}/basemap.json", 30)
         ok = False
         if up:
@@ -1881,10 +1875,9 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
     check("address search installed", bool(java and photon and (gdir / "photon_data").is_dir()))
     if java and photon and (gdir / "photon_data").is_dir():
         port = free_port()
-        procs.append(subprocess.Popen([str(java), f"-Xmx{m['geocoder_heap']}", "-jar", str(photon), "serve",
-                                       "-data-dir", str(gdir), "-listen-ip", "127.0.0.1", "-listen-port", str(port),
-                                       "-cors-any"],
-                                      stdout=open(logs_dir / "test-geocoder.log", "w"), stderr=subprocess.STDOUT))
+        start_server(procs, logs_dir / "test-geocoder.log",
+                     [java, f"-Xmx{m['geocoder_heap']}", "-jar", photon, "serve", "-data-dir", gdir,
+                      "-listen-ip", "127.0.0.1", "-listen-port", port, "-cors-any"])
         up = wait_http(f"http://127.0.0.1:{port}/status", 240)
         detail = "did not start (see logs/test-geocoder.log)"
         ok = False
@@ -1906,11 +1899,9 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
     check("directions installed", bool(java and gh and (rdir / "graph-cache" / "properties").exists()))
     if java and gh and (rdir / "graph-cache" / "properties").exists():
         port = free_port()
-        procs.append(subprocess.Popen([str(java), f"-Xmx{m['routing_heap']}",
-                                       f"-Ddw.server.application_connectors[0].port={port}",
-                                       f"-Ddw.server.admin_connectors[0].port={free_port()}",
-                                       "-jar", str(gh), "server", "gh-serve.yml"], cwd=str(rdir),
-                                      stdout=open(logs_dir / "test-routing.log", "w"), stderr=subprocess.STDOUT))
+        start_server(procs, logs_dir / "test-routing.log",
+                     [java, f"-Xmx{m['routing_heap']}", f"-Ddw.server.application_connectors[0].port={port}",
+                      f"-Ddw.server.admin_connectors[0].port={free_port()}", "-jar", gh, "server", "gh-serve.yml"], cwd=rdir)
         up = wait_http(f"http://127.0.0.1:{port}/health", 240)
         detail, ok = "did not start (see logs/test-routing.log)", False
         if up:
@@ -1956,10 +1947,8 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
     try:
         if kiwix and zims:
             kport = free_port()
-            procs.append(subprocess.Popen(
-                [str(kiwix), "--port", str(kport), "--address", "127.0.0.1",
-                 "--customIndex", str(portal), *map(str, zims)],
-                stdout=open(logs_dir / "test-kiwix.log", "w"), stderr=subprocess.STDOUT))
+            start_server(procs, logs_dir / "test-kiwix.log",
+                         [kiwix, "--port", kport, "--address", "127.0.0.1", "--customIndex", portal, *zims])
             up = wait_http(f"http://127.0.0.1:{kport}/", 60)
             check("library server starts", up)
             if up:
@@ -1985,10 +1974,9 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
             lport = free_port()
             small = min(models, key=lambda m: sum(f.stat().st_size for f in m.glob("*.gguf")))
             name = args.model or small.name
-            procs.append(subprocess.Popen(
-                [str(llama), "--models-dir", str(root / "models"), "--models-max", "1", "-c", "4096",
-                 "--host", "127.0.0.1", "--port", str(lport), "--cors-origins", "http://127.0.0.1:8888"],
-                stdout=open(logs_dir / "test-llama.log", "w"), stderr=subprocess.STDOUT))
+            start_server(procs, logs_dir / "test-llama.log",
+                         [llama, "--models-dir", root / "models", "--models-max", "1", "-c", "4096",
+                          "--host", "127.0.0.1", "--port", lport, "--cors-origins", "http://127.0.0.1:8888"])
             up = wait_http(f"http://127.0.0.1:{lport}/v1/models", 90)
             check("AI server starts", up)
             if up:
@@ -2030,6 +2018,8 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
         f"\n{len(failed)} check(s) failed. Logs are in {logs_dir}.")
     sys.exit(1 if failed else 0)
 
+
+# ----------------------------------------------------------------------------- update command
 
 def kit_github(path: str, *keys: str) -> Optional[Dict[str, Any]]:
     """Ask the kit's own GitHub repo. None if GitHub has no such thing; exits if it can't be reached or makes no sense."""

@@ -2,7 +2,7 @@
 # Starts the offline library server (kiwix-serve) and the AI server (llama-server),
 # then opens the portal in the browser. Started by START-HERE.command.
 #
-#   bash tools/launch.sh [--share] [--model=NAME] [--no-browser]
+#   bash tools/launch.sh [--share] [--model=NAME] [--no-browser] [--no-maps]
 #
 #   --share       also serve phones/laptops on the same Wi-Fi or hotspot
 #   --model=NAME  model to load first (a folder name in models/)
@@ -23,18 +23,20 @@ for a in "$@"; do
 done
 
 say() { printf '%s\n' "$*"; }
-setting() { # read a simple "key": value from kit.json without needing python
-  sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",}]*\)\"\{0,1\}.*/\1/p" "$KIT/kit.json" 2>/dev/null | head -1
+setting() { # key default: a simple "key": value from kit.json, read without needing python
+  local v
+  v="$(sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",}]*\)\"\{0,1\}.*/\1/p" "$KIT/kit.json" 2>/dev/null | head -1)"
+  printf '%s' "${v:-$2}"
 }
-LIB_PORT="$(setting library_port)"; LIB_PORT="${LIB_PORT:-8888}"
-AI_PORT="$(setting ai_port)"; AI_PORT="${AI_PORT:-8080}"
-CTX="$(setting context_size)"; CTX="${CTX:-16384}"
+LIB_PORT="$(setting library_port 8888)"
+AI_PORT="$(setting ai_port 8080)"
+CTX="$(setting context_size 16384)"
 MODEL="${MODEL:-$(setting default_model)}"
-TILES_PORT="$(setting tiles_port)"; TILES_PORT="${TILES_PORT:-8090}"
-GEO_PORT="$(setting geocoder_port)"; GEO_PORT="${GEO_PORT:-2322}"
-ROUTE_PORT="$(setting routing_port)"; ROUTE_PORT="${ROUTE_PORT:-8989}"
-GEO_HEAP="$(setting geocoder_heap)"; GEO_HEAP="${GEO_HEAP:-3g}"
-ROUTE_HEAP="$(setting routing_heap)"; ROUTE_HEAP="${ROUTE_HEAP:-2g}"
+TILES_PORT="$(setting tiles_port 8090)"
+GEO_PORT="$(setting geocoder_port 2322)"
+ROUTE_PORT="$(setting routing_port 8989)"
+GEO_HEAP="$(setting geocoder_heap 3g)"
+ROUTE_HEAP="$(setting routing_heap 2g)"
 
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) PLAT=macos-arm64 ;;
@@ -211,19 +213,18 @@ if [ "$NO_MAPS" = 0 ] && [ -d "$KIT/maps" ]; then
   JAVA="$(pick_bin java java)"
   PHOTON_JAR="$(newest "$KIT"/bin/photon/photon-*.jar)"
   GH_JAR="$(newest "$KIT"/bin/graphhopper/graphhopper-web-*.jar)"
-  IFACE=127.0.0.1; [ "$SHARE" = 1 ] && IFACE=0.0.0.0
   if [ -n "$PMTILES" ] && [ -f "$KIT/maps/tiles/basemap.pmtiles" ] && ! up "http://127.0.0.1:$TILES_PORT/basemap.json"; then
-    "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$IFACE" --cors '*' > "$KIT/logs/tiles.log" 2>&1 &
+    "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors '*' > "$KIT/logs/tiles.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED map"
   fi
   if [ -n "$JAVA" ] && [ -n "$PHOTON_JAR" ] && [ -d "$KIT/maps/geocoder/photon_data" ] && ! up "http://127.0.0.1:$GEO_PORT/status"; then
-    "$JAVA" "-Xmx$GEO_HEAP" -jar "$PHOTON_JAR" serve -data-dir "$KIT/maps/geocoder" -listen-ip "$IFACE" \
+    "$JAVA" "-Xmx$GEO_HEAP" -jar "$PHOTON_JAR" serve -data-dir "$KIT/maps/geocoder" -listen-ip "$HOST" \
       -listen-port "$GEO_PORT" -cors-any > "$KIT/logs/geocoder.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED address-search"
   fi
   if [ -n "$JAVA" ] && [ -n "$GH_JAR" ] && [ -f "$KIT/maps/routing/graph-cache/properties" ] && ! up "http://127.0.0.1:$ROUTE_PORT/health"; then
     (cd "$KIT/maps/routing" && exec "$JAVA" "-Xmx$ROUTE_HEAP" \
-      "-Ddw.server.application_connectors[0].bind_host=$IFACE" "-Ddw.server.application_connectors[0].port=$ROUTE_PORT" \
+      "-Ddw.server.application_connectors[0].bind_host=$HOST" "-Ddw.server.application_connectors[0].port=$ROUTE_PORT" \
       -jar "$GH_JAR" server gh-serve.yml) > "$KIT/logs/routing.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED directions"
   fi
