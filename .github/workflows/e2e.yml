@@ -14,15 +14,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install gguf numpy libzim playwright && playwright install --with-deps chromium
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: tests/work/downloads
           key: e2e-downloads-${{ hashFiles('tests/build_fixtures.sh') }}
@@ -31,7 +31,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - run: tests/run_all.sh
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: e2e-logs-and-screenshots
           path: |
