@@ -98,12 +98,12 @@
     from = new Array(N);
     order.forEach(function (i, k) {
       var p = proj(land[i], base + theta(dep[i]), tmp);
-      from[i] = { x: p.x, y: p.y, slot: k, j: (Math.random() - .5) * 7 };
+      from[i] = { x: p.x, y: p.y, slot: k, j: ((i * .618034) % 1 - .5) * 7 };   // fixed per dot: a resize while paused redraws the same frame
     });
   }
 
   // Arcs between places while online
-  var arcs = [], nextArc = 0;
+  var arcs = [], nextArc = 0, arcLoop = -1;
   function spawnArc(t, rot) {
     var tmp = {}, a, b, d, n = 0;
     do a = land[(Math.random() * N) | 0]; while (proj(a, rot, tmp).z < .45 && ++n < 40);
@@ -175,7 +175,7 @@
     ctx.globalAlpha = 1;
 
     // network arcs while online
-    if (t < .05) { arcs = []; nextArc = 0; }
+    if (loop !== arcLoop) { arcs = []; nextArc = 0; arcLoop = loop; }
     if (t >= nextArc && t < T_PACK - .5) { spawnArc(t, rot); nextArc = t + .16; }
     arcs = arcs.filter(function (A) { return t >= A.t && t - A.t < 1.25; });
     ctx.lineWidth = 1.4; ctx.strokeStyle = SIG; ctx.fillStyle = SIG;
@@ -282,7 +282,8 @@
   }
   function kick() { if (!raf && playing && visible) { last = 0; raf = requestAnimationFrame(tick); } }
   function label() { btn.textContent = playing ? 'Pause' : 'Play'; btn.setAttribute('aria-label', (playing ? 'Pause' : 'Play') + ' the animation'); }
-  btn.addEventListener('click', function () { playing = !playing; label(); kick(); });
+  // dropping the queued frame makes Pause hold exactly what's on screen
+  btn.addEventListener('click', function () { playing = !playing; cancelAnimationFrame(raf); raf = 0; label(); kick(); });
   still.addEventListener && still.addEventListener('change', function () { playing = !still.matches; if (!playing) clock = STILL_AT; label(); frame(); kick(); });
   new IntersectionObserver(function (es) { visible = es[0].isIntersecting; kick(); }).observe(cv);
   // resize on the next frame, so changing the canvas height doesn't re-trigger the observer mid-delivery
