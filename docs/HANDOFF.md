@@ -2,12 +2,24 @@
 
 Handoff from the Claude chat where the kit was built (2026-11-21). The code moved into this repo; section 1 is the state at handoff. Agent rules live in `AGENTS.md`.
 
-## Status (2026-11-21, after the move to Claude Code)
+## Status (2026-11-21, end of the first Claude Code thread)
 
-- Tasks 1, 2 and 4 below are done: the repo is set up, the end-to-end suite passes in GitHub Actions against the mocks, and the Field Manual design (variant A of 3) is built in `site/` and deployed by Vercel.
-- The builder's sizes are live: a weekly Action runs `./kit plan --json`.
-- Added `SETUP.command`, the double-click guided setup from the site plan (sync, then test, with checks for the drive format and the Command Line Tools).
-- Still open: a real sync on Travis's Mac, the domain (ask first), and making the repo public at launch. kit.json now matches the Kiwix catalog (WikEM, WHO and the Gutenberg subject subsets were dropped upstream).
+**Done**
+- Repo set up for agents (AGENTS.md, CLAUDE.md), quick gate and CI. The end-to-end suite passes in GitHub Actions against the mocks and also runs `SETUP.command`.
+- Site: the Field Manual design (variant A of 3) is in `site/`, deployed by Vercel from `main`. It has the kit builder with live sizes (weekly `refresh builder sizes` Action), a questions section, a social card (`og.png`), canonical URLs for tinfoilkit.com, and security headers in `site/vercel.json`. CI checks it with Playwright and axe, served with the production headers. The headers were checked on a live deployment.
+- `SETUP.command`: the double-click guided setup and refresh, with checks for the drive format and the Command Line Tools. GUIDE, README and the site point to it.
+- kit.json matches the Kiwix catalog. WikEM, WHO and the Gutenberg subject subsets were dropped upstream, two entries were renamed, and Urban Prepper was added. All 60 sources resolve.
+- Launch-day checklist: see section 7.
+
+**Waiting on Travis**
+- tinfoilkit.com: he approved buying it and is buying it himself, since Vercel needs his registrant contact. When it shows up on the tudor-city-ventures team, add it plus `www` (redirecting to the bare domain) to the `tinfoilkit` project. Last checked 16:23 UTC: not there yet.
+- Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too, because scheduled workflows run from the default branch.
+- A real `SETUP.command` run on his Mac. This is the only test against real downloads and Apple Silicon.
+- Going public: turn off Vercel Authentication for production and make the repo public. Ask first.
+
+**Ideas not started**
+- Real product screenshots on the site. CI's e2e screenshots use test data (a tiny model, mock places), so they would need real data from Travis's Mac.
+- The CI artifact host (blob.core.windows.net) is blocked from cloud sessions, so artifacts can't be downloaded there.
 
 ---
 
