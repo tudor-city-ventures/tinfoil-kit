@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-USER_AGENT = "TinfoilKit/1.0 (+https://github.com/travisbloom/tinfoilkit)"
+USER_AGENT = "TinfoilKit/1.0 (+https://github.com/tudor-city-ventures/tinfoilkit)"
 KIWIX_CATALOG = os.environ.get("KIT_KIWIX_CATALOG", "https://library.kiwix.org/catalog/v2/entries?count=-1")
 KIWIX_RELEASES = os.environ.get("KIT_KIWIX_RELEASES", "https://download.kiwix.org/release/{product}/")
 GITHUB_API = os.environ.get("KIT_GITHUB_API", "https://api.github.com")
@@ -241,11 +241,17 @@ class Item:
     def note(self) -> str:
         return self.cfg.get("note", "")
 
+    def partial(self, root: Path, f: RemoteFile) -> Path:
+        """Where f is downloaded to; an interrupted download resumes from here."""
+        if self.kind == "archive" or self.cfg.get("type") == "photon_db":
+            return root / ".kit" / "downloads" / (f.name + ".partial")
+        return root / self.dest / (f.name + ".partial")
+
     def need_bytes(self, root: Path) -> int:
         total = 0
         for f in self.need:
             if f.size:
-                partial = root / self.dest / (f.name + ".partial")
+                partial = self.partial(root, f)
                 done = partial.stat().st_size if partial.exists() else 0
                 total += max(0, f.size - done)
             elif f.estimate:
@@ -348,6 +354,7 @@ class Resolver:
     def __init__(self, root: Path, cfg: Dict[str, Any]):
         self.root, self.cfg = root, cfg
         self._catalog: Optional[Dict[str, Dict[str, Any]]] = None
+        self._catalog_error: Optional[Exception] = None
         self._releases: Dict[str, Any] = {}
         self._listings: Dict[str, str] = {}
         self.resolved: Dict[str, Item] = {}
@@ -355,16 +362,30 @@ class Resolver:
     # --- kiwix catalog
     def catalog(self, max_age_hours: float = 12) -> Dict[str, Dict[str, Any]]:
         if self._catalog is None:
+            if self._catalog_error:      # every book asks; fetch it once
+                raise self._catalog_error
             cache = self.root / ".kit" / "cache" / "kiwix-catalog.xml"
             cache.parent.mkdir(parents=True, exist_ok=True)
-            fresh = cache.exists() and time.time() - cache.stat().st_mtime < max_age_hours * 3600
-            if not fresh:
+            if cache.exists() and time.time() - cache.stat().st_mtime < max_age_hours * 3600:
+                try:
+                    self._catalog = parse_kiwix_catalog(cache.read_bytes()) or None
+                except ET.ParseError:
+                    pass
+            if self._catalog is None:
                 log("Fetching the Kiwix catalog (all available libraries)...")
-                data = http_get(KIWIX_CATALOG, timeout=600)
+                try:
+                    data = http_get(KIWIX_CATALOG, timeout=600)
+                    # parse before caching: a Wi-Fi sign-in page answers every URL with HTML
+                    self._catalog = parse_kiwix_catalog(data) or None
+                except (HttpError, ET.ParseError) as e:
+                    self._catalog_error = ValueError(f"couldn't read the Kiwix catalog ({e}). Is this Mac online?")
+                    raise self._catalog_error from e
+                if self._catalog is None:
+                    self._catalog_error = ValueError("the Kiwix catalog came back empty; try again later")
+                    raise self._catalog_error
                 tmp = cache.with_suffix(".tmp")
                 tmp.write_bytes(data)
                 os.replace(tmp, cache)
-            self._catalog = parse_kiwix_catalog(cache.read_bytes())
         return self._catalog
 
     def resolve(self, item: Item) -> None:
@@ -838,6 +859,9 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
     disabled = [i for i in items if not i.enabled]
     if disabled:
         log(f"\n  ({len(disabled)} disabled in kit.json: {', '.join(i.id for i in disabled)})")
+    active = [i for i in items if i.enabled]
+    if len(active) > 1 and all(i.status == "error" for i in active):
+        log("\nNothing could be looked up. Check that this Mac is online, then try again.")
     keep = float(cfg["settings"].get("keep_free_gb", 25)) * GB
     log(f"\nTo download: {fmt_size(total)}   Free on drive: {fmt_size(free)}   "
         f"Free afterwards: ~{fmt_size(max(0, free - total))} (before old versions are removed)")
@@ -858,6 +882,7 @@ def download(url: str, partial: Path, size: Optional[int], downloader: str) -> N
     use_aria = downloader == "aria2c" or (downloader == "auto" and shutil.which("aria2c"))
     for attempt in range(1, 6):
         before = partial.stat().st_size if partial.exists() else 0
+        status = ""
         if use_aria:
             cmd = ["aria2c", "-c", "-x", "8", "-s", "8", "-k", "8M", "--file-allocation=none",
                    "--auto-file-renaming=false", "--allow-overwrite=true", "--summary-interval=0",
@@ -865,18 +890,20 @@ def download(url: str, partial: Path, size: Optional[int], downloader: str) -> N
                    f"--user-agent={USER_AGENT}", "-d", str(partial.parent), "-o", partial.name]
             for k, v in _auth_headers(url).items():
                 cmd.append(f"--header={k}: {v}")
+            rc = subprocess.run(cmd + [url]).returncode
         else:
             cmd = ["curl", "-L", "--fail", "--retry", "10", "--retry-delay", "5", "--connect-timeout", "30",
-                   "-A", USER_AGENT, "-C", "-", "-o", str(partial)]
+                   "-A", USER_AGENT, "-C", "-", "-o", str(partial), "-w", "%{http_code}"]
             if curl_supports("--retry-all-errors"):
                 cmd.append("--retry-all-errors")
             for k, v in _auth_headers(url).items():
                 cmd += ["-H", f"{k}: {v}"]
-        rc = subprocess.run(cmd + [url]).returncode
+            p = subprocess.run(cmd + [url], stdout=subprocess.PIPE, text=True)   # progress still shows (stderr)
+            rc, status = p.returncode, p.stdout.strip()[-3:]
         got = partial.stat().st_size if partial.exists() else 0
         if rc == 0 and (not size or got == size):
             return
-        if not use_aria and rc == 33:          # server refused to resume: start over
+        if not use_aria and (rc == 33 or status == "416"):   # can't resume this partial file: start over
             partial.unlink(missing_ok=True)
         log(f"    download interrupted (exit {rc}, {fmt_size(got)} of {fmt_size(size)}); "
             f"retrying ({attempt}/5)...")
@@ -943,6 +970,59 @@ def ensure_space(root: Path, need: int, cfg: Dict[str, Any]) -> bool:
     return shutil.disk_usage(root).free - need >= keep
 
 
+def fetch(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, cfg: Dict[str, Any], force: bool,
+          room: int = 1, label: str = "") -> Path:
+    """Download f into its partial file and return that path. An interrupted download resumes,
+    unless it was of an older version under the same name. room: how many times f.size must fit."""
+    partial = item.partial(root, f)
+    rel = partial.relative_to(root).as_posix()
+    tag = f.sha256 or f"{item.version}|{f.size or ''}"
+    partials = state.setdefault("partials", {})
+    if partial.exists() and (partials.get(rel, {}).get("tag", tag) != tag
+                             or (f.size and partial.stat().st_size > f.size)):
+        log(f"    discarding an unfinished download of a different version of {f.name}")
+        partial.unlink()
+    have = partial.stat().st_size if partial.exists() else 0
+    need = max(0, (f.size or 0) * room - have)
+    if not force and not ensure_space(root, need, cfg):
+        raise RuntimeError(f"not enough free space for {label or f.name} (needs about {fmt_size(need)} more); "
+                           "free up space or lower keep_free_gb in kit.json")
+    partials[rel] = {"item": item.key, "tag": tag}
+    save_state(root, state)
+    log(f"    downloading {label or f.name} ({fmt_size(f.size)})" + (f", resuming at {fmt_size(have)}" if have else ""))
+    download(f.url, partial, f.size, cfg["settings"].get("downloader", "auto"))
+    return partial
+
+
+def forget_partial(root: Path, state: Dict[str, Any], partial: Path) -> None:
+    state.get("partials", {}).pop(partial.relative_to(root).as_posix(), None)
+
+
+def sweep_partials(root: Path, state: Dict[str, Any], items: List[Item]) -> None:
+    """Delete unfinished downloads that a newer version has made useless (they can be 100 GB).
+    Kept: the ones this sync resumes, and those of items switched off or not found this time."""
+    keep = {i.partial(root, f).relative_to(root).as_posix() for i in items if i.enabled and not i.error for f in i.need}
+    current = {i.key for i in items if i.enabled and not i.error}
+    known = {i.key for i in items}
+    partials = state.get("partials", {})
+    for rel, rec in list(partials.items()):
+        p = root / rel
+        if p.exists() and rel not in keep and (rec.get("item") in current or rec.get("item") not in known):
+            p.unlink()
+            log(f"Removed an unfinished download that's out of date: {rel}")
+        if not p.exists():
+            partials.pop(rel)
+
+
+def matches(path: Path, f: RemoteFile, expected: Dict[str, str]) -> Optional[str]:
+    """The SHA-256 of a file already on the drive if it's exactly f (same size and published checksums)."""
+    if not expected or not path.is_file() or (f.size and path.stat().st_size != f.size):
+        return None
+    log(f"    found {path.name} on the drive, checking it...")
+    got = hash_file(path, list(expected))
+    return got["sha256"] if all(got[a] == v for a, v in expected.items()) else None
+
+
 def install_files(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, Any], force: bool) -> int:
     dest = root / item.dest
     dest.mkdir(parents=True, exist_ok=True)
@@ -950,30 +1030,21 @@ def install_files(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, 
     old_files: Dict[str, Any] = dict(old.get("files", {}))
     new_files: Dict[str, Any] = {}
     downloaded = 0
-    downloader = cfg["settings"].get("downloader", "auto")
     for f in item.files:
         final = dest / f.name
         if f not in item.need:
             new_files[f.name] = old_files[f.name]
             continue
         expected = expected_digests(f)
-        # a file already on the drive (copied by hand, or state was lost): adopt it if it checks out
-        if (f.name not in old_files and final.exists() and expected
-                and (f.size is None or final.stat().st_size == f.size)):
-            log(f"    found {f.name} on the drive, checking it...")
-            got = hash_file(final, list(expected))
-            if all(got[a] == v for a, v in expected.items()):
-                new_files[f.name] = {"size": final.stat().st_size, "sha256": got["sha256"], "verified": True}
-                continue
-        need = f.size or 0
-        if not force and not ensure_space(root, need, cfg):
-            raise RuntimeError(f"not enough free space for {f.name} ({fmt_size(need)}); "
-                               "free up space or lower keep_free_gb in kit.json")
-        partial = dest / (f.name + ".partial")
-        log(f"    downloading {f.name} ({fmt_size(f.size)})")
-        download(f.url, partial, f.size, downloader)
+        # already on the drive (copied by hand, state lost, or a sync stopped before saving): keep it if it checks out
+        have = matches(final, f, expected)
+        if have:
+            new_files[f.name] = {"size": final.stat().st_size, "sha256": have, "verified": True}
+            continue
+        partial = fetch(root, state, item, f, cfg, force)
         got = verify_download(partial, f, expected)
         os.replace(partial, final)
+        forget_partial(root, state, partial)
         downloaded += final.stat().st_size
         new_files[f.name] = {"size": final.stat().st_size, "sha256": got, "verified": bool(expected)}
         log(f"    ok: {f.name}" + ("" if expected else " (no published checksum to compare; recorded ours)"))
@@ -989,12 +1060,7 @@ def install_files(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, 
 def install_archive(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, Any], force: bool) -> int:
     f = item.files[0]
     expected = expected_digests(f)
-    dl_dir = root / ".kit" / "downloads"
-    partial = dl_dir / (f.name + ".partial")
-    if not force and not ensure_space(root, (f.size or 0) * 3, cfg):
-        raise RuntimeError("not enough free space")
-    log(f"    downloading {f.name} ({fmt_size(f.size)})")
-    download(f.url, partial, f.size, cfg["settings"].get("downloader", "auto"))
+    partial = fetch(root, state, item, f, cfg, force, room=3)
     got = verify_download(partial, f, expected)
     base = root / item.dest
     target = base / safe_name(item.version)
@@ -1020,6 +1086,7 @@ def install_archive(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
         shutil.rmtree(base / safe_name(v), ignore_errors=True)
         log(f"    removed old version: {v}")
     partial.unlink(missing_ok=True)
+    forget_partial(root, state, partial)
     log(f"    ok: {binary.relative_to(root) if binary else target.relative_to(root)}")
     state["items"][item.key] = {
         "version": item.version, "current": item.version, "versions": [item.version] + versions[:keep],
@@ -1142,15 +1209,14 @@ def install_routing(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
     old = state["items"].get(item.key) or {}
     downloaded = 0
     if old.get("version") != item.version or not pbf.exists():
-        if not force and not ensure_space(root, (f.size or 0) * 3, cfg):
-            raise RuntimeError("not enough free space for the road data")
         expected = expected_digests(f)
-        partial = dest / (f.name + ".partial")
-        log(f"    downloading road data ({fmt_size(f.size)})")
-        download(f.url, partial, f.size, cfg["settings"].get("downloader", "auto"))
-        sha = verify_download(partial, f, expected)
-        os.replace(partial, pbf)
-        downloaded = pbf.stat().st_size
+        sha = matches(pbf, f, expected)    # downloaded last time, but the import failed (e.g. out of memory)
+        if not sha:
+            partial = fetch(root, state, item, f, cfg, force, room=3, label="road data")
+            sha = verify_download(partial, f, expected)
+            os.replace(partial, pbf)
+            forget_partial(root, state, partial)
+            downloaded = pbf.stat().st_size
     else:
         sha = (old.get("files", {}).get(f.name) or {}).get("sha256") or sha256_file(pbf)
     (dest / "gh-import.yml").write_text(graphhopper_yaml(m, "graph-cache.new", "RAM_STORE"), encoding="utf-8")
@@ -1179,13 +1245,9 @@ def install_routing(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
 def install_photon(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, Any], force: bool) -> int:
     f = item.files[0]
     dest = root / item.dest
-    if not force and not ensure_space(root, (f.size or 0) * 4, cfg):
-        raise RuntimeError(f"not enough free space for the address database ({fmt_size(f.size)} download, "
-                           "about 3x that unpacked)")
     expected = expected_digests(f)
-    partial = root / ".kit" / "downloads" / (f.name + ".partial")
-    log(f"    downloading the address database ({fmt_size(f.size)})")
-    download(f.url, partial, f.size, cfg["settings"].get("downloader", "auto"))
+    # the download plus about 3x that unpacked
+    partial = fetch(root, state, item, f, cfg, force, room=4, label="the address database")
     sha = verify_download(partial, f, expected)
     staging = dest.with_name(dest.name + ".new")
     shutil.rmtree(staging, ignore_errors=True)
@@ -1193,15 +1255,18 @@ def install_photon(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str,
     log("    unpacking it (10-40 minutes)...")
     fast = shutil.which("pbzip2") or shutil.which("lbzip2")
     if fast:
-        p = subprocess.run(f'"{fast}" -dc "{partial}" | tar -x -C "{staging}"', shell=True)
+        unpack = subprocess.Popen([fast, "-dc", str(partial)], stdout=subprocess.PIPE)
+        untar = subprocess.run(["tar", "-x", "-C", str(staging)], stdin=unpack.stdout)
+        unpack.stdout.close()
+        ok = unpack.wait() == 0 and untar.returncode == 0
     else:
-        p = subprocess.run(["tar", "-xjf", str(partial), "-C", str(staging)])
+        ok = subprocess.run(["tar", "-xjf", str(partial), "-C", str(staging)]).returncode == 0
     data = staging / "photon_data"
     if not data.is_dir():
         nested = [d for d in staging.glob("*/photon_data") if d.is_dir()]
         if nested:
             os.replace(nested[0], data)
-    if p.returncode != 0 or not data.is_dir():
+    if not ok or not data.is_dir():
         shutil.rmtree(staging, ignore_errors=True)
         raise RuntimeError("unpacking the address database failed")
     trash = dest.with_name(dest.name + ".old")
@@ -1211,6 +1276,7 @@ def install_photon(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str,
     os.replace(staging, dest)
     shutil.rmtree(trash, ignore_errors=True)
     partial.unlink(missing_ok=True)
+    forget_partial(root, state, partial)
     log("    ok: maps/geocoder/photon_data")
     state["items"][item.key] = {"version": item.version, "dest": item.dest, "archive": f.name, "archive_sha256": sha,
                                 "db_version": item.extra.get("db_version"), "updated": now_iso(), "note": item.note,
@@ -1429,31 +1495,27 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
         print_plan(root, items, state, cfg)
         todo = sorted([i for i in items if i.enabled and i.status in ("new", "update")],
                       key=lambda i: (i.priority, i.need_bytes(root)))
-        if not todo:
-            state["last_sync"] = now_iso()
-            save_state(root, state)
-            write_inventory(root, state, cfg)
-            build_portal(root, cfg)
-            log("\nEverything is up to date.")
-            return
-        if not args.yes and sys.stdin.isatty():
+        if todo and not args.yes and sys.stdin.isatty():
             if input(f"\nDownload {len(todo)} item(s) now? [Y/n] ").strip().lower() not in ("", "y", "yes"):
                 return
+        if not args.only:
+            sweep_partials(root, state, items)
         failures, done_bytes, start = [], 0, time.time()
         try:
             for n, item in enumerate(todo, 1):
                 log(f"\n[{n}/{len(todo)}] {item.key}  ({item.version})")
                 try:
                     done_bytes += installer_for(item)(root, item, state, cfg, args.force)
-                    save_state(root, state)
-                except (RuntimeError, HttpError, OSError) as e:
-                    failures.append((item.key, str(e)))
-                    log(f"    FAILED: {e}")
+                except Exception as e:    # one bad item mustn't end a sync that runs for hours
+                    failures.append((item.key, str(e) or type(e).__name__))
+                    log(f"    FAILED: {failures[-1][1]}")
+                save_state(root, state)
         except KeyboardInterrupt:
             save_state(root, state)
             log("\nStopped. Everything finished so far is saved; run ./kit sync again to resume.")
             sys.exit(130)
-        if not failures:
+        errors = [i for i in items if i.enabled and i.status == "error"]
+        if not failures and not errors and not args.only:
             state["last_sync"] = now_iso()
         save_state(root, state)
         write_inventory(root, state, cfg)
@@ -1461,9 +1523,10 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
             build_portal(root, cfg)
         except (OSError, RuntimeError, ValueError) as e:
             failures.append(("portal page", str(e)))
-        mins = (time.time() - start) / 60
-        log(f"\nDownloaded {fmt_size(done_bytes)} in {mins:.0f} min.")
-        errors = [i for i in items if i.enabled and i.status == "error"]
+        if todo:
+            log(f"\nDownloaded {fmt_size(done_bytes)} in {(time.time() - start) / 60:.0f} min.")
+        elif not failures and not errors:
+            log("\nEverything is up to date.")
         if failures or errors:
             log("\nProblems (everything else is done):")
             for key, msg in failures:
@@ -1471,9 +1534,11 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
             for i in errors:
                 log(f"  - {i.key}: {i.error}")
             log("Re-run ./kit sync to retry. Fix or disable items in kit.json if they keep failing.")
-        every = int(cfg["settings"].get("update_every_days", 75))
-        log(f"\nNext update due around {(dt.date.today() + dt.timedelta(days=every)).isoformat()}. "
-            "Now run ./kit test to check that everything starts.")
+        if todo:
+            every = int(cfg["settings"].get("update_every_days", 75))
+            log(f"\nNext update due around {(dt.date.today() + dt.timedelta(days=every)).isoformat()}. "
+                "Now run ./kit test to check that everything starts.")
+    sys.exit(1 if failures or errors else 0)
 
 
 def cmd_verify(root: Path, args: argparse.Namespace) -> None:
@@ -1541,7 +1606,10 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
 
 def cmd_search(root: Path, args: argparse.Namespace) -> None:
     cfg = load_config(root)
-    catalog = Resolver(root, cfg).catalog(max_age_hours=72)
+    try:
+        catalog = Resolver(root, cfg).catalog(max_age_hours=72)
+    except ValueError as e:
+        die(str(e))
     words = [w.lower() for w in args.words]
     configured = {e.get("zim") for e in cfg.get("library", [])}
     hits = [e for e in catalog.values()

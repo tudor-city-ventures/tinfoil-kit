@@ -60,7 +60,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 | --- | --- |
 | `kit.json` | The single source of truth: `settings`, `runtimes`, `models`, `maps`, `library`, `extras` |
 | `kit` | Wrapper that runs `python3 tools/kit.py --root <kit folder>` |
-| `tools/kit.py` | Sync engine and CLI. Python 3.7+, standard library only; all HTTP goes through `curl` |
+| `tools/kit.py` | Sync engine and CLI. Python 3.9+, standard library only; all HTTP goes through `curl` |
 | `tools/launch.sh` | Offline launcher. Must stay compatible with macOS's bash 3.2 |
 | `tools/portal.html` | The browser page. A single file; kiwix-serve serves it as its custom index |
 | `START-HERE.command` | Double-click launcher for the Mac |

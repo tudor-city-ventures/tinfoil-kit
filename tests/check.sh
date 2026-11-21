@@ -40,6 +40,11 @@ const m = { exports: {} };
 new Function("module", "exports", h.split("<script>")[1].split("</script>")[0])(m, m.exports);
 if (typeof m.exports.isMapQuestion !== "function") throw new Error("Kit not exported");'
 
+step "sync engine against the mock internet"
+out=$(python3 tests/sync_test.py 2>&1); rc=$?
+echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+[ $rc -eq 0 ] || fail=1
+
 step "map logic against mocks"
 pids=""
 start() { python3 tests/mock_services.py "$@" >/dev/null 2>&1 & pids="$pids $!"; }

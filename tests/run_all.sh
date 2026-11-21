@@ -26,7 +26,18 @@ cp "$TESTS/drive_kit_maps.json" "$D/kit.json"
 cd "$D" || exit 1
 step() { echo; echo "=== $*"; }
 step "plan";   ./kit plan | grep -A7 "\[maps\]"; ./kit plan | tail -2
-step "sync v1"; ./kit sync -y > "$L/sync1.log" 2>&1; echo "exit $?"; grep -E "^\[[0-9]|FAILED|removed" "$L/sync1.log" | head -30
+step "sync v1"; ./kit sync -y > "$L/sync1.log" 2>&1; rc=$?
+grep -E "^\[[0-9]|FAILED|removed" "$L/sync1.log" | head -30
+# Three entries are broken on purpose: sync installs everything else, names them, and exits 1.
+[ $rc -eq 1 ] && echo "ok: exit 1" || echo "FAIL: sync exit $rc, expected 1"
+for k in models/Ambiguous models/Missing library/does_not_exist_en; do
+  grep -q -- "- $k:" "$L/sync1.log" || echo "FAIL: $k not listed under Problems"
+done
+python3 -c "
+import json; c = json.load(open('kit.json'))
+c['models'] = [m for m in c['models'] if m['id'] not in ('Ambiguous', 'Missing')]
+c['library'] = [z for z in c['library'] if z['zim'] != 'does_not_exist_en']
+json.dump(c, open('kit.json', 'w'), indent=2)"
 step "verify";  ./kit verify | tail -1
 # SETUP.command = plan, sync (a no-op now), test. Answers: start download yes, open the kit no, close.
 step "setup (sync again, then test)"; printf 'y\nn\n\n' | timeout 600 bash SETUP.command > "$L/setup.log" 2>&1; echo "exit $?"

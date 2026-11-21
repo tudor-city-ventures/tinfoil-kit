@@ -34,7 +34,7 @@ Visual changes to the page or the site come with screenshots.
 ## Rules
 
 - Keep code, docs and copy slim and written for humans. No filler.
-- `tools/kit.py`: Python 3.7+, standard library only, all HTTP through curl.
+- `tools/kit.py`: Python 3.9+ (what macOS's command line tools install), standard library only, all HTTP through curl.
 - Bash must run on macOS's bash 3.2: no `mapfile`, no `set -u` with empty arrays.
 - No symlinks anywhere: drives are exFAT.
 - `START-HERE-Windows.bat` keeps CRLF line endings.
