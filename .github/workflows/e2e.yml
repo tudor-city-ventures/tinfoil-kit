@@ -1,0 +1,37 @@
+name: e2e
+on:
+  pull_request:
+    paths: [tools/**, kit.json, kit, START-HERE.command, tests/**]
+  push:
+    branches: [main]
+    paths: [tools/**, kit.json, kit, START-HERE.command, tests/**]
+  workflow_dispatch:
+jobs:
+  end-to-end:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install gguf numpy libzim playwright && playwright install --with-deps chromium
+      - uses: actions/cache@v4
+        with:
+          path: tests/work/downloads
+          key: e2e-downloads-${{ hashFiles('tests/build_fixtures.sh') }}
+      - run: tests/build_fixtures.sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: tests/run_all.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-and-screenshots
+          path: |
+            tests/work/logs
+            tests/work/shots
+            tests/work/FIXTURES.txt

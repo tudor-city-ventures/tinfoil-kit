@@ -1,13 +1,13 @@
 """Make a tiny random-weight llama GGUF (gibberish output) to test the kit's plumbing."""
 import sys
+
+import gguf  # pip install gguf
 import numpy as np
 
-sys.path.insert(0, "/home/claude/src/llama.cpp/gguf-py")
-import gguf  # noqa: E402
-
+# usage: make_tiny_model.py OUT.gguf [SEED]   (a different seed simulates a re-uploaded model)
 out = sys.argv[1]
 n_vocab, n_embd, n_layer, n_head, n_ff = 259, 64, 2, 4, 128
-rng = np.random.default_rng(0)
+rng = np.random.default_rng(int(sys.argv[2]) if len(sys.argv) > 2 else 0)
 
 w = gguf.GGUFWriter(out, "llama")
 w.add_name("tiny-test")

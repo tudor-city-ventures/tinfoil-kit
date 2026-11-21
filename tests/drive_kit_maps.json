@@ -14,7 +14,7 @@
       "id": "llama.cpp-linux-x64",
       "type": "github",
       "repo": "ggml-org/llama.cpp",
-      "asset": "llama-*-bin-ubuntu-vulkan-x64.tar.gz",
+      "asset": "llama-*-bin-ubuntu-x64.tar.gz",
       "binary": "llama-server"
     },
     {

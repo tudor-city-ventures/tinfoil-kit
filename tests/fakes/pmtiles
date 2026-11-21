@@ -1,11 +1,11 @@
 #!/bin/bash
-# fake `pmtiles` for tests
+# fake `pmtiles` for tests. Needs KIT_TEST_DIR and KIT_TEST_WORK (set by run_all.sh).
 case "$1" in
   version) echo "pmtiles 1.31.2 (fake)";;
-  extract) cp /home/claude/src/go-pmtiles/pmtiles/fixtures/test_fixture_1.pmtiles "$3"; echo "fake extract $*";;
+  extract) cp "$KIT_TEST_WORK/test_fixture_1.pmtiles" "$3"; echo "fake extract $*";;
   merge) out="${@: -1}"; cp "$2" "$out";;
   verify) test -f "$2";;
   serve) dir="$2"; shift 2; port=8080; while [ $# -gt 0 ]; do [ "$1" = "--port" ] && port="$2"; shift; done
-         exec python3 /home/claude/test/mock_services.py tiles "$port" "$dir";;
+         exec python3 "$KIT_TEST_DIR/mock_services.py" tiles "$port" "$dir";;
   *) echo "fake pmtiles: unsupported $*"; exit 2;;
 esac

@@ -24,7 +24,7 @@ Use the cheapest check that proves the change, and paste its output in the PR.
 | --- | --- | --- |
 | Targeted | `node tests/map_logic_test.js tools/portal.html` (start the mocks as `tests/check.sh` does) | While iterating |
 | Quick gate | `tests/check.sh` | Before calling anything done. CI runs it on every PR |
-| End to end | `tests/run_all.sh` (not portable yet, see docs/HANDOFF.md section 4) | Changes to `tools/` or `kit.json` |
+| End to end | `tests/build_fixtures.sh` once, then `tests/run_all.sh` (Linux x86_64; needs GitHub and download.kiwix.org, which cloud sessions can't reach) | Changes to `tools/` or `kit.json`. CI runs it on those PRs |
 | Real Mac | `./kit sync && ./kit test` on a real drive | Before a release. Travis runs it |
 
 Visual changes to the page or the site include screenshots in the PR.

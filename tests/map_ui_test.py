@@ -1,7 +1,11 @@
 """Drive the real portal map in headless Chrome: real MapLibre + Protomaps style + embedded fonts/icons,
 against mock tile / address / routing servers and a mock tool-calling AI."""
+import os
 import sys
 from playwright.sync_api import sync_playwright
+
+SHOTS = os.environ.get("KIT_TEST_SHOTS", os.path.join(os.path.dirname(__file__), "work", "shots"))
+os.makedirs(SHOTS, exist_ok=True)
 
 BASE = "http://127.0.0.1:18888"
 fails = 0
@@ -20,8 +24,7 @@ def watch(page, errors, warnings):
 
 
 with sync_playwright() as p:
-    b = p.chromium.launch(executable_path="/usr/bin/google-chrome",
-                          args=["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
+    b = p.chromium.launch(args=["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
     page = b.new_page(viewport={"width": 1280, "height": 860})
     errors, warnings = [], []
     watch(page, errors, warnings)
@@ -40,7 +43,7 @@ with sync_playwright() as p:
     check("home label", "Westchester" in page.inner_text("#homeLabel"), page.inner_text("#homeLabel"))
     modes = page.eval_on_selector_all("#dirMode option", "els => els.map(e => e.textContent)")
     check("travel modes", modes == ["Drive", "Walk"], str(modes))
-    page.screenshot(path="/home/claude/test/shot_map.png")
+    page.screenshot(path=os.path.join(SHOTS, "shot_map.png"))
 
     # search an address, pick it
     page.fill("#placeQ", "100 Main Street White Plains")
@@ -77,7 +80,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(1500)
     zoom = page.evaluate("window.__kitMap.getZoom()")
     check("clicking a step zooms to it", zoom > 15, f"zoom {zoom:.1f}")
-    page.screenshot(path="/home/claude/test/shot_map_route.png")
+    page.screenshot(path=os.path.join(SHOTS, "shot_map_route.png"))
 
     # nearest
     page.fill("#dirFrom", "")
@@ -87,7 +90,7 @@ with sync_playwright() as p:
     check("nearest hospitals", len(near) == 3 and near[0].startswith("White Plains Hospital"), " | ".join(near))
     page.wait_for_timeout(1200)
     check("nearest shown as markers", page.locator(".maplibregl-marker").count() == 4)
-    page.screenshot(path="/home/claude/test/shot_map_nearby.png")
+    page.screenshot(path=os.path.join(SHOTS, "shot_map_nearby.png"))
 
     # set home
     page.click("#setHome")
@@ -121,7 +124,7 @@ with sync_playwright() as p:
     steps = p2.eval_on_selector_all("#dirSteps li", "els => els.map(e => e.textContent)")
     check("AI route shown on the map", len(steps) == 3 and p2.evaluate("window.__kitMap.querySourceFeatures('route').length") >= 1,
           p2.inner_text("#dirSummary"))
-    p2.screenshot(path="/home/claude/test/shot_ask_map.png")
+    p2.screenshot(path=os.path.join(SHOTS, "shot_ask_map.png"))
     p2.click("nav a[data-tab=ask]")
     p2.fill("#q", "Where is the Shire in the story?")     # looks like a map question; the AI answers without the map
     p2.click("#askBtn")

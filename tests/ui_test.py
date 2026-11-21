@@ -1,6 +1,10 @@
 """Drive the real portal page in headless Chrome against the live kit servers."""
+import os
 import sys
 from playwright.sync_api import sync_playwright
+
+SHOTS = os.environ.get("KIT_TEST_SHOTS", os.path.join(os.path.dirname(__file__), "work", "shots"))
+os.makedirs(SHOTS, exist_ok=True)
 
 URL = "http://localhost:18888/?model=Tiny&ai=18080"   # localhost on purpose: must redirect to 127.0.0.1
 fails = 0
@@ -13,7 +17,7 @@ def check(name, ok, detail=""):
 
 
 with sync_playwright() as p:
-    b = p.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
+    b = p.chromium.launch(args=["--no-sandbox"])
     page = b.new_page(viewport={"width": 1100, "height": 900})
     errors = []
     page.on("console", lambda m: errors.append(m.text + " @ " + str(m.location)) if m.type == "error" else None)
@@ -32,14 +36,14 @@ with sync_playwright() as p:
     srcs = page.eval_on_selector_all("#sources li a", "els => els.map(e => e.textContent)")
     check("sources listed", "Water purification" in srcs, ", ".join(srcs))
     check("answer rendered", len(page.inner_text("#answer")) > 0)
-    page.screenshot(path="/home/claude/test/shot_ask.png", full_page=True)
+    page.screenshot(path=os.path.join(SHOTS, "shot_ask.png"), full_page=True)
     href = page.get_attribute("#sources li a", "href")
     r = page.request.get("http://127.0.0.1:18888" + href)
     check("source link opens the article", r.ok and "8 drops" in r.text(), href)
     page.click("nav a[data-tab=library]")
     cards = page.eval_on_selector_all(".book-card a", "els => els.map(e => e.textContent)")
     check("library cards", len(cards) == 2, ", ".join(cards))
-    page.screenshot(path="/home/claude/test/shot_library.png", full_page=True)
+    page.screenshot(path=os.path.join(SHOTS, "shot_library.png"), full_page=True)
     page.fill("#libQ", "tourniquet")
     page.click("#libSearch button")
     page.wait_for_load_state()
@@ -56,7 +60,7 @@ with sync_playwright() as p:
     page2.wait_for_function("document.getElementById('progress').textContent.includes('passages') || "
                             "document.getElementById('progress').textContent.includes('Nothing')", timeout=60000)
     check("AI-off fallback shows passages", "5 to 7 cm" in page2.inner_text("#answer"), page2.inner_text("#progress"))
-    page2.screenshot(path="/home/claude/test/shot_ai_off.png", full_page=True)
+    page2.screenshot(path=os.path.join(SHOTS, "shot_ai_off.png"), full_page=True)
     b.close()
 
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")

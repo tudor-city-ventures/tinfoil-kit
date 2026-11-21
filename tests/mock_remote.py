@@ -12,7 +12,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, unquote
 
-R = Path(__file__).parent / "remote"
+R = Path(os.environ.get("KIT_TEST_WORK", Path(__file__).parent / "work")) / "remote"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 19000
 BASE = f"http://127.0.0.1:{PORT}"
 
@@ -49,7 +49,7 @@ def catalog() -> bytes:
 
 def releases() -> bytes:
     tag = "b99999" if v2() else "b99990"
-    asset = R / "gh" / f"llama-{tag}-bin-ubuntu-vulkan-x64.tar.gz"
+    asset = R / "gh" / f"llama-{tag}-bin-ubuntu-x64.tar.gz"
     data = [
         {"tag_name": "v1.0.0", "draft": False, "prerelease": False, "assets": [
             {"name": "nightly-tag.txt", "size": 7, "browser_download_url": f"{BASE}/gh/nightly-tag.txt"}]},
@@ -183,8 +183,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_file(R / "maven" / path[len("/maven/"):], head)
         if path in ("/npm/maplibre-gl", "/npm/@protomaps/basemaps"):
             import base64
-            f = R / "npm" / ("maplibre-gl-5.24.1.tgz" if "maplibre" in path else "basemaps-5.7.2.tgz")
-            ver = "5.24.1" if "maplibre" in path else "5.7.2"
+            f = next((R / "npm").glob("maplibre-gl-*.tgz" if "maplibre" in path else "basemaps-*.tgz"))
+            ver = f.name[:-4].rsplit("-", 1)[1]
             raw = f.read_bytes()
             doc = {"name": path[5:], "versions": {
                 ver: {"dist": {"tarball": f"{BASE}/npmfile/{f.name}", "shasum": hashlib.sha1(raw).hexdigest(),
