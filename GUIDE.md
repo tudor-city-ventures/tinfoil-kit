@@ -10,8 +10,8 @@ Print this page and keep it with the drive.
 
 1. Plug the drive into the Mac (Apple Silicon, ideally 32 GB memory). Plug the Mac into power if you can.
 2. Open the drive in Finder and **double-click `START-HERE.command`**.
-   - If macOS says it can't verify it: right-click it, choose **Open**, then **Open** again.
-   - Or open Terminal and type: `bash /Volumes/<drive name>/TinfoilKit/START-HERE.command`
+   - If macOS won't open it: open Terminal and type `bash ` (with a space), drag `START-HERE.command` into the
+     window, and press Return. That always works.
 3. A browser tab opens. **Keep the Terminal window open** while you use it. Closing it stops everything.
 
 Nothing here needs the internet, an account, or an install.
@@ -93,11 +93,14 @@ Then run `./kit plan` to preview and `./kit sync` to apply.
 
 1. Format the drive in Disk Utility: **exFAT** if you want a Windows or Linux PC to be able to read it
    (recommended for an emergency drive), **APFS** if it will only ever be used with Macs.
-   Always eject it before unplugging, especially with exFAT.
-2. Copy the `TinfoilKit` folder onto the drive.
+   Many new drives come as exFAT already. FAT32 (files over 4 GB don't fit) and NTFS (Macs can't write to it)
+   won't work; SETUP checks. Always eject the drive before unplugging, especially with exFAT.
+2. Copy the `TinfoilKit` folder onto the drive. (From GitHub: **Code > Download ZIP**, then copy the unzipped folder.)
 3. Double-click **`SETUP.command`** in that folder. It checks the drive, downloads everything (about 280 to
    330 GB the first time, a few hours; maps are 20 to 30 GB of that), then starts each part offline to check
    it answers. Leave the Mac plugged in. If you stop it, double-click it again and it picks up where it left off.
+   If it ends with "some downloads didn't finish", the kit already works with what it has: double-click
+   `SETUP.command` again later and it fetches the rest.
    - If macOS says it can't be opened because it's from the internet: open **System Settings > Privacy &
      Security**, scroll down and click **Open Anyway**. You only do this once.
    - If it asks to install the Command Line Tools, say yes, then double-click `SETUP.command` again.

@@ -2,7 +2,7 @@
 
 Handoff from the Claude chat where the kit was built (2026-11-21). The code moved into this repo; section 1 is the state at handoff. Agent rules live in `AGENTS.md`.
 
-## Status (2026-11-21, end of the first Claude Code thread)
+## Status (2026-11-21, second Claude Code thread)
 
 **Done**
 - Repo set up for agents (AGENTS.md, CLAUDE.md), quick gate and CI. The end-to-end suite passes in GitHub Actions against the mocks and also runs `SETUP.command`.
@@ -10,20 +10,29 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 - `SETUP.command`: the double-click guided setup and refresh, with checks for the drive format and the Command Line Tools. GUIDE, README and the site point to it.
 - kit.json matches the Kiwix catalog. WikEM, WHO and the Gutenberg subject subsets were dropped upstream, two entries were renamed, and Urban Prepper was added. All 60 sources resolve.
 - Launch-day checklist: see section 7.
+- Second thread (robustness, tests, accessibility):
+  - Sync tells the truth: it exits 1 when anything failed or couldn't be looked up, stops with one message when offline or behind a Wi-Fi sign-in page, and never resumes a half-download of an older version into a new file. Leftover half-downloads of old versions are cleaned up.
+  - `SETUP.command` says "All set" only when everything finished and passed, lists what didn't finish otherwise, handles Ctrl-C, rejects FAT32 and NTFS drives up front, and clears the downloaded-from-internet mark on the launchers so `START-HERE.command` opens without a Gatekeeper prompt in an outage.
+  - `tests/sync_test.py` runs the real sync against the mocks in the quick gate (about 10 seconds): resume, checksums, updates, leftovers, `verify --fix`, lost state, offline, and every ending of `SETUP.command`.
+  - The page works from the keyboard and with screen readers, and dark mode buttons are readable; e2e runs axe on every tab in light and dark mode.
+  - The site serves its own fonts (no Google requests); the CSP allows nothing third-party.
 
 **Waiting on Travis**
-- tinfoilkit.com: he approved buying it and is buying it himself, since Vercel needs his registrant contact. When it shows up on the tudor-city-ventures team, add it plus `www` (redirecting to the bare domain) to the `tinfoilkit` project. Last checked 16:23 UTC: not there yet.
-- Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too, because scheduled workflows run from the default branch.
+- tinfoilkit.com: he approved buying it and is buying it himself, since Vercel needs his registrant contact. When it shows up on the tudor-city-ventures team, add it plus `www` (redirecting to the bare domain) to the `tinfoilkit` project. Last checked 17:40 UTC: not there yet.
+- Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too: Vercel deploys production from the default branch. The weekly sizes workflow already pushes to both.
 - A real `SETUP.command` run on his Mac. This is the only test against real downloads and Apple Silicon.
 - Going public: turn off Vercel Authentication for production and make the repo public. Ask first.
 
 **Ideas not started**
+- The kit can't update its own code. `./kit sync` refreshes content and programs, but a drive set up today keeps today's `tools/` and `kit.json` forever. When a source is renamed or dropped upstream (it happened to four entries in November), that drive's sync reports it as a problem every time until someone edits kit.json by hand. Options: a `./kit update` that fetches the latest release of this repo and keeps the user's kit.json choices, or publishing kit.json entries separately. Needs Travis's call, since it means the drive trusts code from GitHub.
 - Real product screenshots on the site. CI's e2e screenshots use test data (a tiny model, mock places), so they would need real data from Travis's Mac.
 - The CI artifact host (blob.core.windows.net) is blocked from cloud sessions, so artifacts can't be downloaded there.
 
 ---
 
-## 1. Where things stand
+## 1. Where things stood at the handoff
+
+Written before the first Claude Code thread. The Status section above is current.
 
 - **The kit works** and passes a full end-to-end test suite in a Linux sandbox, with every download source and map server replaced by a mock. Two zips were delivered earlier in the chat: OfflineKit v1 (AI and library) and v2 (adds maps). The code in this repo is v2, renamed to Tinfoil Kit, with the default home location changed to New York, NY.
 - **Not yet tested anywhere real:** a real sync from the internet on a Mac. That means the Apple Silicon binaries, about 300 GB of downloads, and the real map servers running from an exFAT drive. The first real run will be on Travis's Mac.
@@ -83,6 +92,12 @@ After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `instal
 
 - Each item is resolved to a version and a list of files with checksums, then compared with `.kit/state.json`. Sync then plans, checks free space (`keep_free_gb`), downloads, verifies, installs and prunes.
 - Downloads resume after interruption: `curl -C -` with retries, or `aria2c` when it's installed.
+- Half-finished downloads are `<file>.partial` next to their destination (archives and the Photon dump: `.kit/downloads/`). `state.json` records each one's version under `partials`:
+  - a partial of a different version under the same file name (models often keep their names) is discarded, not resumed into a corrupt file;
+  - at the start of a sync, partials that a newer version made useless are deleted (they can be 100 GB); those of switched-off items are kept;
+  - free-space checks count what a partial already has.
+- Exit codes: `sync` exits 1 if any item failed or couldn't be looked up, and 130 on Ctrl-C (everything finished is saved). `last_sync` is set only after a fully clean run. `plan` and `sync` exit 1 straight away when nothing could be looked up (offline, or a Wi-Fi sign-in page answering instead).
+- The Kiwix catalog is cached only after it parses, so a sign-in page can't poison the cache.
 - Each download is verified against what its source publishes:
   - Kiwix: a `.sha256` sidecar file.
   - Hugging Face: the LFS sha256.
@@ -108,6 +123,7 @@ After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `instal
 - **Maps:** `pmtiles serve` on 8090, Photon on 2322 and GraphHopper on 8989, all run by the bundled Java. Their memory comes from `kit.json` (`geocoder_heap` 3g, `routing_heap` 2g). `--no-maps` skips them and saves about 5 GB.
 - **Sharing:** `--share` listens on all network interfaces so phones on the same Wi-Fi or hotspot can use the kit.
 - `caffeinate` keeps the Mac awake while the kit runs.
+- It serves the page `./kit sync` built (`.kit/portal.html`, with the map inside) whenever it exists, and the bare template otherwise. The launcher never needs python, so a drive works on a Mac without the Command Line Tools.
 
 ### The browser page (`tools/portal.html`)
 
@@ -128,6 +144,7 @@ After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `instal
     - Fonts are Noto Sans Regular, Medium and Italic, ranges 0-255, 256-511 and 8192-8447.
     - Fonts and the "light" icon sprites are embedded as base64 and served through `maplibregl.addProtocol` (`kitglyph://`, `kitsprite://sprites/light`), because kiwix-serve can serve only one custom page.
   - Features: a search box with suggestions; Drive/Walk directions with clickable steps; "nearest" buttons by category; and "Set home", stored in `localStorage`. The Mac has no GPS, so home is where searches start.
+- **Tabs** are links (`#ask`, `#map`, `#library`, `#help`), so the keyboard reaches them and the address remembers the tab. The status line is `role="status"`; map results, nearest places and route steps are buttons.
 - **Template tags:** kiwix-serve renders `--customIndex` as a Mustache template. The template contains exactly one tag, `{{root}}`. The built page starts with a set-delimiter tag (`{{=<% %>=}}`) so the embedded code survives rendering.
 
 ### Maps stack
@@ -190,43 +207,19 @@ After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `instal
 
 ## 4. Tests as they exist
 
-Everything passed on 2026-11-21 in the Linux sandbox. The scripts are in `tests/`.
+The scripts are in `tests/`; AGENTS.md says which to run when.
 
-- **Logic tests (node):**
-  - `map_logic_test.js` runs the page's `Kit` code against a mock Photon, a mock GraphHopper and a mock tool-calling AI (`mock_services.py`).
-  - `portal_test.js` runs the Ask logic against a live kiwix-serve and llama-server.
-- **End to end (`run_all.sh`):** copies the kit onto a fake drive, then runs:
-  - `plan` and `sync`, including a download that fails partway and resumes;
-  - a second sync that should do nothing, `verify`, `kit test` and `search`;
-  - the launcher, then the logic tests and the headless Chrome UI tests (Playwright: `ui_test.py`, `map_ui_test.py`);
+- **Quick gate (`check.sh`, every push):** compile and parse checks, shellcheck when installed, kit.json validity, `site/sources.json` freshness, CRLF on the Windows launcher, then:
+  - `sync_test.py`: the real `kit.py` against `mock_remote.py` with tiny random files: downloads, a download that breaks and resumes, checksums, a second sync that does nothing, `verify --fix`, lost `state.json`, a "3 months later" update with planted leftovers, offline and Wi-Fi sign-in runs, and every ending of `SETUP.command` with a stand-in `./kit`. Needs only python3 and curl, so it runs in cloud sessions.
+  - `map_logic_test.js`: the page's `Kit` map code against a mock Photon, GraphHopper and tool-calling AI (`mock_services.py`).
+- **End to end (`build_fixtures.sh` then `run_all.sh`, CI on changes to the kit):** copies the kit onto a fake drive with real kiwix-serve and llama-server binaries, a tiny GGUF model and test ZIMs, then:
+  - `plan` and `sync` (three entries are broken on purpose: sync must finish the rest, name them and exit 1), `verify`, `SETUP.command`, `search`;
+  - the launcher, then `portal_test.js`, `map_logic_test.js` and the Playwright UI tests (`ui_test.py`, `map_ui_test.py`), with axe on every tab in light and dark mode when `KIT_AXE` is set;
   - `--no-maps`;
   - a "3 months later" update with a new catalog and new map builds, then `kit test` again.
-- **`mock_remote.py`** fakes every download source: the Kiwix catalog and releases, the GitHub API, Hugging Face, Adoptium, Maven, npm, Protomaps builds, Geofabrik and the Photon dumps. Flag files switch its behavior:
-  - `STATE_V2`: "3 months later".
-  - `FLAKY`: a download breaks partway.
-  - `PHOTON_OLD_DUMP`: only an older database version is published.
+- **Website (`site_test.py`, every push):** serves `site/` with the production headers and drives the kit builder on desktop and phone sizes: presets, totals, no sideways scroll, fonts load from the site, nothing loads from other sites, both Copy paths, the kit.json download, and axe.
+- **`mock_remote.py`** fakes every download source. Flag files switch its behavior: `STATE_V2` ("3 months later"), `FLAKY` (a download breaks partway), `PHOTON_OLD_DUMP` (only an older database version is published). `/wifi-sign-in` answers like a hotel network's sign-in page.
 - **`tests/fakes/`:** a fake `java` (pretends to be GraphHopper's import and server, and Photon, by running the mocks) and a fake `pmtiles`.
-- **Real software in the tests:**
-  - kiwix-serve and llama-server, built from source for Linux.
-  - A tiny random-weight GGUF model (`make_tiny_model.py`, uses gguf-py) and test ZIM files (`make_zims.py`, uses python-libzim).
-  - MapLibre and basemaps from npm, fonts and icons from `protomaps/basemaps-assets`, and a pmtiles fixture from go-pmtiles.
-- `tests/FIXTURES.txt` lists every file the mock served.
-
-**Portability work needed. The suite doesn't run outside that sandbox yet:**
-- Hardcoded paths (`/home/claude/test`, `/home/claude/OfflineKit`, `/home/claude/src/...`) in:
-  - `run_all.sh`;
-  - the screenshot paths in the UI tests;
-  - `make_tiny_model.py` (path to gguf-py);
-  - the fake `java` and `pmtiles` (path to `mock_services.py`).
-- Building fixtures isn't scripted. Write `tests/build_fixtures.sh` that:
-  - downloads the Linux release binaries of llama.cpp and kiwix-tools;
-  - pip-installs `gguf`, `libzim` and `playwright`;
-  - generates the tiny model and the ZIMs;
-  - fetches the npm tarballs and basemaps-assets;
-  - packs the fake release archives the mock serves.
-- `run_all.sh` still copies the kit from the old `OfflineKit` folder. Point it at the repo root.
-- Done: the mock places are made up and sit around the New York default.
-- Then add GitHub Actions: the quick gate on every pull request, and the end-to-end suite on pull requests that touch `tools/` or `kit.json`.
 
 **Never verified. Needs a real Mac and the internet:**
 - Real downloads and checksums from each source.
