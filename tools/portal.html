@@ -815,7 +815,7 @@ if (typeof document !== "undefined") (function () {
     $("answer").innerHTML = ""; $("sources").innerHTML = ""; $("sourcesBox").hidden = true;
     $("thinking").hidden = true; $("thinking").querySelector("pre").textContent = "";
     var progress = function (t) { $("progress").textContent = t; };
-    var model = $("model").value;
+    var model = $("model").value, slowTimer = null;
     store("model", model || "");
     try {
       if (!aiUp) await checkAI();
@@ -833,7 +833,8 @@ if (typeof document !== "undefined") (function () {
         return;
       }
       progress(sources.length ? "Found " + sources.length + " sources. Asking " + model + "..." : "No matching passages found. Asking " + model + " anyway...");
-      var answer = "", reasoning = "", t0 = Date.now(), slowTimer = setTimeout(function () {
+      var answer = "", reasoning = "", t0 = Date.now();
+      slowTimer = setTimeout(function () {
         if (!answer && !reasoning) progress("Loading " + model + " into memory. The first answer can take up to a minute...");
       }, 6000);
       await Kit.streamChat(opts, Kit.buildMessages(question, sources), function (c, r) {
@@ -841,11 +842,11 @@ if (typeof document !== "undefined") (function () {
                  if (!answer) progress("Thinking... (" + Math.round((Date.now() - t0) / 1000) + "s)"); }
         if (c) { answer += c; $("answer").innerHTML = Kit.render(answer, sources.length); progress("Answering..."); }
       });
-      clearTimeout(slowTimer);
       progress("Done in " + Math.round((Date.now() - t0) / 1000) + "s. " + (sources.length ? "Sources are listed below." : ""));
     } catch (e) {
       progress(e.name === "AbortError" ? "Stopped." : "Problem: " + e.message);
     } finally {
+      clearTimeout(slowTimer);    // or it would write over "Stopped." or the problem a few seconds later
       running = null; $("askBtn").disabled = false; $("stopBtn").disabled = true;
     }
   }
