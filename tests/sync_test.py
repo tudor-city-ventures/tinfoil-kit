@@ -220,6 +220,29 @@ esac""")
     check("SETUP: Ctrl-C during the download", rc == 130 and "Stopped" in out and calls == ["plan", "sync"], out)
     rc, out, calls = run_setup(plan=1)
     check("SETUP: offline: stops before asking to download", rc == 1 and calls == ["plan"] and "Start downloading" not in out, out)
+
+    # The launcher's first model, by the computer's memory. The mock answers on both server ports, so the
+    # launcher takes them as already running and only picks the model and prints the address.
+    lk = work / "launch"
+    (lk / "tools").mkdir(parents=True)
+    shutil.copy(TESTS.parent / "tools" / "launch.sh", lk / "tools")
+    (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": port, "ai_port": port}}, indent=1))
+    for name, gb in (("Big", 18), ("Mid", 12), ("Small", 5)):
+        (lk / "models" / name).mkdir(parents=True)
+        with open(lk / "models" / name / f"{name}-Q4_K_M.gguf", "wb") as f:
+            f.truncate(gb * 10**9)   # sparse, so it takes no space
+
+    def launch(mem_gb, *args):
+        p = subprocess.run(["bash", str(lk / "tools" / "launch.sh"), "--no-browser", *args], capture_output=True, text=True,
+                           timeout=60, stdin=subprocess.DEVNULL, env={**os.environ, "KIT_MEMORY_MB": str(mem_gb * 1024)})
+        out = p.stdout + p.stderr
+        return (out.split("?model=")[1].split("&")[0] if "?model=" in out else ""), out
+
+    for mem_gb, want in ((32, "Big"), (24, "Mid"), (16, "Small"), (4, "Small")):
+        got, out = launch(mem_gb)
+        check(f"launcher: {mem_gb} GB of memory starts {want}", got == want and (want == "Big" or f"{mem_gb} GB of memory" in out), out)
+    got, out = launch(16, "--model=Big")
+    check("launcher: --model wins over memory", got == "Big", out)
 finally:
     mock.terminate()
     shutil.rmtree(work, ignore_errors=True)

@@ -12,13 +12,13 @@
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$KIT" || exit 1
 mkdir -p "$KIT/logs" "$KIT/.kit"
-SHARE=0; NO_BROWSER=0; NO_MAPS=0; MODEL=""
+SHARE=0; NO_BROWSER=0; NO_MAPS=0; MODEL=""; CHOSEN=0
 for a in "$@"; do
   case "$a" in
     --share) SHARE=1 ;;
     --no-browser) NO_BROWSER=1 ;;
     --no-maps) NO_MAPS=1 ;;
-    --model=*) MODEL="${a#*=}" ;;
+    --model=*) MODEL="${a#*=}"; CHOSEN=1 ;;
   esac
 done
 
@@ -82,7 +82,7 @@ MODELS=("$KIT"/models/*/)
 shopt -u nullglob
 
 say ""
-say "  OFFLINE KIT"
+say "  TINFOIL KIT"
 say "  ==========="
 [ -n "$KIWIX" ] || say "  ! Library server not found for $PLAT (bin/kiwix-tools-$PLAT). Run ./kit sync while online."
 [ -n "$LLAMA" ] || say "  ! AI server not found for $PLAT (bin/llama.cpp-$PLAT). Run ./kit sync while online."
@@ -90,6 +90,32 @@ say "  ==========="
 [ ${#MODELS[@]} -gt 0 ] || say "  ! No models in models/. Run ./kit sync while online."
 if [ ${#MODELS[@]} -gt 0 ] && [ ! -d "$KIT/models/$MODEL" ]; then
   MODEL="$(basename "${MODELS[0]}")"   # default model missing: fall back to whatever is there
+fi
+
+# A model has to fit in memory with room for everything else. On a computer with less memory than the
+# first model needs, start with the biggest one that fits; the Ask page still lists them all.
+model_mb() { ls -ln "$1"/*.gguf 2>/dev/null | awk '{s += $5} END {print int(s / 1048576)}'; }
+MEM_MB="${KIT_MEMORY_MB:-}"
+if [ -z "$MEM_MB" ]; then
+  case "$(uname -s)" in
+    Darwin) MEM_MB=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 )) ;;
+    Linux) MEM_MB="$(awk '/^MemTotal/ {print int($2 / 1024)}' /proc/meminfo 2>/dev/null)" ;;
+  esac
+fi
+ROOM=$(( ${MEM_MB:-0} * 6 / 10 ))
+if [ "$CHOSEN" = 0 ] && [ "$ROOM" -gt 0 ] && [ ${#MODELS[@]} -gt 0 ] && [ "$(model_mb "$KIT/models/$MODEL")" -gt "$ROOM" ]; then
+  FIT=""; FIT_MB=0; SMALL=""; SMALL_MB=""
+  for d in "${MODELS[@]}"; do
+    mb="$(model_mb "${d%/}")"
+    [ "$mb" -gt 0 ] || continue
+    if [ "$mb" -le "$ROOM" ] && [ "$mb" -gt "$FIT_MB" ]; then FIT="$(basename "$d")"; FIT_MB="$mb"; fi
+    if [ -z "$SMALL_MB" ] || [ "$mb" -lt "$SMALL_MB" ]; then SMALL="$(basename "$d")"; SMALL_MB="$mb"; fi
+  done
+  FIT="${FIT:-$SMALL}"
+  if [ -n "$FIT" ] && [ "$FIT" != "$MODEL" ]; then
+    say "  This computer has $(( MEM_MB / 1024 )) GB of memory, too little for $MODEL. Starting with $FIT."
+    MODEL="$FIT"
+  fi
 fi
 
 HOST=127.0.0.1

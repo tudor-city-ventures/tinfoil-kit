@@ -12,7 +12,7 @@ Plug in the drive, double-click `START-HERE.command`, and a browser page opens w
 
 ## Requirements
 
-- An Apple Silicon Mac. Built around 32 GB of memory; smaller Macs can use the small model.
+- An Apple Silicon Mac. Built around 32 GB of memory; smaller Macs start with the small model.
 - A 2 TB external SSD. The first sync downloads about 300 GB.
 
 Windows and Linux paths exist in the code but are untested.

@@ -18,7 +18,7 @@ set ZIMS=
 for %%f in (library\*.zim) do set ZIMS=!ZIMS! "%%~ff"
 
 echo.
-echo   OFFLINE KIT (Windows)
+echo   TINFOIL KIT (Windows)
 echo   =====================
 if not defined KIWIX echo   ! Library server missing: bin\kiwix-tools-windows-x64
 if not defined LLAMA echo   ! AI server missing: bin\llama.cpp-windows-x64

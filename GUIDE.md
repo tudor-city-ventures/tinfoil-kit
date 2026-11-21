@@ -27,7 +27,8 @@ Nothing here needs the internet, an account, or an install.
 - **Models**: pick from the list on the Ask page.
   - `Inkling-2-Mini` (default): fast, good quality, reads photos.
   - `Qwen3.8-27B` and `Gemma-4-26B-A4B`: second and third opinions from other labs. Worth asking twice on anything important.
-  - `Gemma-4-E4B`: small. Use it to **save battery**, or on a computer with 8 to 16 GB of memory.
+  - `Gemma-4-E4B`: small. Use it to **save battery**. On a Mac with less than 32 GB of memory the kit starts
+    with it, because the bigger models don't fit.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
 - **Share with family**: start with `bash START-HERE.command --share`. It prints an address that phones on the same
   Wi-Fi or hotspot can open (turn on the Mac's hotspot if the router is down). If macOS asks whether to accept
