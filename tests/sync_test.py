@@ -66,7 +66,7 @@ env = {**os.environ, "KIT_KIWIX_CATALOG": f"{base}/catalog/v2/entries?count=-1",
 drive = work / "drive" / "TinfoilKit"
 shutil.copytree(TESTS.parent / "tools", drive / "tools")
 cfg = {
-    "settings": {"default_model": "Tiny", "keep_free_gb": 0.001, "downloader": "curl"},
+    "settings": {"default_model": "Tiny", "keep_free_gb": 0.001, "keep_free_gb_this_computer": 0.001, "downloader": "curl"},
     "models": [
         {"id": "Tiny", "type": "hf", "repo": "test/Tiny-GGUF", "files": ["*-Q4_K_M.gguf", "*-Q8_0.gguf"], "priority": 1},
         {"id": "Two", "type": "hf", "repo": "test/Two-GGUF", "files": ["*-Q4_K_M.gguf"]},
@@ -221,6 +221,28 @@ pathlib.Path(str(out) + ".aria2").unlink()
     check("status, including the switched-off book's unfinished download",
           rc == 0 and "Last complete sync" in out and "library/disabled_one_en_2026-01.zim.partial" in out, out)
 
+    # How much room the kit needs, before anything is looked up online: the builder's sizes for what's switched on.
+    (drive / "site").mkdir()
+    (drive / "site" / "sources.json").write_text(json.dumps({"sources": [
+        {"id": "Tiny", "bytes": 2 * 10**9}, {"id": "Two", "bytes": 3 * 10**9}, {"id": "testmed_en_all_maxi", "bytes": 4 * 10**9},
+        {"id": "disabled_one_en", "bytes": 100 * 10**9}, {"id": "maps", "bytes": 20 * 10**9}]}))
+    rc, out = kit("estimate")
+    check("estimate: the builder's sizes of what's switched on, plus 1 GB of programs", rc == 0 and out.strip() == "10", out)
+    shutil.rmtree(drive / "site")
+
+    # On the computer's own disk (the one with the home folder) the kit leaves more room free than on a drive.
+    (work / "home").mkdir()
+    cfg["settings"]["keep_free_gb_this_computer"] = 10**9     # more than any disk has
+    write_cfg()
+    rc, out = kit("plan", env={**env, "HOME": str(work / "home")})
+    check("on the computer's own disk, the kit keeps keep_free_gb_this_computer free", "WARNING: that leaves less" in out, out)
+    shm = Path("/dev/shm")
+    if shm.is_dir() and shm.stat().st_dev != work.stat().st_dev:
+        rc, out = kit("plan", env={**env, "HOME": str(shm)})
+        check("on a drive, keep_free_gb_this_computer doesn't apply", rc == 0 and "WARNING" not in out, out)
+    cfg["settings"]["keep_free_gb_this_computer"] = 0.001
+    write_cfg()
+
     junk = [drive / "library" / "._junk.zim", drive / "models" / "Tiny" / "._Tiny-Q4_K_M.gguf"]
     for j in junk:
         j.write_bytes(b"\0\5\26\7")   # macOS's metadata files on exFAT start like this
@@ -244,7 +266,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # ./kit update: a kit on the drive, its kit.json changed by its owner, and releases of the kit's code
     # published on the mock GitHub. site/kit.json is the copy of kit.json the kit's current version came with.
     up = work / "update" / "TinfoilKit"
-    code = {rel: (TESTS.parent / rel).read_bytes() for rel in ("kit", "SETUP.command", "START-HERE.command")}
+    code = {rel: (TESTS.parent / rel).read_bytes() for rel in ("kit", "SETUP.command", "START-HERE.command", "UNINSTALL.command")}
     code.update({p.relative_to(TESTS.parent).as_posix(): p.read_bytes() for p in (TESTS.parent / "tools").rglob("*")
                  if p.is_file() and "__pycache__" not in p.parts})
     for rel, data in code.items():
@@ -350,33 +372,49 @@ pathlib.Path(str(out) + ".aria2").unlink()
 
     # SETUP.command's choices, with a stand-in ./kit that exits as told. Its update rewrites SETUP.command in
     # place, the hard case for bash, which reads a script as it goes.
-    setup = work / "setup"
-    setup.mkdir()
-    (setup / "kit").write_text("""#!/bin/bash
+    stand_in = """#!/bin/bash
 echo "kit $1" >> calls.log
 case "$1" in
-  update) [ "$UPDATE" = 3 ] && sed 's/Step 1 of 2:/Step 1 of 2 (new version):/' SETUP.command > new && cat new > SETUP.command
+  estimate) echo "${ESTIMATE:-1}";;
+  update) [ "$UPDATE" = 3 ] && sed 's/Step 2 of 3:/Step 2 of 3 (new version):/' SETUP.command > new && cat new > SETUP.command
           exit $UPDATE;;
   plan) exit $PLAN;;
   sync) mkdir -p logs; echo "===== sync started =====" >> logs/sync-2026-01-01.log
         [ $SYNC = 1 ] && printf 'Problems (everything else is done):\n  - models/Big: download failed\nRe-run ./kit sync\n' >> logs/sync-2026-01-01.log
         exit $SYNC;;
   test) exit $TEST;;
-esac""")
-    (setup / "kit").chmod(0o755)
+esac"""
 
-    def run_setup(plan=0, sync=0, test=0, update=0):
-        shutil.copy(TESTS.parent / "SETUP.command", setup)
-        (setup / "calls.log").write_text("")
-        p = subprocess.run(["bash", "SETUP.command"], cwd=setup, input="y\nn\n\n", capture_output=True, text=True, timeout=60,
-                           env={**os.environ, "PLAN": str(plan), "SYNC": str(sync), "TEST": str(test), "UPDATE": str(update)})
-        return p.returncode, p.stdout, (setup / "calls.log").read_text().split()[1::2]
+    def kit_folder(path, git=False):
+        """A kit's code as Download ZIP leaves it (or a git checkout), with the stand-in ./kit."""
+        path.mkdir(parents=True)
+        shutil.copy(TESTS.parent / "SETUP.command", path)
+        (path / "kit").write_text(stand_in)
+        (path / "kit").chmod(0o755)
+        (path / "tools").mkdir()
+        (path / "tools" / "kit.py").write_text("# stand-in\n")
+        (path / "GUIDE.md").write_text("guide\n")
+        if git:
+            (path / ".git").mkdir()
+        return path
+
+    setup = kit_folder(work / "setup")
+    (setup / ".kit").mkdir()     # set up before, so SETUP doesn't ask where it goes
+
+    def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="y\nn\n\n", **env_extra):
+        shutil.copy(TESTS.parent / "SETUP.command", folder)
+        (folder / "calls.log").write_text("")
+        p = subprocess.run(["bash", str(folder / "SETUP.command")], input=answers, capture_output=True, text=True, timeout=60,
+                           env={**os.environ, "PLAN": str(plan), "SYNC": str(sync), "TEST": str(test), "UPDATE": str(update),
+                                **env_extra})
+        return p.returncode, p.stdout, (folder / "calls.log").read_text().split()[1::2]
 
     rc, out, calls = run_setup()
-    check("SETUP: all good", rc == 0 and "All set" in out and calls == ["update", "plan", "sync", "test"], out)
+    check("SETUP: all good", rc == 0 and "All set" in out and calls == ["update", "plan", "sync", "test"]
+          and "Step 1 of 3: the kit is on" in out and "where should the kit go" not in out, out)
     rc, out, calls = run_setup(update=3)
     check("SETUP: after updating the kit it starts over on the new SETUP, once",
-          rc == 0 and "Step 1 of 2 (new version):" in out and out.count("TINFOIL KIT SETUP") == 1
+          rc == 0 and "Step 2 of 3 (new version):" in out and out.count("TINFOIL KIT SETUP") == 1
           and calls == ["update", "plan", "sync", "test"], out)
     rc, out, calls = run_setup(update=1)
     check("SETUP: the kit's own update failed: carries on", rc == 0 and "All set" in out and calls == ["update", "plan", "sync", "test"], out)
@@ -389,6 +427,142 @@ esac""")
     check("SETUP: Ctrl-C during the download", rc == 130 and "Stopped" in out and calls == ["update", "plan", "sync"], out)
     rc, out, calls = run_setup(plan=1)
     check("SETUP: offline: stops before asking to download", rc == 1 and calls == ["update", "plan"] and "Start downloading" not in out, out)
+
+    # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
+    # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.
+    def first_run(answers, drives=(), git=False, home_kit=None, **env_extra):
+        place = work / "place"
+        shutil.rmtree(place, ignore_errors=True)
+        home, vols = place / "home", place / "Volumes"
+        home.mkdir(parents=True)
+        vols.mkdir()
+        for d in drives:
+            (vols / d).mkdir()
+        if home_kit == "kit":
+            kit_folder(home / "TinfoilKit")
+        elif home_kit == "other":
+            (home / "TinfoilKit").mkdir()
+            (home / "TinfoilKit" / "notes.txt").write_text("mine")
+        dl = kit_folder(place / "Downloads" / "tinfoilkit-main", git=git)
+        (dl / "calls.log").write_text("")
+        p = subprocess.run(["bash", str(dl / "SETUP.command")], input=answers, capture_output=True, text=True, timeout=60,
+                           env={**os.environ, "HOME": str(home), "KIT_DRIVES": str(env_extra.pop("KIT_DRIVES", vols)),
+                                "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0", **env_extra})
+        return p.returncode, p.stdout, dl, home, vols
+
+    def placed_ok(where):
+        log = where / "calls.log"
+        return ((where / "SETUP.command").exists() and (where / "kit").exists() and (where / "tools/kit.py").exists()
+                and (where / ".kit").is_dir() and log.exists() and log.read_text().split()[1::2][-4:] == ["update", "plan", "sync", "test"])
+
+    rc, out, dl, home, vols = first_run("2\ny\nn\n\n")
+    check("SETUP first run: this computer: the kit moves to TinfoilKit in the home folder and sets up there",
+          rc == 0 and "where should the kit go" in out and "needs about 1 GB" in out and placed_ok(home / "TinfoilKit")
+          and not dl.exists() and "Moved the kit to this computer" in out and out.count("TINFOIL KIT SETUP") == 1
+          and "All set" in out, out)
+    rc, out, _, _, _ = first_run("1\n1\ny\nn\n\n", drives=["SAMSUNG T7"])
+    check("SETUP first run: a drive: lists it, the kit moves to TinfoilKit at its top and sets up there",
+          rc == 0 and "1  SAMSUNG T7 (" in out and "Look again" in out and placed_ok(vols / "SAMSUNG T7" / "TinfoilKit")
+          and "Moved the kit to the drive SAMSUNG T7" in out and "All set" in out, out)
+    rc, out, _, home, _ = first_run("1\n2\ny\nn\n\n")
+    check("SETUP first run: no drive plugged in: says so, and offers this computer instead",
+          rc == 0 and "No external drive is plugged in" in out and placed_ok(home / "TinfoilKit"), out)
+    rc, out, _, home, _ = first_run("2\ny\ny\nn\n\n", ESTIMATE="999999")
+    check("SETUP first run: too little room on this computer: says so, and goes ahead when told to",
+          rc == 0 and "too little for all of it" in out and "leaves 50 GB free" in out and placed_ok(home / "TinfoilKit"), out)
+    rc, out, dl, home, _ = first_run("2\nn\n1\n2\ny\ny\nn\n\n", ESTIMATE="999999")
+    check("SETUP first run: too little room: a no goes to the drives instead", rc == 0 and "No external drive" in out
+          and placed_ok(home / "TinfoilKit"), out)
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", git=True)
+    check("SETUP first run: a git checkout on this computer stays where it is",
+          rc == 0 and placed_ok(dl) and not (home / "TinfoilKit").exists(), out)
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", home_kit="kit")
+    check("SETUP first run: a kit already in the home folder: carries on with that one",
+          rc == 0 and "already a Tinfoil Kit" in out and placed_ok(home / "TinfoilKit") and dl.exists(), out)
+    rc, out, dl, home, _ = first_run("2\n", home_kit="other")
+    check("SETUP first run: someone else's TinfoilKit folder is left alone",
+          rc == 1 and "isn't a Tinfoil Kit" in out and (home / "TinfoilKit" / "notes.txt").read_text() == "mine"
+          and dl.exists() and not (home / "TinfoilKit" / "SETUP.command").exists(), out)
+    rc, out, _, _, _ = first_run("3\n")
+    check("SETUP first run: a wrong answer asks again, and a closed window stops it", rc == 1 and "Type a number from 1 to 2" in out, out)
+    shm = Path("/dev/shm")
+    if shm.is_dir() and os.access(shm, os.W_OK) and shm.stat().st_dev != work.stat().st_dev:
+        drv = Path(tempfile.mkdtemp(prefix="kit drives ", dir=shm))
+        try:
+            (drv / "USB DRIVE").mkdir()
+            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", KIT_DRIVES=drv)
+            check("SETUP first run: a drive that's another disk: the kit is copied over, and the download removed",
+                  rc == 0 and placed_ok(drv / "USB DRIVE" / "TinfoilKit") and not dl.exists() and "Moved the kit" in out
+                  and not (drv / "USB DRIVE" / "TinfoilKit.partial").exists(), out)
+            shutil.rmtree(drv / "USB DRIVE" / "TinfoilKit")
+            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", git=True, KIT_DRIVES=drv)
+            check("SETUP first run: a git checkout is copied to the drive, .git and all, and stays where it was",
+                  rc == 0 and placed_ok(drv / "USB DRIVE" / "TinfoilKit") and (drv / "USB DRIVE" / "TinfoilKit" / ".git").is_dir()
+                  and dl.exists() and "Use that copy from now on" in out, out)
+        finally:
+            shutil.rmtree(drv, ignore_errors=True)
+    else:
+        print("skip  SETUP first run: copying to another disk (no /dev/shm here)")
+
+    # UNINSTALL.command: removes the kit and its downloads, only when asked, and stops the kit if it's running.
+    def uninstall(*args, answers="", kit_files=True):
+        gone = work / "gone" / "TinfoilKit"
+        shutil.rmtree(gone.parent, ignore_errors=True)
+        (gone / "models" / "Tiny").mkdir(parents=True)
+        (gone / "models" / "Tiny" / "Tiny.gguf").write_bytes(os.urandom(5000))
+        (gone / "library").mkdir()
+        (gone / "library" / "book.zim").write_bytes(os.urandom(5000))
+        shutil.copy(TESTS.parent / "UNINSTALL.command", gone)
+        if kit_files:
+            (gone / "kit").write_text("#!/bin/bash\n")
+            (gone / "tools").mkdir()
+            (gone / "tools" / "kit.py").write_text("# kit\n")
+        (gone.parent / "keep.txt").write_text("not the kit's")
+        p = subprocess.run(["bash", str(gone / "UNINSTALL.command"), *args], input=answers, capture_output=True, text=True,
+                           timeout=60, env={**os.environ, "HOME": str(work)})
+        return p.returncode, p.stdout, gone
+
+    rc, out, gone = uninstall(answers="\n\n")
+    check("UNINSTALL: says what it deletes, and just Return keeps everything",
+          rc == 0 and "This deletes Tinfoil Kit" in out and "can't be undone" in out and "Kept" in out
+          and (gone / "models/Tiny/Tiny.gguf").exists(), out)
+    rc, out, gone = uninstall(answers="yes\n\n")
+    check("UNINSTALL: anything but delete keeps it", rc == 0 and "Kept" in out and (gone / "library/book.zim").exists(), out)
+    rc, out, gone = uninstall(answers="delete\n\n")
+    check("UNINSTALL: typing delete removes the kit and its downloads, and nothing beside it",
+          rc == 0 and not gone.exists() and (gone.parent / "keep.txt").exists() and "Tinfoil Kit is gone" in out, out)
+    rc, out, gone = uninstall(answers="delete\n\n", kit_files=False)
+    check("UNINSTALL: refuses a folder that isn't a kit", rc == 1 and gone.exists() and "doesn't look like a Tinfoil Kit" in out, out)
+    rc, out, gone = uninstall(answers="DELETE\n\n")
+    check("UNINSTALL: DELETE in capitals works too", rc == 0 and not gone.exists(), out)
+
+    def running_kit():
+        """A kit whose AI server is running (a stand-in that sleeps), removed with --yes."""
+        gone = work / "gone" / "TinfoilKit"
+        shutil.rmtree(gone.parent, ignore_errors=True)
+        srv = gone / "bin" / "llama.cpp-test" / "llama-server"
+        srv.parent.mkdir(parents=True)
+        srv.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(300)\n")
+        srv.chmod(0o755)
+        proc = subprocess.Popen([str(srv)])
+        shutil.copy(TESTS.parent / "UNINSTALL.command", gone)
+        (gone / "kit").write_text("#!/bin/bash\n")
+        (gone / "tools").mkdir()
+        (gone / "tools" / "kit.py").write_text("# kit\n")
+        time.sleep(0.5)
+        p = subprocess.run(["bash", str(gone / "UNINSTALL.command"), "--yes"], capture_output=True, text=True, timeout=60,
+                           stdin=subprocess.DEVNULL, env={**os.environ, "HOME": str(work)})
+        try:
+            proc.wait(timeout=10)
+            stopped = True
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stopped = False
+        return p.returncode, p.stdout, gone, stopped
+
+    rc, out, gone, stopped = running_kit()
+    check("UNINSTALL --yes: no question, stops the kit's running programs, removes it all",
+          rc == 0 and stopped and not gone.exists() and "Stopping the kit" in out and "Press Return" not in out, out)
 
     # The launcher's first model, by the computer's memory. A stand-in for a running kit answers on both
     # server ports, so the launcher reuses them and only picks the model and prints the address.

@@ -1,12 +1,14 @@
 #!/bin/bash
 # The drive test: the kit on a real exFAT disk, set up on a Mac, then plugged into Windows and Linux.
 # CI runs it nightly and on demand (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive.
-#   tests/drive_test.sh mac     erase a disk image as exFAT the way Disk Utility does, copy the kit on as
-#                               Download ZIP leaves it, run SETUP against the mock internet, double-click
-#                               START-HERE, check the page in WebKit, eject. Leaves tests/work/drive.vhd.
+#   tests/drive_test.sh mac     erase a disk image as exFAT the way Disk Utility does, unzip the kit as
+#                               Download ZIP leaves it, run its SETUP against the mock internet and pick the
+#                               drive, double-click START-HERE, check the page in WebKit, eject. Leaves
+#                               tests/work/drive.vhd. Then set the kit up on this Mac (~/TinfoilKit), start it
+#                               and remove it with UNINSTALL.
 #   tests/drive_test.sh linux   mount that drive the way a Linux desktop does, start the kit on this
 #                               machine (the newest Ubuntu in CI), then in Ubuntu 24.04 and 22.04, Debian 12
-#                               and Fedora.
+#                               and Fedora. Then remove it from the drive with UNINSTALL.
 # Windows: the workflow mounts drive.vhd and double-clicks START-HERE-Windows.bat.
 set -u
 TESTS="$(cd "$(dirname "$0")" && pwd)"
@@ -19,6 +21,38 @@ fail() { echo "FAIL: $*"; FAILS=$((FAILS + 1)); }
 step() { echo; echo "=== $*"; }
 stop_kit() { pkill -f tools/launch.sh; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; sleep 1; } 2>/dev/null
 
+# The kit as Safari leaves a Download ZIP: unzipped into tinfoilkit-main, every file marked as from the internet.
+# Its kit.json is the test kit, put in the folder the way one from the website's builder goes in.
+download_kit() { # DIR
+  rm -rf "$1" && mkdir -p "$1"
+  git -C "$ROOT" archive HEAD | tar -xf - -C "$1"
+  python3 - "$TESTS/drive_kit.json" "$ROOT/kit.json" > "$1/kit.json" <<'EOF'
+import json, sys
+t, k = (json.load(open(p)) for p in sys.argv[1:3])
+t["runtimes"] = [r for r in k["runtimes"] if not r.get("requires")]    # the real Mac, Windows and Linux programs
+t["models"] = [m for m in t["models"] if m["id"] == "Tiny"]
+t["library"] = [z for z in t["library"] if z["zim"] in ("testmed_en_all_maxi", "testsurvival_en")]
+t["settings"].update(library_port=8888, ai_port=8080)    # the ports START-HERE-Windows.bat uses
+print(json.dumps(t, indent=2))
+EOF
+  xattr -r -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$1"
+}
+# Where SETUP lists a drive: it lists the disks in /Volumes it can write to, but not the Mac's own.
+drive_number() { # NAME
+  local v i=0
+  for v in /Volumes/*; do
+    [ -d "$v" ] && [ ! -L "$v" ] && [ -w "$v" ] || continue
+    i=$((i + 1)); [ "${v##*/}" = "$1" ] && { echo "$i"; return; }
+  done
+}
+# SETUP with the mock internet, a stock Mac's PATH and bash, and these answers.
+setup() { # FOLDER LOG ANSWERS
+  (cd "$1" && . "$TESTS/env.sh" && printf '%b' "$3" | PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash SETUP.command) > "$L/$2" 2>&1
+  echo "exit $?"
+  grep -E "PASS|FAIL|All set|Moved|Problems|^  - |^  [0-9]  " "$L/$2" | tail -24
+  grep -q "All set" "$L/$2" || fail "SETUP didn't end with All set (logs/$2)"
+}
+
 mac() {
   local img="$W/drive.img" vol=/Volumes/TINFOIL disk kit src mock f
   python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
@@ -30,29 +64,17 @@ mac() {
   disk=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount "$img" | awk 'NR == 1 {print $1}')
   diskutil eraseDisk ExFAT TINFOIL GPT "$disk" || { fail "erase $disk"; kill "$mock"; return; }
 
-  step "the kit as Download ZIP leaves it, every file marked as from the internet, copied onto the drive"
-  src="$W/download/TinfoilKit" kit="$vol/TinfoilKit"
-  rm -rf "$W/download" && mkdir -p "$src"
-  git -C "$ROOT" archive HEAD | tar -xf - -C "$src"
-  xattr -r -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$src"
-  ditto "$src" "$kit"    # exFAT has no extended attributes: macOS keeps the marks in ._ files
-  python3 - "$TESTS/drive_kit.json" "$ROOT/kit.json" > "$kit/kit.json" <<'EOF'
-import json, sys
-t, k = (json.load(open(p)) for p in sys.argv[1:3])
-t["runtimes"] = [r for r in k["runtimes"] if not r.get("requires")]    # the real Mac, Windows and Linux programs
-t["models"] = [m for m in t["models"] if m["id"] == "Tiny"]
-t["library"] = [z for z in t["library"] if z["zim"] in ("testmed_en_all_maxi", "testsurvival_en")]
-t["settings"].update(library_port=8888, ai_port=8080)    # the ports START-HERE-Windows.bat uses
-print(json.dumps(t, indent=2))
-EOF
+  step "SETUP.command in the unzipped download: pick the drive; it moves the kit there and sets it up"
+  src="$W/Downloads/tinfoilkit-main" kit="$vol/TinfoilKit"
+  download_kit "$src"
+  n="$(drive_number TINFOIL)"
+  echo "SETUP lists TINFOIL as drive ${n:-(not at all)}"
+  # Answers: an external drive, TINFOIL, start downloading, don't open the kit, close.
+  setup "$src" setup.log "1\n${n:-1}\ny\nn\n\n"
+  [ -d "$kit/models" ] || fail "the kit isn't set up on the drive, at $kit"
+  [ -d "$src" ] && fail "the download is still in $src after the move"
   echo "$(find "$kit" -name '._*' | wc -l | tr -d ' ') ._ files on the drive"
-
-  step "SETUP.command against the mock internet, with a stock Mac's PATH and bash"
-  (cd "$kit" && . "$TESTS/env.sh" && printf 'y\nn\n\n' | PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash SETUP.command) > "$L/setup.log" 2>&1
-  echo "exit $?"
-  grep -E "PASS|FAIL|All set|Problems|^  - " "$L/setup.log" | tail -20
-  grep -q "All set" "$L/setup.log" || fail "SETUP didn't end with All set (logs/setup.log)"
-  for f in START-HERE.command SETUP.command tools/launch.sh; do
+  for f in START-HERE.command SETUP.command UNINSTALL.command tools/launch.sh; do
     xattr -p com.apple.quarantine "$kit/$f" > /dev/null 2>&1 && fail "$f is still marked as from the internet"
   done
   [ -f "$vol/.metadata_never_index" ] || fail "no .metadata_never_index, so Spotlight would index the drive"
@@ -74,6 +96,28 @@ EOF
   cp -R "$kit/logs" "$L/mac-drive-logs" 2> /dev/null
   hdiutil detach "$disk" || hdiutil detach -force "$disk" || fail "eject"
   python3 "$TESTS/drive.py" vhd "$img" && mv "$img" "$W/drive.vhd"    # a VHD, so Windows can mount it
+
+  step "SETUP.command in a new download: this Mac; it moves the kit to ~/TinfoilKit and sets it up"
+  kit="$HOME/TinfoilKit"
+  rm -rf "$kit"
+  download_kit "$src"
+  # Answers: this Mac, yes even if the disk is short of room (SETUP asks then), download, don't open it, close.
+  room=""; [ "$(df -Pk "$HOME" | awk 'NR == 2 {print int($4 * 1024 / 1e9)}')" -lt 51 ] && room="y\n"
+  setup "$src" setup-mac.log "2\n${room}y\nn\n\n"
+  [ -d "$kit/models" ] || fail "the kit isn't set up in $kit"
+  [ -d "$src" ] && fail "the download is still in $src after the move"
+  tmutil isexcluded "$kit" | grep -q Excluded || fail "Time Machine would back up $kit"
+
+  step "double-click START-HERE.command in ~/TinfoilKit"
+  open "$kit/START-HERE.command"
+  python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit on this Mac after a double-click"
+  stop_kit
+  cp -R "$kit/logs" "$L/mac-home-logs" 2> /dev/null
+
+  step "UNINSTALL.command: type delete, and the kit and its downloads are gone"
+  printf 'delete\n\n' | /bin/bash "$kit/UNINSTALL.command" > "$L/uninstall-mac.log" 2>&1
+  tail -4 "$L/uninstall-mac.log"
+  [ -e "$kit" ] && fail "$kit is still there after UNINSTALL"
   kill "$mock"
 }
 
@@ -97,6 +141,14 @@ linux() {
   run_linux "this machine ($(. /etc/os-release && echo "$PRETTY_NAME"))" ""
   for img in ubuntu:24.04 ubuntu:22.04 debian:12 fedora:latest; do run_linux "$img" "$img"; done
   cp -R "$kit/logs" "$L/linux-drive-logs" 2> /dev/null
+
+  step "UNINSTALL.command --yes: the kit goes, and nothing else on the drive"
+  echo mine > "$mnt/keep-me.txt"
+  bash "$kit/UNINSTALL.command" --yes > "$L/uninstall-linux.log" 2>&1
+  tail -4 "$L/uninstall-linux.log"
+  [ -e "$kit" ] && fail "the kit is still on the drive after UNINSTALL"
+  [ -f "$mnt/keep-me.txt" ] || fail "UNINSTALL deleted something else on the drive"
+  [ -e "$mnt/.metadata_never_index" ] && fail "UNINSTALL left Spotlight switched off for the drive"
   sudo umount "$mnt" && sudo losetup -d "$loop"
 }
 

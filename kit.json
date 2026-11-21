@@ -1,6 +1,6 @@
 {
   "_readme": [
-    "This file is the list of everything the kit keeps on the drive.",
+    "This file is the list of everything the kit keeps, on a drive or on this computer.",
     "Edit it, then run:  ./kit plan   (preview)   and   ./kit sync   (download/update).",
     "Set \"enabled\": false to skip an item. Find more library content with:  ./kit search <words>",
     "Sizes in notes are approximate (late 2026)."
@@ -12,6 +12,7 @@
     "library_port": 8888,
     "ai_port": 8080,
     "keep_free_gb": 25,
+    "keep_free_gb_this_computer": 50,
     "keep_previous_runtime_versions": 1,
     "llama_cpp_channel": "nightly",
     "downloader": "auto",

@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Tinfoil Kit: keeps an offline AI + knowledge library on an external drive up to date.
+"""Tinfoil Kit: keeps an offline AI + knowledge library up to date, on an external drive or this computer.
 
 Commands (run from the kit folder, e.g.  ./kit sync):
   plan [--json]      Show what would be downloaded or updated. Changes nothing.
                      --json prints every item's size, disabled ones too.
   sync [-y]          Download/update everything enabled in kit.json, verify every file
                      (SHA-256), then remove the old versions. Safe to interrupt and re-run.
-  verify [--quick]   Re-check every file on the drive against its recorded SHA-256.
+  verify [--quick]   Re-check every downloaded file against its recorded SHA-256.
                      --fix deletes the bad ones so the next sync replaces them.
   status             What's installed, when it was last updated, free space.
   search WORDS...    Search the Kiwix catalog for more library content to add to kit.json.
   test               Start the offline servers briefly and check they actually work.
   update             Replace the kit's own code with its newest release on GitHub, keeping
-                     this drive's kit.json changes. SETUP.command runs it first.
+                     your kit.json changes. SETUP.command runs it first.
+  estimate           About how many GB this kit.json needs, from the sizes the website's kit
+                     builder lists. Needs no internet. SETUP.command uses it.
 
 Only needs python3 (3.9+) and curl, both standard on macOS. aria2c is used if installed
 (brew install aria2) for faster multi-connection downloads.
@@ -873,12 +875,12 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
         log("\nNothing could be looked up. Check that this Mac is online (on hotel or cafe Wi-Fi, "
             "open any web page and sign in first), then try again.")
         return
-    keep = float(cfg["settings"].get("keep_free_gb", 25)) * GB
-    log(f"\nTo download: {fmt_size(total)}   Free on drive: {fmt_size(free)}   "
+    keep = keep_free(root, cfg)
+    log(f"\nTo download: {fmt_size(total)}   Free space: {fmt_size(free)}   "
         f"Free afterwards: ~{fmt_size(max(0, free - total))} (before old versions are removed)")
     if free - total < keep:
-        log(f"WARNING: that leaves less than keep_free_gb ({fmt_size(keep)}). Items that don't fit "
-            "will be skipped; disable some in kit.json or use a bigger drive.")
+        log(f"WARNING: that leaves less than the {fmt_size(keep)} the kit keeps free. Items that don't fit "
+            "are skipped, the most important ones download first. Switch some off in kit.json, or make room.")
 
 
 # ----------------------------------------------------------------------------- downloading
@@ -927,7 +929,7 @@ def download(url: str, partial: Path, size: Optional[int], downloader: str) -> N
                 free = f" ({fmt_size(shutil.disk_usage(partial.parent).free)} free)"
             except OSError:
                 free = ""
-            raise RuntimeError(f"couldn't write {partial.name} to the drive{free}. Is it full, or was it unplugged?")
+            raise RuntimeError(f"couldn't save {partial.name}{free}. Is the disk full, or was the drive unplugged?")
         if not use_aria and (rc == 33 or status == "416"):   # can't resume this partial file: start over
             drop_partial(partial)
         log(f"    download interrupted (exit {rc}, {fmt_size(got)} of {fmt_size(size)}); "
@@ -990,9 +992,25 @@ def verify_download(path: Path, f: RemoteFile, expected: Dict[str, str]) -> str:
     return got["sha256"]
 
 
+def on_this_computer(root: Path) -> bool:
+    """True when the kit is on the computer's own disk (the one with the home folder), not on a drive."""
+    try:
+        return root.stat().st_dev == Path.home().stat().st_dev
+    except OSError:
+        return False
+
+
+def keep_free(root: Path, cfg: Dict[str, Any]) -> float:
+    """Bytes to leave free. The computer's own disk keeps more, so it still has room for system updates."""
+    s = cfg["settings"]
+    gb = float(s.get("keep_free_gb", 25))
+    if on_this_computer(root):
+        gb = max(gb, float(s.get("keep_free_gb_this_computer", 50)))
+    return gb * GB
+
+
 def ensure_space(root: Path, need: int, cfg: Dict[str, Any]) -> bool:
-    keep = float(cfg["settings"].get("keep_free_gb", 25)) * GB
-    return shutil.disk_usage(root).free - need >= keep
+    return shutil.disk_usage(root).free - need >= keep_free(root, cfg)
 
 
 def fetch(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, cfg: Dict[str, Any], force: bool,
@@ -1010,8 +1028,8 @@ def fetch(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, cfg: Dic
     have = partial.stat().st_size if partial.exists() else 0
     need = max(0, (f.size or 0) * room - have)
     if not force and not ensure_space(root, need, cfg):
-        raise RuntimeError(f"not enough free space for {label or f.name} (needs about {fmt_size(need)} more); "
-                           "free up space or lower keep_free_gb in kit.json")
+        raise RuntimeError(f"not enough free space for {label or f.name} (needs about {fmt_size(need)} more, "
+                           f"and the kit keeps {fmt_size(keep_free(root, cfg))} free); make room or switch it off in kit.json")
     partials[rel] = {"item": item.key, "tag": tag}
     save_state(root, state)
     log(f"    downloading {label or f.name} ({fmt_size(f.size)})" + (f", resuming at {fmt_size(have)}" if have else ""))
@@ -1040,10 +1058,10 @@ def sweep_partials(root: Path, state: Dict[str, Any], items: List[Item]) -> None
 
 
 def matches(path: Path, f: RemoteFile, expected: Dict[str, str]) -> Optional[str]:
-    """The SHA-256 of a file already on the drive if it's exactly f (same size and published checksums)."""
+    """The SHA-256 of a file already in the kit if it's exactly f (same size and published checksums)."""
     if not expected or not path.is_file() or (f.size and path.stat().st_size != f.size):
         return None
-    log(f"    found {path.name} on the drive, checking it...")
+    log(f"    found {path.name} already here, checking it...")
     got = hash_file(path, list(expected))
     return got["sha256"] if all(got[a] == v for a, v in expected.items()) else None
 
@@ -1061,7 +1079,7 @@ def install_files(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, 
             new_files[f.name] = old_files[f.name]
             continue
         expected = expected_digests(f)
-        # already on the drive (copied by hand, state lost, or a sync stopped before saving): keep it if it checks out
+        # already here (copied by hand, state lost, or a sync stopped before saving): keep it if it checks out
         have = matches(final, f, expected)
         if have:
             new_files[f.name] = {"size": final.stat().st_size, "sha256": have, "verified": True}
@@ -1427,13 +1445,18 @@ def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
 
 # ----------------------------------------------------------------------------- housekeeping
 
-def prepare_drive(root: Path) -> None:
+def prepare_folder(root: Path) -> None:
     if sys.platform != "darwin":
         return
     # A kit downloaded as a ZIP is marked "from the internet", and macOS won't open marked scripts until
     # they're approved in System Settings. Lift the mark so START-HERE opens with a plain double-click in an outage.
-    subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(root / "START-HERE.command"), str(root / "SETUP.command"),
-                    str(root / "kit"), str(root / "tools")], capture_output=True)
+    subprocess.run(["xattr", "-dr", "com.apple.quarantine", *(str(root / f) for f in
+                    ("START-HERE.command", "SETUP.command", "UNINSTALL.command", "kit", "tools"))], capture_output=True)
+    if on_this_computer(root):
+        # Time Machine would copy 300 GB of downloads to the backup disk at its next backup. A sticky exclusion
+        # (no administrator needed) travels with the folder, and goes when the folder does.
+        subprocess.run(["tmutil", "addexclusion", str(root)], capture_output=True)
+        return
     parts = root.resolve().parts
     if len(parts) >= 3 and parts[1] == "Volumes":   # keep Spotlight from indexing 500 GB of archives
         marker = Path("/", parts[1], parts[2], ".metadata_never_index")
@@ -1444,12 +1467,12 @@ def prepare_drive(root: Path) -> None:
 
 
 def drive_bytes(rec: Dict[str, Any]) -> int:
-    """What an item in state.json takes on the drive."""
+    """What an item in state.json takes up on disk."""
     return sum(f.get("size", 0) for f in rec.get("files", {}).values()) + rec.get("unpacked_size", 0)
 
 
 def write_inventory(root: Path, state: Dict[str, Any]) -> None:
-    lines = ["# What's on this drive", "",
+    lines = ["# What's in this kit", "",
              f"Last updated: {state.get('last_sync', 'never')}  ",
              "Generated by `./kit sync`. Start everything by double-clicking START-HERE.command.", ""]
     for section in SECTIONS:
@@ -1477,7 +1500,7 @@ class Lock:
             import fcntl
             fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            die("another ./kit sync is already running on this drive")
+            die("another ./kit sync is already running on this kit")
         except (OSError, ImportError):
             pass  # filesystem without locking support: carry on
         return self
@@ -1491,7 +1514,8 @@ class Lock:
 
 # ./kit update never writes here, whatever a release holds: the downloads, the kit's state and logs, a git checkout.
 KEEP = {".git", ".kit", "bin", "installers", "library", "logs", "maps", "models", "INVENTORY.md"}
-NEEDED = ("kit", "kit.json", "SETUP.command", "START-HERE.command", "tools/kit.py", "tools/launch.sh", "tools/portal.html")
+NEEDED = ("kit", "kit.json", "SETUP.command", "START-HERE.command", "UNINSTALL.command", "tools/kit.py", "tools/launch.sh",
+          "tools/portal.html")
 MISSING = object()
 
 
@@ -1505,7 +1529,7 @@ def keyed(x: Any) -> bool:
 
 
 def merge3(base: Any, ours: Any, theirs: Any) -> Any:
-    """Three-way merge of kit.json values: this drive's changes (base to ours) win, and the new version's
+    """Three-way merge of kit.json values: this kit's changes (base to ours) win, and the new version's
     (base to theirs) apply everywhere else. MISSING stands for a key or item that isn't there."""
     if ours == base:
         return theirs
@@ -1534,8 +1558,8 @@ def merge3(base: Any, ours: Any, theirs: Any) -> Any:
 
 
 def merge_kit_json(root: Path, theirs_text: str) -> Tuple[str, str]:
-    """This drive's kit.json with the new version's changes, and a line on what happened. The copy of kit.json
-    that came with the kit's current version (site/kit.json) shows which parts this drive changed."""
+    """This kit's kit.json with the new version's changes, and a line on what happened. The copy of kit.json
+    that came with the kit's current version (site/kit.json) shows which parts were changed here."""
     mine = root / "kit.json"
     if not mine.exists():
         return theirs_text, "kit.json is the new version's."
@@ -1552,13 +1576,13 @@ def merge_kit_json(root: Path, theirs_text: str) -> Tuple[str, str]:
     theirs = json.loads(theirs_text)
     merged = merge3(base, ours, theirs)
     text = theirs_text if merged == theirs else json.dumps(merged, indent=2, ensure_ascii=False) + "\n"
-    return text, ("kit.json is the new version's, with this drive's changes kept." if ours != base else
+    return text, ("kit.json is the new version's, with your changes kept." if ours != base else
                   "kit.json is the new version's.")
 
 
 def unpack_release(data: bytes, dest: Path) -> None:
     """Unpack a GitHub release archive into dest without trusting it: plain files and folders only, all inside
-    its one top folder, and nothing for the drive's own folders (KEEP)."""
+    its one top folder, and nothing for the kit's own folders of downloads (KEEP)."""
     total, top = 0, None
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
         for m in tf:
@@ -1598,13 +1622,13 @@ def check_release(new: Path) -> None:
         json.loads((new / "kit.json").read_text(encoding="utf-8"))
     except ValueError as e:
         raise ValueError(f"its kit.json doesn't parse ({e})") from None
-    for script in ("kit", "SETUP.command", "START-HERE.command", "tools/launch.sh"):
+    for script in ("kit", "SETUP.command", "START-HERE.command", "UNINSTALL.command", "tools/launch.sh"):
         if subprocess.run(["bash", "-n", str(new / script)], capture_output=True).returncode:
             raise ValueError(f"its {script} has a syntax error")
 
 
 def install_release(root: Path, new: Path, old_files: List[str]) -> List[str]:
-    """Move the unpacked release over the kit's code (renames on the same drive, so it takes a moment), then
+    """Move the unpacked release over the kit's code (renames on the same disk, so it takes a moment), then
     remove the files the last update installed that this version no longer has. Returns the files installed."""
     files = sorted(p.relative_to(new).as_posix() for p in new.rglob("*") if p.is_file())
     # kit.py goes last: if this stops partway, the old kit.py (which knows it's older) runs the retry.
@@ -1659,7 +1683,7 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
     LOG_FILE = root / "logs" / f"sync-{dt.date.today().isoformat()}.log"
     log(f"\n===== sync started {now_iso()} =====")
     with Lock(root):
-        prepare_drive(root)
+        prepare_folder(root)
         cfg, state = load_config(root), load_state(root)
         items = build_plan(root, cfg, state, args.only)
         print_plan(root, items, state, cfg)
@@ -1775,7 +1799,8 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
         for rel, size in left:
             log(f"  {rel[:60]:<62}{fmt_size(size):>9}")
     last = state.get("last_sync")
-    log(f"\nKit content: {fmt_size(total)}.  Drive: {fmt_size(usage.free)} free of {fmt_size(usage.total)}.")
+    disk = "this computer's disk" if on_this_computer(root) else "the drive"
+    log(f"\nKit content: {fmt_size(total)}.  Free on {disk}: {fmt_size(usage.free)} of {fmt_size(usage.total)}.")
     if last:
         age = (dt.datetime.now() - dt.datetime.fromisoformat(last)).days
         every = int(cfg["settings"].get("update_every_days", 75))
@@ -1784,6 +1809,22 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
         log("Never fully synced. Run ./kit sync.")
     if state.get("kit_version"):
         log(f"Kit version: {state['kit_version']}.")
+
+
+def cmd_estimate(root: Path, args: argparse.Namespace) -> None:
+    """Print about how many GB the switched-on items need, from the sizes the kit builder lists (site/sources.json),
+    plus about 1 GB of programs. Needs no internet, so SETUP can say how much room the kit needs before choosing where."""
+    cfg = load_config(root)
+    try:
+        listed = json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
+        sizes = {s["id"]: s.get("bytes") or 0 for s in listed}
+    except (OSError, ValueError, KeyError, TypeError):
+        sizes = {}
+    on = [m["id"] for m in cfg.get("models", []) if m.get("enabled", True)]
+    on += [z["zim"] for z in cfg.get("library", []) if z.get("enabled", True)]
+    if maps_settings(cfg)["enabled"]:
+        on.append("maps")
+    print(math.ceil((sum(sizes.get(i, 0) for i in on) + GB) / GB))
 
 
 def cmd_search(root: Path, args: argparse.Namespace) -> None:
@@ -2101,7 +2142,7 @@ def main() -> None:
     p.add_argument("--json", action="store_true", help="print every item's size as JSON, disabled ones too")
     p = sub.add_parser("sync", help="download and update everything")
     p.add_argument("-y", "--yes", action="store_true", help="don't ask for confirmation")
-    p.add_argument("--force", action="store_true", help="ignore the keep_free_gb safety margin")
+    p.add_argument("--force", action="store_true", help="ignore the free space the kit keeps (keep_free_gb)")
     p.add_argument("--only", nargs="*", default=[], help="limit to items whose section/id contains these words")
     p = sub.add_parser("verify", help="re-check files against their checksums")
     p.add_argument("--quick", action="store_true", help="check sizes only (fast)")
@@ -2113,12 +2154,13 @@ def main() -> None:
     p.add_argument("--model", help="model folder name to test (default: the smallest)")
     p = sub.add_parser("update", help="install the newest version of the kit's own code, keeping kit.json changes")
     p.add_argument("--force", action="store_true", help="reinstall even if this is the newest version")
+    sub.add_parser("estimate", help="about how many GB this kit.json needs (no internet needed)")
     args = ap.parse_args()
     root = (args.root or ROOT).resolve()
     if not shutil.which("curl"):
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
-                "search": cmd_search, "test": cmd_test, "update": cmd_update}
+                "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate}
     if args.cmd not in commands:
         ap.print_help()
         return
