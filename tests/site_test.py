@@ -1,5 +1,6 @@
 """Smoke test the website: serve site/ locally, drive the kit builder in headless Chromium.
-usage: python3 tests/site_test.py   (needs: pip install playwright && playwright install chromium)"""
+usage: python3 tests/site_test.py   (needs: pip install playwright && playwright install chromium)
+Set KIT_AXE to axe-core's axe.min.js (npm i axe-core) to also check accessibility."""
 import functools
 import http.server
 import json
@@ -51,6 +52,10 @@ with sync_playwright() as p:
         first.uncheck()
         check(f"{name}: unticking a source changes the total", page.inner_text("#totalText") != before)
         check(f"{name}: no page errors", not errors, "; ".join(errors))
+        if os.environ.get("KIT_AXE"):
+            page.add_script_tag(path=os.environ["KIT_AXE"])
+            bad = page.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
+            check(f"{name}: no accessibility violations (axe)", not bad, ", ".join(bad))
         if name == "desktop":
             with page.expect_download() as dl:
                 page.click("#downloadKit")
