@@ -10,6 +10,8 @@ import time
 import uuid
 import urllib.request
 
+# A Windows console can't print every character a tiny test model makes up.
+sys.stdout.reconfigure(errors="backslashreplace")
 fails = 0
 
 
@@ -37,12 +39,12 @@ def wait_for(url, seconds):
 
 def check_kit(lib, ai):
     base = f"http://127.0.0.1:{lib}"
-    check("library page", "Tinfoil Kit" in wait_for(base + "/", 180), base)    # containers install packages first
+    check("library page", "Tinfoil Kit" in wait_for(base + "/", 120), base)    # containers install packages first
     books = wait_for(base + "/catalog/v2/entries", 5).count("<entry>")
     check("both test books listed", books == 2, f"{books} books")
     found = wait_for(base + "/search?books.filter.lang=eng&pattern=tourniquet", 5)
     check("library search", "Tourniquet" in found)
-    models = wait_for(f"http://127.0.0.1:{ai}/v1/models", 120)
+    models = wait_for(f"http://127.0.0.1:{ai}/v1/models", 90)
     check("AI lists the model", "Tiny" in models, models[:200])
     try:
         out = json.loads(fetch(f"http://127.0.0.1:{ai}/v1/chat/completions", {

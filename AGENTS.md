@@ -27,6 +27,7 @@ Use the cheapest check that proves the change, and paste its output in the commi
 | Targeted | `node tests/map_logic_test.js tools/portal.html` (start the mocks as `tests/check.sh` does) | While iterating |
 | Quick gate | `tests/check.sh` | Before every push. CI runs it on every push |
 | End to end | `tests/build_fixtures.sh` once, then `tests/run_all.sh` (Linux x86_64; needs GitHub and download.kiwix.org, which cloud sessions can't reach) | Changes to `tools/` or `kit.json`. CI runs it on those pushes |
+| Drive | The `drive test` workflow (`drive.yml`: Actions > drive test > Run workflow, or `run_workflow` at `main`). It sets the kit up on an exFAT disk on a Mac, then starts it on Windows and Linux | Once the bulk of a change to `tools/`, `kit.json` or a launcher is done, and before calling it finished. Not on every push: Mac minutes cost money while the repo is private. It also runs nightly |
 | Website | `python3 tests/site_test.py` (Playwright; set `KIT_AXE` to axe-core's `axe.min.js` to check accessibility too) | Changes to `site/`. CI runs it on every push |
 | Real Mac | `./kit sync && ./kit test` on a real drive | Before a release. Travis runs it |
 

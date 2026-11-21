@@ -21,6 +21,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
   - The site serves its own fonts (no Google requests); the CSP allows nothing third-party. The kit builder fits phones down to 320px wide.
   - The launcher starts with a model that fits the Mac's memory, reuses only its own servers (another program on 8888 or 8080 makes it move to the next free port), and clears the `._` files macOS leaves on exFAT before the servers scan their folders.
   - CI also runs the sync test on Python 3.9 (via uv) and with bash 3.2 (the official `bash:3.2` image), the versions macOS ships.
+- Drive test (`drive.yml`, nightly and by hand; Travis chose nightly until launch, every kit change once public): the kit set up on a real exFAT disk on one of GitHub's Apple Silicon Macs, with the real llama.cpp and kiwix-tools builds, then started from that same drive on Windows and Linux. Details in section 4. It found that the launcher needed curl, which stock Ubuntu and Debian desktops don't have; it now falls back to bash's `/dev/tcp`.
 
 **Waiting on Travis**
 - Whether tinfoilkit.com stays public before launch. The project's Vercel Authentication covers everything except custom domains, so the site is public there, and its GitHub buttons 404 until the repo is public. Hiding it means setting protection to all deployments; that needs his OK.
@@ -56,7 +57,7 @@ Written before the first Claude Code thread. The Status section above is current
 
 ## 2. What the kit is
 
-- **For:** technical people and non-technical preppers. Version 1 supports Apple Silicon Macs only and is designed around 32 GB of memory; smaller Macs can use the small model. Windows and Linux paths exist in the code but are untested.
+- **For:** technical people and non-technical preppers. Version 1 supports Apple Silicon Macs only and is designed around 32 GB of memory; smaller Macs can use the small model. Windows and Linux are fallbacks: the nightly drive test starts the kit on both from a drive a Mac set up, with test data.
 - **On the drive:** AI models, the library, maps, the programs that serve them (llama.cpp, kiwix-serve, pmtiles, Photon, GraphHopper, Java), the launcher and the browser page.
 - **Using it:** double-click `START-HERE.command`. A browser opens http://127.0.0.1:8888 with these tabs:
   - **Ask:** answers from the library, with numbered sources.
@@ -144,7 +145,7 @@ Why: a drive set up once kept its `tools/` and `kit.json` forever, so a source r
 - `caffeinate` keeps the Mac awake while the kit runs.
 - **First model:** the default, unless its files take more than 60% of memory; then the biggest model that fits, else the smallest. `--model=NAME` overrides. `KIT_MEMORY_MB` fakes the memory size for tests.
 - **Ports:** a server already on a port counts as the kit's only if it answers like one (the page's title, or `/v1/models` JSON). Otherwise the library or AI starts on the next free port, and the page's address carries it. Map ports are baked into the page at sync time, so they don't move.
-- It serves the page `./kit sync` built (`.kit/portal.html`, with the map inside) whenever it exists, and the bare template otherwise. The launcher never needs python, so a drive works on a Mac without the Command Line Tools.
+- It serves the page `./kit sync` built (`.kit/portal.html`, with the map inside) whenever it exists, and the bare template otherwise. The launcher never needs python, so a drive works on a Mac without the Command Line Tools. It doesn't need curl either: without it (stock Ubuntu and Debian), it checks its servers through bash's `/dev/tcp`. When a program on the drive won't run (say, a library Linux lacks), it prints the reason.
 
 ### The browser page (`tools/portal.html`)
 
@@ -240,13 +241,20 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
   - the launcher, then `portal_test.js`, `map_logic_test.js` and the Playwright UI tests (`ui_test.py`, `map_ui_test.py`), with axe on every tab in light and dark mode when `KIT_AXE` is set;
   - `--no-maps`;
   - a "3 months later" update with a new catalog and new map builds, then `kit test` again.
+- **Drive (`drive.yml`, nightly and by hand):** `build_fixtures.sh drive` adds the newest real llama.cpp and kiwix-tools builds for Mac, Windows and Linux to the mock internet, then `drive_test.sh` uses one disk image the whole way:
+  - Mac (GitHub's macOS 26 on Apple Silicon): erase the image as exFAT, copy the kit on as Download ZIP leaves it (marked as from the internet, with `._` files), run `SETUP.command` with a stock PATH and `/bin/bash`, double-click `START-HERE.command` (Terminal, then Safari), check the page in WebKit, add Finder-style `._` files beside the books and the model, and eject.
+  - Windows: mount the same drive as a VHD, double-click `START-HERE-Windows.bat`, check the page in Edge.
+  - Linux: mount it as a desktop does (udisks2 options), start the kit on GitHub's Ubuntu (26.04 now), then in Ubuntu 24.04 and 22.04, Debian 12 and Fedora containers. 22.04 is the oldest the llama.cpp build runs on.
+  - Screenshots and logs are run artifacts. A run takes about 3 Mac minutes (about $0.25 with the other jobs while the repo is private; free once public).
+  - Not covered: maps, real models on a real GPU, and the first-run prompts a person clicks through (Open Anyway for `SETUP.command`, Terminal's removable-volume permission, the Command Line Tools install).
 - **Website (`site_test.py`, every push):** serves `site/` with the production headers and drives the kit builder on desktop and phone sizes: presets, totals, no sideways scroll, fonts load from the site, nothing loads from other sites, both Copy paths, the kit.json download, and axe.
 - **`mock_remote.py`** fakes every download source. Flag files switch its behavior: `STATE_V2` ("3 months later"), `FLAKY` (a download breaks partway), `PHOTON_OLD_DUMP` (only an older database version is published). `/wifi-sign-in` answers like a hotel network's sign-in page.
 - **`tests/fakes/`:** a fake `java` (pretends to be GraphHopper's import and server, and Photon, by running the mocks) and a fake `pmtiles`.
 
 **Never verified. Needs a real Mac and the internet:**
 - Real downloads and checksums from each source.
-- The Apple Silicon binaries.
+- The map programs' Apple Silicon builds (Java, pmtiles). The drive test runs llama-server and kiwix-serve on an Apple Silicon VM, but on a virtual GPU with a tiny model.
+- First-run prompts on a fresh Mac and a physical USB drive.
 - Photon and GraphHopper on real data, including from exFAT. Photon's search engine (OpenSearch) may fail to lock its files on exFAT; the guide says to reformat as APFS if `./kit test` shows a lock error.
 - GraphHopper's import memory for car plus foot.
 - The exact name of the Photon US dump.

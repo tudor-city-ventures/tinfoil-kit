@@ -10,8 +10,8 @@ on:
     branches: [main]
     paths: [tools/**, kit, kit.json, SETUP.command, START-HERE.command, START-HERE-Windows.bat, tests/drive*,
             tests/build_fixtures.sh, tests/mock_remote.py, tests/ui_test.py, .github/workflows/drive.yml]
-concurrency:
-  group: drive-${{ github.ref }}
+concurrency:    # per event too, so a push run whose jobs are skipped can't cancel a run in progress
+  group: drive-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 permissions:
   contents: read
@@ -107,7 +107,7 @@ jobs:
           }
           $kit = "$($part.DriveLetter):\TinfoilKit"
           "The drive is $($part.DriveLetter):"
-          Get-ChildItem -Force "$kit\library", "$kit\models" -Recurse | Select-Object -ExpandProperty FullName
+          Get-ChildItem -Force "$kit\library", "$kit\models" -Recurse | ForEach-Object { "$($_.Mode)  $($_.FullName)" }
           Start-Process -FilePath "$kit\START-HERE-Windows.bat" -WorkingDirectory $kit
           python tests/drive.py check 8888 8080
           $checked = $LASTEXITCODE
@@ -133,7 +133,7 @@ jobs:
     needs: mac
     if: ${{ !cancelled() && needs.mac.outputs.drive == 'yes' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
         with:

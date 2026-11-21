@@ -5,7 +5,8 @@
 #                               Download ZIP leaves it, run SETUP against the mock internet, double-click
 #                               START-HERE, check the page in WebKit, eject. Leaves tests/work/drive.vhd.
 #   tests/drive_test.sh linux   mount that drive the way a Linux desktop does, start the kit on this
-#                               machine (Ubuntu 24.04 in CI), then in Ubuntu 22.04, Debian 12 and Fedora.
+#                               machine (the newest Ubuntu in CI), then in Ubuntu 24.04 and 22.04, Debian 12
+#                               and Fedora.
 # Windows: the workflow mounts drive.vhd and double-clicks START-HERE-Windows.bat.
 set -u
 TESTS="$(cd "$(dirname "$0")" && pwd)"
@@ -94,7 +95,7 @@ linux() {
   echo "$(find "$kit/library" "$kit/models" -name '._*' | wc -l | tr -d ' ') ._ files beside books and models"
 
   run_linux "this machine ($(. /etc/os-release && echo "$PRETTY_NAME"))" ""
-  for img in ubuntu:22.04 debian:12 fedora:latest; do run_linux "$img" "$img"; done
+  for img in ubuntu:24.04 ubuntu:22.04 debian:12 fedora:latest; do run_linux "$img" "$img"; done
   cp -R "$kit/logs" "$L/linux-drive-logs" 2> /dev/null
   sudo umount "$mnt" && sudo losetup -d "$loop"
 }
@@ -122,7 +123,7 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
 case "${1:-}" in
   mac) mac ;;
   linux) linux ;;
-  *) sed -n '2,9p' "$0"; exit 2 ;;
+  *) sed -n '2,10p' "$0"; exit 2 ;;
 esac
 echo
 [ "$FAILS" -eq 0 ] || { echo "DRIVE TEST: $FAILS FAILED (logs in $L)"; exit 1; }
