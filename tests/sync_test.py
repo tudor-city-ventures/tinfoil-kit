@@ -1,6 +1,7 @@
 """Sync engine test: runs the real kit.py against the mock internet (tests/mock_remote.py) with tiny
 made-up books and models. Covers downloads, resume, checksums, updates, leftover partial downloads,
-verify --fix, adopting files already on the drive, offline runs, exit codes, and SETUP.command's choices.
+verify --fix, adopting files already on the drive, offline runs, exit codes, which release of a program is
+taken, ./kit update, SETUP.command's choices, and the launcher's first model and ports.
 Needs only python3 and curl, so it runs in the quick gate and in cloud sessions.
 usage: python3 tests/sync_test.py
 """
@@ -48,6 +49,9 @@ for rel, size in (("zim/testmed_en_all_maxi_2026-01.zim", 70_000), ("zim/testsur
     (R / rel).parent.mkdir(parents=True, exist_ok=True)
     (R / rel).write_bytes(os.urandom(size))
 shutil.copy(R / "hf/tiny/Tiny-Q8_0.gguf", R / "hf/tiny_v2/Tiny-Q8_0.gguf")
+for rel in ("gh/llama-b99990-bin-ubuntu-x64.tar.gz", "gh2/photon-1.3.0.jar", "gh2/photon-1.2.1.jar"):   # only looked up, never unpacked
+    (R / rel).parent.mkdir(parents=True, exist_ok=True)
+    (R / rel).write_bytes(os.urandom(1000))
 (R / "FLAKY").touch()   # the first model download drops halfway, so sync has to resume it
 
 port = free_port()
@@ -165,6 +169,17 @@ pathlib.Path(str(out) + ".aria2").unlink()
     write_cfg()
     check("aria2c: a full-length download it hadn't finished is resumed, not taken as done",
           rc == 0 and same("models/Two/Two-Q4_K_M.gguf", "hf/two/Two-Q4_K_M.gguf") and not record.exists(), out)
+
+    # Which release of a program: llama.cpp's builds are its nightly prereleases, but Photon's newest release
+    # here is a beta, and a beta is taken only when there's nothing else.
+    rt = work / "runtimes"
+    shutil.copytree(TESTS.parent / "tools", rt / "tools")
+    (rt / "kit.json").write_text(json.dumps({"runtimes": [
+        {"id": "llama.cpp-linux-x64", "type": "github", "repo": "ggml-org/llama.cpp", "asset": "llama-*-bin-ubuntu-x64.tar.gz"},
+        {"id": "photon", "type": "github", "repo": "komoot/photon", "asset": "photon-[0-9]*.jar"}]}))
+    rc, out = kit("plan", root=rt)
+    check("plan: llama.cpp's nightly build, and Photon's full release rather than its newer beta",
+          rc == 0 and "b99990" in out and "1.3.0" in out and "2.0.0-beta" not in out, out)
 
     (drive / ".kit" / "state.json").unlink()
     rc, out = kit("sync", "-y")

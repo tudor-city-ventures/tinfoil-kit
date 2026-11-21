@@ -462,11 +462,11 @@ class Resolver:
         repo, pattern = item.cfg["repo"], item.cfg["asset"]
         if repo not in self._releases:
             self._releases[repo] = http_json(f"{GITHUB_API}/repos/{repo}/releases?per_page=30")
-        channel = self.cfg["settings"].get("llama_cpp_channel", "nightly")
         candidates = [r for r in self._releases[repo] if not r.get("draft")]
-        if channel == "stable":
-            stable = [r for r in candidates if not r.get("prerelease")]
-            candidates = stable + [r for r in candidates if r.get("prerelease")]
+        # llama.cpp's builds are its nightly prereleases. Every other program takes a full release while it has one.
+        nightly = repo.endswith("/llama.cpp") and self.cfg["settings"].get("llama_cpp_channel", "nightly") != "stable"
+        if not nightly:
+            candidates.sort(key=lambda r: bool(r.get("prerelease")))    # a stable sort: each kind stays newest first
         prefix = str(item.cfg.get("version_prefix", ""))
         for rel in candidates:
             if prefix and not rel["tag_name"].lstrip("v").startswith(prefix):
