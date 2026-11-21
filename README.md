@@ -19,7 +19,7 @@ Windows and Linux paths exist in the code but are untested.
 
 ## Set up
 
-Copy this folder onto the drive (**Code > Download ZIP** on GitHub, then unzip) and double-click `SETUP.command`. It checks the drive, downloads everything and tests it. Or from Terminal:
+Copy this folder onto the drive (**Code > Download ZIP** on GitHub, unzip, and rename `tinfoilkit-main` to `TinfoilKit`) and double-click `SETUP.command`. It checks the drive, downloads everything and tests it. Or from Terminal:
 
 ```sh
 git clone https://github.com/tudor-city-ventures/tinfoilkit /Volumes/<drive>/TinfoilKit

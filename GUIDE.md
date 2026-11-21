@@ -98,7 +98,8 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
    (recommended for an emergency drive), **APFS** if it will only ever be used with Macs.
    Many new drives come as exFAT already. FAT32 (files over 4 GB don't fit) and NTFS (Macs can't write to it)
    won't work; SETUP checks. Always eject the drive before unplugging, especially with exFAT.
-2. Copy the `TinfoilKit` folder onto the drive. (From GitHub: **Code > Download ZIP**, then copy the unzipped folder.)
+2. Copy the `TinfoilKit` folder onto the drive. (From GitHub: **Code > Download ZIP**, unzip it, and rename the
+   `tinfoilkit-main` folder to `TinfoilKit`.)
 3. Double-click **`SETUP.command`** in that folder. It checks the drive, downloads everything (about 280 to
    330 GB the first time, a few hours; maps are 20 to 30 GB of that), then starts each part offline to check
    it answers. Leave the Mac plugged in. If you stop it, double-click it again and it picks up where it left off.
