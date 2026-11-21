@@ -8,13 +8,13 @@ An offline kit for when the internet goes down. One external SSD holds:
 - **An offline library** (Kiwix): Wikipedia, medical references, repair guides, preparedness manuals.
 - **Offline maps** with address search, driving and walking directions, and "nearest hospital".
 
-Plug in the drive, double-click `START-HERE.command`, and a browser page opens with Ask, AI chat, Library and Map tabs. No internet, account or install needed.
+Plug in the drive, double-click `START-HERE.command` (`START-HERE-Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library and Map tabs. No internet, account or install needed.
 
 ![The Ask tab](docs/screenshots/shot_ask.png)
 
 ## How it works
 
-The whole kit is one folder. Put it on an external drive to grab and go, or on your Mac's own disk. While you're online, `SETUP.command` fills it. When the internet is down, `START-HERE.command` starts a few servers from it on your Mac, and your browser talks to them. Nothing goes over the internet.
+The whole kit is one folder. Put it on an external drive to grab and go, or on your computer's own disk. While you're online, `SETUP.command` fills it. When the internet is down, `START-HERE.command` starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet.
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 300}}}%%
@@ -23,12 +23,12 @@ flowchart TB
     direction TB
     releases["Tinfoil Kit releases<br/>the kit's own code"] --> setup
     publishers["Publishers' downloads<br/>AI models, books,<br/>maps, programs"] --> setup
-    setup["SETUP.command<br/>update, download, check"]
+    setup["SETUP<br/>update, download, check"]
   end
-  folder[("Kit folder<br/>on a drive or your Mac")]
+  folder[("Kit folder<br/>on a drive or your computer")]
   subgraph offline["Offline, any time"]
     direction TB
-    start["START-HERE.command<br/>starts the servers"]
+    start["START-HERE<br/>starts the servers"]
     start --> ai["AI<br/>llama-server"]
     start --> library["Library<br/>kiwix-serve"]
     start --> maps["Maps<br/>pmtiles, Photon,<br/>GraphHopper"]
@@ -50,7 +50,7 @@ flowchart TB
 
 ### Using it (offline)
 
-`START-HERE.command` (`tools/launch.sh`) starts these servers on your Mac and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the Mac's memory and keeps the Mac awake. `bash START-HERE.command --share` lets phones on the same Wi-Fi use it too.
+`START-HERE.command` (`tools/launch.sh`; `START-HERE-Windows.bat` on Windows) starts these servers on your computer and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the computer's memory. `bash START-HERE.command --share` lets phones on the same Wi-Fi use it too.
 
 | Part | Program | Port | What it does |
 | --- | --- | --- | --- |
@@ -60,7 +60,7 @@ flowchart TB
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy (the whole US by default) |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
 
-Photon and GraphHopper run on a Java that's in the kit. On Windows (`START-HERE-Windows.bat`) and Linux, only the AI and the library start.
+Photon and GraphHopper run on a Java that's in the kit. On Windows and Linux, only the AI and the library start for now.
 
 The kit page (`tools/portal.html`) is one HTML file with no build step. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
 
@@ -72,8 +72,8 @@ The kit page (`tools/portal.html`) is one HTML file with no build step. Each syn
 ```text
 TinfoilKit/
 ├── SETUP.command           set up or refresh (online)
-├── START-HERE.command      start the kit (offline)
-├── START-HERE-Windows.bat  start it on a Windows PC
+├── START-HERE.command      start the kit offline (Mac, Linux)
+├── START-HERE-Windows.bat  start the kit offline (Windows)
 ├── GUIDE.md                the printable guide
 ├── INVENTORY.md            what's installed, with versions and sizes
 ├── kit, kit.json, tools/   the kit's code and its list of downloads
@@ -90,10 +90,10 @@ The repo is the kit, so `site/` (the website), `tests/` and `docs/` come along, 
 
 ## Requirements
 
-- An Apple Silicon Mac. Built around 32 GB of memory; smaller Macs start with the small model.
+- A modern laptop or desktop: a Mac with Apple Silicon, or a Windows or Linux PC. Built around 32 GB of memory; the small model runs on 8-16 GB.
 - An external SSD with room for the kit. The first sync downloads about 300 GB.
 
-Windows and Linux work as a fallback (library and AI, no map). A nightly test sets the kit up on a Mac and starts it on both.
+For now, setup and the map need a Mac. On Windows and Linux the kit runs the library and the AI. A nightly test sets the kit up on a Mac and starts it on all three.
 
 ## Set up
 
