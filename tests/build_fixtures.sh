@@ -27,18 +27,18 @@ echo "== llama.cpp (real Linux CPU build, repacked as two fake nightly builds)"
 url=$(curl -fsSL "${GH_AUTH[@]}" "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=15" |
       python3 -c '
 import json, re, sys
-# "latest" is a stub release; the builds are on the nightly prereleases, newest first
-names = {}
+# "latest" is a stub release; the builds are on the nightly prereleases, newest first.
+# A release still uploading lists only some builds, so take the newest one that has the CPU build.
 for rel in json.load(sys.stdin):
     names = {a["name"]: a["browser_download_url"] for a in rel["assets"]}
-    if any("ubuntu" in n for n in names):
+    # the plain CPU build for x86_64 Linux; skip GPU and other-arch variants
+    ok = [n for n in names if re.search(r"bin-ubuntu-x64", n) and n.endswith((".zip", ".tar.gz"))]
+    ok = ok or [n for n in names if "ubuntu" in n and "x64" in n and not re.search(r"vulkan|cuda|rocm|sycl|hip|openvino", n)]
+    if ok:
+        print(names[sorted(ok)[0]])
         break
-# the plain CPU build for x86_64 Linux; skip GPU and other-arch variants
-ok = [n for n in names if re.search(r"bin-ubuntu-x64", n) and n.endswith((".zip", ".tar.gz"))]
-ok = ok or [n for n in names if "ubuntu" in n and "x64" in n and not re.search(r"vulkan|cuda|rocm|sycl|hip|openvino", n)]
-if not ok:
-    sys.exit("no Linux x64 CPU asset in the latest llama.cpp release: " + ", ".join(sorted(names)))
-print(names[sorted(ok)[0]])')
+else:
+    sys.exit("no Linux x64 CPU asset in the last 15 llama.cpp releases")')
 get "$url" "$DL/$(basename "$url")"
 mkdir -p "$TMP/llama"
 case "$url" in *.zip) unzip -q "$DL/$(basename "$url")" -d "$TMP/llama";; *) tar -xzf "$DL/$(basename "$url")" -C "$TMP/llama";; esac
