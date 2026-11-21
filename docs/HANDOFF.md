@@ -6,7 +6,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 
 **Done**
 - Repo set up for agents (AGENTS.md, CLAUDE.md), quick gate and CI. The end-to-end suite passes in GitHub Actions against the mocks and also runs `SETUP.command`.
-- Site: the Field Manual design (variant A of 3) is in `site/`, deployed by Vercel from `main`. It has an animated hero (`site/hero.js`: a dotted globe streams into the drive, then the Wi-Fi drops; it pauses, and holds a still frame for reduced motion), the kit builder with live sizes (weekly `refresh builder sizes` Action), a questions section, a social card (`og.png`), canonical URLs for tinfoilkit.com, and security headers in `site/vercel.json`. CI checks it with Playwright and axe, served with the production headers. The headers were checked on a live deployment.
+- Site: the Field Manual design (variant A of 3) is in `site/`, deployed by Vercel from `main`. It has an animated hero (`site/hero.js`: a dotted globe streams into the drive, then the Wi-Fi drops; it pauses, and holds a still frame for reduced motion), the kit builder with live sizes (weekly `refresh builder sizes` Action), a questions section, a mark (`icon.svg`, the world in a foil hat) with the favicons, Apple touch icon and social card (`og.png`) rendered from it by `build_images.py`, canonical URLs for tinfoilkit.com, and security headers in `site/vercel.json`. CI checks it with Playwright and axe, served with the production headers. The headers were checked on a live deployment.
 - `SETUP.command`: the double-click guided setup and refresh, with checks for the drive format and the Command Line Tools. GUIDE, README and the site point to it.
 - kit.json matches the Kiwix catalog. WikEM, WHO and the Gutenberg subject subsets were dropped upstream, two entries were renamed, and Urban Prepper was added. All 60 sources resolve.
 - tinfoilkit.com: bought 2026-11-21 through Vercel on the tudor-city-ventures team (registrant Tudor City Ventures LLC, auto-renews yearly). It's on the `tinfoilkit` project, and `www` redirects to it (308).
@@ -394,6 +394,7 @@ The policy and its reasons are in `.github/CONTRIBUTING.md`. In the repo's Setti
 - **General**
   - Pull requests: allow squash merging only; turn on auto-merge and "Automatically delete head branches".
   - Limit open pull requests for users without write access: 2.
+  - Social preview: upload `docs/social-preview.png` (made by `site/build_images.py`), so shared repo links show the card. GitHub has no API for it, and it can go up any time.
   - Leave pull requests open to everyone. "Restrict pull requests to collaborators" is the brake for a flood: while it's on, only people with write access can open them.
   - Releases: turn on release immutability. Every drive installs the latest release, so its tag and files must never change.
   - Features: turn off Wikis and Projects.

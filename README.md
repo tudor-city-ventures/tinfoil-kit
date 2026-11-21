@@ -1,3 +1,5 @@
+<img src="site/icon.svg" width="72" alt="">
+
 # Tinfoil Kit
 
 An offline kit for when the internet goes down. One external SSD holds:
