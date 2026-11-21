@@ -1,6 +1,6 @@
 # Tinfoil Kit
 
-An offline "internet outage" kit for Apple Silicon Macs. One external SSD holds local AI models (llama.cpp), an offline library (Kiwix ZIM files) and offline maps (pmtiles, Photon, GraphHopper). `./kit sync` refreshes everything every 2-3 months. `START-HERE.command` serves it all on localhost and opens a browser page with Ask, AI chat, Library and Map tabs.
+An offline "internet outage" kit for Apple Silicon Macs. One external SSD holds local AI models (llama.cpp), an offline library (Kiwix ZIM files) and offline maps (pmtiles, Photon, GraphHopper). `./kit sync` refreshes everything every 2-3 months. `SETUP.command` is the double-click version of sync plus test. `START-HERE.command` serves it all on localhost and opens a browser page with Ask, AI chat, Library and Map tabs.
 
 The repo root is the kit itself, so cloning onto a drive just works. The marketing site lives in `site/`. Full history, decisions and open work: [docs/HANDOFF.md](docs/HANDOFF.md).
 

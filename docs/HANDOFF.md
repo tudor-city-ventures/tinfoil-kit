@@ -6,6 +6,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 
 - Tasks 1, 2 and 4 below are done: the repo is set up, the end-to-end suite passes in GitHub Actions against the mocks, and the Field Manual design (variant A of 3) is built in `site/` and deployed by Vercel.
 - The builder's sizes are live: a weekly Action runs `./kit plan --json`.
+- Added `SETUP.command`, the double-click guided setup from the site plan (sync, then test, with checks for the drive format and the Command Line Tools).
 - Still open: a real sync on Travis's Mac, the domain (ask first), and making the repo public at launch. kit.json now matches the Kiwix catalog (WikEM, WHO and the Gutenberg subject subsets were dropped upstream).
 
 ---

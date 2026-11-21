@@ -19,6 +19,8 @@ Windows and Linux paths exist in the code but are untested.
 
 ## Set up
 
+Copy this folder onto the drive and double-click `SETUP.command`. It checks the drive, downloads everything and tests it. Or from Terminal:
+
 ```sh
 git clone https://github.com/tudor-city-ventures/tinfoilkit /Volumes/<drive>/TinfoilKit
 cd /Volumes/<drive>/TinfoilKit
@@ -31,7 +33,7 @@ Then turn Wi-Fi off and double-click `START-HERE.command`. [GUIDE.md](GUIDE.md) 
 
 ## Keep it fresh
 
-Run `./kit sync` and then `./kit test` every two to three months. Downloads resume, every file is checked against its published checksum, and the old version stays until the new one verifies.
+Double-click `SETUP.command` (or run `./kit sync` and then `./kit test`) every two to three months. Downloads resume, every file is checked against its published checksum, and the old version stays until the new one verifies.
 
 ## Customize
 

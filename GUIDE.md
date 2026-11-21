@@ -56,14 +56,15 @@ The kit's map is the backup, and it's handy for planning on a big screen and for
 
 ## Every 2 to 3 months: update it (while you still have internet)
 
-Open Terminal in the kit folder (drag the `TinfoilKit` folder onto the Terminal icon) and run:
+Double-click `SETUP.command`. Or open Terminal in the kit folder (drag the `TinfoilKit` folder onto the
+Terminal icon) and run:
 
 ```
 ./kit sync      # shows what's new, downloads it, checks every file, then removes old versions
 ./kit test      # starts everything briefly and confirms it works
 ```
 
-`sync` is safe to stop (Ctrl-C) and re-run; it picks up where it left off. A normal update downloads
+Either way it is safe to stop (Ctrl-C or close the window) and re-run; it picks up where it left off. A normal update downloads
 new library editions, the latest AI engine, any re-released models and fresh map data (rebuilding the
 directions network takes 10 to 40 minutes). Then pull the plug on Wi-Fi and open the kit once for real.
 
@@ -94,11 +95,14 @@ Then run `./kit plan` to preview and `./kit sync` to apply.
    (recommended for an emergency drive), **APFS** if it will only ever be used with Macs.
    Always eject it before unplugging, especially with exFAT.
 2. Copy the `TinfoilKit` folder onto the drive.
-3. In Terminal: `cd /Volumes/<drive name>/TinfoilKit` then `bash kit sync`. The first run downloads about
-   280 to 330 GB (maps are 20 to 30 GB of that), which takes a few hours. Leave the Mac plugged in and awake.
-4. `./kit test`, then turn off Wi-Fi and try `START-HERE.command`.
+3. Double-click **`SETUP.command`** in that folder. It checks the drive, downloads everything (about 280 to
+   330 GB the first time, a few hours; maps are 20 to 30 GB of that), then starts each part offline to check
+   it answers. Leave the Mac plugged in. If you stop it, double-click it again and it picks up where it left off.
+   - If macOS says it can't be opened because it's from the internet: open **System Settings > Privacy &
+     Security**, scroll down and click **Open Anyway**. You only do this once.
+   - If it asks to install the Command Line Tools, say yes, then double-click `SETUP.command` again.
+4. Turn off Wi-Fi and double-click `START-HERE.command`.
 
-It needs `python3` (for updates only). If macOS asks to install the Command Line Tools, say yes.
 Optional: `brew install aria2` makes downloads faster.
 
 ## Power

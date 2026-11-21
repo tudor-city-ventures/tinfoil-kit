@@ -20,16 +20,17 @@ pkill -f mock_remote.py; sleep 0.5; (python3 "$TESTS/mock_remote.py" 19000 > "$L
 rm -f "$R/STATE_V2"; touch "$R/FLAKY"
 touch -d "2026-11-20 12:00" "$R/geofabrik/us-northeast-latest.osm.pbf" "$R/photon/north-america/usa/photon-db-usa-1.3-latest.tar.bz2"
 rm -rf "$W/drive" && mkdir -p "$D"
-cp -a "$ROOT"/{kit,kit.json,START-HERE.command,START-HERE-Windows.bat,GUIDE.md,tools} "$D/"
+cp -a "$ROOT"/{kit,kit.json,START-HERE.command,SETUP.command,START-HERE-Windows.bat,GUIDE.md,tools} "$D/"
 cp "$TESTS/drive_kit_maps.json" "$D/kit.json"
 . "$TESTS/env.sh"
 cd "$D" || exit 1
 step() { echo; echo "=== $*"; }
 step "plan";   ./kit plan | grep -A7 "\[maps\]"; ./kit plan | tail -2
 step "sync v1"; ./kit sync -y > "$L/sync1.log" 2>&1; echo "exit $?"; grep -E "^\[[0-9]|FAILED|removed" "$L/sync1.log" | head -30
-step "sync again (no-op)"; ./kit sync -y 2>&1 | tail -1
 step "verify";  ./kit verify | tail -1
-step "test";    timeout 600 ./kit test | tail -9
+# SETUP.command = plan, sync (a no-op now), test. Answers: start download yes, open the kit no, close.
+step "setup (sync again, then test)"; printf 'y\nn\n\n' | timeout 600 bash SETUP.command > "$L/setup.log" 2>&1; echo "exit $?"
+grep -E "PASS|FAIL|up to date|All set" "$L/setup.log" | tail -12
 step "search";  ./kit search test | head -2
 step "launcher"; (timeout 900 bash START-HERE.command --no-browser > "$L/launch.out" 2>&1 &); sleep 12; grep -E "Library:|AI:|Maps" "$L/launch.out"
 (python3 "$TESTS/mock_services.py" llama 18081 > "$L/m_llama.log" 2>&1 &)
