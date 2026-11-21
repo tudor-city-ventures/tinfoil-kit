@@ -111,8 +111,10 @@ trap 'exit 0' INT TERM HUP
 if up "http://127.0.0.1:$LIB_PORT/"; then
   say "  Library already running on port $LIB_PORT."
 elif [ -n "$KIWIX" ] && [ ${#ZIMS[@]} -gt 0 ]; then
-  PORTAL="$KIT/tools/portal.html"   # the version built by ./kit sync has the map built in
-  [ -f "$KIT/.kit/portal.html" ] && [ "$KIT/.kit/portal.html" -nt "$PORTAL" ] && PORTAL="$KIT/.kit/portal.html"
+  # The page ./kit sync builds has the map inside; the bare template has no map. A newer template
+  # (kit code updated, no sync since) shows up after the next sync, which rebuilds the page.
+  PORTAL="$KIT/.kit/portal.html"
+  [ -f "$PORTAL" ] || PORTAL="$KIT/tools/portal.html"
   KARGS=(--port "$LIB_PORT" --customIndex "$PORTAL" --threads 4)
   [ "$SHARE" = 1 ] || KARGS+=(--address 127.0.0.1)
   "$KIWIX" --help 2>&1 | grep -q -- --skipInvalid && KARGS+=(--skipInvalid)

@@ -13,15 +13,23 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: main     # a scheduled run starts on the default branch; the work happens on main
       - run: ./kit plan --json > /tmp/plan.json
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - name: list sources that couldn't be resolved (they would fail in a real sync too)
         run: python3 -c "import json; [print(k, '->', v['error']) for k, v in json.load(open('/tmp/plan.json')).items() if v['error']]"
       - run: python3 site/build_sources.py /tmp/plan.json
-      - run: |
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           git diff --quiet site/ && { echo "no change"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "Refresh kit builder sizes"
-          git push
+          git pull --rebase origin main
+          git push origin HEAD:main
+          # while the default branch isn't main it mirrors main, and Vercel deploys production from it
+          default="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
+          [ -z "$default" ] || [ "$default" = main ] || git push origin "HEAD:$default"
