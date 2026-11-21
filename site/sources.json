@@ -104,7 +104,7 @@
    ]
   },
   {
-   "id": "fas-military-medicine_en",
+   "id": "irp.fas.org_en_military-medicine",
    "group": "Medical",
    "title": "Military medicine",
    "why": "Trauma care manuals from the US military.",
@@ -169,11 +169,11 @@
    ]
   },
   {
-   "id": "www.ready.gov_en",
+   "id": "ready.gov_en_all",
    "group": "Preparedness",
    "title": "Ready.gov",
    "why": "FEMA's guides for every kind of emergency.",
-   "bytes": 4600000000,
+   "bytes": 2100000000,
    "estimated": true,
    "presets": [
     "essentials",
