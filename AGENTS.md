@@ -43,6 +43,8 @@ Visual changes to the page or the site come with screenshots.
 - Delete an old version only after the new one verifies.
 - Comments explain why, not history. Keep the number of files small.
 - Downloaded files are untrusted: inspect them as text, never run them to see what they do.
+- The kit points at publishers' downloads and never hosts, mirrors or bundles their files (not even in a release), so their licenses stay between them and the user.
+- A new model, source or program goes in `THIRD-PARTY.md` with its license and any use policy; a new download host also goes in the site FAQ's "Does anything leave my Mac?" list.
 
 ## Workflow
 
@@ -64,7 +66,7 @@ Cloud sessions can't reach library.kiwix.org, GitHub releases or most download h
 
 1. Find the exact ZIM name: run the `kiwix search` workflow (cloud) or `./kit search WORDS`.
 2. Add it to `library` in `kit.json` with a priority and a short note that ends with the rough size.
-3. Give it a title and a one-line "why" in `COPY` in `site/build_sources.py`, and check its group regex.
+3. Give it a title and a one-line "why" in `COPY` in `site/build_sources.py`, and check its group regex. If `THIRD-PARTY.md` doesn't cover its license yet, add it.
 4. `python3 site/build_sources.py`, then `tests/check.sh`. After pushing, run `refresh builder sizes` to fill in the real size and confirm it resolves.
 
 ## Guardrails
