@@ -60,6 +60,11 @@ with sync_playwright() as p:
         check(f"{name}: presets order by size", totals["essentials"] < totals["recommended"] < totals["everything"], str(totals))
         width = page.evaluate("document.documentElement.scrollWidth")
         check(f"{name}: no sideways scroll", width <= vp["width"], f"{width}px")
+        if name == "phone":
+            page.set_viewport_size({"width": 320, "height": 640})    # the narrowest width WCAG asks a page to fit
+            width = page.evaluate("document.documentElement.scrollWidth")
+            check("320px phone: no sideways scroll", width <= 320, f"{width}px")
+            page.set_viewport_size(vp)
         first = page.locator(".card input").first
         before = page.inner_text("#totalText")
         first.uncheck()

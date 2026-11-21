@@ -73,12 +73,12 @@ nav.links a.btn{min-height:44px;font:500 14px var(--mono);padding:0 16px}
 .faq details[open] summary::after{content:"\2212"}
 .faq p{margin:0 0 20px;max-width:760px;font-size:17px;line-height:1.55;color:var(--ink2)}
 .head-row{display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;justify-content:space-between}
-.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:20px}
 .tile{background:var(--paper);border:var(--rule);padding:24px;display:flex;flex-direction:column;gap:10px}
 .tile .tag{font:600 12px var(--mono);color:var(--olive)}
 .tile h3{font-size:22px}
 .tile p{font-size:16px;line-height:1.5;color:var(--ink2)}
-.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0;border:var(--rule)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:0;border:var(--rule)}
 .step{padding:22px;display:flex;flex-direction:column;gap:8px;border-right:var(--rule)}
 .step:last-child{border-right:0}
 .step b{font:600 13px var(--mono);color:var(--olive)}
@@ -91,7 +91,7 @@ nav.links a.btn{min-height:44px;font:500 14px var(--mono);padding:0 16px}
 .presets button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
 .group{display:flex;flex-direction:column;gap:12px}
 .group h3{font:600 14px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--mute);padding-bottom:8px}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:12px}
 .card{border:var(--rule);padding:16px 18px;display:flex;gap:14px;align-items:flex-start;background:var(--paper);cursor:pointer}
 .card.off{border-style:dashed;border-color:var(--mute);background:transparent}
 .card input{width:22px;height:22px;margin:2px 0 0;accent-color:var(--signal);flex:none;cursor:pointer}
@@ -102,13 +102,15 @@ nav.links a.btn{min-height:44px;font:500 14px var(--mono);padding:0 16px}
 .card .why{font-size:15px;line-height:1.45;color:var(--ink2)}
 .more{align-self:flex-start;min-height:44px;padding:0 16px;border:1px solid var(--ink);background:transparent;font:500 14px var(--mono);border-radius:4px;cursor:pointer;color:var(--ink)}
 .total{position:sticky;bottom:12px;border:var(--rule);background:var(--ink);color:var(--paper);padding:18px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;z-index:2}
+.total .sum{font-size:14px}
+.total .acts{display:flex;flex-wrap:wrap;gap:10px}
 .total .meter{height:10px;background:#3A3E36;border-radius:2px;overflow:hidden}
 .total .meter div{height:10px;background:var(--signal);transition:width .3s}
 .total .btn{min-height:48px;font-size:16px;padding:0 20px}
 .total .btn.ghost{color:var(--paper);border-color:var(--paper)}
 .total .btn.ghost:hover{background:#30342C}
 .toast{font:13px var(--mono);color:#E0884F;min-height:18px}
-.prompts{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px}
+.prompts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:20px}
 .prompt{background:var(--paper);border:var(--rule);display:flex;flex-direction:column;min-width:0}
 .prompt .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px;border-bottom:var(--rule)}
 .prompt .bar b{font-size:18px;display:block}
@@ -122,7 +124,12 @@ nav.links a.btn{min-height:44px;font:500 14px var(--mono);padding:0 16px}
 footer{border-top:1px solid #3A3E36;background:var(--ink);color:#CFCBBE}
 footer .wrap{padding-top:24px;padding-bottom:24px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;font:13px var(--mono)}
 footer a{color:#E0884F}footer a:hover{color:#F2A878}
-@media (max-width:600px){.wrap{padding-left:16px;padding-right:16px}h2{font-size:32px}.oss h2{font-size:34px}.hero{padding-top:40px;gap:36px}}
+@media (max-width:600px){.wrap{padding-left:16px;padding-right:16px}h2{font-size:32px}.oss h2{font-size:34px}.hero{padding-top:40px;gap:36px}
+.presets{display:flex;align-self:stretch}.presets button{flex:1 1 auto;padding:0 6px;font-size:13px}
+.total{padding:10px 12px;gap:8px;bottom:8px}.total .sum{font-size:12px}.total .meter,.total .meter div{height:6px}
+.toast:empty{min-height:0;margin-top:-8px}
+.total .acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));width:100%}.total .btn{min-height:44px;font-size:14px;padding:0 10px;justify-content:center}}
+@media (max-height:600px){.total{position:static}}
 </style>
 </head>
 <body>
@@ -222,11 +229,11 @@ GitHub</a>
 <div id="groups" style="display:flex;flex-direction:column;gap:32px"><p class="mono">Loading sources…</p></div>
 <div class="total" role="region" aria-label="Your kit">
 <div style="display:flex;flex-direction:column;gap:8px;flex:1 1 320px">
-<div class="mono" style="font-size:14px" id="totalText" aria-live="polite">YOUR KIT</div>
+<div class="mono sum" id="totalText" aria-live="polite">YOUR KIT</div>
 <div class="meter"><div id="meter" style="width:0"></div></div>
 <div class="toast" id="toast" aria-live="polite"></div>
 </div>
-<div style="display:flex;flex-wrap:wrap;gap:10px">
+<div class="acts">
 <button type="button" class="btn primary" id="copySetup">Copy setup prompt</button>
 <button type="button" class="btn ghost" id="downloadKit">Download kit.json</button>
 </div>
