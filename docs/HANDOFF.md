@@ -6,7 +6,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 
 **Done**
 - Repo set up for agents (AGENTS.md, CLAUDE.md), quick gate and CI. The end-to-end suite passes in GitHub Actions against the mocks and also runs `SETUP.command`.
-- Site: the Field Manual design (variant A of 3) is in `site/`, deployed by Vercel from `main`. It has the kit builder with live sizes (weekly `refresh builder sizes` Action), a questions section, a social card (`og.png`), canonical URLs for tinfoilkit.com, and security headers in `site/vercel.json`. CI checks it with Playwright and axe, served with the production headers. The headers were checked on a live deployment.
+- Site: the Field Manual design (variant A of 3) is in `site/`, deployed by Vercel from `main`. It has the kit builder with live sizes (weekly `refresh builder sizes` Action), a questions section, a mark (`icon.svg`) with the favicons, Apple touch icon and social card (`og.png`) rendered from it by `build_images.py`, canonical URLs for tinfoilkit.com, and security headers in `site/vercel.json`. CI checks it with Playwright and axe, served with the production headers. The headers were checked on a live deployment.
 - `SETUP.command`: the double-click guided setup and refresh, with checks for the drive format and the Command Line Tools. GUIDE, README and the site point to it.
 - kit.json matches the Kiwix catalog. WikEM, WHO and the Gutenberg subject subsets were dropped upstream, two entries were renamed, and Urban Prepper was added. All 60 sources resolve.
 - tinfoilkit.com: bought 2026-11-21 through Vercel on the tudor-city-ventures team (registrant Tudor City Ventures LLC, auto-renews yearly). It's on the `tinfoilkit` project, and `www` redirects to it (308).
@@ -360,6 +360,7 @@ Each step needs Travis's go-ahead, because none of them can be quietly undone.
    - switch the default branch to `main` (visitors land on it) and delete `claude/project-thread-ew0j18`;
    - decide whether this file stays public. Sections 8 and 9 are internal (accounts, how the project started); trim them if not. Commit authors are all `Claude <noreply@anthropic.com>` or the Actions bot, so no personal email is in the history.
 5. Check the social card (https://tinfoilkit.com/og.png) with a link preview, and that the builder loads sources.json.
+   Upload `docs/social-preview.png` as the repo's social preview (Settings > General > Social preview), so shared repo links show the card. GitHub has no API for it.
 6. Switch to PRs and review from then on (update AGENTS.md's Workflow section).
 
 ## 8. Accounts and access

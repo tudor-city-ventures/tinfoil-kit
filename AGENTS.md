@@ -15,7 +15,7 @@ The repo root is the kit itself, so cloning onto a drive just works. The marketi
 | `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests |
 | `GUIDE.md` | Printable guide that lives on the drive |
 | `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
-| `site/` | The website: one `index.html`, no build step. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
+| `site/` | The website: one `index.html`, no build step. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. The favicons and link-preview cards are rendered from the mark, `icon.svg`, by `site/build_images.py`. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
 
 ## Verify
 

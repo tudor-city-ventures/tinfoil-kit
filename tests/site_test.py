@@ -5,6 +5,7 @@ import functools
 import http.server
 import json
 import os
+import struct
 import sys
 import threading
 from playwright.sync_api import sync_playwright
@@ -109,6 +110,15 @@ with sync_playwright() as p:
         bad = nf.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
         check("404 page: no accessibility violations (axe)", not bad, ", ".join(bad))
     nf.screenshot(path=os.path.join(SHOTS, "site_404.png"))
+    home = b.new_page()
+    home.goto(URL)
+    refs = home.evaluate("""[...document.querySelectorAll('link[rel~=icon], link[rel=apple-touch-icon]')].map(l => l.getAttribute('href'))
+        .concat(new URL(document.querySelector('meta[property="og:image"]').content).pathname)""")
+    missing = [r for r in refs if home.request.get(URL + r.lstrip("/")).status != 200]
+    check("icons and the link-preview card are all served", len(refs) == 4 and not missing, ", ".join(missing) or str(refs))
+    card = home.request.get(URL + "og.png").body()
+    size = struct.unpack(">II", card[16:24])     # a PNG's width and height sit in its first chunk
+    check("link-preview card is the size its tags say", size == (1200, 630), "%dx%d" % size)
     b.close()
 srv.shutdown()
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
