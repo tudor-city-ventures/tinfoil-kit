@@ -194,6 +194,18 @@ with sync_playwright() as p:
     card = home.request.get(URL + "og.png").body()
     size = struct.unpack(">II", card[16:24])     # a PNG's width and height sit in its first chunk
     check("link-preview card is the size its tags say", size == (1200, 630), "%dx%d" % size)
+    # search engines and AI answer engines: robots.txt lets every crawler in and names the sitemap, the sitemap lists
+    # the canonical address, and the JSON-LD describes the kit there
+    canonical = home.get_attribute("link[rel=canonical]", "href")
+    robots = home.request.get(URL + "robots.txt").text()
+    check("robots.txt lets every crawler in and names the sitemap", "User-agent: *" in robots and "Disallow" not in robots
+          and f"Sitemap: {canonical}sitemap.xml" in robots)
+    locs = re.findall(r"<loc>(.*?)</loc>", home.request.get(URL + "sitemap.xml").text())
+    check("sitemap.xml lists the canonical address", locs == [canonical], str(locs))
+    ld = [json.loads(t) for t in home.eval_on_selector_all("script[type='application/ld+json']", "s => s.map(e => e.textContent)")]
+    app = [n for d in ld for n in d.get("@graph", [d]) if n["@type"] == "SoftwareApplication"]
+    check("structured data describes Tinfoil Kit, free, at the canonical address", len(app) == 1 and app[0]["name"] == "Tinfoil Kit"
+          and app[0]["url"] == canonical and app[0]["offers"]["price"] == "0", json.dumps(app)[:200])
     b.close()
 srv.shutdown()
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
