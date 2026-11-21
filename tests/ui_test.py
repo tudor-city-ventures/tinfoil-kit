@@ -63,8 +63,8 @@ with sync_playwright() as p:
                 check(f"{scheme} mode, {tab} tab: no accessibility violations (axe)", not bad, ", ".join(bad))
             pa.close()
 
-    # AI down: answer must fall back to library passages
-    page2 = b.new_page()
+    # AI down, on a phone (how family members use a shared kit): answers fall back to library passages
+    page2 = b.new_page(viewport={"width": 390, "height": 844})
     page2.goto("http://127.0.0.1:18888/?model=Tiny&ai=18999")
     page2.wait_for_function("document.getElementById('aiStatus').textContent.includes('off')", timeout=15000)
     page2.fill("#q", "tourniquet placement")
@@ -73,6 +73,10 @@ with sync_playwright() as p:
                             "document.getElementById('progress').textContent.includes('Nothing')", timeout=60000)
     check("AI-off fallback shows passages", "5 to 7 cm" in page2.inner_text("#answer"), page2.inner_text("#progress"))
     page2.screenshot(path=os.path.join(SHOTS, "shot_ai_off.png"), full_page=True)
+    for tab in ("ask", "map", "library", "help"):
+        page2.click(f"nav a[data-tab={tab}]")
+        width = page2.evaluate("document.documentElement.scrollWidth")
+        check(f"phone, {tab} tab: no sideways scroll", width <= 390, f"{width}px")
     b.close()
 
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
