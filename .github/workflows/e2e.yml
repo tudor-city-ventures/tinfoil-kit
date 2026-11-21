@@ -1,4 +1,7 @@
 name: e2e
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
 on:
   pull_request:
     paths: [tools/**, kit.json, kit, START-HERE.command, tests/**]

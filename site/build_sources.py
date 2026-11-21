@@ -1,8 +1,8 @@
 """Build site/sources.json (the kit builder's data) and site/kit.json from the repo's kit.json.
 
-usage: python3 site/build_sources.py [sizes.json]
-sizes.json (optional) maps a source id to bytes, e.g. from `./kit plan --json`. Without it,
-sizes come from the "~N GB" in each kit.json note.
+usage: python3 site/build_sources.py [plan.json]
+plan.json (optional) is the output of `./kit plan --json`: live sizes for every item. Without it,
+sizes measured by the last run are kept; anything never measured comes from the "~N GB" in each kit.json note.
 """
 import json
 import re
@@ -61,13 +61,38 @@ def size_from_note(note):
     return None
 
 
+def load_plan(path):
+    """`./kit plan --json` keys are section/id; the builder uses bare ids, with every map part summed."""
+    live, maps = {}, 0
+    for key, v in json.loads(path.read_text()).items():
+        section, ident = key.split("/", 1)
+        if not v.get("bytes") or v.get("error"):
+            continue
+        if section == "maps":
+            maps += v["bytes"]
+        elif section in ("models", "library"):
+            live[ident] = v["bytes"]
+    if maps:
+        live["maps"] = maps
+    return live
+
+
+def previous_live():
+    """Keep the live sizes the last plan run measured, so editing kit.json doesn't drop them."""
+    try:
+        old = json.loads((ROOT / "site" / "sources.json").read_text())["sources"]
+    except (OSError, ValueError, KeyError):
+        return {}
+    return {s["id"]: s["bytes"] for s in old if s.get("bytes") and not s.get("estimated")}
+
+
 def group_for(zim):
     return next(g for g, rx in GROUPS if re.search(rx, zim))
 
 
 def main():
     cfg = json.loads((ROOT / "kit.json").read_text())
-    live = json.loads(Path(sys.argv[1]).read_text()) if len(sys.argv) > 1 else {}
+    live = load_plan(Path(sys.argv[1])) if len(sys.argv) > 1 else previous_live()
     default_model = cfg["settings"]["default_model"]
     out = []
 

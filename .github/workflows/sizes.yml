@@ -1,0 +1,25 @@
+name: refresh builder sizes
+# Asks every source for its current size (./kit plan --json downloads nothing) and commits
+# site/sources.json when it changed, so the website's kit builder stays accurate.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sizes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./kit plan --json > /tmp/plan.json
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: python3 site/build_sources.py /tmp/plan.json
+      - run: |
+          git diff --quiet site/ && { echo "no change"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Refresh kit builder sizes"
+          git push

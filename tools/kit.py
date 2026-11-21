@@ -2,7 +2,8 @@
 """Tinfoil Kit: keeps an offline AI + knowledge library on an external drive up to date.
 
 Commands (run from the kit folder, e.g.  ./kit sync):
-  plan               Show what would be downloaded or updated. Changes nothing.
+  plan [--json]      Show what would be downloaded or updated. Changes nothing.
+                     --json prints every item's size, disabled ones too.
   sync [-y]          Download/update everything enabled in kit.json, verify every file
                      (SHA-256), then remove the old versions. Safe to interrupt and re-run.
   verify [--quick]   Re-check every file on the drive against its recorded SHA-256.
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
 import datetime as dt
 import email.utils
 import fnmatch
@@ -1386,10 +1388,33 @@ class Lock:
 
 def cmd_plan(root: Path, args: argparse.Namespace) -> None:
     cfg, state = load_config(root), load_state(root)
+    if args.json:
+        return plan_json(root, cfg, args.only)
     items = build_plan(root, cfg, state, args.only)
     print_plan(root, items, state, cfg)
     pending = [i for i in items if i.enabled and i.status in ("new", "update")]
     log(f"\n{len(pending)} item(s) to download. Run ./kit sync to do it." if pending else "\nEverything is up to date.")
+
+
+def plan_json(root: Path, cfg: Dict[str, Any], only: List[str]) -> None:
+    """Print the full download size of every item, disabled ones included, as JSON on stdout.
+    Feeds the website's kit builder (site/build_sources.py). Downloads nothing."""
+    cfg = json.loads(json.dumps(cfg))
+    for section in ("models", "library", "extras"):
+        for entry in cfg.get(section, []):
+            entry["enabled"] = True
+    cfg.setdefault("maps", {})["enabled"] = True
+    with contextlib.redirect_stdout(sys.stderr):
+        items = build_plan(root, cfg, {"items": {}}, only)
+    out = {}
+    for i in items:
+        if not i.enabled:
+            continue
+        sizes = [f.size or f.estimate for f in i.files]
+        out[i.key] = {"version": i.version or None, "error": i.error,
+                      "bytes": sum(x for x in sizes if x) if any(sizes) else None,
+                      "estimated": any(not f.size for f in i.files)}
+    print(json.dumps(out, indent=1, sort_keys=True))
 
 
 def cmd_sync(root: Path, args: argparse.Namespace) -> None:
@@ -1758,6 +1783,7 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("plan", help="preview what sync would do")
     p.add_argument("--only", nargs="*", default=[], help="limit to items whose section/id contains these words")
+    p.add_argument("--json", action="store_true", help="print every item's size as JSON, disabled ones too")
     p = sub.add_parser("sync", help="download and update everything")
     p.add_argument("-y", "--yes", action="store_true", help="don't ask for confirmation")
     p.add_argument("--force", action="store_true", help="ignore the keep_free_gb safety margin")
