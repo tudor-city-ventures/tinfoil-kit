@@ -1,23 +1,57 @@
 name: drive test
 # The kit on a real exFAT disk: set up on a Mac, then plugged into Windows and Linux (tests/drive_test.sh).
-# Nightly, and by hand (Actions > drive test > Run workflow) once the bulk of a change is done.
-# Mac minutes cost money while the repo is private, so pushes run it only once the repo is public.
+# By hand (Actions > drive test > Run workflow) once the bulk of a change is done. Nightly and on pushes only when
+# something it covers changed (the changes job), so site edits never start it. Pushes start it only once the
+# repo is public, since Mac minutes cost money while it's private.
 on:
   schedule:
     - cron: "17 9 * * *"
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [tools/**, kit, kit.json, SETUP.command, START-HERE.command, START-HERE-Windows.bat, tests/drive*,
-            tests/build_fixtures.sh, tests/mock_remote.py, tests/ui_test.py, .github/workflows/drive.yml]
 concurrency:    # per event too, so a push run whose jobs are skipped can't cancel a run in progress
   group: drive-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 permissions:
   contents: read
 jobs:
-  fixtures:
+  changes:    # did a file the drive test covers change since the push before, or since the last green run?
     if: github.event_name != 'push' || !github.event.repository.private
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read    # to find the last green run
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            push) base="$BEFORE" ;;
+            schedule) base="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/drive.yml/runs?status=success&per_page=1" \
+                                -q '.workflow_runs[0].head_sha')" || base="" ;;
+            *) base="" ;;    # by hand: always
+          esac
+          if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2> /dev/null &&
+             git diff --quiet "$base" HEAD -- tools kit kit.json SETUP.command START-HERE.command START-HERE-Windows.bat \
+               'tests/drive*' tests/build_fixtures.sh tests/env.sh tests/mock_remote.py tests/ui_test.py .github/workflows/drive.yml
+          then
+            echo "Nothing the drive test covers changed since $base, so it doesn't run."
+          else
+            echo "run=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+  fixtures:
+    needs: changes
+    if: needs.changes.outputs.run == 'yes'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
