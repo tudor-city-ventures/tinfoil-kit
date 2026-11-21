@@ -47,6 +47,10 @@ Visual changes to the page or the site come with screenshots.
 
 Pre-launch: commit straight to `main` in small increments, no PRs or review. Run the quick gate before each push and check CI after. PRs come back once the site is live.
 
+## From a cloud session
+
+Cloud sessions can't reach library.kiwix.org, GitHub releases or most download hosts. Use the workflows instead: `kiwix search` (manual, takes search words) runs `./kit search`, and `refresh builder sizes` runs `./kit plan --json` and lists any kit.json source that no longer resolves.
+
 ## Guardrails
 
 - Never run a real `./kit sync` in CI or a cloud session. It downloads about 300 GB. Use the mocks in `tests/`.
