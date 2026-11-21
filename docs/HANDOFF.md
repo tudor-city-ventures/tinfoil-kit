@@ -19,7 +19,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 
 **Waiting on Travis**
 - tinfoilkit.com: he approved buying it and is buying it himself, since Vercel needs his registrant contact. When it shows up on the tudor-city-ventures team, add it plus `www` (redirecting to the bare domain) to the `tinfoilkit` project. Last checked 17:40 UTC: not there yet.
-- Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too: Vercel deploys production from the default branch. The weekly sizes workflow already pushes to both.
+- Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too, because scheduled workflows run from the default branch's copy of `.github/`. (Vercel deploys production from `main`; the sizes workflow checks out and pushes `main`.)
 - A real `SETUP.command` run on his Mac. This is the only test against real downloads and Apple Silicon.
 - Going public: turn off Vercel Authentication for production and make the repo public. Ask first.
 
