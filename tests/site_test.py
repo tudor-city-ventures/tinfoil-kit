@@ -21,9 +21,18 @@ def check(name, ok, detail=""):
     fails += 0 if ok else 1
 
 
+# Serve with the same headers Vercel adds (site/vercel.json), so a too-strict CSP fails here first.
+HEADERS = json.load(open(os.path.join(SITE, "vercel.json")))["headers"][0]["headers"]
+
+
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
+
+    def end_headers(self):
+        for h in HEADERS:
+            self.send_header(h["key"], h["value"])
+        super().end_headers()
 
 
 handler = functools.partial(Quiet, directory=SITE)
@@ -37,6 +46,7 @@ with sync_playwright() as p:
         page = b.new_page(viewport=vp, accept_downloads=True)
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" and "fonts." not in m.location.get("url", "") else None)
         page.route("https://fonts.*/**", lambda r: r.abort())   # offline-friendly; fonts aren't under test
         page.goto(URL)
         page.wait_for_selector(".card")
