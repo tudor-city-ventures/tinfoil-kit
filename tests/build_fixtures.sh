@@ -15,7 +15,7 @@ GH_AUTH=(); [ -n "${GITHUB_TOKEN:-}" ] && GH_AUTH=(-H "Authorization: Bearer $GI
 
 get() {   # get URL FILE: download once, reuse on later runs
   [ -s "$2" ] && return
-  curl -fsSL --retry 3 "${GH_AUTH[@]}" -o "$2.part" "$1"
+  curl -fsSL --retry 3 "${GH_AUTH[@]}" -o "$2.part" "$1" || { echo "download failed: $1" >&2; return 1; }
   mv -f "$2.part" "$2"
 }
 md5() { (cd "$(dirname "$1")" && md5sum "$(basename "$1")" > "$(basename "$1").md5"); }
@@ -113,9 +113,18 @@ else:
     get "$url" "$DL/$(basename "$url")"
     cp "$DL/$(basename "$url")" "$R/gh/llama-b99990-bin-$suffix"
   done
+  curl -fsSL https://download.kiwix.org/release/kiwix-tools/ > "$TMP/kiwix.html"
   for plat in macos-arm64.tar.gz win-x86_64.zip; do
-    get "https://download.kiwix.org/release/kiwix-tools/kiwix-tools_$plat" "$DL/kiwix-tools_$plat"
-    cp "$DL/kiwix-tools_$plat" "$R/release/kiwix-tools/kiwix-tools_${plat%%.*}-3.8.2.${plat#*.}"
+    name=$(python3 -c '
+import re, sys
+plat, ext = sys.argv[2].split(".", 1)
+found = re.findall(r"kiwix-tools_%s-([0-9.]+)\.%s" % (re.escape(plat), re.escape(ext)), open(sys.argv[1]).read())
+if not found:
+    sys.exit("no kiwix-tools build for " + sys.argv[2])
+newest = max(set(found), key=lambda v: [int(x) for x in v.split(".")])
+print("kiwix-tools_%s-%s.%s" % (plat, newest, ext))' "$TMP/kiwix.html" "$plat")
+    get "https://download.kiwix.org/release/kiwix-tools/$name" "$DL/$name"
+    cp "$DL/$name" "$R/release/kiwix-tools/kiwix-tools_${plat%%.*}-3.8.2.${plat#*.}"
   done
 fi
 
