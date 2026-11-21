@@ -377,8 +377,13 @@ class Resolver:
                     data = http_get(KIWIX_CATALOG, timeout=600)
                     # parse before caching: a Wi-Fi sign-in page answers every URL with HTML
                     self._catalog = parse_kiwix_catalog(data) or None
-                except (HttpError, ET.ParseError) as e:
-                    self._catalog_error = ValueError(f"couldn't read the Kiwix catalog ({e}). Is this Mac online?")
+                except HttpError as e:
+                    self._catalog_error = ValueError(f"couldn't reach the Kiwix catalog ({e}). Is this Mac online?")
+                    raise self._catalog_error from e
+                except ET.ParseError as e:
+                    why = ("got a web page instead; does this Wi-Fi want you to sign in?"
+                           if b"<html" in data[:4000].lower() else f"it's garbled: {e}")
+                    self._catalog_error = ValueError(f"couldn't read the Kiwix catalog ({why})")
                     raise self._catalog_error from e
                 if self._catalog is None:
                     self._catalog_error = ValueError("the Kiwix catalog came back empty; try again later")
@@ -832,6 +837,12 @@ def build_plan(root: Path, cfg: Dict[str, Any], state: Dict[str, Any], only: Lis
     return items
 
 
+def offline(items: List[Item]) -> bool:
+    """Every lookup failed: no internet, or a Wi-Fi sign-in page answering instead."""
+    active = [i for i in items if i.enabled]
+    return len(active) > 1 and all(i.status == "error" for i in active)
+
+
 def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[str, Any]) -> int:
     free = shutil.disk_usage(root).free
     total = 0
@@ -859,9 +870,10 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
     disabled = [i for i in items if not i.enabled]
     if disabled:
         log(f"\n  ({len(disabled)} disabled in kit.json: {', '.join(i.id for i in disabled)})")
-    active = [i for i in items if i.enabled]
-    if len(active) > 1 and all(i.status == "error" for i in active):
-        log("\nNothing could be looked up. Check that this Mac is online, then try again.")
+    if offline(items):
+        log("\nNothing could be looked up. Check that this Mac is online (on hotel or cafe Wi-Fi, "
+            "open any web page and sign in first), then try again.")
+        return 0
     keep = float(cfg["settings"].get("keep_free_gb", 25)) * GB
     log(f"\nTo download: {fmt_size(total)}   Free on drive: {fmt_size(free)}   "
         f"Free afterwards: ~{fmt_size(max(0, free - total))} (before old versions are removed)")
@@ -1458,6 +1470,8 @@ def cmd_plan(root: Path, args: argparse.Namespace) -> None:
         return plan_json(root, cfg, args.only)
     items = build_plan(root, cfg, state, args.only)
     print_plan(root, items, state, cfg)
+    if offline(items):
+        sys.exit(1)
     pending = [i for i in items if i.enabled and i.status in ("new", "update")]
     log(f"\n{len(pending)} item(s) to download. Run ./kit sync to do it." if pending else "\nEverything is up to date.")
 
@@ -1493,6 +1507,8 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
         cfg, state = load_config(root), load_state(root)
         items = build_plan(root, cfg, state, args.only)
         print_plan(root, items, state, cfg)
+        if offline(items):
+            sys.exit(1)
         todo = sorted([i for i in items if i.enabled and i.status in ("new", "update")],
                       key=lambda i: (i.priority, i.need_bytes(root)))
         if todo and not args.yes and sys.stdin.isatty():

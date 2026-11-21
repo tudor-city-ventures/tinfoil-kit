@@ -129,6 +129,9 @@ class H(BaseHTTPRequestHandler):
         path = unquote(u.path)
         if path == "/catalog/v2/entries":
             return self.send_bytes(catalog(), "application/atom+xml", head)
+        if path == "/wifi-sign-in":    # what a hotel or cafe network answers every URL with until you log in
+            return self.send_bytes(b'<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sign in</title></head>'
+                                   b'<body><p>Welcome to Hotel Wi-Fi<br>Accept the terms to continue</body></html>', "text/html", head)
         m = re.match(r"^/zim/(.+\.zim)(\.sha256)?$", path)
         if m:
             p = R / "zim" / m.group(1)

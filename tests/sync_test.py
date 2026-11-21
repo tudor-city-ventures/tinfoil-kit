@@ -1,6 +1,6 @@
 """Sync engine test: runs the real kit.py against the mock internet (tests/mock_remote.py) with tiny
 made-up books and models. Covers downloads, resume, checksums, updates, leftover partial downloads,
-verify --fix, adopting files already on the drive, and exit codes.
+verify --fix, adopting files already on the drive, offline runs, exit codes, and SETUP.command's choices.
 Needs only python3 and curl, so it runs in the quick gate and in cloud sessions.
 usage: python3 tests/sync_test.py
 """
@@ -77,7 +77,7 @@ def write_cfg():
     (drive / "kit.json").write_text(json.dumps(cfg, indent=1))
 
 
-def kit(*args):
+def kit(*args, env=env):
     p = subprocess.run([sys.executable, str(drive / "tools" / "kit.py"), "--root", str(drive), *args], env=env,
                        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=180)
     return p.returncode, p.stdout + p.stderr
@@ -174,6 +174,51 @@ try:
 
     rc, out = kit("status")
     check("status", rc == 0 and "Last complete sync" in out, out)
+
+    nowhere = "http://127.0.0.1:9"     # nothing listens there
+    off = {**env, "KIT_HF": nowhere, "KIT_KIWIX_CATALOG": nowhere + "/catalog"}
+    (drive / ".kit/cache/kiwix-catalog.xml").unlink()
+    rc, out = kit("sync", "-y", env=off)
+    check("offline: sync stops with one clear message", rc == 1 and "Check that this Mac is online" in out
+          and "Problems" not in out and out.count("Kiwix catalog") <= 3, out)
+    (drive / ".kit/cache").mkdir(exist_ok=True)
+    portal = env["KIT_KIWIX_CATALOG"].replace("/catalog/v2/entries?count=-1", "/wifi-sign-in")
+    rc, out = kit("plan", env={**off, "KIT_KIWIX_CATALOG": portal})
+    check("Wi-Fi sign-in page: plan says so and nothing is cached",
+          rc == 1 and not (drive / ".kit/cache/kiwix-catalog.xml").exists(), out)
+
+    # SETUP.command's choices, with a stand-in ./kit that exits as told
+    setup = work / "setup"
+    setup.mkdir()
+    shutil.copy(TESTS.parent / "SETUP.command", setup)
+    (setup / "kit").write_text("""#!/bin/bash
+echo "kit $1" >> calls.log
+case "$1" in
+  plan) exit $PLAN;;
+  sync) mkdir -p logs; echo "===== sync started =====" >> logs/sync-2026-01-01.log
+        [ $SYNC = 1 ] && printf 'Problems (everything else is done):\n  - models/Big: download failed\nRe-run ./kit sync\n' >> logs/sync-2026-01-01.log
+        exit $SYNC;;
+  test) exit $TEST;;
+esac""")
+    (setup / "kit").chmod(0o755)
+
+    def run_setup(plan=0, sync=0, test=0):
+        (setup / "calls.log").write_text("")
+        p = subprocess.run(["bash", "SETUP.command"], cwd=setup, input="y\nn\n\n", capture_output=True, text=True,
+                           timeout=60, env={**os.environ, "PLAN": str(plan), "SYNC": str(sync), "TEST": str(test)})
+        return p.returncode, p.stdout, (setup / "calls.log").read_text().split()[1::2]
+
+    rc, out, calls = run_setup()
+    check("SETUP: all good", rc == 0 and "All set" in out and calls == ["plan", "sync", "test"], out)
+    rc, out, calls = run_setup(sync=1)
+    check("SETUP: some downloads failed but the kit works: says so and lists them",
+          rc == 1 and "didn't finish" in out and "models/Big: download failed" in out and "All set" not in out, out)
+    rc, out, calls = run_setup(sync=1, test=1)
+    check("SETUP: checks failed", rc == 1 and "Some checks failed" in out and "models/Big" in out, out)
+    rc, out, calls = run_setup(sync=130)
+    check("SETUP: Ctrl-C during the download", rc == 130 and "Stopped" in out and calls == ["plan", "sync"], out)
+    rc, out, calls = run_setup(plan=1)
+    check("SETUP: offline: stops before asking to download", rc == 1 and calls == ["plan"] and "Start downloading" not in out, out)
 finally:
     mock.terminate()
     shutil.rmtree(work, ignore_errors=True)
