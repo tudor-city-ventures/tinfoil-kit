@@ -9,6 +9,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 - Site: the Field Manual design (variant A of 3) is in `site/`, deployed by Vercel from `main`. It has the kit builder with live sizes (weekly `refresh builder sizes` Action), a questions section, a social card (`og.png`), canonical URLs for tinfoilkit.com, and security headers in `site/vercel.json`. CI checks it with Playwright and axe, served with the production headers. The headers were checked on a live deployment.
 - `SETUP.command`: the double-click guided setup and refresh, with checks for the drive format and the Command Line Tools. GUIDE, README and the site point to it.
 - kit.json matches the Kiwix catalog. WikEM, WHO and the Gutenberg subject subsets were dropped upstream, two entries were renamed, and Urban Prepper was added. All 60 sources resolve.
+- tinfoilkit.com: bought 2026-11-21 through Vercel on the tudor-city-ventures team (registrant Tudor City Ventures LLC, auto-renews yearly). It's on the `tinfoilkit` project, and `www` redirects to it (308).
 - Launch-day checklist: see section 7.
 - Second thread (robustness, tests, accessibility):
   - Sync tells the truth: it exits 1 when anything failed or couldn't be looked up, stops with one message when offline or behind a Wi-Fi sign-in page, and never resumes a half-download of an older version into a new file. Leftover half-downloads of old versions are cleaned up.
@@ -20,7 +21,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
   - CI also runs the sync test on Python 3.9 (via uv) and with bash 3.2 (the official `bash:3.2` image), the versions macOS ships.
 
 **Waiting on Travis**
-- tinfoilkit.com: he approved buying it and is buying it himself, since Vercel needs his registrant contact. When it shows up on the tudor-city-ventures team, add it plus `www` (redirecting to the bare domain) to the `tinfoilkit` project. Last checked 17:40 UTC: not there yet.
+- Whether tinfoilkit.com stays public before launch. The project's Vercel Authentication covers everything except custom domains, so the site is public there, and its GitHub buttons 404 until the repo is public. Hiding it means setting protection to all deployments; that needs his OK.
 - Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too, because scheduled workflows run from the default branch's copy of `.github/`. (Vercel deploys production from `main`; the sizes workflow checks out and pushes `main`.)
 - A real `SETUP.command` run on his Mac. This is the only test against real downloads and Apple Silicon.
 - Going public: turn off Vercel Authentication for production and make the repo public. Ask first.
@@ -280,7 +281,7 @@ Inspired by the Do They Support It repo, but much smaller and written for people
 ## 7. Website plan (Travis's answers, 2026-11-21)
 
 - **Name:** Tinfoil Kit. "Tinfoil" alone collides with tinfoil.sh, a YC-backed private-AI company with its own AI chat app and a `tinfoilsh` GitHub org.
-- **Domain:** tinfoilkit.com, $12.03 a year through Vercel on the tudor-city-ventures team. **Ask before buying.**
+- **Domain:** tinfoilkit.com, $12.03 a year through Vercel on the tudor-city-ventures team. Bought 2026-11-21.
   - Also available on 2026-11-21: tinfoilkit.org, tinfoilkit.dev, tinfoilkit.app, usetinfoil.com, tinfoilhq.com, tinfoil.computer, tinfoil.tools.
   - Taken: tinfoil.app, tinfoil.dev, tinfoil.org, gettinfoil.com.
 - **Hosting:** a new Vercel project in the tudor-city-ventures team. The site credits a company, and Vercel's free Hobby plan is for non-commercial use only. Don't touch other projects.
@@ -353,8 +354,8 @@ First ask me about my computer, drive size, region and priorities. Then propose 
 Each step needs Travis's go-ahead, because none of them can be quietly undone.
 
 1. Travis runs `SETUP.command` on his Mac and `./kit test` passes.
-2. tinfoilkit.com is on the tudor-city-ventures Vercel team. Add it (and `www`, redirecting to the bare domain) to the `tinfoilkit` project.
-3. Turn off Vercel Authentication for production on the `tinfoilkit` project, so the public can see the site. Previews can stay protected.
+2. Done: tinfoilkit.com and `www` (redirecting to it) are on the `tinfoilkit` project.
+3. Make sure the public can see tinfoilkit.com: Vercel Authentication on the `tinfoilkit` project must be "all except custom domains" (or off). Previews stay protected.
 4. Make the GitHub repo public. The site's GitHub button and the install prompt point at it. First:
    - switch the default branch to `main` (visitors land on it) and delete `claude/project-thread-ew0j18`;
    - decide whether this file stays public. Sections 8 and 9 are internal (accounts, how the project started); trim them if not. Commit authors are all `Claude <noreply@anthropic.com>` or the Actions bot, so no personal email is in the history.
@@ -372,7 +373,7 @@ Each step needs Travis's go-ahead, because none of them can be quietly undone.
 - **Claude Code:**
   - Connectors set up in claude.ai, including Vercel, work in Claude Code cloud sessions.
   - Cloud sessions can reach only package registries and other approved sites by default. Real kit downloads need Claude Code running on Travis's Mac.
-- **Domain purchase:** only with Travis's OK.
+- **Purchases:** only with Travis's OK.
 
 ---
 
