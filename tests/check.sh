@@ -9,7 +9,7 @@ step "python compiles"
 run python3 -m py_compile tools/kit.py tests/*.py site/*.py
 
 step "bash parses"
-SH="kit START-HERE.command SETUP.command tools/launch.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/fakes/java tests/fakes/pmtiles"
+SH="kit START-HERE.command SETUP.command tools/launch.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles"
 for f in $SH; do run bash -n "$f"; done
 
 step "shellcheck"

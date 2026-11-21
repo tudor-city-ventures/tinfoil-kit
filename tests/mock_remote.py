@@ -49,13 +49,13 @@ def catalog() -> bytes:
 
 def releases() -> bytes:
     tag = "b99999" if v2() else "b99990"
-    asset = R / "gh" / f"llama-{tag}-bin-ubuntu-x64.tar.gz"
+    # every build of this tag: the Linux one, plus the Mac, Windows and Linux Vulkan ones for the drive test
+    assets = [{"name": a.name, "size": a.stat().st_size, "digest": "sha256:" + sha(a), "browser_download_url": f"{BASE}/gh/{a.name}"}
+              for a in sorted((R / "gh").glob(f"llama-{tag}-bin-*"))]
     data = [
         {"tag_name": "v1.0.0", "draft": False, "prerelease": False, "assets": [
             {"name": "nightly-tag.txt", "size": 7, "browser_download_url": f"{BASE}/gh/nightly-tag.txt"}]},
-        {"tag_name": tag, "draft": False, "prerelease": True, "assets": [
-            {"name": asset.name, "size": asset.stat().st_size, "digest": "sha256:" + sha(asset),
-             "browser_download_url": f"{BASE}/gh/{asset.name}"}]},
+        {"tag_name": tag, "draft": False, "prerelease": True, "assets": assets},
     ]
     return json.dumps(data).encode()
 
