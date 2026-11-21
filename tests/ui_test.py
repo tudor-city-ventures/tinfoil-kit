@@ -51,6 +51,18 @@ with sync_playwright() as p:
     errors = [e for e in errors if "favicon" not in e]
     check("no JS errors", not errors, "; ".join(errors))
 
+    if os.environ.get("KIT_AXE"):     # axe-core's axe.min.js
+        for scheme in ("light", "dark"):
+            pa = b.new_page(color_scheme=scheme)
+            pa.goto("http://127.0.0.1:18888/?model=Tiny&ai=18080")
+            pa.wait_for_function("document.querySelectorAll('#scope option').length > 1", timeout=20000)
+            pa.add_script_tag(path=os.environ["KIT_AXE"])
+            for tab in ("ask", "map", "library", "help"):
+                pa.click(f"nav a[data-tab={tab}]")
+                bad = pa.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
+                check(f"{scheme} mode, {tab} tab: no accessibility violations (axe)", not bad, ", ".join(bad))
+            pa.close()
+
     # AI down: answer must fall back to library passages
     page2 = b.new_page()
     page2.goto("http://127.0.0.1:18888/?model=Tiny&ai=18999")

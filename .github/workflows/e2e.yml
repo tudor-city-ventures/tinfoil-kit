@@ -29,7 +29,10 @@ jobs:
       - run: tests/build_fixtures.sh
         env:
           GITHUB_TOKEN: ${{ github.token }}
+      - run: npm i --no-save axe-core@4.10.2
       - run: tests/run_all.sh
+        env:
+          KIT_AXE: ${{ github.workspace }}/node_modules/axe-core/axe.min.js
       - if: always()
         uses: actions/upload-artifact@v5
         with:

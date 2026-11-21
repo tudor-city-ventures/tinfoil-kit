@@ -47,10 +47,10 @@ with sync_playwright() as p:
 
     # search an address, pick it
     page.fill("#placeQ", "100 Main Street Testville")
-    page.wait_for_selector("#placeResults div[data-i]", timeout=10000)
-    first = page.inner_text("#placeResults div[data-i]")
+    page.wait_for_selector("#placeResults button[data-i]", timeout=10000)
+    first = page.inner_text("#placeResults button[data-i]")
     check("address suggestions", "100 Main Street" in first, first.replace("\n", " "))
-    page.click("#placeResults div[data-i]")
+    page.click("#placeResults button[data-i]")
     page.wait_for_timeout(1200)
     check("result marker + popup", page.locator(".maplibregl-marker").count() == 2 and page.locator(".maplibregl-popup").count() == 1)
     page.wait_for_timeout(800)

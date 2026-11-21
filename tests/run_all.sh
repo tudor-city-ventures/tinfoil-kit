@@ -25,6 +25,13 @@ cp "$TESTS/drive_kit_maps.json" "$D/kit.json"
 . "$TESTS/env.sh"
 cd "$D" || exit 1
 step() { echo; echo "=== $*"; }
+# Runs one test: prints its failures and last line, and FAIL if it crashed or timed out. Full output in logs/.
+run_test() { # log-name seconds command...
+  local log="$L/$1.log" secs="$2" rc; shift 2
+  timeout "$secs" "$@" > "$log" 2>&1; rc=$?
+  grep -E "^FAIL" "$log"; tail -1 "$log"
+  [ $rc -eq 0 ] || echo "FAIL: exit $rc, see $log"
+}
 step "plan";   ./kit plan | grep -A7 "\[maps\]"; ./kit plan | tail -2
 step "sync v1"; ./kit sync -y > "$L/sync1.log" 2>&1; rc=$?
 grep -E "^\[[0-9]|FAILED|removed" "$L/sync1.log" | head -30
@@ -47,10 +54,10 @@ step "launcher"; (timeout 900 bash START-HERE.command --no-browser > "$L/launch.
 (python3 "$TESTS/mock_services.py" llama 18081 > "$L/m_llama.log" 2>&1 &)
 (MOCK_PHOTON_OLD=1 python3 "$TESTS/mock_services.py" photon 12323 > "$L/m_photon_old.log" 2>&1 &)
 sleep 1
-step "portal logic"; timeout 180 node "$TESTS/portal_test.js" "$D/tools/portal.html" | tail -1
-step "map logic";    timeout 180 node "$TESTS/map_logic_test.js" "$D/tools/portal.html" | tail -1
-step "portal UI";    timeout 240 python3 "$TESTS/ui_test.py" | tail -1
-step "map UI";       timeout 400 python3 "$TESTS/map_ui_test.py" | tail -1
+step "portal logic"; run_test portal_logic 180 node "$TESTS/portal_test.js" "$D/tools/portal.html"
+step "map logic";    run_test map_logic 180 node "$TESTS/map_logic_test.js" "$D/tools/portal.html"
+step "portal UI";    run_test portal_ui 240 python3 "$TESTS/ui_test.py"
+step "map UI";       run_test map_ui 400 python3 "$TESTS/map_ui_test.py"
 cleanup 2>/dev/null
 step "launcher --no-maps"; (timeout 60 bash START-HERE.command --no-browser --no-maps > "$L/launch2.out" 2>&1 &); sleep 8
 grep -q "Starting maps" "$L/launch2.out" && echo "FAIL: maps started" || echo "ok: no map servers"
