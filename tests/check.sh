@@ -22,6 +22,14 @@ fi
 step "kit.json is valid"
 run python3 -c "import json,sys; [json.load(open(f)) for f in sys.argv[1:]]" kit.json tests/drive_kit.json tests/drive_kit_maps.json
 
+step "site data matches kit.json"
+run python3 -m py_compile site/build_sources.py
+run python3 -c "
+import json, subprocess, sys
+before = open('site/sources.json').read()
+subprocess.run([sys.executable, 'site/build_sources.py'], check=True, stdout=subprocess.DEVNULL)
+sys.exit(0 if open('site/sources.json').read() == before else 'site/sources.json is stale: run python3 site/build_sources.py')"
+
 step "Windows launcher keeps CRLF"
 run python3 -c "import sys; d=open('START-HERE-Windows.bat','rb').read(); sys.exit(d.count(b'\n') != d.count(b'\r\n'))"
 

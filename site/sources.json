@@ -1,0 +1,593 @@
+{
+ "default_model": "Inkling-2-Mini",
+ "sources": [
+  {
+   "id": "Inkling-2-Mini",
+   "group": "AI models",
+   "title": "Inkling 2 Mini",
+   "why": "The default AI. Fast, reads photos, built for a 32 GB Mac.",
+   "bytes": 18000000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "Qwen3.8-27B",
+   "group": "AI models",
+   "title": "Qwen 3.8 27B",
+   "why": "A second opinion from a different lab. Slower, but strong.",
+   "bytes": 17500000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "Gemma-4-26B-A4B",
+   "group": "AI models",
+   "title": "Gemma 4 26B",
+   "why": "A third opinion from Google. Quick and reads photos.",
+   "bytes": 15700000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "Gemma-4-E4B",
+   "group": "AI models",
+   "title": "Gemma 4 E4B",
+   "why": "Small and light. Runs on an 8 to 16 GB laptop or on battery.",
+   "bytes": 5300000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "maps",
+   "group": "Maps",
+   "title": "Offline maps",
+   "why": "Street maps, address search and driving or walking directions for your region.",
+   "bytes": 25000000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "mdwiki_en_all_maxi",
+   "group": "Medical",
+   "title": "WikiMed",
+   "why": "A medical encyclopedia: conditions, drugs, procedures.",
+   "bytes": 2000000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "wikem_en_all_maxi",
+   "group": "Medical",
+   "title": "WikEM",
+   "why": "Emergency medicine notes written for clinicians.",
+   "bytes": 100000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "zimgit-medicine_en",
+   "group": "Medical",
+   "title": "Field medicine books",
+   "why": "First aid and medicine for when help is far away.",
+   "bytes": 100000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "fas-military-medicine_en",
+   "group": "Medical",
+   "title": "Military medicine",
+   "why": "Trauma care manuals from the US military.",
+   "bytes": 100000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "zimgit-post-disaster_en",
+   "group": "Preparedness",
+   "title": "Post-disaster guides",
+   "why": "Shelter, sanitation and recovery after a disaster.",
+   "bytes": 600000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "zimgit-water_en",
+   "group": "Preparedness",
+   "title": "Water treatment",
+   "why": "How to find, filter and disinfect drinking water.",
+   "bytes": 100000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "zimgit-food-preparation_en",
+   "group": "Preparedness",
+   "title": "Food preparation",
+   "why": "Storing, preserving and cooking food without power.",
+   "bytes": 100000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "zimgit-knots_en",
+   "group": "Preparedness",
+   "title": "Knots",
+   "why": "Illustrated knots for rope, tarps and rescue.",
+   "bytes": 100000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "www.ready.gov_en",
+   "group": "Preparedness",
+   "title": "Ready.gov",
+   "why": "FEMA's guides for every kind of emergency.",
+   "bytes": 4600000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "who.int_en_all",
+   "group": "Medical",
+   "title": "World Health Organization",
+   "why": "Public health guidance and disease facts.",
+   "bytes": 500000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "ifixit_en_all",
+   "group": "Repair and skills",
+   "title": "iFixit",
+   "why": "Step-by-step repair guides for phones, appliances, cars and tools.",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "appropedia_en_all_maxi",
+   "group": "Repair and skills",
+   "title": "Appropedia",
+   "why": "Off-grid and low-tech solutions: solar, water, building.",
+   "bytes": 600000000,
+   "estimated": true,
+   "presets": [
+    "essentials",
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "energypedia_en_all_nopic",
+   "group": "Repair and skills",
+   "title": "Energypedia",
+   "why": "Solar panels, batteries and small power systems.",
+   "bytes": 700000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "armypubs_en_all",
+   "group": "Preparedness",
+   "title": "US Army publications",
+   "why": "Field manuals on survival, first aid, navigation and more.",
+   "bytes": 7700000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "wikipedia_en_all_maxi",
+   "group": "Reference",
+   "title": "Wikipedia, with images",
+   "why": "All of English Wikipedia. The reference for nearly any question.",
+   "bytes": 115000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "wiktionary_en_all_nopic",
+   "group": "Reference",
+   "title": "Wiktionary",
+   "why": "A full dictionary and thesaurus.",
+   "bytes": 8000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "wikibooks_en_all_maxi",
+   "group": "Books and courses",
+   "title": "Wikibooks",
+   "why": "Open textbooks and how-tos.",
+   "bytes": 5000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "wikivoyage_en_all_maxi",
+   "group": "Reference",
+   "title": "Wikivoyage",
+   "why": "Travel guides for places you might need to go.",
+   "bytes": 1000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "wikiversity_en_all_maxi",
+   "group": "Books and courses",
+   "title": "Wikiversity courses",
+   "why": "Wikiversity courses (~2 GB)",
+   "bytes": 2000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "libretexts.org_en_med",
+   "group": "Medical",
+   "title": "LibreTexts medicine textbooks",
+   "why": "LibreTexts medicine textbooks (~1 GB)",
+   "bytes": 1000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "libretexts.org_en_bio",
+   "group": "Books and courses",
+   "title": "LibreTexts biology",
+   "why": "LibreTexts biology (~2 GB)",
+   "bytes": 2000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "libretexts.org_en_chem",
+   "group": "Books and courses",
+   "title": "LibreTexts chemistry",
+   "why": "LibreTexts chemistry (~2 GB)",
+   "bytes": 2000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "libretexts.org_en_eng",
+   "group": "Books and courses",
+   "title": "LibreTexts engineering",
+   "why": "LibreTexts engineering (~0.7 GB)",
+   "bytes": 700000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "libretexts.org_en_phys",
+   "group": "Books and courses",
+   "title": "LibreTexts physics",
+   "why": "LibreTexts physics (~0.5 GB)",
+   "bytes": 500000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "libretexts.org_en_geo",
+   "group": "Books and courses",
+   "title": "LibreTexts earth science",
+   "why": "LibreTexts earth science (~1 GB)",
+   "bytes": 1000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "libretexts.org_en_math",
+   "group": "Books and courses",
+   "title": "LibreTexts math",
+   "why": "LibreTexts math (~0.8 GB)",
+   "bytes": 800000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "diy.stackexchange.com_en_all",
+   "group": "Repair and skills",
+   "title": "Home improvement Q&A",
+   "why": "Home improvement Q&A",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "gardening.stackexchange.com_en_all",
+   "group": "Repair and skills",
+   "title": "Gardening Q&A",
+   "why": "Gardening Q&A",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "cooking.stackexchange.com_en_all",
+   "group": "Repair and skills",
+   "title": "Cooking Q&A",
+   "why": "Cooking Q&A",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "outdoors.stackexchange.com_en_all",
+   "group": "Preparedness",
+   "title": "Outdoors / wilderness Q&A",
+   "why": "Outdoors / wilderness Q&A",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "electronics.stackexchange.com_en_all",
+   "group": "Repair and skills",
+   "title": "Electronics Q&A",
+   "why": "Electronics Q&A (~4 GB)",
+   "bytes": 4000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "ham.stackexchange.com_en_all",
+   "group": "Repair and skills",
+   "title": "Amateur radio Q&A",
+   "why": "Amateur radio Q&A",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "mechanics.stackexchange.com_en_all",
+   "group": "Repair and skills",
+   "title": "Car repair Q&A",
+   "why": "Car repair Q&A",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "bicycles.stackexchange.com_en_all",
+   "group": "Repair and skills",
+   "title": "Bicycle repair Q&A",
+   "why": "Bicycle repair Q&A",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "sustainability.stackexchange.com_en_all",
+   "group": "Repair and skills",
+   "title": "Sustainable living Q&A",
+   "why": "Sustainable living Q&A",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "medicalsciences.stackexchange.com_en_all",
+   "group": "Medical",
+   "title": "Medical sciences Q&A",
+   "why": "Medical sciences Q&A",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "gutenberg_en_lcc-s",
+   "group": "Books and courses",
+   "title": "Project Gutenberg",
+   "why": "Project Gutenberg: agriculture books (~4 GB)",
+   "bytes": 4000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "gutenberg_en_lcc-t",
+   "group": "Books and courses",
+   "title": "Project Gutenberg",
+   "why": "Project Gutenberg: technology books (~12 GB)",
+   "bytes": 12000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "gutenberg_en_lcc-r",
+   "group": "Books and courses",
+   "title": "Project Gutenberg",
+   "why": "Project Gutenberg: medicine books",
+   "bytes": null,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "gutenberg_en_lcc-q",
+   "group": "Books and courses",
+   "title": "Project Gutenberg",
+   "why": "Project Gutenberg: science books (~16 GB)",
+   "bytes": 16000000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
+   "id": "survivorlibrary.com_en_all",
+   "group": "Books and courses",
+   "title": "Survivor Library",
+   "why": "Historical how-to books on farming, tools and trades.",
+   "bytes": 232000000000,
+   "estimated": true,
+   "presets": [
+    "everything"
+   ]
+  },
+  {
+   "id": "khanacademy_en_all",
+   "group": "Books and courses",
+   "title": "Khan Academy",
+   "why": "Video lessons for school-age kids.",
+   "bytes": 168000000000,
+   "estimated": true,
+   "presets": [
+    "everything"
+   ]
+  },
+  {
+   "id": "gutenberg_en_all",
+   "group": "Books and courses",
+   "title": "All of Project Gutenberg",
+   "why": "Every English public-domain book. Replaces the subsets.",
+   "bytes": 206000000000,
+   "estimated": true,
+   "presets": [
+    "everything"
+   ]
+  }
+ ]
+}

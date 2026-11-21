@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tinfoil Kit: the internet's knowledge, offline, on one drive</title>
+<meta name="description" content="An open-source offline kit for Apple Silicon Macs: a local AI assistant, Wikipedia, medical and repair guides, and offline maps with directions, all on one external SSD.">
+<meta property="og:title" content="Tinfoil Kit">
+<meta property="og:description" content="Everything you'd look up, on a drive you can hold. Open source, works with the internet off.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='3' y='7' width='22' height='14' rx='2' fill='%23F3F0E6' stroke='%231C1F1A' stroke-width='2'/%3E%3Crect x='7' y='11' width='6' height='6' fill='%23D9531E'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F3F0E6;--paper2:#EAE6D8;--ink:#1C1F1A;--ink2:#3A3E36;--mute:#6B6F63;--olive:#4A5A2A;--signal:#D9531E;--signal-text:#9A3A10;--rule:2px solid var(--ink);--mono:'IBM Plex Mono',ui-monospace,monospace;--sans:'IBM Plex Sans',system-ui,sans-serif}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--signal-text)}a:hover{color:#6E2809}
+.wrap{max-width:1240px;margin:0 auto;padding-left:32px;padding-right:32px}
+.mono{font-family:var(--mono)}
+.kicker{font-family:var(--mono);font-size:13px;letter-spacing:.08em;color:var(--olive);text-transform:uppercase;margin:0}
+h1,h2,h3{margin:0;letter-spacing:-.01em}
+h2{font-size:40px;line-height:1.1}
+p{margin:0}
+.btn{display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:0 24px;border:var(--rule);border-radius:4px;font:600 17px var(--sans);color:var(--ink);background:transparent;text-decoration:none;cursor:pointer}
+.btn:hover{color:var(--ink);background:var(--paper2)}
+.btn.primary{background:var(--signal)}.btn.primary:hover{background:#E4683A}
+.btn.dark{background:var(--ink);color:var(--paper)}.btn.dark:hover{background:#30342C;color:var(--paper)}
+.btn:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+header.top{border-bottom:var(--rule)}
+header.top .wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;padding-top:14px;padding-bottom:14px}
+.brand{display:flex;align-items:center;gap:12px;font:600 18px var(--mono);letter-spacing:.04em;color:var(--ink);text-decoration:none}
+nav.links{display:flex;flex-wrap:wrap;gap:4px 20px;align-items:center;font:14px var(--mono)}
+nav.links a{color:var(--ink);text-decoration:none;padding:12px 0}
+nav.links a.btn{min-height:44px;font:500 14px var(--mono);padding:0 16px}
+.hero{display:flex;flex-wrap:wrap;gap:56px;align-items:center;padding-top:72px;padding-bottom:64px}
+.hero-copy{flex:1 1 440px;min-width:0;display:flex;flex-direction:column;gap:24px}
+.hero h1{font-size:clamp(40px,6vw,64px);line-height:1.02;font-weight:700;letter-spacing:-.02em}
+.lede{font-size:20px;line-height:1.5;color:var(--ink2);max-width:560px}
+.ctas{display:flex;flex-wrap:wrap;gap:12px}
+.fig{flex:1 1 520px;min-width:0;margin:0;border:var(--rule);background:var(--paper2);padding:24px}
+.fig svg{width:100%;height:auto;display:block}
+.fig figcaption{font:12px var(--mono);color:var(--ink2);margin-top:12px}
+.flow{stroke-dasharray:5 5;animation:flow 1.2s linear infinite}
+.flow.fine{stroke-dasharray:2 6;animation-duration:1.8s}
+@keyframes flow{to{stroke-dashoffset:-20}}
+.lift{animation:lift 6s ease-in-out infinite}
+@keyframes lift{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.pin{animation:pin 2.4s ease-in-out infinite;transform-origin:526px 118px}
+@keyframes pin{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.flow,.lift,.pin{animation:none}html{scroll-behavior:auto}}
+.band{border-top:var(--rule);border-bottom:var(--rule);background:var(--paper2)}
+.section{padding-top:72px;padding-bottom:72px;display:flex;flex-direction:column;gap:28px}
+.head-row{display:flex;flex-wrap:wrap;gap:16px;align-items:baseline;justify-content:space-between}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}
+.tile{background:var(--paper);border:var(--rule);padding:24px;display:flex;flex-direction:column;gap:10px}
+.tile .tag{font:600 12px var(--mono);color:var(--olive)}
+.tile h3{font-size:22px}
+.tile p{font-size:16px;line-height:1.5;color:var(--ink2)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0;border:var(--rule)}
+.step{padding:22px;display:flex;flex-direction:column;gap:8px;border-right:var(--rule)}
+.step:last-child{border-right:0}
+.step b{font:600 13px var(--mono);color:var(--olive)}
+.step p{font-size:16px;line-height:1.5;color:var(--ink2)}
+.step code{font:13px var(--mono);background:var(--paper2);padding:1px 5px}
+@media (max-width:900px){.step{border-right:0;border-bottom:var(--rule)}.step:last-child{border-bottom:0}}
+.presets{display:inline-flex;flex-wrap:wrap;border:var(--rule);border-radius:4px;overflow:hidden;align-self:flex-start}
+.presets button{min-height:44px;padding:0 20px;border:0;border-right:var(--rule);background:transparent;font:500 15px var(--mono);color:var(--ink);cursor:pointer}
+.presets button:last-child{border-right:0}
+.presets button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.group{display:flex;flex-direction:column;gap:12px}
+.group h3{font:600 14px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--mute);padding-bottom:8px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.card{border:var(--rule);padding:16px 18px;display:flex;gap:14px;align-items:flex-start;background:var(--paper);cursor:pointer}
+.card.off{border-style:dashed;border-color:var(--mute);background:transparent}
+.card input{width:22px;height:22px;margin:2px 0 0;accent-color:var(--signal);flex:none;cursor:pointer}
+.card .body{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+.card .row{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.card strong{font-size:17px}
+.card .size{font:14px var(--mono);white-space:nowrap}
+.card .why{font-size:15px;line-height:1.45;color:var(--ink2)}
+.more{align-self:flex-start;min-height:44px;padding:0 16px;border:1px solid var(--ink);background:transparent;font:500 14px var(--mono);border-radius:4px;cursor:pointer;color:var(--ink)}
+.total{position:sticky;bottom:12px;border:var(--rule);background:var(--ink);color:var(--paper);padding:18px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;z-index:2}
+.total .meter{height:10px;background:#3A3E36;border-radius:2px;overflow:hidden}
+.total .meter div{height:10px;background:var(--signal);transition:width .3s}
+.total .btn{min-height:48px;font-size:16px;padding:0 20px}
+.total .btn.ghost{color:var(--paper);border-color:var(--paper)}
+.total .btn.ghost:hover{background:#30342C}
+.toast{font:13px var(--mono);color:#E0884F;min-height:18px}
+.prompts{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px}
+.prompt{background:var(--paper);border:var(--rule);display:flex;flex-direction:column;min-width:0}
+.prompt .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px;border-bottom:var(--rule)}
+.prompt .bar b{font-size:18px;display:block}
+.prompt .bar span{font-size:14px;color:var(--ink2)}
+.prompt pre{margin:0;padding:20px;font:13px/1.6 var(--mono);white-space:pre-wrap;color:var(--ink);overflow-wrap:anywhere}
+.prompt button{min-height:44px;padding:0 16px;background:var(--ink);color:var(--paper);border:0;border-radius:4px;font:500 14px var(--mono);cursor:pointer;flex:none}
+.oss{background:var(--ink);color:var(--paper)}
+.oss .wrap{padding-top:80px;padding-bottom:80px;display:flex;flex-wrap:wrap;gap:40px;align-items:center;justify-content:space-between}
+.oss h2{font-size:44px}
+.oss p{font-size:18px;line-height:1.5;color:#CFCBBE;max-width:620px}
+footer{border-top:1px solid #3A3E36;background:var(--ink);color:#CFCBBE}
+footer .wrap{padding-top:24px;padding-bottom:24px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;font:13px var(--mono)}
+footer a{color:#E0884F}footer a:hover{color:#F2A878}
+@media (max-width:600px){.wrap{padding-left:16px;padding-right:16px}h2{font-size:32px}.oss h2{font-size:34px}.hero{padding-top:40px;gap:36px}}
+</style>
+</head>
+<body>
+
+<header class="top">
+<div class="wrap">
+<a class="brand" href="#top" aria-label="Tinfoil Kit home">
+<svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="7" width="22" height="14" rx="2" fill="none" stroke="#1C1F1A" stroke-width="2"/><rect x="7" y="11" width="6" height="6" fill="#D9531E"/><line x1="16" y1="12" x2="22" y2="12" stroke="#1C1F1A" stroke-width="2"/><line x1="16" y1="16" x2="20" y2="16" stroke="#1C1F1A" stroke-width="2"/></svg>
+TINFOIL KIT</a>
+<nav class="links" aria-label="Sections">
+<a href="#inside">What's inside</a>
+<a href="#builder">Build your kit</a>
+<a href="#prompts">Set up with AI</a>
+<a class="btn dark gh" href="https://github.com/tudor-city-ventures/tinfoilkit">
+<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3.1-.3 6.4-1.5 6.4-7a5.4 5.4 0 0 0-1.5-3.7 5 5 0 0 0-.1-3.8s-1.2-.3-3.9 1.5a13.4 13.4 0 0 0-7 0C6.3 1.7 5.1 2 5.1 2a5 5 0 0 0-.1 3.8A5.4 5.4 0 0 0 3.5 9.5c0 5.4 3.3 6.6 6.4 7a3.4 3.4 0 0 0-.9 2.6V22"/></svg>
+GitHub</a>
+</nav>
+</div>
+</header>
+
+<main id="top">
+<section class="wrap hero">
+<div class="hero-copy">
+<p class="kicker">Open source · MIT · Apple Silicon Macs</p>
+<h1>Everything you'd look up, on a drive you can hold.</h1>
+<p class="lede">An AI assistant, Wikipedia, medical and repair guides, and maps with directions. One external SSD. Works on your Mac with the internet off.</p>
+<div class="ctas">
+<a class="btn primary" href="https://github.com/tudor-city-ventures/tinfoilkit">Get it on GitHub</a>
+<a class="btn" href="#builder">Build your kit</a>
+</div>
+</div>
+<figure class="fig">
+<svg viewBox="0 0 600 330" role="img" aria-label="A globe of knowledge narrows into a small external drive, which a hand lifts toward a map of the earth">
+<g stroke="#1C1F1A" stroke-width="1.5" fill="none">
+<circle cx="110" cy="150" r="88"/><ellipse cx="110" cy="150" rx="40" ry="88"/><ellipse cx="110" cy="150" rx="70" ry="88"/>
+<line x1="22" y1="150" x2="198" y2="150"/><path d="M32 110 Q110 96 188 110"/><path d="M32 190 Q110 204 188 190"/>
+<path class="flow" d="M198 92 L300 140"/><path class="flow" d="M198 208 L300 162"/>
+<path class="flow fine" d="M200 130 L300 146"/><path class="flow fine" d="M200 170 L300 156"/>
+</g>
+<g font-family="IBM Plex Mono, monospace" font-size="10" fill="#1C1F1A">
+<text x="58" y="70">WIKIPEDIA</text><text x="150" y="88">MEDICINE</text><text x="34" y="234">REPAIR</text><text x="126" y="250">MAPS</text><text x="92" y="132">AI</text>
+</g>
+<rect x="300" y="132" width="56" height="36" rx="4" fill="#D9531E" stroke="#1C1F1A" stroke-width="2"/>
+<rect x="306" y="142" width="10" height="16" fill="#1C1F1A"/>
+<path class="flow" d="M356 150 L392 150" stroke="#1C1F1A" stroke-width="1.5"/>
+<g class="lift" stroke="#1C1F1A" stroke-width="2" fill="#F3F0E6" stroke-linejoin="round">
+<path d="M400 210 Q396 176 414 168 L446 160 Q458 158 458 168 L456 176 L470 174 Q480 174 478 184 L474 214 Q468 244 440 250 L416 252 Z"/>
+<rect x="418" y="128" width="48" height="32" rx="4" fill="#D9531E"/>
+</g>
+<g stroke="#4A5A2A" stroke-width="1.5" fill="none">
+<circle cx="530" cy="110" r="52"/>
+<path d="M486 92 Q506 84 516 98 Q526 112 548 104 Q566 98 576 110"/>
+<path d="M490 132 Q512 124 528 136 Q542 148 570 134"/>
+<circle class="pin" cx="526" cy="118" r="5" fill="#D9531E" stroke="none"/>
+</g>
+<g font-family="IBM Plex Mono, monospace" font-size="11" fill="#4A5A2A" font-weight="600">
+<text x="64" y="300">01 EVERYTHING</text><text x="282" y="300">02 COMPRESSED</text><text x="460" y="300">03 IN HAND</text>
+</g>
+</svg>
+<figcaption>FIG. 1 · About 300 GB of the world, packed onto one 2 TB SSD.</figcaption>
+</figure>
+</section>
+
+<section id="inside" class="band">
+<div class="wrap section">
+<div class="head-row">
+<h2>What's inside</h2>
+<p class="mono" style="font-size:14px;color:var(--ink2)">Plug in. Double-click START-HERE. A page opens with four tabs.</p>
+</div>
+<div class="grid4">
+<div class="tile"><span class="tag">TAB 01</span><h3>Ask</h3><p>Ask a question in plain words. The answer comes from the library, with numbered sources you can open. Works even with the AI off.</p></div>
+<div class="tile"><span class="tag">TAB 02</span><h3>AI chat</h3><p>A capable open model running on your Mac. Attach a photo of a rash, a part or a label and ask about it.</p></div>
+<div class="tile"><span class="tag">TAB 03</span><h3>Library</h3><p>Wikipedia with images, medical references, iFixit, Army manuals and preparedness guides. All searchable.</p></div>
+<div class="tile"><span class="tag">TAB 04</span><h3>Map</h3><p>Search an address, get driving or walking directions, or find the nearest hospital or pharmacy.</p></div>
+</div>
+<div class="steps">
+<div class="step"><b>01 · GET A DRIVE</b><p>A 2 TB external SSD and an Apple Silicon Mac. 32 GB of memory is ideal; smaller Macs use the small model.</p></div>
+<div class="step"><b>02 · FILL IT</b><p>Download the kit and run <code>./kit sync</code> once. It takes a few hours and checks every file.</p></div>
+<div class="step"><b>03 · TEST IT</b><p>Turn Wi-Fi off and double-click <code>START-HERE.command</code>. Everything should still answer.</p></div>
+<div class="step"><b>04 · REFRESH IT</b><p>Every two or three months, run <code>./kit sync</code> again. Only what changed downloads.</p></div>
+</div>
+</div>
+</section>
+
+<section id="builder" class="wrap section">
+<div style="display:flex;flex-direction:column;gap:10px">
+<p class="kicker">The kit builder</p>
+<h2>Choose what goes on your drive.</h2>
+<p style="font-size:18px;line-height:1.5;color:var(--ink2);max-width:680px">Start from a preset, then switch sources on or off. You get a setup prompt with your picks built in, and a kit.json to drop on the drive.</p>
+</div>
+<div class="presets" role="group" aria-label="Preset">
+<button type="button" data-preset="essentials" aria-pressed="false">Essentials</button>
+<button type="button" data-preset="recommended" aria-pressed="true">Recommended</button>
+<button type="button" data-preset="everything" aria-pressed="false">Everything</button>
+</div>
+<div id="groups" style="display:flex;flex-direction:column;gap:32px"><p class="mono">Loading sources…</p></div>
+<div class="total" role="region" aria-label="Your kit">
+<div style="display:flex;flex-direction:column;gap:8px;flex:1 1 320px">
+<div class="mono" style="font-size:14px" id="totalText" aria-live="polite">YOUR KIT</div>
+<div class="meter"><div id="meter" style="width:0"></div></div>
+<div class="toast" id="toast" aria-live="polite"></div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px">
+<button type="button" class="btn primary" id="copySetup">Copy setup prompt</button>
+<button type="button" class="btn ghost" id="downloadKit">Download kit.json</button>
+</div>
+</div>
+</section>
+
+<section id="prompts" class="band">
+<div class="wrap section">
+<h2>Set it up with any AI chat.</h2>
+<div class="prompts">
+<div class="prompt">
+<div class="bar"><div><b>Install ours</b><span>Walks you through setup, one step at a time.</span></div><button type="button" data-copy="installPrompt">Copy</button></div>
+<pre id="installPrompt">I want to set up Tinfoil Kit on my Mac. It's an offline AI assistant, an offline library (Wikipedia, medical and repair guides) and offline maps, all on an external drive, for when the internet is down. The project is at https://github.com/tudor-city-ventures/tinfoilkit. Read its README and GUIDE, then walk me through setup one step at a time:
+
+1. Which drive to buy and how to format it.
+2. How to download the kit and run the first sync, which takes a few hours.
+3. How to check that it works with Wi-Fi off.
+4. How to keep it updated every few months.
+
+I'm not a programmer. Tell me exactly what to click or paste, and wait for me to confirm each step before moving on.</pre>
+</div>
+<div class="prompt">
+<div class="bar"><div><b>Build your own</b><span>The principles, for any AI to build from.</span></div><button type="button" data-copy="ownPrompt">Copy</button></div>
+<pre id="ownPrompt">Help me build my own offline kit for an internet outage, on an external SSD. Principles:
+
+- Everything works with zero internet: local AI models, an offline library and offline maps, served on localhost and opened in a browser.
+- One config file lists every source. One command refreshes everything every 2-3 months. It resumes interrupted downloads, verifies checksums, and keeps the old version until the new one checks out.
+- AI: a few open-weight models sized to my computer's memory (one capable default, one small and fast), run with llama.cpp's server.
+- Library: Kiwix ZIM files (Wikipedia, medical references, iFixit, preparedness guides) served by kiwix-serve with full-text search.
+- The AI answers from the library: it searches it, reads the top passages and cites them. It still works with the AI off.
+- Maps: vector tiles for my region plus a low-detail world map, offline address search and offline directions. The AI can use them as tools.
+- An offline self-test, and a one-page printed guide kept with the drive.
+- Use exFAT so any computer can read the drive, and avoid symlinks.
+
+First ask me about my computer, drive size, region and priorities. Then propose a plan before writing any code.</pre>
+</div>
+</div>
+</div>
+</section>
+
+<section class="oss">
+<div class="wrap">
+<div style="flex:1 1 520px;display:flex;flex-direction:column;gap:16px">
+<p class="kicker" style="color:#E0884F">Open source, MIT license</p>
+<h2>Read every line. Change anything. Keep it forever.</h2>
+<p>No account, no subscription, no tracking. The sync script, the launcher and the page are plain files you can inspect, and your drive keeps working no matter what happens to us.</p>
+</div>
+<a class="btn primary" style="min-height:60px;font-size:19px;padding:0 28px;border-color:var(--signal)" href="https://github.com/tudor-city-ventures/tinfoilkit">
+<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3.1-.3 6.4-1.5 6.4-7a5.4 5.4 0 0 0-1.5-3.7 5 5 0 0 0-.1-3.8s-1.2-.3-3.9 1.5a13.4 13.4 0 0 0-7 0C6.3 1.7 5.1 2 5.1 2a5 5 0 0 0-.1 3.8A5.4 5.4 0 0 0 3.5 9.5c0 5.4 3.3 6.6 6.4 7a3.4 3.4 0 0 0-.9 2.6V22"/></svg>
+View the code on GitHub</a>
+</div>
+</section>
+</main>
+
+<footer>
+<div class="wrap">
+<span>A side project from the team behind <a href="https://dotheysupportit.com">Do They Support It</a>.</span>
+<span>Tinfoil Kit · MIT · No analytics on this site</span>
+</div>
+</footer>
+
+<script>
+(function () {
+  var DRIVE = 2e12, VISIBLE = 6;
+  var state = { sources: [], picked: {}, preset: "recommended", open: {} };
+  var groupsEl = document.getElementById("groups");
+
+  function gb(bytes) {
+    if (bytes == null) return "size TBD";
+    var g = bytes / 1e9;
+    return "~" + (g < 1 ? "<1" : g < 10 ? g.toFixed(1).replace(/\.0$/, "") : Math.round(g)) + " GB";
+  }
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    for (var k in attrs || {}) { if (k === "text") n.textContent = attrs[k]; else n.setAttribute(k, attrs[k]); }
+    (kids || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+  function applyPreset(p) {
+    state.preset = p;
+    state.sources.forEach(function (s) { state.picked[s.id] = s.presets.indexOf(p) >= 0; });
+    document.querySelectorAll("[data-preset]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.preset === p)); });
+    render();
+  }
+  function render() {
+    var groups = [];
+    state.sources.forEach(function (s) { if (groups.indexOf(s.group) < 0) groups.push(s.group); });
+    groupsEl.textContent = "";
+    groups.forEach(function (g) {
+      var items = state.sources.filter(function (s) { return s.group === g; });
+      var on = items.filter(function (s) { return state.picked[s.id]; });
+      var bytes = on.reduce(function (t, s) { return t + (s.bytes || 0); }, 0);
+      var shown = state.open[g] ? items : items.slice(0, VISIBLE);
+      var cards = el("div", { "class": "cards" }, shown.map(function (s) {
+        var box = el("input", { type: "checkbox", "aria-describedby": "why-" + s.id });
+        box.checked = !!state.picked[s.id];
+        box.addEventListener("change", function () { state.picked[s.id] = box.checked; state.preset = null; markCustom(); render(); });
+        return el("label", { "class": "card" + (box.checked ? "" : " off") }, [box,
+          el("span", { "class": "body" }, [
+            el("span", { "class": "row" }, [el("strong", { text: s.title }), el("span", { "class": "size", text: gb(s.bytes) })]),
+            el("span", { "class": "why", id: "why-" + s.id, text: s.why })])]);
+      }));
+      var more = null;
+      if (items.length > VISIBLE) {
+        more = el("button", { type: "button", "class": "more", text: state.open[g] ? "Show fewer" : "Show all " + items.length });
+        more.addEventListener("click", function () { state.open[g] = !state.open[g]; render(); });
+      }
+      groupsEl.appendChild(el("div", { "class": "group" }, [
+        el("h3", {}, [el("span", { text: g }), el("span", { text: on.length + " of " + items.length + " · " + gb(bytes).replace("~", "") })]),
+        cards, more]));
+    });
+    var total = state.sources.reduce(function (t, s) { return t + (state.picked[s.id] ? s.bytes || 0 : 0); }, 0);
+    var unknown = state.sources.filter(function (s) { return state.picked[s.id] && s.bytes == null; }).length;
+    document.getElementById("totalText").textContent = "YOUR KIT · ABOUT " + Math.round(total / 1e9) + " GB" +
+      (unknown ? " + " + unknown + (unknown === 1 ? " SMALL ITEM" : " SMALL ITEMS") : "") + " · " + Math.round(total / DRIVE * 100) + "% OF A 2 TB DRIVE";
+    document.getElementById("meter").style.width = Math.min(100, total / DRIVE * 100) + "%";
+  }
+  function markCustom() {
+    document.querySelectorAll("[data-preset]").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+  }
+  function toast(msg) {
+    var t = document.getElementById("toast"); t.textContent = msg;
+    clearTimeout(toast.t); toast.t = setTimeout(function () { t.textContent = ""; }, 3000);
+  }
+  function copy(text, what) {
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+      .then(function () { toast(what + " copied"); }, function () { toast("Copy failed. Select the text and copy it yourself."); });
+  }
+  function picks() { return state.sources.filter(function (s) { return state.picked[s.id]; }); }
+  function setupPrompt() {
+    var list = picks().map(function (s) { return "- " + s.title + " (" + s.id + ")"; }).join("\n");
+    return document.getElementById("installPrompt").textContent +
+      "\n\nI used the kit builder on the website. Set kit.json so only these are enabled:\n" + list;
+  }
+  function customKit() {
+    var kit = JSON.parse(JSON.stringify(state.kit));
+    kit.models.forEach(function (m) { m.enabled = !!state.picked[m.id]; });
+    kit.library.forEach(function (z) { z.enabled = !!state.picked[z.zim]; });
+    kit.maps.enabled = !!state.picked.maps;
+    if (!state.picked[kit.settings.default_model]) {
+      var firstModel = kit.models.filter(function (m) { return m.enabled; })[0];
+      if (firstModel) kit.settings.default_model = firstModel.id;
+    }
+    return JSON.stringify(kit, null, 2) + "\n";
+  }
+
+  document.querySelectorAll("[data-preset]").forEach(function (b) {
+    b.addEventListener("click", function () { applyPreset(b.dataset.preset); });
+  });
+  document.querySelectorAll("[data-copy]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var t = document.getElementById(b.dataset.copy).textContent;
+      navigator.clipboard && navigator.clipboard.writeText(t).then(function () {
+        b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy"; }, 2000);
+      });
+    });
+  });
+  document.getElementById("copySetup").addEventListener("click", function () { copy(setupPrompt(), "Setup prompt"); });
+  document.getElementById("downloadKit").addEventListener("click", function () {
+    if (!state.kit) return;
+    var a = el("a", { href: URL.createObjectURL(new Blob([customKit()], { type: "application/json" })), download: "kit.json" });
+    document.body.appendChild(a); a.click(); a.remove();
+    toast("kit.json downloaded. Replace the one in the kit folder.");
+  });
+
+  Promise.all([fetch("sources.json").then(function (r) { return r.json(); }), fetch("kit.json").then(function (r) { return r.json(); })])
+    .then(function (res) { state.sources = res[0].sources; state.kit = res[1]; applyPreset("recommended"); })
+    .catch(function () { groupsEl.innerHTML = '<p class="mono">Couldn\'t load the source list. <a href="kit.json">kit.json</a> lists everything.</p>'; });
+})();
+</script>
+</body>
+</html>
