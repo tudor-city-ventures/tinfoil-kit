@@ -141,6 +141,31 @@ try:
     rc, out = kit("sync", "-y")
     check("sync replaces it", rc == 0 and same("library/testmed_en_all_maxi_2026-01.zim", "zim/testmed_en_all_maxi_2026-01.zim"), out)
 
+    # aria2c (optional, faster) fills a file in several places at once, so a download it was stopped on can already
+    # be full length. Its record beside the file says it isn't whole. A stand-in aria2c finishes the job.
+    fakebin = work / "bin"
+    fakebin.mkdir()
+    (fakebin / "aria2c").write_text(f"""#!{sys.executable}
+import pathlib, sys, urllib.request
+out = pathlib.Path(sys.argv[sys.argv.index("-d") + 1]) / sys.argv[sys.argv.index("-o") + 1]
+out.write_bytes(urllib.request.urlopen(sys.argv[-1]).read())
+pathlib.Path(str(out) + ".aria2").unlink()
+""")
+    (fakebin / "aria2c").chmod(0o755)
+    model = drive / "models/Two/Two-Q4_K_M.gguf"
+    model.unlink()
+    partial = model.with_name(model.name + ".partial")
+    partial.write_bytes(os.urandom((R / "hf/two/Two-Q4_K_M.gguf").stat().st_size))
+    record = partial.with_name(partial.name + ".aria2")
+    record.touch()
+    cfg["settings"]["downloader"] = "aria2c"
+    write_cfg()
+    rc, out = kit("sync", "-y", env={**env, "PATH": f"{fakebin}{os.pathsep}{env['PATH']}"})
+    cfg["settings"]["downloader"] = "curl"
+    write_cfg()
+    check("aria2c: a full-length download it hadn't finished is resumed, not taken as done",
+          rc == 0 and same("models/Two/Two-Q4_K_M.gguf", "hf/two/Two-Q4_K_M.gguf") and not record.exists(), out)
+
     (drive / ".kit" / "state.json").unlink()
     rc, out = kit("sync", "-y")
     check("lost state: files on the drive are checked and kept, not downloaded again",

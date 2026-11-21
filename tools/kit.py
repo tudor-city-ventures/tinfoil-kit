@@ -891,11 +891,20 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
 
 # ----------------------------------------------------------------------------- downloading
 
+def drop_partial(partial: Path) -> None:
+    """Delete an unfinished download, along with aria2c's record of which parts of it had arrived."""
+    partial.unlink(missing_ok=True)
+    partial.with_name(partial.name + ".aria2").unlink(missing_ok=True)
+
+
 def download(url: str, partial: Path, size: Optional[int], downloader: str) -> None:
     partial.parent.mkdir(parents=True, exist_ok=True)
     if size and partial.exists() and partial.stat().st_size > size:
-        partial.unlink()
-    if size and partial.exists() and partial.stat().st_size == size:
+        drop_partial(partial)
+    # aria2c fills a file in several places at once, so one it was stopped on can be full length with gaps in it.
+    # Its record (<file>.aria2) is there until the download is whole.
+    if (size and partial.exists() and partial.stat().st_size == size
+            and not partial.with_name(partial.name + ".aria2").exists()):
         return
     use_aria = downloader == "aria2c" or (downloader == "auto" and shutil.which("aria2c"))
     for attempt in range(1, 6):
@@ -928,7 +937,7 @@ def download(url: str, partial: Path, size: Optional[int], downloader: str) -> N
                 free = ""
             raise RuntimeError(f"couldn't write {partial.name} to the drive{free}. Is it full, or was it unplugged?")
         if not use_aria and (rc == 33 or status == "416"):   # can't resume this partial file: start over
-            partial.unlink(missing_ok=True)
+            drop_partial(partial)
         log(f"    download interrupted (exit {rc}, {fmt_size(got)} of {fmt_size(size)}); "
             f"retrying ({attempt}/5)...")
         time.sleep(10 if got > before else 30)
@@ -1005,7 +1014,7 @@ def fetch(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, cfg: Dic
     if partial.exists() and (partials.get(rel, {}).get("tag", tag) != tag
                              or (f.size and partial.stat().st_size > f.size)):
         log(f"    discarding an unfinished download of a different version of {f.name}")
-        partial.unlink()
+        drop_partial(partial)
     have = partial.stat().st_size if partial.exists() else 0
     need = max(0, (f.size or 0) * room - have)
     if not force and not ensure_space(root, need, cfg):
@@ -1032,7 +1041,7 @@ def sweep_partials(root: Path, state: Dict[str, Any], items: List[Item]) -> None
     for rel, rec in list(partials.items()):
         p = root / rel
         if p.exists() and rel not in keep and (rec.get("item") in current or rec.get("item") not in known):
-            p.unlink()
+            drop_partial(p)
             log(f"Removed an unfinished download that's out of date: {rel}")
         if not p.exists():
             partials.pop(rel)

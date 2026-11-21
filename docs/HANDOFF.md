@@ -113,7 +113,7 @@ Why: a drive set up once kept its `tools/` and `kit.json` forever, so a source r
 ### Sync engine rules (keep these)
 
 - Each item is resolved to a version and a list of files with checksums, then compared with `.kit/state.json`. Sync then plans, checks free space (`keep_free_gb`), downloads, verifies, installs and prunes.
-- Downloads resume after interruption: `curl -C -` with retries, or `aria2c` when it's installed.
+- Downloads resume after interruption: `curl -C -` with retries, or `aria2c` when it's installed. aria2c fills a file in several places at once, so a stopped download can already be full length: while its `<file>.aria2` record is there, the file isn't whole.
 - Half-finished downloads are `<file>.partial` next to their destination (archives and the Photon dump: `.kit/downloads/`). `state.json` records each one's version under `partials`:
   - a partial of a different version under the same file name (models often keep their names) is discarded, not resumed into a corrupt file;
   - at the start of a sync, partials that a newer version made useless are deleted (they can be 100 GB); those of switched-off items are kept;
