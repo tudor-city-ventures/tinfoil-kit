@@ -12,6 +12,14 @@ jobs:
         with:
           node-version: 22
       - run: tests/check.sh
+  oldest-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.9"     # what macOS's command line tools install
+      - run: python tests/sync_test.py
   site:
     runs-on: ubuntu-latest
     steps:
