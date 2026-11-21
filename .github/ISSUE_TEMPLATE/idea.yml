@@ -1,0 +1,35 @@
+name: Idea or change
+description: Something to add or change, including a new library, map or model source
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: If the maintainer wants it, they'll label this issue `accepted`. Wait for that before you open a pull request; others are closed automatically.
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: What should change, and why it matters when the internet is down.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: For a library source, its exact name from `./kit search WORDS` and its rough size. Links and anything else that helps.
+  - type: dropdown
+    id: pr
+    attributes:
+      label: Will you send the pull request?
+      options:
+        - Yes, once it's accepted
+        - No, I'm suggesting it
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I searched the open issues and this isn't one of them.
+          required: true

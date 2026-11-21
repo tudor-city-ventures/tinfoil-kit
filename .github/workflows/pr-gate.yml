@@ -1,0 +1,71 @@
+name: pull request gate
+# Outside pull requests must link an open issue the maintainer labeled `accepted` (.github/CONTRIBUTING.md).
+# pull_request_target runs this file from the base branch with a write token, even for forks, so it must
+# never check out or run the pull request's code. It reads the pull request only from the event payload.
+on:
+  pull_request_target:
+    types: [opened, reopened]
+  workflow_dispatch: # run once by hand to create or update the labels below
+permissions: {}
+jobs:
+  gate:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            const full = `${owner}/${repo}`;
+
+            // Branches in this repo come from people with write access. Members, collaborators (including
+            // read-only ones the maintainer vouched for) and anyone with a merged commit skip the gate too.
+            const here = !!pr.head.repo && pr.head.repo.full_name.toLowerCase() === full.toLowerCase();
+            if (here || ['OWNER', 'MEMBER', 'COLLABORATOR', 'CONTRIBUTOR'].includes(pr.author_association)) {
+              return core.info(`Skipped: ${here ? 'branch in this repo' : pr.author_association}`);
+            }
+            // Someone other than the author reopening it is a maintainer making the call.
+            if (context.payload.action === 'reopened' && context.payload.sender.login !== pr.user.login) {
+              return core.info(`Skipped: reopened by ${context.payload.sender.login}`);
+            }
+
+            // Any issue of this repo the title or description mentions counts, however it's written.
+            const name = full.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const text = `${pr.title}\n${pr.body || ''}`;
+            const numbers = new Set();
+            for (const re of [/(?:^|[^\w/])#(\d+)\b/g, new RegExp(`\\b${name}#(\\d+)\\b`, 'gi'),
+                              new RegExp(`github\\.com/${name}/issues/(\\d+)`, 'gi')]) {
+              for (const m of text.matchAll(re)) numbers.add(Number(m[1]));
+            }
+            for (const n of [...numbers].slice(0, 10)) {
+              const issue = await github.rest.issues.get({ owner, repo, issue_number: n }).then(r => r.data, () => null);
+              if (issue && !issue.pull_request && issue.state === 'open' && issue.labels.some(l => l.name === 'accepted')) {
+                return core.info(`Allowed: links accepted issue #${n}`);
+              }
+            }
+
+            await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body:
+              "Thanks for this. Pull requests here need an open issue that the maintainer has labeled `accepted`, " +
+              "and this one doesn't link one, so it's closed.\n\n" +
+              "Open an issue describing the change (or find an accepted one), wait for the label, then open a new " +
+              `pull request that says \`Closes #<number>\`. See [CONTRIBUTING](https://github.com/${full}/blob/main/.github/CONTRIBUTING.md).` });
+            await github.rest.pulls.update({ owner, repo, pull_number: pr.number, state: 'closed' });
+            await github.rest.issues.addLabels({ owner, repo, issue_number: pr.number, labels: ['auto-closed'] })
+              .catch(e => core.warning(`Couldn't label it: ${e.message}`));
+            core.info('Closed: no accepted issue');
+  labels:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh label create accepted --force --color 0e8a16 --description "The maintainer wants this: a pull request for it is welcome"
+          gh label create auto-closed --force --color ededed --description "Closed by the pull request gate: no accepted issue linked"

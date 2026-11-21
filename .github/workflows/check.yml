@@ -56,3 +56,22 @@ jobs:
         with:
           name: site-screenshots
           path: tests/work/shots
+  sign-off:
+    # Outside contributors sign off every commit (the DCO, see .github/CONTRIBUTING.md). Branches in this repo
+    # are the maintainers', so the job skips them, and a skipped job counts as passing for required checks.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The checkout is GitHub's merge commit: its first parent is the base branch, its second the pull request.
+      - run: |
+          bad=0
+          for c in $(git rev-list --no-merges HEAD^1..HEAD^2); do
+            git log -1 --format=%B "$c" | grep -q '^Signed-off-by: ' && continue
+            echo "::error::Commit $(git rev-parse --short "$c") has no Signed-off-by line. Sign off with git commit -s (see .github/CONTRIBUTING.md)."
+            bad=1
+          done
+          exit $bad

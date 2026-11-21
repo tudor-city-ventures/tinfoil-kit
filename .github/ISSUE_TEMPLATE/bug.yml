@@ -1,0 +1,33 @@
+name: Something broke
+description: A problem you ran into with the kit, the guide or the website
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The error, the end of what `SETUP.command`, `./kit sync` or `./kit test` printed, or the relevant file from the drive's `logs` folder.
+      render: shell
+  - type: input
+    id: mac
+    attributes:
+      label: Mac and drive
+      placeholder: MacBook Air M2, 16 GB, macOS 26.1, 2 TB SSD formatted exFAT
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send it
+      options:
+        - label: I searched the open issues and this isn't one of them.
+          required: true
+        - label: I saw this happen myself. It isn't only something an AI tool or scanner flagged.
+          required: true

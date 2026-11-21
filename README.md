@@ -41,7 +41,7 @@ Everything the kit keeps is listed in [kit.json](kit.json). Set `"enabled": fals
 
 ## Contributing
 
-Agent and contributor rules are in [AGENTS.md](AGENTS.md). Design history is in [docs/HANDOFF.md](docs/HANDOFF.md).
+Bug reports and ideas are welcome as issues. A pull request needs an issue the maintainer has labeled `accepted` first: see [CONTRIBUTING](.github/CONTRIBUTING.md). Code rules, for people and their AI agents, are in [AGENTS.md](AGENTS.md). Design history is in [docs/HANDOFF.md](docs/HANDOFF.md).
 
 ## License
 

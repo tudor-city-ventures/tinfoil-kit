@@ -11,6 +11,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 - kit.json matches the Kiwix catalog. WikEM, WHO and the Gutenberg subject subsets were dropped upstream, two entries were renamed, and Urban Prepper was added. All 60 sources resolve.
 - tinfoilkit.com: bought 2026-11-21 through Vercel on the tudor-city-ventures team (registrant Tudor City Ventures LLC, auto-renews yearly). It's on the `tinfoilkit` project, and `www` redirects to it (308).
 - `./kit update` (Travis chose to build it before launch): `SETUP.command` first installs the newest GitHub release of the kit's code and keeps each drive's kit.json changes. Design in section 3. It does nothing until the repo is public and has a release (launch day, step 5).
+- Ready for outside contributors: CONTRIBUTING, SECURITY, the code of conduct, issue forms, a PR template and CODEOWNERS are in `.github/`, out of sight on drives. Outside pull requests need an open issue labeled `accepted`, and `pr-gate.yml` closes the rest (members, collaborators and past contributors skip it). Fork PRs need DCO sign-off (the `sign-off` job in `check.yml`). Workflow tokens are read-only except in the sizes refresh and the gate. GitHub's own settings go on at launch (step 4).
 - Launch-day checklist: see section 7.
 - Second thread (robustness, tests, accessibility):
   - Sync tells the truth: it exits 1 when anything failed or couldn't be looked up, stops with one message when offline or behind a Wi-Fi sign-in page, and never resumes a half-download of an older version into a new file. Leftover half-downloads of old versions are cleaned up.
@@ -26,6 +27,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 - Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too, because scheduled workflows run from the default branch's copy of `.github/`. (Vercel deploys production from `main`; the sizes workflow checks out and pushes `main`.)
 - A real `SETUP.command` run on his Mac. This is the only test against real downloads and Apple Silicon.
 - Going public: turn off Vercel Authentication for production and make the repo public. Ask first.
+- Contribution policy, in place as recommended until Travis says otherwise: the issue-first gate (not label-only or invite-only), DCO sign-off (not a CLA or nothing), and AI tools allowed with disclosure and a person answering for every PR.
 
 **Decided for now (Travis, 2026-11-21):** llama-server is the only AI runtime (no Ollama or LM Studio), Ask stays one library search then an answer (only map questions use tools), and "AI chat" stays llama-server's own page.
 
@@ -371,9 +373,31 @@ Each step needs Travis's go-ahead, because none of them can be quietly undone.
 4. Make the GitHub repo public. The site's GitHub button and the install prompt point at it. First:
    - switch the default branch to `main` (visitors land on it) and delete `claude/project-thread-ew0j18`;
    - decide whether this file stays public. Sections 8 and 9 are internal (accounts, how the project started); trim them if not. Commit authors are all `Claude <noreply@anthropic.com>` or the Actions bot, so no personal email is in the history.
+   Then turn on the settings in "GitHub settings at launch" below, all but the `main` ruleset (step 7). Several exist only for public repos, and the release protections must be on before step 5.
 5. Publish the first GitHub release from `main` (for example `v1.0.0`), with a few lines on what's in it: SETUP shows them after updating. Until the repo is public and has a release, `./kit update` finds nothing and drives keep their version.
 6. Check the social card (https://tinfoilkit.com/og.png) with a link preview, and that the builder loads sources.json.
-7. Switch to PRs and review from then on (update AGENTS.md's Workflow section).
+7. Switch to PRs and review from then on: turn on the `main` ruleset (below) and update AGENTS.md's Workflow section. The ruleset ends direct pushes, including the weekly sizes commit, so in the same step switch `sizes.yml` to open a pull request, run the checks on it with `workflow_dispatch` (pull requests opened with the Actions token don't trigger workflows) and auto-merge it. That needs "Allow GitHub Actions to create and approve pull requests" and auto-merge turned on.
+
+#### GitHub settings at launch
+
+The policy and its reasons are in `.github/CONTRIBUTING.md`. In the repo's Settings:
+
+- **General**
+  - Pull requests: allow squash merging only; turn on auto-merge and "Automatically delete head branches".
+  - Limit open pull requests for users without write access: 2.
+  - Leave pull requests open to everyone. "Restrict pull requests to collaborators" is the brake for a flood: while it's on, only people with write access can open them.
+  - Releases: turn on release immutability. Every drive installs the latest release, so its tag and files must never change.
+  - Features: turn off Wikis and Projects.
+- **Moderation options:** interaction limits stay off; in a flood, "Limit to existing users" (blocks accounts under a day old) or "Limit to prior contributors", for a day to a week. Code review limits on. Reported content: accept reports from everyone (the code of conduct sends people there).
+- **Actions > General:** allow only actions created by GitHub (every workflow uses `actions/*`). Fork pull request workflows: the strictest approval option, every outside contributor. Workflow permissions: read-only.
+- **Rules > Rulesets**
+  - Tag ruleset `releases` on `v*`: restrict creations, updates and deletions; bypass: Repository admin. Before the first release.
+  - Branch ruleset `main` on the default branch: restrict deletions, block force pushes, require a pull request (no approvals: Travis's agents open PRs as Travis, and an author can't approve their own; conversations resolved), require the status checks `quick-gate`, `oldest-python`, `bash-3-2`, `site` and `sign-off`; bypass: Repository admin, for pull requests only. With step 7, not before. `e2e` isn't required because it only runs when the kit changes.
+- **Code security:** private vulnerability reporting (SECURITY.md sends reports there), Dependabot alerts, secret scanning with push protection, CodeQL default setup.
+- **Collaborators:** to vouch for someone, add them with the Read role; the pull request gate skips collaborators. Anyone who needs more than two open PRs goes on the limit's bypass list.
+- **Organization** (tudor-city-ventures): require two-factor authentication.
+- **Vercel** (`tinfoilkit` project): keep Git Fork Protection on, so pull requests from forks don't deploy previews until approved.
+- **Labels:** `accepted` and `auto-closed` come from running the `pull request gate` workflow by hand. Run it again after changing them there.
 
 ## 8. Accounts and access
 

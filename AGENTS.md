@@ -15,6 +15,7 @@ The repo root is the kit itself, so cloning onto a drive just works. The marketi
 | `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests |
 | `GUIDE.md` | Printable guide that lives on the drive |
 | `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
+| `.github/` | The workflows, plus what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and PR templates, CODEOWNERS. `pr-gate.yml` closes outside pull requests that don't link an accepted issue |
 | `site/` | The website: `index.html`, plus `hero.js` for the animated figure at the top, no build step. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
 
 ## Verify
@@ -46,6 +47,14 @@ Visual changes to the page or the site come with screenshots.
 ## Workflow
 
 Pre-launch: commit straight to `main` in small increments, no PRs or review. Run the quick gate before each push and check CI after. PRs come back once the site is live.
+
+## Outside contributors
+
+If you can't push to this repo, you're working for an outside contributor: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) applies, and the Workflow section above doesn't.
+
+- Open a pull request only for an open issue labeled `accepted`, and link it with `Closes #N`. Others are closed automatically.
+- The person you work for reads every issue and pull request before it's posted. Don't post on your own.
+- Never add a `Signed-off-by` line. Only that person can sign off.
 
 ## From a cloud session
 
