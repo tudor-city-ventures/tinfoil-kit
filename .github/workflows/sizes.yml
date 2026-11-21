@@ -16,6 +16,8 @@ jobs:
       - run: ./kit plan --json > /tmp/plan.json
         env:
           GITHUB_TOKEN: ${{ github.token }}
+      - name: list sources that couldn't be resolved (they would fail in a real sync too)
+        run: python3 -c "import json; [print(k, '->', v['error']) for k, v in json.load(open('/tmp/plan.json')).items() if v['error']]"
       - run: python3 site/build_sources.py /tmp/plan.json
       - run: |
           git diff --quiet site/ && { echo "no change"; exit 0; }
