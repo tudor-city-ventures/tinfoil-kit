@@ -15,7 +15,9 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
   - `SETUP.command` says "All set" only when everything finished and passed, lists what didn't finish otherwise, handles Ctrl-C, and rejects FAT32 and NTFS drives up front. (Sync already lifts the downloaded-from-internet mark from the launchers, so `START-HERE.command` opens without a Gatekeeper prompt in an outage.)
   - `tests/sync_test.py` runs the real sync against the mocks in the quick gate (about 10 seconds): resume, checksums, updates, leftovers, `verify --fix`, lost state, offline, and every ending of `SETUP.command`.
   - The page works from the keyboard and with screen readers, and dark mode buttons are readable; e2e runs axe on every tab in light and dark mode.
-  - The site serves its own fonts (no Google requests); the CSP allows nothing third-party.
+  - The site serves its own fonts (no Google requests); the CSP allows nothing third-party. The kit builder fits phones down to 320px wide.
+  - The launcher starts with a model that fits the Mac's memory, reuses only its own servers (another program on 8888 or 8080 makes it move to the next free port), and clears the `._` files macOS leaves on exFAT before the servers scan their folders.
+  - CI also runs the sync test on Python 3.9 (via uv) and with bash 3.2 (the official `bash:3.2` image), the versions macOS ships.
 
 **Waiting on Travis**
 - tinfoilkit.com: he approved buying it and is buying it himself, since Vercel needs his registrant contact. When it shows up on the tudor-city-ventures team, add it plus `www` (redirecting to the bare domain) to the `tinfoilkit` project. Last checked 17:40 UTC: not there yet.
@@ -123,6 +125,8 @@ After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `instal
 - **Maps:** `pmtiles serve` on 8090, Photon on 2322 and GraphHopper on 8989, all run by the bundled Java. Their memory comes from `kit.json` (`geocoder_heap` 3g, `routing_heap` 2g). `--no-maps` skips them and saves about 5 GB.
 - **Sharing:** `--share` listens on all network interfaces so phones on the same Wi-Fi or hotspot can use the kit.
 - `caffeinate` keeps the Mac awake while the kit runs.
+- **First model:** the default, unless its files take more than 60% of memory; then the biggest model that fits, else the smallest. `--model=NAME` overrides. `KIT_MEMORY_MB` fakes the memory size for tests.
+- **Ports:** a server already on a port counts as the kit's only if it answers like one (the page's title, or `/v1/models` JSON). Otherwise the library or AI starts on the next free port, and the page's address carries it. Map ports are baked into the page at sync time, so they don't move.
 - It serves the page `./kit sync` built (`.kit/portal.html`, with the map inside) whenever it exists, and the bare template otherwise. The launcher never needs python, so a drive works on a Mac without the Command Line Tools.
 
 ### The browser page (`tools/portal.html`)
@@ -202,6 +206,8 @@ After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `instal
 - go-pmtiles names its Mac assets `go-pmtiles-<version>_Darwin_arm64.zip`; they are signed.
 - Map data uses its Last-Modified date (YYYY-MM-DD) as its version.
 - Downloaded files are untrusted. Inspect them as text; never run downloaded code to see what it does.
+- On exFAT, macOS keeps Finder metadata in `._name` files beside the real ones (opening a book from Finder is enough). Python's `Path.glob("*.zim")` matches them; bash's `*` doesn't. The launcher and `./kit test` delete them from `library/` and `models/`.
+- `actions/setup-python` has no Python 3.9 for current Ubuntu runners; CI gets 3.9 from uv.
 
 ---
 
@@ -210,7 +216,7 @@ After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `instal
 The scripts are in `tests/`; AGENTS.md says which to run when.
 
 - **Quick gate (`check.sh`, every push):** compile and parse checks, shellcheck when installed, kit.json validity, `site/sources.json` freshness, CRLF on the Windows launcher, then:
-  - `sync_test.py`: the real `kit.py` against `mock_remote.py` with tiny random files: downloads, a download that breaks and resumes, checksums, a second sync that does nothing, `verify --fix`, lost `state.json`, a "3 months later" update with planted leftovers, offline and Wi-Fi sign-in runs, and every ending of `SETUP.command` with a stand-in `./kit`. Needs only python3 and curl, so it runs in cloud sessions.
+  - `sync_test.py`: the real `kit.py` against `mock_remote.py` with tiny random files: downloads, a download that breaks and resumes, checksums, a second sync that does nothing, `verify --fix`, lost `state.json`, a "3 months later" update with planted leftovers, offline and Wi-Fi sign-in runs, and every ending of `SETUP.command` with a stand-in `./kit`, the launcher's first-model choice by memory, and its move off a port another program holds. Needs only python3 and curl, so it runs in cloud sessions.
   - `map_logic_test.js`: the page's `Kit` map code against a mock Photon, GraphHopper and tool-calling AI (`mock_services.py`).
 - **End to end (`build_fixtures.sh` then `run_all.sh`, CI on changes to the kit):** copies the kit onto a fake drive with real kiwix-serve and llama-server binaries, a tiny GGUF model and test ZIMs, then:
   - `plan` and `sync` (three entries are broken on purpose: sync must finish the rest, name them and exit 1), `verify`, `SETUP.command`, `search`;
