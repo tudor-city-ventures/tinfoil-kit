@@ -1,0 +1,160 @@
+{
+  "settings": {
+    "default_model": "Tiny",
+    "context_size": 4096,
+    "library_port": 18888,
+    "ai_port": 18080,
+    "keep_free_gb": 0.1,
+    "keep_previous_runtime_versions": 1,
+    "downloader": "curl",
+    "update_every_days": 75
+  },
+  "runtimes": [
+    {
+      "id": "llama.cpp-linux-x64",
+      "type": "github",
+      "repo": "ggml-org/llama.cpp",
+      "asset": "llama-*-bin-ubuntu-vulkan-x64.tar.gz",
+      "binary": "llama-server"
+    },
+    {
+      "id": "kiwix-tools-linux-x64",
+      "type": "kiwix_release",
+      "product": "kiwix-tools",
+      "pattern": "kiwix-tools_linux-x86_64-{version}.tar.gz",
+      "binary": "kiwix-serve"
+    },
+    {
+      "id": "java-linux-x64",
+      "type": "adoptium",
+      "feature_version": 21,
+      "os": "linux",
+      "arch": "x64",
+      "binary": "java",
+      "requires": "maps"
+    },
+    {
+      "id": "pmtiles-linux-x64",
+      "type": "github",
+      "repo": "protomaps/go-pmtiles",
+      "asset": "go-pmtiles*_Linux_x86_64.tar.gz",
+      "binary": "pmtiles",
+      "requires": "maps"
+    },
+    {
+      "id": "graphhopper",
+      "type": "maven",
+      "group": "com.graphhopper",
+      "artifact": "graphhopper-web",
+      "version_prefix": "11.",
+      "requires": "maps"
+    },
+    {
+      "id": "photon",
+      "type": "github",
+      "repo": "komoot/photon",
+      "asset": "photon-[0-9]*.jar",
+      "version_prefix": "1.",
+      "requires": "maps"
+    }
+  ],
+  "models": [
+    {
+      "id": "Tiny",
+      "type": "hf",
+      "repo": "test/Tiny-GGUF",
+      "files": [
+        "*-Q4_K_M.gguf"
+      ],
+      "priority": 1,
+      "note": "tiny test model"
+    },
+    {
+      "id": "Two",
+      "type": "hf",
+      "repo": "test/Two-GGUF",
+      "files": [
+        "*-Q4_K_M.gguf"
+      ],
+      "priority": 2
+    },
+    {
+      "id": "Ambiguous",
+      "type": "hf",
+      "repo": "test/Tiny-GGUF",
+      "files": [
+        "Tiny-*.gguf"
+      ]
+    },
+    {
+      "id": "Missing",
+      "type": "hf",
+      "repo": "test/Nope-GGUF",
+      "files": [
+        "*.gguf"
+      ]
+    }
+  ],
+  "library": [
+    {
+      "zim": "testmed_en_all_maxi",
+      "priority": 1,
+      "note": "medical"
+    },
+    {
+      "zim": "testsurvival_en",
+      "priority": 1,
+      "note": "survival"
+    },
+    {
+      "zim": "does_not_exist_en",
+      "priority": 3
+    },
+    {
+      "zim": "disabled_one_en",
+      "enabled": false
+    }
+  ],
+  "extras": [
+    {
+      "id": "Kiwix-macOS-app",
+      "type": "kiwix_release",
+      "product": "kiwix-macos",
+      "pattern": "kiwix-macos_{version}.dmg"
+    },
+    {
+      "id": "Guide",
+      "type": "url",
+      "url": "http://127.0.0.1:19000/files/guide.pdf",
+      "dest": "docs"
+    }
+  ],
+  "maps": {
+    "enabled": true,
+    "label": "US Northeast",
+    "home": {
+      "lat": 41.0,
+      "lon": -73.78,
+      "zoom": 10,
+      "label": "Westchester, NY"
+    },
+    "detail_bbox": [
+      -80.6,
+      38.8,
+      -66.8,
+      47.6
+    ],
+    "detail_maxzoom": 15,
+    "world_maxzoom": 7,
+    "routing_osm_pbf": "http://127.0.0.1:19000/geofabrik/us-northeast-latest.osm.pbf",
+    "routing_profiles": [
+      "car",
+      "foot"
+    ],
+    "geocoder_country": "us",
+    "units": "imperial",
+    "tiles_port": 18090,
+    "geocoder_port": 12322,
+    "routing_port": 18989
+  }
+}

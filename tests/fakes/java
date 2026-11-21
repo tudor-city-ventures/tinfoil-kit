@@ -1,0 +1,30 @@
+#!/bin/bash
+# fake `java` for tests: emulates GraphHopper import/server and Photon serve
+case "$1" in --version|-version) echo "openjdk 21.0.9 2026-10-21 (fake)"; exit 0;; esac
+JAR=""; PORT=""; args=("$@")
+for ((i=0;i<${#args[@]};i++)); do
+  a="${args[$i]}"
+  case "$a" in
+    -jar) JAR="${args[$((i+1))]}";;
+    -Ddw.server.application_connectors\[0\].port=*) PORT="${a#*=}";;
+  esac
+done
+CMD=""; for a in "$@"; do case "$a" in import|server|serve) CMD="$a";; esac; done
+last="${args[$((${#args[@]}-1))]}"
+case "$JAR" in
+  *graphhopper*)
+    if [ "$CMD" = import ]; then
+      loc=$(grep "graph.location" "$last" | awk '{print $2}'); mkdir -p "$loc"; echo "fake graph" > "$loc/properties"; echo "fake import done"; exit 0
+    fi
+    [ -z "$PORT" ] && PORT=$(grep -m1 "port:" "$last" | awk '{print $2}')
+    exec python3 /home/claude/test/mock_services.py graphhopper "$PORT";;
+  *photon*)
+    port=2322; dir=.
+    for ((i=0;i<${#args[@]};i++)); do
+      [ "${args[$i]}" = "-listen-port" ] && port="${args[$((i+1))]}"
+      [ "${args[$i]}" = "-data-dir" ] && dir="${args[$((i+1))]}"
+    done
+    [ -d "$dir/photon_data" ] || { echo "no photon_data in $dir"; exit 1; }
+    exec python3 /home/claude/test/mock_services.py photon "$port";;
+esac
+echo "fake java: unsupported $*"; exit 2

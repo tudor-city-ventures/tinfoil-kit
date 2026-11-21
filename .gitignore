@@ -1,0 +1,11 @@
+# Created by ./kit sync on a drive
+.kit/
+logs/
+bin/
+models/
+library/
+maps/
+installers/
+INVENTORY.md
+__pycache__/
+.DS_Store

@@ -1,0 +1,235 @@
+{
+  "_readme": [
+    "This file is the list of everything the kit keeps on the drive.",
+    "Edit it, then run:  ./kit plan   (preview)   and   ./kit sync   (download/update).",
+    "Set \"enabled\": false to skip an item. Find more library content with:  ./kit search <words>",
+    "Sizes in notes are approximate (late 2026)."
+  ],
+
+  "settings": {
+    "default_model": "Inkling-2-Mini",
+    "context_size": 16384,
+    "library_port": 8888,
+    "ai_port": 8080,
+    "keep_free_gb": 25,
+    "keep_previous_runtime_versions": 1,
+    "llama_cpp_channel": "nightly",
+    "downloader": "auto",
+    "update_every_days": 75
+  },
+
+  "runtimes": [
+    {
+      "id": "llama.cpp-macos-arm64",
+      "type": "github",
+      "repo": "ggml-org/llama.cpp",
+      "asset": "llama-*-bin-macos-arm64.tar.gz",
+      "binary": "llama-server",
+      "note": "AI engine for Apple Silicon Macs (runs every model below, includes the chat web UI)"
+    },
+    {
+      "id": "kiwix-tools-macos-arm64",
+      "type": "kiwix_release",
+      "product": "kiwix-tools",
+      "pattern": "kiwix-tools_macos-arm64-{version}.tar.gz",
+      "binary": "kiwix-serve",
+      "note": "Library server for Apple Silicon Macs (serves every .zim file in a browser, with search)"
+    },
+    {
+      "id": "java-macos-arm64",
+      "type": "adoptium",
+      "feature_version": 21,
+      "os": "mac",
+      "arch": "aarch64",
+      "binary": "java",
+      "requires": "maps",
+      "note": "Java runtime for the address search and directions servers"
+    },
+    {
+      "id": "pmtiles-macos-arm64",
+      "type": "github",
+      "repo": "protomaps/go-pmtiles",
+      "asset": "go-pmtiles-*_Darwin_arm64.zip",
+      "binary": "pmtiles",
+      "requires": "maps",
+      "note": "Map tile server, also cuts the map region out of the world map"
+    },
+    {
+      "id": "graphhopper",
+      "type": "maven",
+      "group": "com.graphhopper",
+      "artifact": "graphhopper-web",
+      "version_prefix": "11.",
+      "requires": "maps",
+      "note": "Directions server (GraphHopper). Pinned to 11.x so its settings keep working"
+    },
+    {
+      "id": "photon",
+      "type": "github",
+      "repo": "komoot/photon",
+      "asset": "photon-[0-9]*.jar",
+      "version_prefix": "1.",
+      "requires": "maps",
+      "note": "Address search server (Photon). The release is matched to the address database version automatically"
+    },
+    {
+      "id": "llama.cpp-windows-x64",
+      "type": "github",
+      "repo": "ggml-org/llama.cpp",
+      "asset": "llama-*-bin-win-vulkan-x64.zip",
+      "binary": "llama-server.exe",
+      "note": "Fallback: AI engine for a Windows PC if the Mac dies (drive must be exFAT to be readable)"
+    },
+    {
+      "id": "kiwix-tools-windows-x64",
+      "type": "kiwix_release",
+      "product": "kiwix-tools",
+      "pattern": "kiwix-tools_win-x86_64-{version}.zip",
+      "binary": "kiwix-serve.exe",
+      "note": "Fallback: library server for a Windows PC"
+    },
+    {
+      "id": "llama.cpp-linux-x64",
+      "type": "github",
+      "repo": "ggml-org/llama.cpp",
+      "asset": "llama-*-bin-ubuntu-vulkan-x64.tar.gz",
+      "binary": "llama-server",
+      "note": "Fallback: AI engine for a Linux PC"
+    },
+    {
+      "id": "kiwix-tools-linux-x64",
+      "type": "kiwix_release",
+      "product": "kiwix-tools",
+      "pattern": "kiwix-tools_linux-x86_64-{version}.tar.gz",
+      "binary": "kiwix-serve",
+      "note": "Fallback: library server for a Linux PC"
+    }
+  ],
+
+  "models": [
+    {
+      "id": "Inkling-2-Mini",
+      "type": "hf",
+      "repo": "ggml-org/Inkling-2-Mini-GGUF",
+      "files": ["*-IQ4_NL.gguf", "mmproj-*-Q8_0.gguf"],
+      "priority": 1,
+      "note": "Default. Thinking Machines, Nov 2026. 26B params but only ~3.4B active per token, so fast. Reads photos. ~18 GB"
+    },
+    {
+      "id": "Qwen3.8-27B",
+      "type": "hf",
+      "repo": "unsloth/Qwen3.8-27B-GGUF",
+      "files": ["*-UD-Q4_K_M.gguf", "mmproj-F16.gguf"],
+      "priority": 2,
+      "note": "Second opinion: strong dense model from a different lab. Slower. Reads photos. ~17.5 GB"
+    },
+    {
+      "id": "Gemma-4-26B-A4B",
+      "type": "hf",
+      "repo": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
+      "files": ["*-UD-Q4_K_XL.gguf", "mmproj-F16.gguf", "mtp-*.gguf"],
+      "priority": 2,
+      "note": "Third opinion (Google). Fast mixture-of-experts. Reads photos. ~15.7 GB"
+    },
+    {
+      "id": "Gemma-4-E4B",
+      "type": "hf",
+      "repo": "unsloth/gemma-4-E4B-it-qat-GGUF",
+      "files": ["*-UD-Q4_K_XL.gguf", "mmproj-F16.gguf", "mtp-*.gguf"],
+      "priority": 1,
+      "note": "Battery saver: small and light, also runs on an 8-16 GB laptop. ~5.3 GB"
+    }
+  ],
+
+  "maps": {
+    "enabled": true,
+    "label": "US Northeast",
+    "home": {"lat": 40.7128, "lon": -74.006, "zoom": 10, "label": "New York, NY"},
+    "detail_bbox": [-80.6, 38.8, -66.8, 47.6],
+    "detail_maxzoom": 15,
+    "world_maxzoom": 7,
+    "routing_osm_pbf": "https://download.geofabrik.de/north-america/us-northeast-latest.osm.pbf",
+    "routing_profiles": ["car", "foot"],
+    "geocoder_country": "us",
+    "units": "imperial",
+    "tiles_port": 8090,
+    "geocoder_port": 2322,
+    "routing_port": 8989,
+    "_notes": [
+      "detail_bbox is [west, south, east, north] in degrees: streets are shown inside it, a world overview elsewhere.",
+      "routing_osm_pbf: road data for directions, from download.geofabrik.de (pick a region that covers your trips).",
+      "geocoder_country: two-letter country code for the address search database (US: about 10-40 GB; if no US-only database is published, the North America one is used).",
+      "Set home to where you live: it's where 'nearest' searches and directions start by default.",
+      "Memory for the map servers can be set with geocoder_heap (default 3g) and routing_heap (2g); building the directions network during sync uses routing_import_heap (12g)."
+    ]
+  },
+
+  "library": [
+    {"zim": "mdwiki_en_all_maxi",            "priority": 1, "note": "WikiMed: medical encyclopedia (~2 GB)"},
+    {"zim": "wikem_en_all_maxi",             "priority": 1, "note": "WikEM: emergency medicine (small)"},
+    {"zim": "zimgit-medicine_en",            "priority": 1, "note": "Medical library: field medicine books (small)"},
+    {"zim": "fas-military-medicine_en",      "priority": 1, "note": "Military medicine manuals (small)"},
+    {"zim": "zimgit-post-disaster_en",       "priority": 1, "note": "Post-disaster resources (~0.6 GB)"},
+    {"zim": "zimgit-water_en",               "priority": 1, "note": "Water treatment (small)"},
+    {"zim": "zimgit-food-preparation_en",    "priority": 1, "note": "Food for preppers (small)"},
+    {"zim": "zimgit-knots_en",               "priority": 1, "note": "Knots (small)"},
+    {"zim": "www.ready.gov_en",              "priority": 1, "note": "Ready.gov disaster preparedness (~4.6 GB)"},
+    {"zim": "who.int_en_all",                "priority": 1, "note": "World Health Organization (~0.5 GB)"},
+    {"zim": "ifixit_en_all",                 "priority": 1, "note": "iFixit repair guides (a few GB)"},
+    {"zim": "appropedia_en_all_maxi",        "priority": 1, "note": "Appropedia: off-grid / appropriate technology (~0.6 GB)"},
+    {"zim": "energypedia_en_all_nopic",      "priority": 2, "note": "Energypedia: solar, power, energy (~0.7 GB)"},
+    {"zim": "armypubs_en_all",               "priority": 2, "note": "US Army publications incl. field manuals (~7.7 GB)"},
+
+    {"zim": "wikipedia_en_all_maxi",         "priority": 2, "note": "All of English Wikipedia with images (~115 GB)"},
+    {"zim": "wiktionary_en_all_nopic",       "priority": 2, "note": "Dictionary (~8 GB)"},
+    {"zim": "wikibooks_en_all_maxi",         "priority": 2, "note": "Wikibooks: open textbooks and how-tos (~5 GB)"},
+    {"zim": "wikivoyage_en_all_maxi",        "priority": 2, "note": "Travel guide (~1 GB)"},
+    {"zim": "wikiversity_en_all_maxi",       "priority": 3, "note": "Wikiversity courses (~2 GB)"},
+
+    {"zim": "libretexts.org_en_med",         "priority": 2, "note": "LibreTexts medicine textbooks (~1 GB)"},
+    {"zim": "libretexts.org_en_bio",         "priority": 3, "note": "LibreTexts biology (~2 GB)"},
+    {"zim": "libretexts.org_en_chem",        "priority": 3, "note": "LibreTexts chemistry (~2 GB)"},
+    {"zim": "libretexts.org_en_eng",         "priority": 3, "note": "LibreTexts engineering (~0.7 GB)"},
+    {"zim": "libretexts.org_en_phys",        "priority": 3, "note": "LibreTexts physics (~0.5 GB)"},
+    {"zim": "libretexts.org_en_geo",         "priority": 3, "note": "LibreTexts earth science (~1 GB)"},
+    {"zim": "libretexts.org_en_math",        "priority": 3, "note": "LibreTexts math (~0.8 GB)"},
+
+    {"zim": "diy.stackexchange.com_en_all",          "priority": 2, "note": "Home improvement Q&A"},
+    {"zim": "gardening.stackexchange.com_en_all",    "priority": 2, "note": "Gardening Q&A"},
+    {"zim": "cooking.stackexchange.com_en_all",      "priority": 2, "note": "Cooking Q&A"},
+    {"zim": "outdoors.stackexchange.com_en_all",     "priority": 2, "note": "Outdoors / wilderness Q&A"},
+    {"zim": "electronics.stackexchange.com_en_all",  "priority": 3, "note": "Electronics Q&A (~4 GB)"},
+    {"zim": "ham.stackexchange.com_en_all",          "priority": 2, "note": "Amateur radio Q&A"},
+    {"zim": "mechanics.stackexchange.com_en_all",    "priority": 3, "note": "Car repair Q&A"},
+    {"zim": "bicycles.stackexchange.com_en_all",     "priority": 3, "note": "Bicycle repair Q&A"},
+    {"zim": "sustainability.stackexchange.com_en_all", "priority": 3, "note": "Sustainable living Q&A"},
+    {"zim": "medicalsciences.stackexchange.com_en_all", "priority": 3, "note": "Medical sciences Q&A"},
+
+    {"zim": "gutenberg_en_lcc-s",            "priority": 3, "note": "Project Gutenberg: agriculture books (~4 GB)"},
+    {"zim": "gutenberg_en_lcc-t",            "priority": 3, "note": "Project Gutenberg: technology books (~12 GB)"},
+    {"zim": "gutenberg_en_lcc-r",            "priority": 3, "note": "Project Gutenberg: medicine books"},
+    {"zim": "gutenberg_en_lcc-q",            "priority": 3, "note": "Project Gutenberg: science books (~16 GB)"},
+
+    {"zim": "survivorlibrary.com_en_all",    "priority": 3, "enabled": false, "note": "Survivor Library: old how-to books, mostly PDFs (~232 GB)"},
+    {"zim": "khanacademy_en_all",            "priority": 3, "enabled": false, "note": "Khan Academy videos for school-age kids (~168 GB)"},
+    {"zim": "gutenberg_en_all",              "priority": 3, "enabled": false, "note": "All English Project Gutenberg (~206 GB; replaces the lcc-* subsets)"}
+  ],
+
+  "extras": [
+    {
+      "id": "Kiwix-macOS-app",
+      "type": "kiwix_release",
+      "product": "kiwix-macos",
+      "pattern": "kiwix-macos_{version}.dmg",
+      "note": "Kiwix desktop app: opens .zim files directly, a backup if the library server won't start"
+    },
+    {
+      "id": "Ollama-macOS",
+      "type": "url",
+      "url": "https://ollama.com/download/Ollama.dmg",
+      "filename": "Ollama.dmg",
+      "enabled": false,
+      "note": "Optional alternative AI app (not needed: the kit uses llama.cpp)"
+    }
+  ]
+}

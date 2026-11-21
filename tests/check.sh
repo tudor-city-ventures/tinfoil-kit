@@ -1,0 +1,47 @@
+#!/bin/bash
+# Quick gate: run before calling any change done. Needs python3 and node; uses shellcheck if installed.
+cd "$(dirname "$0")/.." || exit 1
+fail=0
+step() { echo "== $*"; }
+run() { if "$@"; then :; else echo "FAIL: $*"; fail=1; fi; }
+
+step "python compiles"
+run python3 -m py_compile tools/kit.py tests/*.py
+
+step "bash parses"
+SH="kit START-HERE.command tools/launch.sh tests/check.sh tests/run_all.sh tests/fakes/java tests/fakes/pmtiles"
+for f in $SH; do run bash -n "$f"; done
+
+step "shellcheck"
+if command -v shellcheck >/dev/null; then
+  run shellcheck -S error $SH
+else
+  echo "skipped (not installed)"
+fi
+
+step "kit.json is valid"
+run python3 -c "import json,sys; [json.load(open(f)) for f in sys.argv[1:]]" kit.json tests/drive_kit.json tests/drive_kit_maps.json
+
+step "Windows launcher keeps CRLF"
+run python3 -c "import sys; d=open('START-HERE-Windows.bat','rb').read(); sys.exit(d.count(b'\n') != d.count(b'\r\n'))"
+
+step "page script parses"
+run node -e '
+const h = require("fs").readFileSync("tools/portal.html", "utf8");
+const m = { exports: {} };
+new Function("module", "exports", h.split("<script>")[1].split("</script>")[0])(m, m.exports);
+if (typeof m.exports.isMapQuestion !== "function") throw new Error("Kit not exported");'
+
+step "map logic against mocks"
+pids=""
+start() { python3 tests/mock_services.py "$@" >/dev/null 2>&1 & pids="$pids $!"; }
+start photon 12322; MOCK_PHOTON_OLD=1 start photon 12323; start graphhopper 18989; start llama 18081
+trap 'kill $pids 2>/dev/null' EXIT
+sleep 1.5
+out=$(timeout 120 node tests/map_logic_test.js tools/portal.html); rc=$?
+echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+[ $rc -eq 0 ] || fail=1
+
+echo
+[ $fail -eq 0 ] && echo "QUICK GATE PASSED" || echo "QUICK GATE FAILED"
+exit $fail

@@ -1,0 +1,8 @@
+#!/bin/bash
+# Tinfoil Kit command line:  ./kit plan | sync | verify | status | search WORDS | test
+DIR="$(cd "$(dirname "$0")" && pwd)"
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "This needs python3. On a Mac run:  xcode-select --install   (then try again)"
+  exit 1
+fi
+exec python3 "$DIR/tools/kit.py" --root "$DIR" "$@"
