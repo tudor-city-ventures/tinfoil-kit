@@ -6,11 +6,15 @@ on:
       words:
         description: "Words to search for, comma-separated for several searches"
         required: true
+permissions:
+  contents: read
 jobs:
   search:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - env:
           WORDS: ${{ inputs.words }}
         run: |

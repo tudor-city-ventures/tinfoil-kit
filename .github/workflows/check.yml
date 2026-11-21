@@ -3,11 +3,15 @@ on:
   pull_request:
   push:
     branches: [main]
+permissions:
+  contents: read
 jobs:
   quick-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -16,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -25,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       # macOS still ships bash 3.2: run the sync test, which drives SETUP.command and the launcher, with it.
       - run: >-
           docker run --rm -v "$PWD:/kit" -w /kit bash:3.2
@@ -33,6 +41,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
