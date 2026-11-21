@@ -176,6 +176,14 @@ try:
     check("status, including the switched-off book's unfinished download",
           rc == 0 and "Last complete sync" in out and "library/disabled_one_en_2026-01.zim.partial" in out, out)
 
+    junk = [drive / "library" / "._junk.zim", drive / "models" / "Tiny" / "._Tiny-Q4_K_M.gguf"]
+    for j in junk:
+        j.write_bytes(b"\0\5\26\7")   # macOS's metadata files on exFAT start like this
+    books = len(list((drive / "library").glob("[!.]*.zim")))
+    rc, out = kit("test")
+    check("test: clears macOS's ._ files before starting the servers",
+          not any(j.exists() for j in junk) and f"library files present: {books} .zim files" in out, out)
+
     nowhere = "http://127.0.0.1:9"     # nothing listens there
     off = {**env, "KIT_HF": nowhere, "KIT_KIWIX_CATALOG": nowhere + "/catalog"}
     (drive / ".kit/cache/kiwix-catalog.xml").unlink()

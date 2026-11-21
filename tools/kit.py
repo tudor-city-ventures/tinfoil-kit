@@ -1116,6 +1116,14 @@ def install_archive(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
 
 # ----------------------------------------------------------------------------- maps installers
 
+def drop_finder_files(root: Path) -> None:
+    """macOS keeps Finder metadata for files on exFAT drives in "._name" files beside them. The servers
+    scan library/ and models/ and could take ._name.zim or ._name.gguf for a book or a model."""
+    for p in [*(root / "library").glob("._*"), *(root / "models").glob("**/._*")]:
+        if p.is_file():
+            p.unlink()
+
+
 def dir_bytes(path: Path) -> int:
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file()) if path.is_dir() else 0
 
@@ -1786,6 +1794,7 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
         portal = root / "tools" / "portal.html"
     kiwix = runtime_binary(root, "kiwix-tools", "kiwix-serve")
     llama = runtime_binary(root, "llama.cpp", "llama-server")
+    drop_finder_files(root)
     zims = sorted((root / "library").glob("*.zim"))
     models = sorted(p for p in (root / "models").glob("*") if p.is_dir() and list(p.glob("*.gguf")))
     log(f"Platform: {platform_tag()}")

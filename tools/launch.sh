@@ -76,6 +76,9 @@ up() { curl -s -o /dev/null --max-time 2 "$1"; }
 
 KIWIX="${KIT_KIWIX_TOOLS_BIN:-$(pick_bin kiwix-tools kiwix-serve)}"
 LLAMA="${KIT_LLAMACPP_BIN:-$(pick_bin llama.cpp llama-server)}"
+# macOS keeps Finder metadata for files on exFAT drives in "._name" files beside them. The servers
+# scan library/ and models/ and could take ._name.zim or ._name.gguf for a book or a model.
+find "$KIT/library" "$KIT/models" -name '._*' -type f -delete 2>/dev/null
 shopt -s nullglob
 ZIMS=("$KIT"/library/*.zim)
 MODELS=("$KIT"/models/*/)

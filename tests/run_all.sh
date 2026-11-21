@@ -46,11 +46,17 @@ c['models'] = [m for m in c['models'] if m['id'] not in ('Ambiguous', 'Missing')
 c['library'] = [z for z in c['library'] if z['zim'] != 'does_not_exist_en']
 json.dump(c, open('kit.json', 'w'), indent=2)"
 step "verify";  ./kit verify | tail -1
+# macOS leaves "._name" metadata files beside files on exFAT drives; the servers must never see them.
+finder_files() { for m in models/*/; do printf junk > "${m}._junk.gguf"; done; printf junk > library/._junk.zim; }
+finder_files_left() { for f in library/._* models/*/._*; do [ -e "$f" ] && { echo "FAIL: $1 left $f"; return; }; done; }
+finder_files
 # SETUP.command = plan, sync (a no-op now), test. Answers: start download yes, open the kit no, close.
 step "setup (sync again, then test)"; printf 'y\nn\n\n' | timeout 600 bash SETUP.command > "$L/setup.log" 2>&1; echo "exit $?"
 grep -E "PASS|FAIL|up to date|All set" "$L/setup.log" | tail -12
+finder_files_left "./kit test"; finder_files
 step "search";  ./kit search test | head -2
 step "launcher"; (timeout 900 bash START-HERE.command --no-browser > "$L/launch.out" 2>&1 &); sleep 12; grep -E "Library:|AI:|Maps" "$L/launch.out"
+finder_files_left "the launcher"
 (python3 "$TESTS/mock_services.py" llama 18081 > "$L/m_llama.log" 2>&1 &)
 (MOCK_PHOTON_OLD=1 python3 "$TESTS/mock_services.py" photon 12323 > "$L/m_photon_old.log" 2>&1 &)
 sleep 1
