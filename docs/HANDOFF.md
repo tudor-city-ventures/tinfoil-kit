@@ -25,6 +25,8 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 - A real `SETUP.command` run on his Mac. This is the only test against real downloads and Apple Silicon.
 - Going public: turn off Vercel Authentication for production and make the repo public. Ask first.
 
+**Decided for now (Travis, 2026-11-21):** llama-server is the only AI runtime (no Ollama or LM Studio), Ask stays one library search then an answer (only map questions use tools), and "AI chat" stays llama-server's own page.
+
 **Ideas not started**
 - The kit can't update its own code. `./kit sync` refreshes content and programs, but a drive set up today keeps today's `tools/` and `kit.json` forever. When a source is renamed or dropped upstream (it happened to four entries in November), that drive's sync reports it as a problem every time until someone edits kit.json by hand. Options: a `./kit update` that fetches the latest release of this repo and keeps the user's kit.json choices, or publishing kit.json entries separately. Needs Travis's call, since it means the drive trusts code from GitHub.
 - Real product screenshots on the site. CI's e2e screenshots use test data (a tiny model, mock places), so they would need real data from Travis's Mac.
