@@ -24,10 +24,15 @@ rm -rf "$R" "$TMP"
 mkdir -p "$DL" "$TMP" "$R"/{zim,gh,gh2,hf/tiny,hf/tiny_v2,hf/two,npm,adoptium,files,geofabrik,release/kiwix-tools,release/kiwix-macos,photon/north-america/usa,maven/com/graphhopper/graphhopper-web/11.1}
 
 echo "== llama.cpp (real Linux CPU build, repacked as two fake nightly builds)"
-url=$(curl -fsSL "${GH_AUTH[@]}" https://api.github.com/repos/ggml-org/llama.cpp/releases/latest |
+url=$(curl -fsSL "${GH_AUTH[@]}" "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=15" |
       python3 -c '
 import json, re, sys
-names = {a["name"]: a["browser_download_url"] for a in json.load(sys.stdin)["assets"]}
+# "latest" is a stub release; the builds are on the nightly prereleases, newest first
+names = {}
+for rel in json.load(sys.stdin):
+    names = {a["name"]: a["browser_download_url"] for a in rel["assets"]}
+    if any("ubuntu" in n for n in names):
+        break
 # the plain CPU build for x86_64 Linux; skip GPU and other-arch variants
 ok = [n for n in names if re.search(r"bin-ubuntu-x64", n) and n.endswith((".zip", ".tar.gz"))]
 ok = ok or [n for n in names if "ubuntu" in n and "x64" in n and not re.search(r"vulkan|cuda|rocm|sycl|hip|openvino", n)]
