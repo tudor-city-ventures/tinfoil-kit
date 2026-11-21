@@ -427,7 +427,7 @@ The policy and its reasons are in `.github/CONTRIBUTING.md`. In the repo's Setti
 
 ## 9. How we got here
 
-1. Travis asked about local LLMs for "end of the world" prep and whether to get a rugged drive. He settled on a 2 TB SSD and his 32 GB Apple Silicon Mac.
+1. Travis asked about local LLMs for "end of the world" prep and whether to get a rugged drive. He settled on an external SSD and his 32 GB Apple Silicon Mac.
 2. He asked for a well-thought-out process that's easy to refresh every 2–3 months. That became OfflineKit v1: the sync engine, launcher, page and library, with the full test suite.
 3. He asked about Inkling 2 Mini. It became the default model, and the kit switched to llama.cpp nightly builds.
 4. He asked for maps "just like Google Maps" that work with the AI. That became v2: tiles, address search, directions, nearest places and map tools for the AI, tested with mocks and real MapLibre in headless Chrome.

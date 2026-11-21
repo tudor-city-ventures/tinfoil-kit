@@ -9,7 +9,7 @@ Repo: https://github.com/tudor-city-ventures/tinfoilkit
 ## 1. Check with the person first
 
 - Mac: Apple Silicon (`uname -m` prints arm64). Memory: `sysctl -n hw.memsize`. 32 GB runs the default model; with less, the kit starts a smaller one.
-- Drive: an external SSD, 2 TB recommended. The default kit is about 300 GB.
+- Drive: an external SSD with room for the kit. The default kit is about 300 GB.
 - Format: exFAT lets a Windows or Linux PC read the drive too; APFS is fine if it will only meet Macs. FAT32 and NTFS don't work. Formatting erases the drive: confirm which disk it is and get the person's explicit yes first.
 - Command Line Tools: `xcode-select -p`. Sync needs python3 3.9+ and curl; if they're missing, run `xcode-select --install`.
 - Time: the first sync downloads for a few hours. Keep the Mac plugged in. It resumes if interrupted.

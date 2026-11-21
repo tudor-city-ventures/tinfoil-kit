@@ -15,7 +15,7 @@ Plug in the drive, double-click `START-HERE.command`, and a browser page opens w
 ## Requirements
 
 - An Apple Silicon Mac. Built around 32 GB of memory; smaller Macs start with the small model.
-- A 2 TB external SSD. The first sync downloads about 300 GB.
+- An external SSD with room for the kit. The first sync downloads about 300 GB.
 
 Windows and Linux work as a fallback (library and AI, no map). A nightly test sets the kit up on a Mac and starts it on both.
 

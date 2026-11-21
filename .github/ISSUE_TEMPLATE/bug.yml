@@ -19,7 +19,7 @@ body:
     id: mac
     attributes:
       label: Mac and drive
-      placeholder: MacBook Air M2, 16 GB, macOS 26.1, 2 TB SSD formatted exFAT
+      placeholder: MacBook Air M2, 16 GB, macOS 26.1, external SSD formatted exFAT
     validations:
       required: true
   - type: checkboxes

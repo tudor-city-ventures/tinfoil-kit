@@ -205,7 +205,7 @@
     ctx.lineWidth = 1; ctx.globalAlpha = .45; line(d.x + 10, d.y + 26, d.x + d.w - 10, d.y + 26); ctx.globalAlpha = 1;
     var gb = t < T_PACK ? 0 : resetting ? (drain < 1 ? TOTAL : 0) : t > T_OUT ? TOTAL : Math.round(TOTAL * done / N);
     if (L.tall) text('TINFOIL', d.x + 12, d.y + 17, 9.5, INK, 600);
-    else { text('TINFOIL KIT', d.x + 14, d.y + 17, 10, INK, 600); text(gb + ' GB / 2 TB', d.x + d.w - 30, d.y + 17, 10, INK, 600, 'right'); }
+    else { text('TINFOIL KIT', d.x + 14, d.y + 17, 10, INK, 600); text(gb + ' GB', d.x + d.w - 30, d.y + 17, 10, INK, 600, 'right'); }
     var led = t > T_PACK && !resetting ? (t > T_SAY && Math.sin(t * 21) < -.3 ? .3 : 1) : .2;
     ctx.globalAlpha = led; ctx.fillStyle = led > .5 ? SIG : INK; ctx.beginPath(); ctx.arc(d.x + d.w - 16, d.y + 13.5, 3.3, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
     if (t < T_PACK + 1) {                 // faint empty slots
@@ -214,7 +214,7 @@
       dots(gl, .7); ctx.globalAlpha = 1;
     }
     ctx.fillStyle = INK; ctx.globalAlpha = 1 - drain; dots(landed, .95); ctx.globalAlpha = 1;
-    if (L.tall) text(gb + ' GB / 2 TB', d.x + d.w / 2, d.y + d.h + 24, 11, INK, 600, 'center');
+    if (L.tall) text(gb + ' GB', d.x + d.w / 2, d.y + d.h + 24, 11, INK, 600, 'center');
 
     // offline: light each part of the drive in turn and label it
     var say = t > T_SAY && !resetting ? t - T_SAY : resetting && drain < 1 ? 99 : -1, cum = 0, fade = 1 - drain;
