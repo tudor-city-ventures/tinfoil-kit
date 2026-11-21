@@ -19,10 +19,6 @@ echo "This downloads the AI models, library and maps onto this drive, then check
 echo "The first time takes a few hours and about 300 GB. Later runs only download what changed."
 
 if [ "$(uname -s)" = "Darwin" ]; then
-  # A kit downloaded as a ZIP is marked "from the internet", and macOS blocks marked scripts until they're
-  # approved in System Settings. This run was approved already: clear the mark so START-HERE opens with a
-  # plain double-click in an outage.
-  xattr -d com.apple.quarantine START-HERE.command SETUP.command 2>/dev/null
   [ "$(uname -m)" = "arm64" ] || say "Note: this Mac doesn't have Apple Silicon (M1 or newer). The kit is built for those and may not run here."
   case "$KIT" in
     /Volumes/*)

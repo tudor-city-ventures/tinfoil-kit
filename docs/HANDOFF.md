@@ -12,7 +12,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 - Launch-day checklist: see section 7.
 - Second thread (robustness, tests, accessibility):
   - Sync tells the truth: it exits 1 when anything failed or couldn't be looked up, stops with one message when offline or behind a Wi-Fi sign-in page, and never resumes a half-download of an older version into a new file. Leftover half-downloads of old versions are cleaned up.
-  - `SETUP.command` says "All set" only when everything finished and passed, lists what didn't finish otherwise, handles Ctrl-C, rejects FAT32 and NTFS drives up front, and clears the downloaded-from-internet mark on the launchers so `START-HERE.command` opens without a Gatekeeper prompt in an outage.
+  - `SETUP.command` says "All set" only when everything finished and passed, lists what didn't finish otherwise, handles Ctrl-C, and rejects FAT32 and NTFS drives up front. (Sync already lifts the downloaded-from-internet mark from the launchers, so `START-HERE.command` opens without a Gatekeeper prompt in an outage.)
   - `tests/sync_test.py` runs the real sync against the mocks in the quick gate (about 10 seconds): resume, checksums, updates, leftovers, `verify --fix`, lost state, offline, and every ending of `SETUP.command`.
   - The page works from the keyboard and with screen readers, and dark mode buttons are readable; e2e runs axe on every tab in light and dark mode.
   - The site serves its own fonts (no Google requests); the CSP allows nothing third-party.

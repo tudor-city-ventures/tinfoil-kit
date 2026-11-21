@@ -1411,8 +1411,9 @@ def extract_archive(archive: Path, name: str, target: Path) -> None:
 def prepare_drive(root: Path) -> None:
     if sys.platform != "darwin":
         return
-    # files downloaded through a browser are quarantined; lift that from the kit's own scripts
-    subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(root / "START-HERE.command"),
+    # A kit downloaded as a ZIP is marked "from the internet", and macOS won't open marked scripts until
+    # they're approved in System Settings. Lift the mark so START-HERE opens with a plain double-click in an outage.
+    subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(root / "START-HERE.command"), str(root / "SETUP.command"),
                     str(root / "kit"), str(root / "tools")], capture_output=True)
     parts = root.resolve().parts
     if len(parts) >= 3 and parts[1] == "Volumes":   # keep Spotlight from indexing 500 GB of archives
