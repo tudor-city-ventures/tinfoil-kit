@@ -5,6 +5,7 @@ Needs only python3 and curl, so it runs in the quick gate and in cloud sessions.
 usage: python3 tests/sync_test.py
 """
 import hashlib
+import http.server
 import json
 import os
 import shutil
@@ -12,6 +13,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -229,12 +231,26 @@ esac""")
     rc, out, calls = run_setup(plan=1)
     check("SETUP: offline: stops before asking to download", rc == 1 and calls == ["plan"] and "Start downloading" not in out, out)
 
-    # The launcher's first model, by the computer's memory. The mock answers on both server ports, so the
-    # launcher takes them as already running and only picks the model and prints the address.
+    # The launcher's first model, by the computer's memory. A stand-in for a running kit answers on both
+    # server ports, so the launcher reuses them and only picks the model and prints the address.
+    class RunningKit(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = b'{"data": []}' if self.path.startswith("/v1/models") else b"<title>Tinfoil Kit</title>"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    running = http.server.ThreadingHTTPServer(("127.0.0.1", 0), RunningKit)
+    threading.Thread(target=running.serve_forever, daemon=True).start()
+    rport = running.server_address[1]
     lk = work / "launch"
     (lk / "tools").mkdir(parents=True)
     shutil.copy(TESTS.parent / "tools" / "launch.sh", lk / "tools")
-    (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": port, "ai_port": port}}, indent=1))
+    (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": rport, "ai_port": rport}}))
     for name, gb in (("Big", 18), ("Mid", 12), ("Small", 5)):
         (lk / "models" / name).mkdir(parents=True)
         with open(lk / "models" / name / f"{name}-Q4_K_M.gguf", "wb") as f:
@@ -251,6 +267,31 @@ esac""")
         check(f"launcher: {mem_gb} GB of memory starts {want}", got == want and (want == "Big" or f"{mem_gb} GB of memory" in out), out)
     got, out = launch(16, "--model=Big")
     check("launcher: --model wins over memory", got == "Big", out)
+
+    # Another program on the library's port (the mock internet, here): the library starts on the next one.
+    fake = work / "fake-kiwix-serve"
+    fake.write_text(f"""#!{sys.executable}
+import http.server, sys, threading
+if "--port" not in sys.argv:
+    sys.exit(0)
+class Page(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.end_headers(); self.wfile.write(b"<title>Tinfoil Kit</title>")
+    def log_message(self, *a):
+        pass
+server = http.server.HTTPServer(("127.0.0.1", int(sys.argv[sys.argv.index("--port") + 1])), Page)
+threading.Timer(3, server.shutdown).start()
+server.serve_forever()
+""")
+    fake.chmod(0o755)
+    (lk / "library").mkdir()
+    (lk / "library" / "book.zim").touch()
+    (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": port, "ai_port": rport}}))
+    p = subprocess.run(["bash", str(lk / "tools" / "launch.sh"), "--no-browser"], capture_output=True, text=True, timeout=60,
+                       stdin=subprocess.DEVNULL, env={**os.environ, "KIT_KIWIX_TOOLS_BIN": str(fake)})
+    out = p.stdout + p.stderr
+    check("launcher: another program on the library's port: it moves to the next free one",
+          f"using port {port}, so the library uses" in out and "Library:  ready" in out and f":{port}/" not in out, out)
 finally:
     mock.terminate()
     shutil.rmtree(work, ignore_errors=True)

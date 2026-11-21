@@ -73,6 +73,12 @@ pick_bin() { # product binary
 }
 
 up() { curl -s -o /dev/null --max-time 2 "$1"; }
+# Is anything listening on this port, ours or not? (curl exits 7 when nothing is.)
+taken() { curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$1/"; [ $? -ne 7 ]; }
+our_library() { curl -sL --max-time 2 "http://127.0.0.1:$1/" 2>/dev/null | grep -q "Tinfoil Kit"; }
+our_ai() { curl -s --max-time 2 "http://127.0.0.1:$1/v1/models" 2>/dev/null | grep -q '"data"'; }
+# Another program can hold a port (Jupyter takes 8888, many developer tools 8080): use the next free one.
+free_port() { local p="$1"; while taken "$p" && [ "$p" -lt $(( $1 + 9 )) ]; do p=$(( p + 1 )); done; printf '%s' "$p"; }
 
 KIWIX="${KIT_KIWIX_TOOLS_BIN:-$(pick_bin kiwix-tools kiwix-serve)}"
 LLAMA="${KIT_LLAMACPP_BIN:-$(pick_bin llama.cpp llama-server)}"
@@ -138,9 +144,13 @@ trap cleanup EXIT
 trap 'exit 0' INT TERM HUP
 
 # --- library
-if up "http://127.0.0.1:$LIB_PORT/"; then
+LIB_PID=""
+if our_library "$LIB_PORT"; then
   say "  Library already running on port $LIB_PORT."
 elif [ -n "$KIWIX" ] && [ ${#ZIMS[@]} -gt 0 ]; then
+  if taken "$LIB_PORT"; then
+    p="$(free_port "$LIB_PORT")"; say "  Another program is using port $LIB_PORT, so the library uses $p."; LIB_PORT="$p"
+  fi
   # The page ./kit sync builds has the map inside; the bare template has no map. A newer template
   # (kit code updated, no sync since) shows up after the next sync, which rebuilds the page.
   PORTAL="$KIT/.kit/portal.html"
@@ -149,14 +159,18 @@ elif [ -n "$KIWIX" ] && [ ${#ZIMS[@]} -gt 0 ]; then
   [ "$SHARE" = 1 ] || KARGS+=(--address 127.0.0.1)
   "$KIWIX" --help 2>&1 | grep -q -- --skipInvalid && KARGS+=(--skipInvalid)
   "$KIWIX" "${KARGS[@]}" "${ZIMS[@]}" > "$KIT/logs/kiwix-serve.log" 2>&1 &
-  PIDS+=($!)
+  LIB_PID=$!; PIDS+=($!)
   say "  Starting library (${#ZIMS[@]} books)..."
 fi
 
 # --- AI
-if up "http://127.0.0.1:$AI_PORT/v1/models"; then
+AI_PID=""
+if our_ai "$AI_PORT"; then
   say "  AI already running on port $AI_PORT."
 elif [ -n "$LLAMA" ] && [ ${#MODELS[@]} -gt 0 ]; then
+  if taken "$AI_PORT"; then
+    p="$(free_port "$AI_PORT")"; say "  Another program is using port $AI_PORT, so the AI uses $p."; AI_PORT="$p"
+  fi
   # Browsers accept exactly one allowed origin (llama-server would echo a list verbatim):
   # the portal at 127.0.0.1 locally, or any origin when sharing with other devices.
   CORS="http://127.0.0.1:$LIB_PORT"
@@ -165,7 +179,7 @@ elif [ -n "$LLAMA" ] && [ ${#MODELS[@]} -gt 0 ]; then
   printf 'version = 1\n\n[%s]\nload-on-startup = true\n' "$MODEL" > "$PRESET"
   "$LLAMA" --models-dir "$KIT/models" --models-preset "$PRESET" --models-max 1 -c "$CTX" \
     --host "$HOST" --port "$AI_PORT" --cors-origins "$CORS" > "$KIT/logs/llama-server.log" 2>&1 &
-  PIDS+=($!)
+  AI_PID=$!; PIDS+=($!)
   say "  Starting AI (loading $MODEL)..."
 fi
 
@@ -201,10 +215,19 @@ if [ "$(uname -s)" = Darwin ] && command -v caffeinate >/dev/null; then
   caffeinate -i -w $$ & PIDS+=($!)
 fi
 
-for _ in $(seq 1 60); do up "http://127.0.0.1:$LIB_PORT/" && break; sleep 1; done
-LIB_OK=0; up "http://127.0.0.1:$LIB_PORT/" && LIB_OK=1
+# Wait for each server to answer, unless this window didn't start it or it has already quit.
+LIB_OK=0
+for _ in $(seq 1 60); do
+  our_library "$LIB_PORT" && { LIB_OK=1; break; }
+  { [ -n "$LIB_PID" ] && kill -0 "$LIB_PID" 2>/dev/null; } || break
+  sleep 1
+done
 AI_OK=0
-for _ in $(seq 1 30); do up "http://127.0.0.1:$AI_PORT/v1/models" && { AI_OK=1; break; }; sleep 1; done
+for _ in $(seq 1 30); do
+  our_ai "$AI_PORT" && { AI_OK=1; break; }
+  { [ -n "$AI_PID" ] && kill -0 "$AI_PID" 2>/dev/null; } || break
+  sleep 1
+done
 
 URL="http://127.0.0.1:$LIB_PORT/?model=$MODEL&ai=$AI_PORT"
 say ""
