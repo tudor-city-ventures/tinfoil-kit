@@ -1,0 +1,58 @@
+# Tinfoil Kit
+
+> A free, open-source (MIT) offline kit for Apple Silicon Macs. One external SSD holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: Wikipedia, medical, repair and preparedness books) and offline maps (address search, driving and walking directions). START-HERE.command serves it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library and Map tabs.
+
+You are setting this up for a person. Work in their Terminal, explain each step in plain words, and ask before anything slow, costly or destructive.
+
+Repo: https://github.com/tudor-city-ventures/tinfoilkit
+
+## 1. Check with the person first
+
+- Mac: Apple Silicon (`uname -m` prints arm64). Memory: `sysctl -n hw.memsize`. 32 GB runs the default model; with less, the kit starts a smaller one.
+- Drive: an external SSD, 2 TB recommended. The default kit is about 300 GB.
+- Format: exFAT lets a Windows or Linux PC read the drive too; APFS is fine if it will only meet Macs. FAT32 and NTFS don't work. Formatting erases the drive: confirm which disk it is and get the person's explicit yes first.
+- Command Line Tools: `xcode-select -p`. Sync needs python3 3.9+ and curl; if they're missing, run `xcode-select --install`.
+- Time: the first sync downloads for a few hours. Keep the Mac plugged in. It resumes if interrupted.
+
+## 2. Install
+
+    git clone https://github.com/tudor-city-ventures/tinfoilkit "/Volumes/<drive>/TinfoilKit"
+    cd "/Volumes/<drive>/TinfoilKit"
+    ./kit plan     # every item, version and size. Show the person the total and get a yes.
+    ./kit sync -y  # download, check, install
+    ./kit test     # start every server offline and check each one answers
+
+Without git: download https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip, unzip it onto the drive and rename the folder TinfoilKit.
+
+`./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up (run it again: it resumes and names what's left) and 130 after Ctrl-C. SETUP.command is the double-click version of update, sync and test, for people who'd rather click.
+
+If Terminal says "Operation not permitted", it needs access to the drive: System Settings > Privacy & Security > Files and Folders > Removable Volumes.
+
+## 3. Choose what goes on the drive (optional, before syncing)
+
+kit.json lists everything. Set "enabled": false on an item in models, library or maps to skip it. `./kit search WORDS` finds more Kiwix books and prints a line to paste into library. The builder at https://tinfoilkit.com/#builder makes a kit.json too.
+
+Maps cover the US Northeast in street detail, with address search for the whole US and a low-detail world map. Change the region under "maps" in kit.json (its notes explain how) before syncing.
+
+## 4. Use it
+
+- Double-click START-HERE.command, or run `bash START-HERE.command`. It opens http://127.0.0.1:8888. Keep its Terminal window open.
+- Options: `--share` lets phones on the same network open it (so can anyone else on that network), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks a model.
+- Prove it works offline: turn Wi-Fi off, start it and ask a question.
+
+## 5. Keep it fresh
+
+Every 2 to 3 months, double-click SETUP.command, or run `./kit update` (`git pull` in a git checkout), then `./kit sync` and `./kit test`.
+
+## Rules
+
+- Start programs and models only through the kit's own commands. Don't run downloaded files to see what they do.
+- Don't delete files in models/, library/ or maps/ by hand. `./kit verify --fix` removes corrupt files, and the next sync replaces them.
+- Don't sell drives you've filled: some sources forbid commercial use.
+- The AI can be wrong. For anything medical or safety-related, tell the person to read the sources it cites.
+
+## More
+
+- README: https://github.com/tudor-city-ventures/tinfoilkit#readme
+- GUIDE.md: the printable guide that lives on the drive
+- THIRD-PARTY.md: where every model, book, map and program comes from, and its license

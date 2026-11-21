@@ -16,7 +16,7 @@ The repo root is the kit itself, so cloning onto a drive just works. The marketi
 | `GUIDE.md` | Printable guide that lives on the drive |
 | `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
 | `.github/` | The workflows, plus what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and PR templates, CODEOWNERS. `pr-gate.yml` closes outside pull requests that don't link an accepted issue |
-| `site/` | The website: `index.html`, plus `hero.js` for the animated figure at the top, no build step. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. The favicons and link-preview cards are rendered from the mark, `icon.svg`, by `site/build_images.py`. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
+| `site/` | The website: `index.html`, plus `hero.js` for the animated figure at the top, no build step. A "Read as" bar switches the page between three versions (normal person, the default; developer; AI agent): elements marked `data-for` show only in the versions they name. The agent version shows `llms.txt`, the setup instructions for AI agents. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. The favicons and link-preview cards are rendered from the mark, `icon.svg`, by `site/build_images.py`. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
 
 ## Verify
 
@@ -46,6 +46,7 @@ Visual changes to the page or the site come with screenshots.
 - Downloaded files are untrusted: inspect them as text, never run them to see what they do.
 - The kit points at publishers' downloads and never hosts, mirrors or bundles their files (not even in a release), so their licenses stay between them and the user.
 - A new model, source or program goes in `THIRD-PARTY.md` with its license and any use policy; a new download host also goes in the site FAQ's "Does anything leave my Mac?" list.
+- When setup or a command changes, update `site/llms.txt` with the GUIDE and README. Site copy changes go in each version of the page that says it.
 
 ## Workflow
 

@@ -22,6 +22,13 @@ def check(name, ok, detail=""):
     fails += 0 if ok else 1
 
 
+def axe(page, label):
+    if os.environ.get("KIT_AXE"):
+        page.add_script_tag(path=os.environ["KIT_AXE"])
+        bad = page.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
+        check(f"{label}: no accessibility violations (axe)", not bad, ", ".join(bad))
+
+
 # Serve with the same headers Vercel adds (site/vercel.json), so a too-strict CSP fails here first.
 HEADERS = json.load(open(os.path.join(SITE, "vercel.json")))["headers"][0]["headers"]
 
@@ -95,10 +102,7 @@ with sync_playwright() as p:
         check(f"{name}: unticking a source changes the total", page.inner_text("#totalText") != before)
         check(f"{name}: no page errors", not errors, "; ".join(errors))
         check(f"{name}: nothing loads from other sites", not offsite, ", ".join(offsite))
-        if os.environ.get("KIT_AXE"):
-            page.add_script_tag(path=os.environ["KIT_AXE"])
-            bad = page.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
-            check(f"{name}: no accessibility violations (axe)", not bad, ", ".join(bad))
+        axe(page, name)
         if name == "desktop":
             page.context.grant_permissions(["clipboard-read", "clipboard-write"])
             page.click("[data-copy=installPrompt]")
@@ -116,7 +120,41 @@ with sync_playwright() as p:
             kit = json.loads(open(dl.value.path()).read())
             off = [m["id"] for m in kit["models"] if not m["enabled"]]
             check("downloaded kit.json reflects the picks", len(off) == 1 and kit["settings"]["default_model"] != off[0], str(off))
+        # Read as: the normal-person page is the default; Developer and AI agent swap the copy, and the pick sticks
+        def wide_enough(label):
+            w = page.evaluate("document.documentElement.scrollWidth")
+            check(f"{label}: no sideways scroll", w <= page.viewport_size["width"], f"{w}px")
+        check(f"{name}: the normal-person page is the default", page.is_visible(".hero-copy[data-for=person] h1")
+              and not page.is_visible(".hero-copy[data-for=dev] h1") and not page.is_visible("#instructions"))
+        page.click(".readas [data-reader=dev]")
+        check(f"{name}: Developer swaps in the developer copy", page.is_visible(".hero-copy[data-for=dev] h1")
+              and not page.is_visible(".hero-copy[data-for=person] h1") and page.is_visible("#builder")
+              and "for=dev" in page.url and page.get_attribute(".readas [data-reader=dev]", "aria-pressed") == "true")
+        wide_enough(f"{name} developer page")
+        axe(page, f"{name} developer page")
+        page.screenshot(path=os.path.join(SHOTS, f"site_{name}_dev.png"), full_page=True)
+        page.goto(URL)
+        check(f"{name}: the pick sticks on the next visit", page.is_visible(".hero-copy[data-for=dev] h1"))
+        page.click(".readas [data-reader=agent]")
+        page.wait_for_selector("#agentDoc:has-text('Check with the person first')", timeout=5000)
+        check(f"{name}: AI agent shows llms.txt and hides the rest", page.inner_text("#agentDoc").startswith("# Tinfoil Kit")
+              and page.is_visible("#agentLine") and not page.is_visible("#builder") and not page.is_visible(".fig"))
+        wide_enough(f"{name} agent page")
+        if name == "phone":
+            page.set_viewport_size({"width": 320, "height": 640})
+            wide_enough("320px phone agent page")
+            page.set_viewport_size(vp)
+        axe(page, f"{name} agent page")
+        page.screenshot(path=os.path.join(SHOTS, f"site_{name}_agent.png"), full_page=True)
+        page.click(".readas [data-reader=person]")
+        check(f"{name}: Normal person switches back", page.is_visible(".hero-copy[data-for=person] h1")
+              and page.is_visible(".fig") and "for=" not in page.url)
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}.png"), full_page=True)
+    deep = b.new_page()        # a shared link opens the version it names
+    deep.goto(URL + "?for=agent")
+    deep.wait_for_selector("#agentDoc:has-text('Check with the person first')", timeout=5000)
+    check("?for=agent opens the agent page", deep.is_visible("#instructions") and not deep.is_visible(".hero-copy[data-for=person] h1"))
+    deep.close()
     still = b.new_page(reduced_motion="reduce")
     still.goto(URL)
     still.wait_for_selector(".card")
