@@ -109,7 +109,7 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
   else
     # Libraries a desktop install has and these bare images don't. Not curl: Ubuntu's desktop doesn't ship it.
     case "$img" in
-      fedora*) prep="dnf install -y -q libgomp vulkan-loader procps-ng findutils gawk > /dev/null" ;;
+      fedora*) prep="dnf install -y -q libgomp vulkan-loader openssl-libs procps-ng findutils gawk > /dev/null" ;;
       *) prep="apt-get update -qq && apt-get install -y -qq libgomp1 libvulkan1 procps > /dev/null" ;;
     esac
     docker run -d --name kit --network host -v "$mnt:/media/user/TINFOIL" -w /media/user/TINFOIL/TinfoilKit \

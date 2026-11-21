@@ -243,7 +243,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
   - a "3 months later" update with a new catalog and new map builds, then `kit test` again.
 - **Drive (`drive.yml`, nightly and by hand):** `build_fixtures.sh drive` adds the newest real llama.cpp and kiwix-tools builds for Mac, Windows and Linux to the mock internet, then `drive_test.sh` uses one disk image the whole way:
   - Mac (GitHub's macOS 26 on Apple Silicon): erase the image as exFAT, copy the kit on as Download ZIP leaves it (marked as from the internet, with `._` files), run `SETUP.command` with a stock PATH and `/bin/bash`, double-click `START-HERE.command` (Terminal, then Safari), check the page in WebKit, add Finder-style `._` files beside the books and the model, and eject.
-  - Windows: mount the same drive as a VHD, double-click `START-HERE-Windows.bat`, check the page in Edge.
+  - Windows: mount the same drive as a VHD, double-click `START-HERE-Windows.bat`, check the page in Edge. macOS marks its `._` files hidden on exFAT, and the .bat's `for` skips hidden files, so they do no harm there.
   - Linux: mount it as a desktop does (udisks2 options), start the kit on GitHub's Ubuntu (26.04 now), then in Ubuntu 24.04 and 22.04, Debian 12 and Fedora containers. 22.04 is the oldest the llama.cpp build runs on.
   - Screenshots and logs are run artifacts. A run takes about 3 Mac minutes (about $0.25 with the other jobs while the repo is private; free once public).
   - Not covered: maps, real models on a real GPU, and the first-run prompts a person clicks through (Open Anyway for `SETUP.command`, Terminal's removable-volume permission, the Command Line Tools install).
