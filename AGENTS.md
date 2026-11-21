@@ -2,7 +2,7 @@
 
 An offline "internet outage" kit for Apple Silicon Macs. One external SSD holds local AI models (llama.cpp), an offline library (Kiwix ZIM files) and offline maps (pmtiles, Photon, GraphHopper). `./kit sync` refreshes everything every 2-3 months. `START-HERE.command` serves it all on localhost and opens a browser page with Ask, AI chat, Library and Map tabs.
 
-The repo root is the kit itself, so cloning onto a drive just works. A marketing site is planned in `site/` (Vercel, tudor-city-ventures team). Full history, decisions and open work: [docs/HANDOFF.md](docs/HANDOFF.md).
+The repo root is the kit itself, so cloning onto a drive just works. The marketing site lives in `site/`. Full history, decisions and open work: [docs/HANDOFF.md](docs/HANDOFF.md).
 
 ## Map
 
@@ -15,6 +15,7 @@ The repo root is the kit itself, so cloning onto a drive just works. A marketing
 | `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests |
 | `GUIDE.md` | Printable guide that lives on the drive |
 | `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
+| `site/` | The website: one `index.html`, no build step. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
 
 ## Verify
 
@@ -25,6 +26,7 @@ Use the cheapest check that proves the change, and paste its output in the commi
 | Targeted | `node tests/map_logic_test.js tools/portal.html` (start the mocks as `tests/check.sh` does) | While iterating |
 | Quick gate | `tests/check.sh` | Before every push. CI runs it on every push |
 | End to end | `tests/build_fixtures.sh` once, then `tests/run_all.sh` (Linux x86_64; needs GitHub and download.kiwix.org, which cloud sessions can't reach) | Changes to `tools/` or `kit.json`. CI runs it on those pushes |
+| Website | `python3 tests/site_test.py` (Playwright) | Changes to `site/`. CI runs it on every push |
 | Real Mac | `./kit sync && ./kit test` on a real drive | Before a release. Travis runs it |
 
 Visual changes to the page or the site come with screenshots.

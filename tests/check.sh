@@ -6,7 +6,7 @@ step() { echo "== $*"; }
 run() { if "$@"; then :; else echo "FAIL: $*"; fail=1; fi; }
 
 step "python compiles"
-run python3 -m py_compile tools/kit.py tests/*.py
+run python3 -m py_compile tools/kit.py tests/*.py site/*.py
 
 step "bash parses"
 SH="kit START-HERE.command tools/launch.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/fakes/java tests/fakes/pmtiles"
