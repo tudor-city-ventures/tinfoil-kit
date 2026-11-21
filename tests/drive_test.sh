@@ -101,23 +101,24 @@ linux() {
 }
 
 run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IMAGE is set, and check it
-  local name="$1" img="$2" log prep
+  local name="$1" img="$2" log prep ok=1
   log="$L/linux-$(printf '%s' "${img:-host}" | tr -c 'a-zA-Z0-9.' '-').log"
   step "$name: bash START-HERE.command"
   if [ -z "$img" ]; then
     (cd "$kit" && exec bash START-HERE.command --no-browser > "$log" 2>&1) &
   else
-    # Libraries a desktop install has and these bare images don't. Not curl: Ubuntu's desktop doesn't ship it.
+    # Libraries a desktop install has and these bare images don't, plus the package GUIDE.md tells Fedora users
+    # to add (Fedora 45 moved to OpenSSL 4; llama.cpp's Linux build needs 3). Not curl: Ubuntu's desktop lacks it.
     case "$img" in
-      fedora*) prep="dnf install -y -q libgomp vulkan-loader openssl-libs procps-ng findutils gawk > /dev/null" ;;
+      fedora*) prep="dnf install -y -q libgomp vulkan-loader openssl3-libs procps-ng findutils gawk > /dev/null" ;;
       *) prep="apt-get update -qq && apt-get install -y -qq libgomp1 libvulkan1 procps > /dev/null" ;;
     esac
     docker run -d --name kit --network host -v "$mnt:/media/user/TINFOIL" -w /media/user/TINFOIL/TinfoilKit \
       "$img" bash -c "$prep && exec bash START-HERE.command --no-browser" > /dev/null
   fi
-  python3 "$TESTS/drive.py" check 8888 8080 || fail "$name"
+  python3 "$TESTS/drive.py" check 8888 8080 || { fail "$name"; ok=0; }
   if [ -n "$img" ]; then docker logs kit > "$log" 2>&1; docker rm -f kit > /dev/null; else stop_kit; fi
-  grep -E "Library:|AI:|!" "$log"
+  if [ "$ok" = 1 ]; then grep -E "Library:|AI:|!" "$log"; else tail -25 "$log"; fi
 }
 
 case "${1:-}" in

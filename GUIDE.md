@@ -140,6 +140,8 @@ and the Library tab (no AI) uses almost nothing.
 On a Windows PC, double-click `START-HERE-Windows.bat` (the drive must be exFAT). On Linux, run
 `bash START-HERE.command`. These fallbacks are less tested than the Mac path, and without a good graphics card
 the AI is slow: use `Gemma-4-E4B`. The map works on the Mac only.
+Fedora 45 and later need one extra package for the AI: run `sudo dnf install openssl3-libs` while you still
+have internet. If the window says another library is missing, install that too.
 
 ## What's where
 
