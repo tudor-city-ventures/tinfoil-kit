@@ -205,6 +205,15 @@ with sync_playwright() as p:
     app = [n for d in ld for n in d.get("@graph", [d]) if n["@type"] == "SoftwareApplication"]
     check("structured data describes Tinfoil Kit, free, at the canonical address", len(app) == 1 and app[0]["name"] == "Tinfoil Kit"
           and app[0]["url"] == canonical and app[0]["offers"]["price"] == "0", json.dumps(app)[:200])
+    # each FAQ entry is a schema.org Question and Answer they can quote, and the first defines the kit on its own
+    faq = home.evaluate("""[...document.querySelectorAll('.faq[itemscope][itemtype="https://schema.org/FAQPage"] > details')].map(d =>
+        d.matches('[itemscope][itemprop=mainEntity][itemtype="https://schema.org/Question"]') && [d.querySelector(':scope > summary[itemprop=name]'),
+        d.querySelector(':scope > [itemscope][itemprop=acceptedAnswer][itemtype="https://schema.org/Answer"] > [itemprop=text]')].map(e => e && e.textContent))""")
+    total = home.locator(".faq details").count()
+    check("every FAQ entry is marked up as a question and its answer", total and len(faq) == total and all(f and all(f) for f in faq),
+          f"{sum(bool(f and all(f)) for f in faq)} of {total}")
+    check("the FAQ opens by saying what Tinfoil Kit is", bool(faq and faq[0] and faq[0][0] == "What is Tinfoil Kit?"
+          and faq[0][1].startswith("Tinfoil Kit is ")))
     b.close()
 srv.shutdown()
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")

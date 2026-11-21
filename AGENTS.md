@@ -16,7 +16,7 @@ The repo root is the kit itself, so cloning onto a drive just works. The marketi
 | `GUIDE.md` | Printable guide that lives on the drive |
 | `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
 | `.github/` | The workflows, plus what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and PR templates, CODEOWNERS. `pr-gate.yml` closes outside pull requests that don't link an accepted issue |
-| `site/` | The website: `index.html`, plus `hero.js` for the animated figure at the top, no build step. A "Read as" bar switches between the human page (the default) and the AI agent page: elements marked `data-for="human"` or `data-for="agent"` show only in that one. The agent page shows `llms.txt`, the setup instructions for AI agents, as markdown, with no images or icons. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. The favicons and link-preview cards are rendered from the mark, `icon.svg`, by `site/build_images.py`. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
+| `site/` | The website: `index.html`, plus `hero.js` for the animated figure at the top, no build step. A "Read as" bar switches between the human page (the default) and the AI agent page: elements marked `data-for="human"` or `data-for="agent"` show only in that one. The agent page shows `llms.txt`, the setup instructions for AI agents, as markdown, with no images or icons. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. The favicons and link-preview cards are rendered from the mark, `icon.svg`, by `site/build_images.py`. For search and AI answer engines, `robots.txt` lets every crawler in and names `sitemap.xml`, a JSON-LD block in the page's `<head>` describes the kit, and each FAQ entry carries schema.org Question markup. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
 
 ## Verify
 
@@ -47,6 +47,7 @@ Visual changes to the page or the site come with screenshots.
 - The kit points at publishers' downloads and never hosts, mirrors or bundles their files (not even in a release), so their licenses stay between them and the user.
 - A new model, source or program goes in `THIRD-PARTY.md` with its license and any use policy; a new download host also goes in the site FAQ's "Does anything leave my Mac?" list.
 - When setup or a command changes, update `site/llms.txt` with the GUIDE and README.
+- A copy change that alters a fact in the page's JSON-LD (what the kit needs or does) updates it too. New FAQ entries copy the others' Question markup, and "What is Tinfoil Kit?" stays first: answer engines quote it.
 
 ## Workflow
 

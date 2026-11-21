@@ -11,6 +11,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 - `SETUP.command`: the double-click guided setup and refresh, with checks for the drive format and the Command Line Tools. GUIDE, README and the site point to it.
 - kit.json matches the Kiwix catalog. WikEM, WHO and the Gutenberg subject subsets were dropped upstream, two entries were renamed, and Urban Prepper was added. All 60 sources resolve.
 - tinfoilkit.com: bought 2026-11-21 through Vercel on the tudor-city-ventures team (registrant Tudor City Ventures LLC, auto-renews yearly). It's on the `tinfoilkit` project, and `www` redirects to it (308).
+- Search and AI answer engines (ChatGPT, Perplexity, Claude, Google's AI answers) can read and cite the site: `site/robots.txt` lets every crawler in and names `site/sitemap.xml`, a JSON-LD block in the page's head describes the kit (free, MIT, what it needs and does), every FAQ entry carries schema.org Question markup, and the FAQ opens with "What is Tinfoil Kit?", a definition that stands on its own. Indexing waits for launch day, step 8.
 - `./kit update` (Travis chose to build it before launch): `SETUP.command` first installs the newest GitHub release of the kit's code and keeps each drive's kit.json changes. Design in section 3. It does nothing until the repo is public and has a release (launch day, step 5).
 - Ready for outside contributors: CONTRIBUTING, SECURITY, the code of conduct, issue forms, a PR template and CODEOWNERS are in `.github/`, out of sight on drives. Outside pull requests need an open issue labeled `accepted`, and `pr-gate.yml` closes the rest (members, collaborators and past contributors skip it). Fork PRs need DCO sign-off (the `sign-off` job in `check.yml`). Workflow tokens are read-only except in the sizes refresh and the gate. GitHub's own settings go on at launch (step 4).
 - Launch-day checklist: see section 7.
@@ -387,6 +388,7 @@ Each step needs Travis's go-ahead, because none of them can be quietly undone.
 5. Publish the first GitHub release from `main` (for example `v1.0.0`), with a few lines on what's in it: SETUP shows them after updating. Until the repo is public and has a release, `./kit update` finds nothing and drives keep their version.
 6. Check the social card (https://tinfoilkit.com/og.png) with a link preview, and that the builder loads sources.json.
 7. Switch to PRs and review from then on: turn on the `main` ruleset (below) and update AGENTS.md's Workflow section. The ruleset ends direct pushes, including the weekly sizes commit, so in the same step switch `sizes.yml` to open a pull request, run the checks on it with `workflow_dispatch` (pull requests opened with the Actions token don't trigger workflows) and auto-merge it. That needs "Allow GitHub Actions to create and approve pull requests" and auto-merge turned on.
+8. Tell search engines about the site, once the repo is public so its GitHub links work: add tinfoilkit.com to Google Search Console and Bing Webmaster Tools (ChatGPT search and Copilot draw on Bing's index), verify it with a DNS record on Vercel, and submit https://tinfoilkit.com/sitemap.xml. Both need Travis's accounts. Search Console will say the app markup can't get star ratings because the site has no reviews: expected, and never fill that in with made-up ratings.
 
 #### GitHub settings at launch
 
@@ -396,6 +398,7 @@ The policy and its reasons are in `.github/CONTRIBUTING.md`. In the repo's Setti
   - Pull requests: allow squash merging only; turn on auto-merge and "Automatically delete head branches".
   - Limit open pull requests for users without write access: 2.
   - Social preview: upload `docs/social-preview.png` (made by `site/build_images.py`), so shared repo links show the card. GitHub has no API for it, and it can go up any time.
+  - About (the gear by About on the repo page), which GitHub search and AI answers quote: description "Free, open-source offline kit for Macs: a local AI, all of Wikipedia, medical and repair guides, and maps with directions on one external drive. For when the internet goes down.", website https://tinfoilkit.com, and topics `offline`, `local-ai`, `llama-cpp`, `kiwix`, `wikipedia`, `offline-maps`, `openstreetmap`, `emergency-preparedness`, `macos`, `apple-silicon`.
   - Leave pull requests open to everyone. "Restrict pull requests to collaborators" is the brake for a flood: while it's on, only people with write access can open them.
   - Releases: turn on release immutability. Every drive installs the latest release, so its tag and files must never change.
   - Features: turn off Wikis and Projects.
