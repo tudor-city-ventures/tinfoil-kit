@@ -72,11 +72,31 @@ pick_bin() { # product binary
   return 1
 }
 
-up() { curl -s -o /dev/null --max-time 2 "$1"; }
-# Is anything listening on this port, ours or not? (curl exits 7 when nothing is.)
-taken() { curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$1/"; [ $? -ne 7 ]; }
-our_library() { curl -sL --max-time 2 "http://127.0.0.1:$1/" 2>/dev/null | grep -q "Tinfoil Kit"; }
-our_ai() { curl -s --max-time 2 "http://127.0.0.1:$1/v1/models" 2>/dev/null | grep -q '"data"'; }
+# Say why a program is missing, or why the copy on the drive won't run here (such as a library Linux lacks).
+missing() { # name product binary
+  local p out rc
+  p="$(find "$KIT/bin/$2-$PLAT" -type f -name "$3" 2>/dev/null | head -1)"
+  if [ -z "$p" ]; then say "  ! $1 not found for $PLAT (bin/$2-$PLAT). Run ./kit sync while online."; return; fi
+  out="$("$p" --version 2>&1)"; rc=$?
+  out="$(printf '%s\n' "$out" | grep -m1 -iE 'error|not found|cannot')"
+  out="${out#*"$3": }"
+  say "  ! $1 won't start on this computer: ${out:-it stops with code $rc}"
+}
+
+# Fetch a local URL: curl when there is one, else bash's own /dev/tcp (a stock Ubuntu desktop has no curl).
+# Exits 7 when nothing listens on the port, as curl does.
+get() { # http://127.0.0.1:PORT/PATH
+  if command -v curl >/dev/null; then curl -sL --max-time 2 "$1" 2>/dev/null; return; fi
+  local hp="${1#http://}" path
+  path="/${hp#*/}"; hp="${hp%%/*}"
+  (: <>"/dev/tcp/${hp%:*}/${hp##*:}") 2>/dev/null || return 7
+  (exec 3<>"/dev/tcp/${hp%:*}/${hp##*:}" && printf 'GET %s HTTP/1.0\r\nHost: %s\r\n\r\n' "$path" "$hp" >&3 && timeout 2 cat <&3) 2>/dev/null
+}
+up() { get "$1" >/dev/null; }
+# Is anything listening on this port, ours or not?
+taken() { get "http://127.0.0.1:$1/" >/dev/null; [ $? -ne 7 ]; }
+our_library() { get "http://127.0.0.1:$1/" | grep -q "Tinfoil Kit"; }
+our_ai() { get "http://127.0.0.1:$1/v1/models" | grep -q '"data"'; }
 # Another program can hold a port (Jupyter takes 8888, many developer tools 8080): use the next free one.
 free_port() { local p="$1"; while taken "$p" && [ "$p" -lt $(( $1 + 9 )) ]; do p=$(( p + 1 )); done; printf '%s' "$p"; }
 
@@ -93,8 +113,8 @@ shopt -u nullglob
 say ""
 say "  TINFOIL KIT"
 say "  ==========="
-[ -n "$KIWIX" ] || say "  ! Library server not found for $PLAT (bin/kiwix-tools-$PLAT). Run ./kit sync while online."
-[ -n "$LLAMA" ] || say "  ! AI server not found for $PLAT (bin/llama.cpp-$PLAT). Run ./kit sync while online."
+[ -n "$KIWIX" ] || missing "Library server" kiwix-tools kiwix-serve
+[ -n "$LLAMA" ] || missing "AI server" llama.cpp llama-server
 [ ${#ZIMS[@]} -gt 0 ] || say "  ! No library files in library/. Run ./kit sync while online."
 [ ${#MODELS[@]} -gt 0 ] || say "  ! No models in models/. Run ./kit sync while online."
 if [ ${#MODELS[@]} -gt 0 ] && [ ! -d "$KIT/models/$MODEL" ]; then
