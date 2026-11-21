@@ -95,8 +95,8 @@
    "group": "Medical",
    "title": "Military medicine",
    "why": "Trauma care manuals from the US military.",
-   "bytes": 100000000,
-   "estimated": true,
+   "bytes": 64986112,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -160,8 +160,8 @@
    "group": "Preparedness",
    "title": "Ready.gov",
    "why": "FEMA's guides for every kind of emergency.",
-   "bytes": 2100000000,
-   "estimated": true,
+   "bytes": 2063895552,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -173,8 +173,8 @@
    "group": "Preparedness",
    "title": "Urban Prepper",
    "why": "Getting through an emergency in a city.",
-   "bytes": 2200000000,
-   "estimated": true,
+   "bytes": 2245235712,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
