@@ -105,6 +105,7 @@ Then run `./kit plan` to preview and `./kit sync` to apply.
    `SETUP.command` again later and it fetches the rest.
    - If macOS says it can't be opened because it's from the internet: open **System Settings > Privacy &
      Security**, scroll down and click **Open Anyway**. You only do this once.
+   - If macOS asks whether Terminal may access files on a removable volume, say yes.
    - If it asks to install the Command Line Tools, say yes, then double-click `SETUP.command` again.
 4. Turn off Wi-Fi and double-click `START-HERE.command`.
 
@@ -119,6 +120,8 @@ and the Library tab (no AI) uses almost nothing.
 ## If something doesn't work
 
 - Close the Terminal window and double-click `START-HERE.command` again.
+- Terminal says "Operation not permitted": macOS is keeping it off the drive. Open **System Settings > Privacy &
+  Security > Files and Folders**, turn on **Removable Volumes** under Terminal, and start again.
 - Logs are in the `logs` folder.
 - If a model won't load or is very slow, quit other apps (big models need most of a 32 GB Mac's memory), or use `Gemma-4-E4B`.
   Starting with `bash START-HERE.command --no-maps` frees about 5 GB by not starting the map servers.
