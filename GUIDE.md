@@ -30,7 +30,8 @@ Nothing here needs the internet, an account, or an install.
   - `Gemma-4-E4B`: small. Use it to **save battery**, or on a computer with 8 to 16 GB of memory.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
 - **Share with family**: start with `bash START-HERE.command --share`. It prints an address that phones on the same
-  Wi-Fi or hotspot can open (turn on the Mac's hotspot if the router is down).
+  Wi-Fi or hotspot can open (turn on the Mac's hotspot if the router is down). If macOS asks whether to accept
+  incoming connections, click **Allow**.
 
 The AI can be wrong. Treat it like a well-read friend, not a doctor: check the sources, and get trained help whenever you can.
 

@@ -96,7 +96,8 @@ HOST=127.0.0.1
 LAN_IP=""
 if [ "$SHARE" = 1 ]; then
   HOST=0.0.0.0
-  LAN_IP="$( (ipconfig getifaddr en0 || ipconfig getifaddr en1 || hostname -I | awk '{print $1}') 2>/dev/null | head -1)"
+  # Wi-Fi or Ethernet, else the Mac's own network when Internet Sharing is on (bridge100), else Linux
+  LAN_IP="$( (ipconfig getifaddr en0 || ipconfig getifaddr en1 || ipconfig getifaddr bridge100 || hostname -I | awk '{print $1}') 2>/dev/null | head -1)"
 fi
 
 PIDS=()
