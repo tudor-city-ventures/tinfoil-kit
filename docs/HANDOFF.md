@@ -335,6 +335,17 @@ First ask me about my computer, drive size, region and priorities. Then propose 
 
 ---
 
+### Launch day
+
+Each step needs Travis's go-ahead, because none of them can be quietly undone.
+
+1. Travis runs `SETUP.command` on his Mac and `./kit test` passes.
+2. tinfoilkit.com is on the tudor-city-ventures Vercel team. Add it (and `www`, redirecting to the bare domain) to the `tinfoilkit` project.
+3. Turn off Vercel Authentication for production on the `tinfoilkit` project, so the public can see the site. Previews can stay protected.
+4. Make the GitHub repo public. The site's GitHub button and the install prompt point at it.
+5. Check the social card (https://tinfoilkit.com/og.png) with a link preview, and that the builder loads sources.json.
+6. Switch to PRs and review from then on (update AGENTS.md's Workflow section).
+
 ## 8. Accounts and access
 
 - **GitHub:** `tudor-city-ventures/tinfoilkit`, private. The Claude GitHub app has access.
