@@ -133,25 +133,23 @@ with sync_playwright() as p:
             kit = json.loads(open(dl.value.path()).read())
             off = [m["id"] for m in kit["models"] if not m["enabled"]]
             check("downloaded kit.json reflects the picks", len(off) == 1 and kit["settings"]["default_model"] != off[0], str(off))
-        # Read as: the normal-person page is the default; Developer and AI agent swap the copy, and the pick sticks
+        # Read as: the human page is the default; AI agent shows the markdown with no images or icons, and the pick sticks
         def wide_enough(label):
             w = page.evaluate("document.documentElement.scrollWidth")
             check(f"{label}: no sideways scroll", w <= page.viewport_size["width"], f"{w}px")
-        check(f"{name}: the normal-person page is the default", page.is_visible(".hero-copy[data-for=person] h1")
-              and not page.is_visible(".hero-copy[data-for=dev] h1") and not page.is_visible("#instructions"))
-        page.click(".readas [data-reader=dev]")
-        check(f"{name}: Developer swaps in the developer copy", page.is_visible(".hero-copy[data-for=dev] h1")
-              and not page.is_visible(".hero-copy[data-for=person] h1") and page.is_visible("#builder")
-              and "for=dev" in page.url and page.get_attribute(".readas [data-reader=dev]", "aria-pressed") == "true")
-        wide_enough(f"{name} developer page")
-        axe(page, f"{name} developer page")
-        page.screenshot(path=os.path.join(SHOTS, f"site_{name}_dev.png"), full_page=True)
-        page.goto(URL)
-        check(f"{name}: the pick sticks on the next visit", page.is_visible(".hero-copy[data-for=dev] h1"))
+        check(f"{name}: the human page is the default", page.is_visible(".hero h1") and not page.is_visible("#instructions"))
         page.click(".readas [data-reader=agent]")
         page.wait_for_selector("#agentDoc:has-text('Check with the person first')", timeout=5000)
-        check(f"{name}: AI agent shows llms.txt and hides the rest", page.inner_text("#agentDoc").startswith("# Tinfoil Kit")
-              and page.is_visible("#agentLine") and not page.is_visible("#builder") and not page.is_visible(".fig"))
+        pictures = page.evaluate("[...document.querySelectorAll('img, svg, canvas')].filter(e => e.getClientRects().length).length")
+        check(f"{name}: AI agent shows the markdown, with no images or icons", page.inner_text("#agentDoc").startswith("# Tinfoil Kit")
+              and not page.is_visible(".hero") and not page.is_visible("#builder") and not pictures
+              and page.is_visible("nav.links a[href='/llms.txt']") and not page.is_visible("#menu")
+              and "for=agent" in page.url and page.get_attribute(".readas [data-reader=agent]", "aria-pressed") == "true",
+              f"{pictures} images or icons showing")
+        if name == "desktop":
+            page.click("[data-copy=agentDoc]")
+            page.wait_for_selector("[data-copy=agentDoc]:text-is('Copied')", timeout=5000)
+            check("Copy puts the markdown on the clipboard", page.evaluate("navigator.clipboard.readText()") == open(os.path.join(SITE, "llms.txt")).read())
         wide_enough(f"{name} agent page")
         if name == "phone":
             page.set_viewport_size({"width": 320, "height": 640})
@@ -159,14 +157,15 @@ with sync_playwright() as p:
             page.set_viewport_size(vp)
         axe(page, f"{name} agent page")
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}_agent.png"), full_page=True)
-        page.click(".readas [data-reader=person]")
-        check(f"{name}: Normal person switches back", page.is_visible(".hero-copy[data-for=person] h1")
-              and page.is_visible(".fig") and "for=" not in page.url)
+        page.goto(URL)
+        check(f"{name}: the pick sticks on the next visit", page.is_visible("#instructions") and not page.is_visible(".hero"))
+        page.click(".readas [data-reader=human]")
+        check(f"{name}: Human switches back", page.is_visible(".hero h1") and page.is_visible(".fig") and "for=" not in page.url)
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}.png"), full_page=True)
     deep = b.new_page()        # a shared link opens the version it names
     deep.goto(URL + "?for=agent")
     deep.wait_for_selector("#agentDoc:has-text('Check with the person first')", timeout=5000)
-    check("?for=agent opens the agent page", deep.is_visible("#instructions") and not deep.is_visible(".hero-copy[data-for=person] h1"))
+    check("?for=agent opens the agent page", deep.is_visible("#instructions") and not deep.is_visible(".hero"))
     deep.close()
     still = b.new_page(reduced_motion="reduce")
     still.goto(URL)
