@@ -37,7 +37,7 @@ def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
-work = Path(tempfile.mkdtemp(prefix="kit-sync-test-"))
+work = Path(tempfile.mkdtemp(prefix="kit sync test "))   # drive names often have spaces ("Samsung T7")
 R = work / "remote"
 for rel, size in (("zim/testmed_en_all_maxi_2026-01.zim", 70_000), ("zim/testsurvival_en_2026-02.zim", 60_000),
                   ("zim/testsurvival_en_2026-05.zim", 61_000), ("hf/tiny/Tiny-Q4_K_M.gguf", 300_000),
