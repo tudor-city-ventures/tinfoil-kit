@@ -93,6 +93,14 @@ with sync_playwright() as p:
             off = [m["id"] for m in kit["models"] if not m["enabled"]]
             check("downloaded kit.json reflects the picks", len(off) == 1 and kit["settings"]["default_model"] != off[0], str(off))
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}.png"), full_page=True)
+    nf = b.new_page()     # Vercel serves 404.html for any unknown address
+    nf.goto(URL + "404.html")
+    check("404 page links home", nf.get_attribute("a", "href") == "/" and "isn't here" in nf.inner_text("h1"))
+    if os.environ.get("KIT_AXE"):
+        nf.add_script_tag(path=os.environ["KIT_AXE"])
+        bad = nf.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
+        check("404 page: no accessibility violations (axe)", not bad, ", ".join(bad))
+    nf.screenshot(path=os.path.join(SHOTS, "site_404.png"))
     b.close()
 srv.shutdown()
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
