@@ -6,8 +6,8 @@
    "group": "AI models",
    "title": "Inkling 2 Mini",
    "why": "The default AI. Fast, reads photos, built for a 32 GB Mac.",
-   "bytes": 18000000000,
-   "estimated": true,
+   "bytes": 17973851712,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -19,8 +19,8 @@
    "group": "AI models",
    "title": "Qwen 3.8 27B",
    "why": "A second opinion from a different lab. Slower, but strong.",
-   "bytes": 17500000000,
-   "estimated": true,
+   "bytes": 17491867232,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -31,8 +31,8 @@
    "group": "AI models",
    "title": "Gemma 4 26B",
    "why": "A third opinion from Google. Quick and reads photos.",
-   "bytes": 15700000000,
-   "estimated": true,
+   "bytes": 15694045216,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -43,8 +43,8 @@
    "group": "AI models",
    "title": "Gemma 4 E4B",
    "why": "Small and light. Runs on an 8 to 16 GB laptop or on battery.",
-   "bytes": 5300000000,
-   "estimated": true,
+   "bytes": 5265746464,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -56,8 +56,8 @@
    "group": "Maps",
    "title": "Offline maps",
    "why": "Street maps, address search and driving or walking directions for your region.",
-   "bytes": 25000000000,
-   "estimated": true,
+   "bytes": 16969233263,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -69,8 +69,8 @@
    "group": "Medical",
    "title": "WikiMed",
    "why": "A medical encyclopedia: conditions, drugs, procedures.",
-   "bytes": 2000000000,
-   "estimated": true,
+   "bytes": 2302838784,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -95,8 +95,8 @@
    "group": "Medical",
    "title": "Field medicine books",
    "why": "First aid and medicine for when help is far away.",
-   "bytes": 100000000,
-   "estimated": true,
+   "bytes": 70179840,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -121,8 +121,8 @@
    "group": "Preparedness",
    "title": "Post-disaster guides",
    "why": "Shelter, sanitation and recovery after a disaster.",
-   "bytes": 600000000,
-   "estimated": true,
+   "bytes": 644666368,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -134,8 +134,8 @@
    "group": "Preparedness",
    "title": "Water treatment",
    "why": "How to find, filter and disinfect drinking water.",
-   "bytes": 100000000,
-   "estimated": true,
+   "bytes": 20925440,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -147,8 +147,8 @@
    "group": "Preparedness",
    "title": "Food preparation",
    "why": "Storing, preserving and cooking food without power.",
-   "bytes": 100000000,
-   "estimated": true,
+   "bytes": 97822720,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -160,8 +160,8 @@
    "group": "Preparedness",
    "title": "Knots",
    "why": "Illustrated knots for rope, tarps and rescue.",
-   "bytes": 100000000,
-   "estimated": true,
+   "bytes": 27945984,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -199,8 +199,8 @@
    "group": "Repair and skills",
    "title": "iFixit",
    "why": "Step-by-step repair guides for phones, appliances, cars and tools.",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 3570696192,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -212,8 +212,8 @@
    "group": "Repair and skills",
    "title": "Appropedia",
    "why": "Off-grid and low-tech solutions: solar, water, building.",
-   "bytes": 600000000,
-   "estimated": true,
+   "bytes": 581642240,
+   "estimated": false,
    "presets": [
     "essentials",
     "recommended",
@@ -225,8 +225,8 @@
    "group": "Repair and skills",
    "title": "Energypedia",
    "why": "Solar panels, batteries and small power systems.",
-   "bytes": 700000000,
-   "estimated": true,
+   "bytes": 722590720,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -237,8 +237,8 @@
    "group": "Preparedness",
    "title": "US Army publications",
    "why": "Field manuals on survival, first aid, navigation and more.",
-   "bytes": 7700000000,
-   "estimated": true,
+   "bytes": 8232397824,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -249,8 +249,8 @@
    "group": "Reference",
    "title": "Wikipedia, with images",
    "why": "All of English Wikipedia. The reference for nearly any question.",
-   "bytes": 115000000000,
-   "estimated": true,
+   "bytes": 127418088448,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -261,8 +261,8 @@
    "group": "Reference",
    "title": "Wiktionary",
    "why": "A full dictionary and thesaurus.",
-   "bytes": 8000000000,
-   "estimated": true,
+   "bytes": 14847562752,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -273,8 +273,8 @@
    "group": "Books and courses",
    "title": "Wikibooks",
    "why": "Open textbooks and how-tos.",
-   "bytes": 5000000000,
-   "estimated": true,
+   "bytes": 4739740672,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -285,8 +285,8 @@
    "group": "Reference",
    "title": "Wikivoyage",
    "why": "Travel guides for places you might need to go.",
-   "bytes": 1000000000,
-   "estimated": true,
+   "bytes": 1071169536,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -297,8 +297,8 @@
    "group": "Books and courses",
    "title": "Wikiversity courses",
    "why": "Wikiversity courses (~2 GB)",
-   "bytes": 2000000000,
-   "estimated": true,
+   "bytes": 2110168064,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -309,8 +309,8 @@
    "group": "Medical",
    "title": "LibreTexts medicine textbooks",
    "why": "LibreTexts medicine textbooks (~1 GB)",
-   "bytes": 1000000000,
-   "estimated": true,
+   "bytes": 1192567808,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -321,8 +321,8 @@
    "group": "Books and courses",
    "title": "LibreTexts biology",
    "why": "LibreTexts biology (~2 GB)",
-   "bytes": 2000000000,
-   "estimated": true,
+   "bytes": 2240947200,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -333,8 +333,8 @@
    "group": "Books and courses",
    "title": "LibreTexts chemistry",
    "why": "LibreTexts chemistry (~2 GB)",
-   "bytes": 2000000000,
-   "estimated": true,
+   "bytes": 2182917120,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -345,8 +345,8 @@
    "group": "Books and courses",
    "title": "LibreTexts engineering",
    "why": "LibreTexts engineering (~0.7 GB)",
-   "bytes": 700000000,
-   "estimated": true,
+   "bytes": 678394880,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -357,8 +357,8 @@
    "group": "Books and courses",
    "title": "LibreTexts physics",
    "why": "LibreTexts physics (~0.5 GB)",
-   "bytes": 500000000,
-   "estimated": true,
+   "bytes": 559554560,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -369,8 +369,8 @@
    "group": "Books and courses",
    "title": "LibreTexts earth science",
    "why": "LibreTexts earth science (~1 GB)",
-   "bytes": 1000000000,
-   "estimated": true,
+   "bytes": 1188117504,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -381,8 +381,8 @@
    "group": "Books and courses",
    "title": "LibreTexts math",
    "why": "LibreTexts math (~0.8 GB)",
-   "bytes": 800000000,
-   "estimated": true,
+   "bytes": 830646272,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -393,8 +393,8 @@
    "group": "Repair and skills",
    "title": "Home improvement Q&A",
    "why": "Home improvement Q&A",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 2086025216,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -405,8 +405,8 @@
    "group": "Repair and skills",
    "title": "Gardening Q&A",
    "why": "Gardening Q&A",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 933097472,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -417,8 +417,8 @@
    "group": "Repair and skills",
    "title": "Cooking Q&A",
    "why": "Cooking Q&A",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 238098432,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -429,8 +429,8 @@
    "group": "Preparedness",
    "title": "Outdoors / wilderness Q&A",
    "why": "Outdoors / wilderness Q&A",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 141820928,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -441,8 +441,8 @@
    "group": "Repair and skills",
    "title": "Electronics Q&A",
    "why": "Electronics Q&A (~4 GB)",
-   "bytes": 4000000000,
-   "estimated": true,
+   "bytes": 4261398528,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -453,8 +453,8 @@
    "group": "Repair and skills",
    "title": "Amateur radio Q&A",
    "why": "Amateur radio Q&A",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 77109248,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -465,8 +465,8 @@
    "group": "Repair and skills",
    "title": "Car repair Q&A",
    "why": "Car repair Q&A",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 341672960,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -477,8 +477,8 @@
    "group": "Repair and skills",
    "title": "Bicycle repair Q&A",
    "why": "Bicycle repair Q&A",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 499255296,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -489,8 +489,8 @@
    "group": "Repair and skills",
    "title": "Sustainable living Q&A",
    "why": "Sustainable living Q&A",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 27687936,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -501,8 +501,8 @@
    "group": "Medical",
    "title": "Medical sciences Q&A",
    "why": "Medical sciences Q&A",
-   "bytes": null,
-   "estimated": true,
+   "bytes": 60660736,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -561,8 +561,8 @@
    "group": "Books and courses",
    "title": "Survivor Library",
    "why": "Historical how-to books on farming, tools and trades.",
-   "bytes": 232000000000,
-   "estimated": true,
+   "bytes": 220347600896,
+   "estimated": false,
    "presets": [
     "everything"
    ]
@@ -572,8 +572,8 @@
    "group": "Books and courses",
    "title": "Khan Academy",
    "why": "Video lessons for school-age kids.",
-   "bytes": 168000000000,
-   "estimated": true,
+   "bytes": 180007048192,
+   "estimated": false,
    "presets": [
     "everything"
    ]
@@ -583,8 +583,8 @@
    "group": "Books and courses",
    "title": "All of Project Gutenberg",
    "why": "Every English public-domain book. Replaces the subsets.",
-   "bytes": 206000000000,
-   "estimated": true,
+   "bytes": 221251591168,
+   "estimated": false,
    "presets": [
     "everything"
    ]
