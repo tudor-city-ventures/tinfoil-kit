@@ -1610,6 +1610,14 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
             total += size
             log(f"  {key.split('/', 1)[1][:44]:<46}{v.get('version', ''):<16}{fmt_size(size) if size else '':>9}"
                 f"   {v.get('updated', '')[:10]}")
+    left = sorted(set(state.get("partials", {})) | {p.relative_to(root).as_posix() for pattern in
+                  ("library/*.partial", "models/*/*.partial", "maps/*/*.partial", ".kit/downloads/*.partial")
+                  for p in root.glob(pattern)})
+    left = [(rel, (root / rel).stat().st_size) for rel in left if (root / rel).is_file()]
+    if left:
+        log("\nUnfinished downloads (sync resumes them while the item is on in kit.json; delete one to free its space):")
+        for rel, size in left:
+            log(f"  {rel[:60]:<62}{fmt_size(size):>9}")
     last = state.get("last_sync")
     log(f"\nKit content: {fmt_size(total)}.  Drive: {fmt_size(usage.free)} free of {fmt_size(usage.total)}.")
     if last:

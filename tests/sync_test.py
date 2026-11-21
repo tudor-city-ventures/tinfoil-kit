@@ -173,7 +173,8 @@ try:
           str(state().get("partials")))
 
     rc, out = kit("status")
-    check("status", rc == 0 and "Last complete sync" in out, out)
+    check("status, including the switched-off book's unfinished download",
+          rc == 0 and "Last complete sync" in out and "library/disabled_one_en_2026-01.zim.partial" in out, out)
 
     nowhere = "http://127.0.0.1:9"     # nothing listens there
     off = {**env, "KIT_HF": nowhere, "KIT_KIWIX_CATALOG": nowhere + "/catalog"}
