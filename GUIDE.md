@@ -23,7 +23,8 @@ Nothing here needs the internet, an account, or an install.
 - **Library**: browse or search every book yourself.
 - **Map**: search an address or place, get driving or walking directions, or find the nearest hospital, pharmacy,
   gas station and more. See [Maps](#maps).
-- **AI chat**: plain chat with the AI. You can attach a photo (a plant, a rash, a broken part).
+- **AI chat**: plain chat with the AI. You can attach a photo (a broken part, a label, a rash). It doesn't search the
+  library, so check anything important there, and never eat a wild plant or mushroom because an AI said it was safe.
 - **Models**: pick from the list on the Ask page.
   - `Inkling-2-Mini` (default): fast, good quality, reads photos.
   - `Qwen3.8-27B` and `Gemma-4-26B-A4B`: second and third opinions from other labs. Worth asking twice on anything important.
@@ -154,3 +155,4 @@ the AI is slow: use `Gemma-4-E4B`. The map works on the Mac only.
 | `bin/` | The programs: llama.cpp (AI), kiwix-serve (library), and for maps pmtiles, Photon, GraphHopper and Java |
 | `installers/` | Optional apps (Kiwix for Mac) |
 | `tools/` | The kit's own scripts and web page |
+| `THIRD-PARTY.md` | Where each model, book, map and program comes from, and its license |

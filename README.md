@@ -33,7 +33,7 @@ Then turn Wi-Fi off and double-click `START-HERE.command`. [GUIDE.md](GUIDE.md) 
 
 ## Keep it fresh
 
-Double-click `SETUP.command` (or run `./kit update`, `./kit sync` and then `./kit test`) every two to three months. It first installs the newest release of the kit's own code, keeping your kit.json changes. Downloads resume, every file is checked against its published checksum, and the old version stays until the new one verifies.
+Double-click `SETUP.command` (or run `./kit update`, `./kit sync` and then `./kit test`) every two to three months. It first installs the newest release of the kit's own code, keeping your kit.json changes. Downloads resume, every file with a published checksum is checked against it, and the old version stays until the new one verifies.
 
 ## Customize
 
@@ -45,4 +45,4 @@ Bug reports and ideas are welcome as issues. A pull request needs an issue the m
 
 ## License
 
-[MIT](LICENSE)
+The kit's code is [MIT](LICENSE). Everything it downloads (models, books, maps, programs) comes from its publisher under its own license: see [THIRD-PARTY.md](THIRD-PARTY.md). Some of it forbids commercial use, so don't sell drives filled with the kit.

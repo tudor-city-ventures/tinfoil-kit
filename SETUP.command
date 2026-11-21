@@ -68,6 +68,7 @@ fi
 
 say "Step 1 of 2: download. Here's what will change:"
 ./kit plan || finish 1
+say "Each item comes from its publisher under its own license, listed in THIRD-PARTY.md. Downloading means you accept them."
 ask "Start downloading? Keep the Mac plugged in. It's fine to stop (Ctrl-C) and run SETUP again later; downloads resume." || finish
 # Keep the Mac awake (not the screen) until the download and checks are done. caffeinate runs in the
 # background so that Ctrl-C reaches the sync, which saves its progress, and this script carries on.

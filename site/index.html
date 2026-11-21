@@ -136,6 +136,7 @@ html:not(.js) .fig{display:none}
 .oss p{font-size:18px;line-height:1.5;color:#CFCBBE;max-width:620px}
 footer{border-top:1px solid #3A3E36;background:var(--ink);color:#CFCBBE}
 footer .wrap{padding-top:24px;padding-bottom:24px;display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;font:13px var(--mono)}
+footer .fine{flex-basis:100%;font-size:12px;line-height:1.5}
 footer a{color:#E0884F}footer a:hover{color:#F2A878}
 @media (max-width:600px){.wrap{padding-left:16px;padding-right:16px}.fig{padding:16px}h2{font-size:32px}.oss h2{font-size:34px}.hero{padding-top:40px;gap:36px}
 .presets{display:flex;align-self:stretch}.presets button{flex:1 1 auto;padding:0 6px;font-size:13px}
@@ -275,13 +276,13 @@ First ask me about my computer, drive size, region and priorities. Then propose 
 <h2>Before you fill a drive.</h2>
 </div>
 <div class="faq">
-<details><summary>Does anything leave my Mac?</summary><p>No. Once the drive is filled, every part runs on your Mac at 127.0.0.1 with no account and no telemetry. The only time it goes online is when you run SETUP or <code>./kit sync</code> to download updates, and then it only talks to GitHub (for updates to the kit itself) and the sources listed in kit.json.</p></details>
+<details><summary>Does anything leave my Mac?</summary><p>No. Once the drive is filled, every part runs on your Mac at 127.0.0.1 with no account and no telemetry. The only time it goes online is when you run SETUP or <code>./kit sync</code> to download updates, and then it only talks to the places it downloads from: GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus anything you add to kit.json.</p></details>
 <details><summary>What do I need?</summary><p>An Apple Silicon Mac (M1 or newer) and an external SSD. 32 GB of memory runs the capable model; smaller Macs use the small one. The recommended kit is about 300 GB, so a 2 TB drive leaves room to grow. The kit builder above shows the total for your picks.</p></details>
 <details><summary>Can I trust the AI's answers?</summary><p>Treat it like a well-read friend, not a doctor. In the Ask tab it answers from the library and numbers its sources, so you can open the page it used and check. For anything serious, read the source itself.</p></details>
-<details><summary>Can my family use it from their phones?</summary><p>Yes. Start it with <code>--share</code> and any phone on the same Wi-Fi or hotspot can open the page. No internet is needed for that, only a local network.</p></details>
+<details><summary>Can my family use it from their phones?</summary><p>Yes. Start it with <code>--share</code> and any phone on the same Wi-Fi or hotspot can open the page. No internet is needed for that, only a local network. Anyone else on that network can open it too, so share on your own hotspot or home Wi-Fi.</p></details>
 <details><summary>How long does it run on battery?</summary><p>The big model uses a lot of power: expect a couple of hours of active use on a laptop. The small model uses much less, and the Library tab with the AI off uses almost nothing. A USB-C power station and a folding solar panel keep it going.</p></details>
 <details><summary>What about Windows or Linux?</summary><p>The Mac is the supported setup for now. They're a fallback if the Mac is gone: on an exFAT drive, a Windows PC runs the library and a slower AI with the included launcher, and Linux runs it from Terminal. The map is Mac-only, and these paths are less tested.</p></details>
-<details><summary>Is all this content legal to copy?</summary><p>Yes. The library comes from Kiwix, which packages openly licensed sites like Wikipedia, WikiMed and iFixit, and US government guides. The AI models are open-weight models published for anyone to run.</p></details>
+<details><summary>Is all this content legal to download?</summary><p>Yes, for your own use. The kit downloads everything straight from its publishers: Kiwix packages openly licensed sites like Wikipedia, WikiMed and iFixit, and US government guides, and the AI models are open-weight models published for anyone to run. Each keeps its own license, and some, like iFixit's, forbid commercial use, so don't sell drives you've filled. <a href="https://github.com/tudor-city-ventures/tinfoilkit/blob/main/THIRD-PARTY.md">Every source and its license</a>.</p></details>
 </div>
 </section>
 
@@ -303,6 +304,7 @@ View the code on GitHub</a>
 <div class="wrap">
 <span>A side project from the team behind <a href="https://dotheysupportit.com">Do They Support It</a>.</span>
 <span>Tinfoil Kit · MIT · No analytics on this site</span>
+<span class="fine">Provided as is, with no warranty, and not medical advice. Not affiliated with Apple, Wikipedia, Kiwix or any source named here; their names are their owners' trademarks. <a href="https://github.com/tudor-city-ventures/tinfoilkit/blob/main/THIRD-PARTY.md">Third-party licenses</a>.</span>
 </div>
 </footer>
 
