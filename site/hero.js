@@ -1,5 +1,5 @@
 // The hero figure: a dotted globe spins up and streams down into the drive, the Wi-Fi drops, and the drive lights up what it holds.
-// Drawn on a canvas each frame from a 13-second timeline, so it can pause, hold a still frame, and stop when off screen.
+// Drawn on a canvas each frame from a 12-second timeline, so it can pause, hold a still frame, and stop when off screen.
 (function () {
   var fig = document.querySelector('.fig.viz');
   if (!fig || !window.ResizeObserver) return;
@@ -37,7 +37,7 @@
   }).catch(function () {});
 
   // Timeline, in seconds of the loop
-  var LOOP = 13, T_PACK = 3.2, T_OUT = 6.9, T_SAY = 7.6, T_RESET = 11.8, FLY = .9;
+  var LOOP = 12, T_PACK = 2.2, T_OUT = 5.9, T_SAY = 6.6, T_RESET = 10.8, FLY = .9;
   var W0 = 22 * D, W1 = 150 * D, TILT = 16 * D, ct = Math.cos(TILT), st = Math.sin(TILT);
   function omega(t) {      // a slow spin, a fast one while it unspools, then slow again
     if (t < T_PACK) return W0;
@@ -239,7 +239,7 @@
 
   // Playback: clicking the figure pauses it (WCAG 2.2.2), a still frame for reduced motion, nothing drawn while off screen.
   var still = window.matchMedia('(prefers-reduced-motion: reduce)'), playing = !still.matches, visible = true;
-  var STILL_AT = 5.4, clock = playing ? 0 : STILL_AT, last = 0, raf = 0;
+  var STILL_AT = 4.4, clock = playing ? 0 : STILL_AT, last = 0, raf = 0;
   function frame() { if (L) draw(clock % LOOP, Math.floor(clock / LOOP)); }
   function tick(ms) {
     raf = 0;
