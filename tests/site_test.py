@@ -75,6 +75,16 @@ check("the site names no update schedule", not re.search(r"\bmonths?\b|\bquarter
 named = re.findall(r"SETUP\.command|SETUP-Windows\.bat|tools/\w+\.py|mac/", open(os.path.join(SITE, "components", "prompts.js"), encoding="utf-8").read())
 gone = [f for f in named if not os.path.exists(os.path.join(SITE, "..", f))]
 check("the check-the-code prompt names files that exist", len(named) >= 5 and not gone, ", ".join(gone))
+# An AI builds the setup command from llms.txt, so it lists every id the options take
+llms = open(os.path.join(SITE, "public", "llms.txt"), encoding="utf-8").read()
+missing = [s["id"] for s in json.load(open(os.path.join(SITE, "sources.json")))["sources"]
+           if f"`{s['id']}`" not in llms and not s["id"].startswith("wikipedia_")]
+check("llms.txt lists every id the setup options take", not missing and "`wikipedia`" in llms, ", ".join(missing))
+# Travis: the AI looks for an external drive first, and checks it's formatted for both a Mac and a PC
+setup = llms.split("## Set it up", 1)[-1].split("\n## ", 1)[0]
+check("llms.txt: the AI gives the command instead of installing, and finds the drive and checks its format first",
+      "Don't run the setup yourself" in setup and setup.index("### 1. Find the drive") < setup.index("### 2.")
+      and all(w in setup.split("### 2.")[0] for w in ("exFAT", "GUID", "diskutil", "Get-Disk", "lsblk", "explicit yes")))
 
 
 
@@ -177,11 +187,14 @@ with sync_playwright() as p:
             audit = page.evaluate("navigator.clipboard.readText()")
             check("Check the code: the prompt has the AI read the code and run nothing",
                   "https://github.com/tudor-city-ventures/tinfoil-kit" in audit and "Don't install or run anything" in audit)
-            for pid, label in (("installPrompt", "Install ours"), ("ownPrompt", "Build your own")):
+            for pid, label, choose_words in (("installPrompt", "Install ours", "leave out"), ("ownPrompt", "Build your own", "opt in or out")):
                 text = page.text_content("#" + pid).lower()
-                missing = [w for w in ("opt in or out", "ai", "maps", "wikipedia", "medical", "preparedness", "repair",
+                missing = [w for w in (choose_words, "ai", "maps", "wikipedia", "medical", "preparedness", "repair",
                                        "courses", "home") if w not in text]
-                check(f"{label}: the prompt lets you opt in or out of each part", not missing, ", ".join(missing))
+                check(f"{label}: the prompt goes through each part with you", not missing, ", ".join(missing))
+            ours = page.text_content("#installPrompt")
+            check("Install ours: the AI asks about a drive and its format, then gives the command to run",
+                  "external drive" in ours and "formatted" in ours and "give me the command" in ours)
             old = b.new_page()    # a browser without the clipboard API (e.g. the page opened over plain http)
             old.add_init_script("Object.defineProperty(Navigator.prototype, 'clipboard', {get: () => undefined})")
             old.goto(URL)
@@ -197,6 +210,8 @@ with sync_playwright() as p:
             stuck.click("#copySetup")
             check("when nothing can copy, the setup prompt shows selected", stuck.is_visible("#setupText")
                   and stuck.evaluate("getSelection().toString()").startswith("I want to set up Tinfoil Kit"), stuck.inner_text("#toast"))
+            check("with nothing picked, the setup prompt leaves where you live to the AI", "--region" not in stuck.inner_text("#setupText")
+                  and "the recommended kit." in stuck.inner_text("#setupText"), stuck.inner_text("#setupText")[-200:])
             stuck.close()
             unticked = page.locator(".card strong").first.inner_text()
             # Where you live: sets the map card and Wikipedia's language, and goes into the setup prompt
@@ -228,14 +243,35 @@ with sync_playwright() as p:
             check("two languages: a Wikipedia card for each", page.evaluate(wiki_titles) == ["Wikipedia in German, with images",
                                                                                          "Wikipedia, with images"])
             choose(page, "#wikiLang", re.compile(r"^German \("))
-            page.click("#copySetup")
-            page.wait_for_selector("#toast:has-text('Copied')", timeout=5000)
-            prompt = page.evaluate("navigator.clipboard.readText()")
-            ticked = page.evaluate("[...document.querySelectorAll('.card')].filter(c => c.querySelector('[role=checkbox]').ariaChecked === 'true')"
-                                   ".map(c => c.querySelector('strong').textContent)")
-            check("the setup prompt lists the picks, and not what was unticked", "- Wikipedia in German, with images (" in prompt
-                  and all("- " + t + " (" in prompt for t in ticked) and "- " + unticked + " (" not in prompt, unticked)
-            check("the setup prompt says where you live, as a ./kit region command", "./kit region bayern --wikipedia de" in prompt)
+            def options():    # the setup prompt's line of SETUP options
+                page.evaluate("navigator.clipboard.writeText('')")
+                page.click("#copySetup")
+                for _ in range(100):
+                    text = page.evaluate("navigator.clipboard.readText()")
+                    if text:
+                        break
+                    page.wait_for_timeout(50)
+                return next((l for l in text.splitlines() if l.startswith("--")), "")
+            line = options()
+            gone = next(s["id"] for s in json.load(open(os.path.join(SITE, "sources.json")))["sources"] if s["title"] == unticked)
+            check("the setup prompt gives the picks as SETUP's options: where you live, and the models still ticked",
+                  line.startswith("--region bayern --wikipedia de --models ") and gone not in line and "Gemma-4-E4B" in line, line)
+            got = {}
+            for preset in ("recommended", "essentials", "no-ai", "everything"):
+                page.click(f"[data-preset={preset}]")
+                got[preset] = options()
+            page.click("[data-preset=essentials]")
+            page.locator(".card", has_text="Wikipedia in German").locator("[role=checkbox]").click()
+            got["essentials and Wikipedia"] = options()
+            page.click("[data-preset=recommended]")
+            page.locator(".card", has_text="WikiMed").locator("[role=checkbox]").click()
+            got["no WikiMed"] = options()
+            here = "--region bayern --wikipedia de"
+            check("each preset, and a ticked or unticked book, become SETUP's options", got["recommended"] == here
+                  and got["essentials"] == here + " --essentials" and got["no-ai"] == here + " --no-ai"
+                  and got["everything"].startswith(here + " --add ") and "gutenberg_en_all" in got["everything"]
+                  and got["essentials and Wikipedia"] == here + " --essentials --add wikipedia"
+                  and got["no WikiMed"] == here + " --skip mdwiki_en_all_maxi", str(got))
             us_georgia = next(r["name"] for r in regions if r["id"] == "us/georgia")
             page.click("#place")
             in_us = page.locator("[role=listbox] [role=group]", has=page.get_by_text("US states", exact=True)).get_by_role("option", name=us_georgia, exact=True).count()

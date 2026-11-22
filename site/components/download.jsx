@@ -62,14 +62,14 @@ function SetupDialog({ phone }) {
         </div>
         <div className="dl-body">
           <p className="dl-phone" hidden={!phone}>Tinfoil Kit runs on a laptop or desktop, so do this on that computer.</p>
-          <p>Your AI asks what you want in your kit, then tells you exactly what to do.</p>
+          <p>Your AI asks what you want in your kit, then gives you the command to run.</p>
           <ol className="dl-steps">
             <li>
               <span className="dl-row">Copy this prompt. <button type="button" className="btn primary" id="copyHero" onClick={copy}>{label}</button></span>
               <pre className="dl-prompt" id="heroPrompt" tabIndex={0}>{INSTALL_PROMPT}</pre>
             </li>
             <li>Paste it into ChatGPT, Claude or any AI chat, and send it.</li>
-            <li>Answer its questions. It tells you what to click or paste, one step at a time.</li>
+            <li>Answer its questions. It gives you a command to paste into your terminal, and tells you how.</li>
           </ol>
           <p className="dl-fine">Want to choose what goes in first? Use the <a href="#builder" onClick={close}>kit builder</a>. Want to check the code before you run it? <a href="#trust" onClick={close}>Have your AI read it</a>.</p>
         </div>

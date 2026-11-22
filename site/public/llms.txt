@@ -2,7 +2,7 @@
 
 > A free, open-source (MIT) kit for when the internet is down. One folder, kept on the computer's own disk or on an external drive, holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: all of English Wikipedia, plus medical, repair and preparedness books) and offline maps (address search, driving and walking directions, "nearest hospital"). Open Tinfoil Kit starts it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library and Map tabs. Once it's filled, it needs no internet, account or install.
 
-You are setting this up for a person, probably not a programmer. Work in their terminal (Terminal on a Mac, PowerShell on Windows), explain each step in plain words, and ask before anything slow, costly or destructive. This file has what you need: what the kit runs on, how it works, where it can live, how to set it up, use it, update it and remove it, what to do when something breaks, and where every file comes from.
+You are helping a person set this up, probably not a programmer. Don't install it yourself: ask them what they want in it, then give them one command to paste into their terminal (Terminal on a Mac, PowerShell on Windows), and explain it in plain words. Updates, fixes and removal work the same way: tell them what to run, and ask before anything slow, costly or destructive. This file has what you need: what the kit runs on, how it works, where it can live, how to set it up, use it, update it and remove it, what to do when something breaks, and where every file comes from.
 
 - Repo: https://github.com/tudor-city-ventures/tinfoil-kit
 - Website: https://tinfoilkit.com
@@ -77,96 +77,117 @@ Run `./kit` (`.\kit.cmd` on Windows) in the app folder. data/kit.json starts as 
 
 Help the person pick one. It's the same kit folder each way; only its place and how it's started change.
 
-1. This computer, at ~/TinfoilKit (C:\Users\<name>\TinfoilKit on Windows). Nothing to buy or plug in, it's always with the laptop, and the internal disk is usually faster. It needs the kit's size plus 50 GB free. If the laptop is lost or breaks, the kit goes with it. Keep it in the home folder, not in Desktop or Documents, which iCloud or OneDrive may sync. On a Mac, sync keeps its downloads folder out of Time Machine backups (data, the person's settings, is backed up).
-2. An external drive, at TinfoilKit on the drive (/Volumes/<drive>/TinfoilKit on a Mac, <letter>:\TinfoilKit on Windows, under /media or /run/media on Linux). It survives the laptop breaking and, formatted exFAT, starts on any Mac, Windows PC or Linux PC. It keeps the laptop's disk free. It needs an SSD with room for the kit plus 25 GB.
+1. An external drive, at TinfoilKit on the drive (/Volumes/<drive>/TinfoilKit on a Mac, <letter>:\TinfoilKit on Windows, under /media or /run/media on Linux). The best home for it: it goes with them, and formatted exFAT it plugs into any Mac, Windows PC or Linux PC and starts there. It survives the laptop breaking and keeps the laptop's disk free. It needs an SSD with room for the kit plus 25 GB.
+2. This computer, at ~/TinfoilKit (C:\Users\<name>\TinfoilKit on Windows). Nothing to buy or plug in, and the internal disk is usually faster, but the kit stays with this laptop, and goes if it's lost or breaks. It needs the kit's size plus 50 GB free. Keep it in the home folder, not in Desktop or Documents, which iCloud or OneDrive may sync. On a Mac, sync keeps its downloads folder out of Time Machine backups (data, the person's settings, is backed up).
 3. A home server: the kit on a computer that stays on (a Linux box, a Mac mini, or a laptop on its charger), shared with every phone and laptop at home behind an access code. See "A home server" below. In an outage the router still needs power, even with no internet: a small battery backup keeps it on.
 
-Recommend a drive when the laptop is short of space or the person wants a kit they can grab and go. Recommend this computer when it has room and the person wants nothing extra to carry. If neither has room for all of it, get just the essentials or turn items off (step 3 below). Let the person choose.
+Recommend the drive first: look for one with room and the right format (step 1 of "Set it up"). If none is plugged in, ask whether they have one to plug in, or want to get one, before suggesting this computer. If nothing has room for all of it, get just the essentials or leave parts out. Let the person choose.
 
 ## Set it up
 
-### 1. Download the kit and size it up
+Don't run the setup yourself, even if you can run commands: ask the person what they want, then give them one command to paste into their terminal. The first time, it gets a small kit to try (about 10 GB: a small AI, a few medical and preparedness books, and their area's map) and opens it, so they can check that it works. When they're ready, a second command gets the rest of what they picked, and says how long that takes on their connection.
 
-Ask the person to plug in the drive first, if they have one.
+### 1. Find the drive
 
-    mkdir -p ~/Downloads && cd ~/Downloads
-    curl -fL https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit.tar.gz | tar -xz
-    cd TinfoilKit/app
-    ./kit drives --json   # what the kit needs, this computer's free space, and every drive plugged in
+Start here: an external drive is the best home for the kit.
 
-On Windows, in PowerShell:
+- If you can run commands on their computer, look for one, with these commands that only read, and change nothing. On a Mac: `diskutil list external physical` (each external disk, its partition scheme and volumes), then `diskutil info /Volumes/NAME` (File System Personality, and the free space). On Windows, in PowerShell: `Get-Disk | Where-Object BusType -eq USB` (each USB disk, with its PartitionStyle), then `Get-Disk | Where-Object BusType -eq USB | Get-Partition | Get-Volume` (DriveLetter, FileSystemType, SizeRemaining). On Linux: `lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT,TRAN` (TRAN usb) and `df -h`.
+- Otherwise, ask them: is an external drive plugged in, what's it called, how big is it, and how is it formatted? To see, on a Mac: select it in the Finder, choose File > Get Info, and read Format and Available. On Windows: in File Explorer, right-click it, choose Properties, and read File system and Free space.
+- The drive to suggest has room for the kit: about 300 GB for all of it, or 30 to 50 GB for just the essentials, plus 25 GB to spare. If none is plugged in, ask whether they have one to plug in, or want to get one (a portable USB SSD), before suggesting this computer.
+- The format decides where it works. exFAT works on a Mac, Windows and Linux: use that, best on a GUID partition map (GPT; GUID_partition_scheme on a Mac). exFAT on an older MBR map (FDisk_partition_scheme on a Mac) works too. APFS and Mac OS Extended work only on a Mac, a Mac can't write to NTFS, and FAT32 can't hold files over 4 GB.
+- A drive in another format needs erasing as exFAT first. Erasing deletes everything on it: make sure they picked the right drive, and get their explicit yes. On a Mac, in Disk Utility, choose View > Show All Devices, select the drive itself (the top line, not a volume under it), click Erase, and choose ExFAT and GUID Partition Map. On Windows, in File Explorer, right-click the drive, choose Format, pick exFAT, and click Start. SETUP checks the drive too, and stops if it can't use it.
 
-    cd ~\Downloads
-    curl.exe -fL -o TinfoilKit.zip https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit-Windows.zip
-    tar -xf TinfoilKit.zip; Remove-Item TinfoilKit.zip
-    cd TinfoilKit\app
-    .\kit.cmd drives --json
+### 2. Ask what goes in it
 
-On Windows, run each `./kit COMMAND` in this file as `.\kit.cmd COMMAND`. It needs Python 3.9 or newer: the one SETUP-Windows.bat got, or else the PC's own. If there's neither (`python --version` doesn't print one), ask the person before installing it (`winget install Python.Python.3.13`), or have them double-click SETUP-Windows.bat instead, which gets its own.
+Ask one or two questions at a time, in plain words. For each part, say what it's for and about how much space it takes, recommend what suits their computer, and keep the default for anything they don't mind. If they pasted options from the website's kit builder (a line like `--region bayern --wikipedia de --skip ...`), use those as they are, and ask only about the rest.
 
-It needs no internet and prints needs_gb (the GB the current kit.json needs), needs_essentials_gb (just the essentials), this_computer (path, free_bytes, keeps_free_gb and space) and drives (each with path, format, free_bytes, problem, has_kit, kit_path and space). space says how the kit fits there: full and essentials are each "fits" (leaving 10% of the computer's disk or 5% of a drive free), "tight" (fits, but leaves less) or "no". `./kit space PATH --json` says the same for any folder.
+1. Their computer: Mac, Windows or Linux, how much memory it has and how much free space. It needs a Mac with Apple Silicon or an x64 PC (see "What it runs on"). To see them on a Mac: Apple menu > About This Mac, and System Settings > General > Storage. On Windows: Settings > System > About, and Settings > System > Storage.
+2. Where it lives: the drive from step 1, this computer, or a home server (see "Where it can live"). A home server's command runs on the computer that stays on.
+3. Where they live, for the map's streets, directions and address search: a US state, a country, or a part of a big country (US states, Canadian provinces, German states).
+4. Which languages they want Wikipedia in: one, or two, like German and English.
+5. The AI: on or off. On, the default is the AI their computer runs, and they can pick models instead.
+6. The library, group by group (below), and whether they want any of the huge collections, which are off by default.
+7. The whole kit, about 300 GB, or just the essentials, 30 to 50 GB, if space is short: the programs, the map, the medical, preparedness and repair books, and the AI. The rest can come later.
+8. Sharing it with the phones and laptops at home, behind an access code: only while it's open, or as a home server that starts with the computer.
 
-On a Mac without Apple's Command Line Tools, `./kit` stops and says the kit needs Python. Either have the person double-click SETUP.command, which gets a Python for the kit first (about 25 MB) and then walks them through the rest of setup, or, with their OK, install the tools (`xcode-select --install`, several GB, 5 to 15 minutes) and run the command again. `xcode-select -p` shows whether they're there.
+What goes in, with the ids the options take:
 
-Developers can `git clone https://github.com/tudor-city-ventures/tinfoil-kit` straight into the chosen place instead, and update with `git pull`. A checkout is its own app folder: downloads and data go inside it.
+- AI models, which all read photos: Inkling 2 Mini (`Inkling-2-Mini`, the default, fast, 18 GB, for 32 GB of memory or more), Qwen3.8 27B (`Qwen3.8-27B`, a second opinion from another lab, slower, 17.5 GB), Gemma 4 26B-A4B (`Gemma-4-26B-A4B`, a third opinion, 15.7 GB), Gemma 4 12B (`Gemma-4-12B`, for 16 to 24 GB, 7.1 GB) and Gemma 4 E4B (`Gemma-4-E4B`, small, saves battery, for 8 GB, 5.3 GB).
+- Maps (`maps`): street detail, addresses and directions for their place, address search for its whole country, and a low-detail world map. 5 to 30 GB, depending on the place. Where nobody publishes address search for the country alone (much of Europe, the Caribbean), it covers the whole region of the world, 16 to 32 GB, and just the essentials leave that out.
+- Reference, about 143 GB: Wikipedia with images (`wikipedia`, about 127 GB in English), Wiktionary (`wiktionary_en_all_nopic`, 15 GB) and Wikivoyage (`wikivoyage_en_all_maxi`).
+- Medical, about 6 GB: WikiMed (`mdwiki_en_all_maxi`), field medicine books (`zimgit-medicine_en`), military medicine manuals (`irp.fas.org_en_military-medicine`), MedlinePlus (`medlineplus.gov_en_all`), CDC Travelers' Health (`wwwnc.cdc.gov_en_all`), LibreTexts Medicine (`libretexts.org_en_med`) and medical Q&A (`medicalsciences.stackexchange.com_en_all`).
+- Preparedness, about 17 GB: post-disaster, water, food and knots guides (`zimgit-post-disaster_en`, `zimgit-water_en`, `zimgit-food-preparation_en`, `zimgit-knots_en`), Ready.gov (`ready.gov_en_all`), Urban Prepper (`urban-prepper_en_all`), Learning Self-Reliance videos (`lrnselfreliance_en_all`), US Army publications (`armypubs_en_all`) and outdoors Q&A (`outdoors.stackexchange.com_en_all`).
+- Repair and skills, about 14 GB: iFixit (`ifixit_en_all`), Appropedia (`appropedia_en_all_maxi`), CD3WD (`cd3wdproject.org_en_all`), Energypedia (`energypedia_en_all_nopic`), and Q&A on home improvement (`diy.stackexchange.com_en_all`), gardening (`gardening.stackexchange.com_en_all`), cooking (`cooking.stackexchange.com_en_all`), electronics (`electronics.stackexchange.com_en_all`), amateur radio (`ham.stackexchange.com_en_all`), car repair (`mechanics.stackexchange.com_en_all`), bicycle repair (`bicycles.stackexchange.com_en_all`) and sustainable living (`sustainability.stackexchange.com_en_all`).
+- Books and courses, about 15 GB: Wikibooks (`wikibooks_en_all_maxi`), Wikiversity (`wikiversity_en_all_maxi`) and LibreTexts textbooks in biology (`libretexts.org_en_bio`), chemistry (`libretexts.org_en_chem`), engineering (`libretexts.org_en_eng`), physics (`libretexts.org_en_phys`), earth science (`libretexts.org_en_geo`) and math (`libretexts.org_en_math`).
+- Off by default, because they're huge: Survivor Library (`survivorlibrary.com_en_all`, 220 GB), Khan Academy videos (`khanacademy_en_all`, 180 GB) and Project Gutenberg (`gutenberg_en_all`, 221 GB).
 
-### 2. Decide where it lives
+https://tinfoilkit.com/sources.json has the same list with each item's size, and kit.json in the kit is the full list.
 
-Go through "Where it can live" with the person, with the numbers from step 1:
+### 3. Give them the command
 
-- A place fits when its space.full is "fits". "tight" fits too, but leaves less than 10% of the computer's disk (5% of a drive) free: tell the person, and offer just the essentials. "no" doesn't fit: if space.essentials isn't "no", the essentials do (step 3).
-- A drive also needs its problem to be null. exFAT works on Mac, Windows and Linux: the best choice for an emergency drive. APFS is fine if the drive will only ever meet Macs.
-- A drive with a problem is FAT32 (it can't hold files over 4 GB) or, on a Mac, NTFS (a Mac can't write to it; Windows and Linux can). It needs erasing as exFAT first: on a Mac, in Disk Utility, select the drive, click Erase and choose ExFAT. On Windows, in File Explorer, right-click the drive, choose Format and pick exFAT. Erasing deletes everything on the drive: confirm which disk it is and get the person's explicit yes first.
-- A drive with has_kit already holds a kit: offer to update that one instead (see "Update it").
+Put their answers in as options. Mac or Linux, in Terminal:
 
-### 3. Choose what goes in it
+    mkdir -p ~/Downloads && cd ~/Downloads && curl -fsSL https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit.tar.gz | tar -xz && bash TinfoilKit/app/SETUP.command --region texas --drive /Volumes/Kit --yes
 
-Go through each part with the person and let them opt in or out. For each, say what it's for, about how big it is and what you'd recommend for their computer, and keep the default for anything they don't mind: where they live and Wikipedia's languages, the AI and which of its models, the maps, each group of the library, the whole kit or just the essentials, and whether to share it with the phones and laptops at home (see "A home server"). Run `./kit estimate` after changes. If they pasted picks from the website's builder (a list of sources and a `./kit region` line), those are their answers for the AI, the maps and the library: switch on only those, run the region line, and ask only about the rest.
+Windows, in PowerShell:
 
-data/kit.json lists everything (it exists once any `./kit` command has run). The default kit:
+    cd ~\Downloads; curl.exe -fsSL -o TinfoilKit.zip https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit-Windows.zip; tar -xf TinfoilKit.zip; Remove-Item TinfoilKit.zip; .\TinfoilKit\app\SETUP-Windows.bat --region texas --drive E: --yes
 
-- AI models, all of which read photos: Inkling 2 Mini (the default, fast, about 18 GB), Qwen3.8 27B (a second opinion from another lab, slower, 17.5 GB), Gemma 4 26B-A4B (a third opinion, 15.7 GB), Gemma 4 12B (mid-size, for 16 to 24 GB, 7.2 GB) and Gemma 4 E4B (small, saves battery, for 8 GB, 5.3 GB).
-- Library, in the builder's groups: Reference (all of English Wikipedia with images, about 127 GB; Wiktionary; Wikivoyage), Medical (WikiMed, MedlinePlus, CDC Travelers' Health, field and military medicine manuals, LibreTexts Medicine, medical Q&A; about 6 GB), Preparedness (post-disaster, water and food guides, knots, Ready.gov, Urban Prepper, Learning Self-Reliance videos, US Army publications, outdoors Q&A; about 18 GB), Repair and skills (iFixit, Appropedia, CD3WD, Energypedia, and Stack Exchange Q&A on home improvement, gardening, cooking, electronics, amateur radio, car and bicycle repair; about 14 GB) and Books and courses (Wikibooks, Wikiversity, LibreTexts textbooks; about 15 GB). Off by default because they're huge: Survivor Library (220 GB), Khan Academy videos (180 GB) and Project Gutenberg (221 GB).
-- Maps: street detail, addresses and directions for one place, address search for that place's whole country, and a low-detail world map. Where nobody publishes address search for the country alone (much of Europe, the Caribbean), it covers the whole region of the world, 16 to 32 GB, and just the essentials (`./kit essentials on`) leave it out. Out of the box the place is the US Northeast (New England, New York, New Jersey, Pennsylvania); set where the person lives (below). 5 to 30 GB, depending on the place.
+| Option | What it does |
+| --- | --- |
+| `--region PLACE` | Where they live, in English: "Texas", "Ontario", "Germany: Bayern" (nicknames like "UK" and big towns like "Lyon" work too), or a place's id. Sets the map's street detail, directions, address search, home and units. Quote a name with spaces. If two places share the name, SETUP stops and lists their ids. |
+| `--wikipedia CODES` | Wikipedia's languages: `de`, or `de,en` for two. |
+| `--drive PATH`, `--this-computer` | Where it lives. A drive is its path: /Volumes/NAME on a Mac, E: on Windows, /media/USER/NAME or /run/media/USER/NAME on Linux, and the kit goes in a TinfoilKit folder at its top. Leave both out and SETUP updates a kit it finds from before, or else puts it on this computer. |
+| `--no-ai`, `--models IDS` | No AI, or exactly these models, even ones this computer can't run. Leave both out and SETUP picks the AI this computer runs. |
+| `--skip IDS`, `--add IDS` | Leave out, or add, items, comma-separated: the ids above, `maps`, or a whole part (`models`, `library`, `extras`). A book's name up to its first underscore catches every book that starts with it (`wikipedia` is Wikipedia in any language), and a site's name catches all its books (`libretexts`, `stackexchange`). They work with `--essentials` too: `--essentials --add wikipedia` is the essentials plus Wikipedia. A wrong name stops SETUP before it changes anything, and it lists the right ones. |
+| `--essentials`, `--all` | Go straight on to the rest once the try-it kit checks out: just the essentials, or all of it, even if that leaves less free space than SETUP likes. Leave both out to stop after the try-it kit. |
+| `--share` | Share it with the phones and laptops at home whenever it's open. |
+| `--home-server` | Share it, and start it whenever the computer starts. It goes straight on to the rest. |
+| `--yes` | Ask nothing. Without it, SETUP asks in the terminal whatever the options didn't answer. |
 
-To change it:
+For someone in Bavaria with a drive called Kit, who wants Wikipedia in German and English and to share it at home, the Mac command ends `--region "Germany: Bayern" --wikipedia de,en --drive /Volumes/Kit --share --yes`.
 
-- Skip an item: set "enabled": false on it in models, library or maps, in data/kit.json. Never edit app/kit.json: a new version replaces it.
-- Just the essentials: `./kit essentials on` (30 to 50 GB). The kit works with them alone, and `./kit essentials off`, then `./kit sync -y`, gets the rest whenever there's room.
-- Skip the models this computer can't run: `./kit fit --skip`.
-- Run without the AI: set "enabled": false on every model, or pick No AI in the builder. The library and the map work as usual, Ask shows the best passages instead of an answer, and `./kit test` doesn't ask for a model.
-- Add a book: `./kit search WORDS` finds Kiwix books and prints a line to paste into library.
-- Where the person lives: ask them, then `./kit region PLACE`, with a US state or a country in English ("Texas", "Ontario", "Germany: Bayern"; nicknames like "UK" and big towns like "Lyon" work too). It sets the map's street detail, directions, address search, home and units, and prints what it set. A big country comes in parts (US states, Canadian provinces, German states): pick the person's part. When a name fits more than one place, it lists them: `./kit region --find WORDS` prints the matches as id, name and group (no words: every place), and `./kit region ID` takes the one meant. `./kit region` alone says what's set now.
-- Wikipedia in the person's language: `./kit region --languages PLACE` lists the choices for that place (codes, name, GB). `./kit region PLACE --wikipedia de` (or `de,en` for two) swaps Wikipedia for those, and sync removes the old one once the new one is in.
+Before they run it, offer to go through the code with them, if they'd like to check it first: what it downloads and from where, what it changes on their computer, and how it checks downloads and updates (see "Security"). Setup is SETUP.command and SETUP-Windows.bat, and the rest is tools/kit.py.
 
-Run `./kit estimate` again after any change.
+Then tell them:
 
-### 4. Put it in place and fill it
+- How to open the terminal: on a Mac, press Cmd-Space, type Terminal and press Return. On Windows, open Start, type PowerShell and press Enter. Then paste the command and press Return.
+- What happens: on a Mac without Python, SETUP gets one first (about 25 MB). Then it moves the kit to its place, gets the try-it kit, checks it, and opens it (on Linux, it prints the command that opens it). Keep the laptop plugged in and the terminal open while it works.
+- If it stops, or the laptop sleeps, run the same command again: it picks up where it left off.
+- On a Mac, "Operation not permitted" with a drive: System Settings > Privacy & Security > Files and Folders > Terminal, turn on Removable Volumes, and run the command again.
+- To try it offline: turn off Wi-Fi and ask it a question.
 
-Put the kit where the person chose, with one of:
+### 4. When it works, give them the rest
 
-    KIT="$(./kit place ~/TinfoilKit)" && cd "$KIT/app"                   # this computer
-    KIT="$(./kit place "/Volumes/<drive>/TinfoilKit")" && cd "$KIT/app"  # a drive: its kit_path from step 1
+SETUP's last message says how big the rest is, how long it takes at the speed it measured, and the command that gets it. When they're ready, give them that command: `bash ~/TinfoilKit/app/SETUP.command --yes` (on a drive, `bash /Volumes/NAME/TinfoilKit/app/SETUP.command --yes`), or on Windows `& "$HOME\TinfoilKit\app\SETUP-Windows.bat" --yes` (on a drive, `E:\TinfoilKit\app\SETUP-Windows.bat --yes`). It gets the rest of what they picked, a few hours for all of it, checks it, and deletes the try-it files their picks left out.
 
-On Windows: `$KIT = .\kit.cmd place "$HOME\TinfoilKit"` (or `E:\TinfoilKit` for a drive), then `cd $KIT\app`. Windows can't move a folder a program is using, so there it copies the kit and leaves the download for you to delete.
-
-`./kit place` moves the download there (to another disk it copies the kit, then removes the download), prints the kit's new folder as its only output and sends its messages to stderr. If a kit is already there, it carries on with that one, and puts this app folder in it if its own was deleted. If the download's folder holds other things besides the kit (an app folder put on the Desktop on its own), it moves nothing and says so. When it can't, it exits 1 and says why: the drive isn't plugged in, a folder that isn't a kit has the name, or macOS won't let Terminal write to the drive (see "When something goes wrong").
-
-Then, in the kit's app folder:
-
-    ./kit plan                  # every item, version and size. Show the person the total and get a yes.
-    ./kit sync -y --starter     # a small kit to try first (about 10 GB): the programs, the map, a small AI, a few books
-    ./kit test                  # start every server offline and check each one answers: now the kit works
-    ./kit sync -y               # then everything picked: a few hours the first time. It removes the try-it
-    ./kit test                  # files nobody picked once it all checks out.
-
-- `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit already works with what it has.
-- Sync fetches the most important items first, each big file over eight connections at once, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
-- Last, prove it works offline: turn Wi-Fi off, double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows) and ask a question.
+- Add `--all` to get all of it even if that leaves less free space than SETUP likes, or `--essentials` for just those. Without either, SETUP takes all of it if it fits with room to spare, or else the essentials, and says so.
+- Double-clicking SETUP again (Update, in the Mac app) gets the rest too. Without `--yes`, it asks the kit builder's questions first (`./kit pick --ask`), unless what goes in was picked already.
 
 ### For people who'd rather click
 
-Download it from https://tinfoilkit.com: the Download button picks the computer's file from the latest release (TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, or TinfoilKit.tar.gz for Linux), and the page says what to do next. On a Mac, open the download (Safari unzips it into the Tinfoil Kit app), double-click Tinfoil Kit, click Open when macOS asks about an app from the internet, let it move itself to Applications and click Set Up: SETUP runs in a Terminal window. On Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat in TinfoilKit\app. On Linux, run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/app/SETUP.command`. The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), then "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it gets a small kit to try (about 10 GB), tests it, opens it and says how long the rest takes on this connection. Running SETUP again gets the rest, after asking what goes in the kit (the website builder's choices). On a Mac without Python, it gets one first. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
+Download it from https://tinfoilkit.com: the Download button picks the computer's file from the latest release (TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, or TinfoilKit.tar.gz for Linux), and the page says what to do next. On a Mac, open the download (Safari unzips it into the Tinfoil Kit app), double-click Tinfoil Kit, click Open when macOS asks about an app from the internet, let it move itself to Applications and click Set Up: SETUP runs in a Terminal window. On Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat in TinfoilKit\app. On Linux, run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/app/SETUP.command`. The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), then "An external drive (recommended)" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it gets a small kit to try (about 10 GB), tests it, opens it and says how long the rest takes on this connection. Running SETUP again gets the rest, after asking what goes in the kit (the website builder's choices). On a Mac without Python, it gets one first. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks its questions as it goes; the options above answer them ahead of time.
+
+### By hand
+
+For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` for `./kit` on Windows):
+
+    ./kit drives --json   # what the kit needs, this computer's free space, and every drive plugged in, with its format
+    ./kit fit --json      # which AI this computer runs
+    ./kit region PLACE --wikipedia de
+    KIT="$(./kit place "/Volumes/<drive>/TinfoilKit")" && cd "$KIT/app"   # or ~/TinfoilKit, for this computer
+    ./kit pick            # what's on, and the size of all of it and of just the essentials (--ask: the kit builder's questions)
+    ./kit plan            # every item, version and size
+    ./kit sync -y --starter && ./kit test   # the try-it kit, about 10 GB
+    ./kit sync -y && ./kit test             # everything picked; then it removes the try-it files nobody picked
+
+- `./kit` needs Python 3.9 or newer. On a Mac without Apple's Command Line Tools, or a PC without Python, run SETUP once: it gets one for the kit. On Windows, `.\kit.cmd` uses the Python SETUP-Windows.bat got, or else the PC's own.
+- `./kit drives --json` needs no internet. It prints needs_gb (what the current kit.json needs), needs_essentials_gb, this_computer and drives, each drive with path, format, free_bytes, problem, has_kit, kit_path and space. space says whether all of it and just the essentials fit there: "fits" (leaving 10% of the computer's disk or 5% of a drive free), "tight" (fits, but leaves less) or "no". A drive with a problem is FAT32, or NTFS on a Mac: erase it as exFAT first (step 1 above). `./kit space PATH --json` says the same for any folder.
+- `./kit place` moves the download there (to another disk it copies the kit, then removes the download) and prints the kit's new folder as its only output. If a kit is already there, it carries on with that one, and puts this app folder in it if its own was deleted. On Windows it copies the kit and leaves the download to delete. When it can't, it exits 1 and says why.
+- Skip an item by setting "enabled": false on it in data/kit.json (never app/kit.json: a new version replaces it), or get just the essentials with `./kit essentials on`. `./kit search WORDS` finds more Kiwix books and prints a line to paste into library. Run `./kit estimate` after any change.
+- `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit already works with what it has.
+- Sync fetches the most important items first, each big file over eight connections at once, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
+- Developers can `git clone https://github.com/tudor-city-ventures/tinfoil-kit` straight into the chosen place instead, and update with `git pull`. A checkout is its own app folder: downloads and data go inside it.
 
 ## Use it
 
@@ -180,12 +201,11 @@ Download it from https://tinfoilkit.com: the Download button picks the computer'
 
 ## A home server
 
-For a computer that stays on, with or without a screen. Set the kit up on the computer's own disk as above (`./kit place ~/TinfoilKit`, `./kit sync -y`, `./kit test`), then, in the kit's app folder:
+For a computer that stays on, with or without a screen. The setup command with `--this-computer --home-server` (see "Set it up") sets the kit up on that computer's own disk, gets all of it, and turns on both of these. By hand, in the kit's app folder:
 
     ./kit share on       # share it on the home network behind an access code: prints the address, the code and a QR code
     ./kit autostart on   # start it now, and whenever the computer starts
 
-- `bash SETUP.command --home-server` (`.\SETUP-Windows.bat --home-server` on Windows) does the setup and then both. It asks its questions in the terminal, so as an agent, run the commands instead.
 - Phones and laptops open the address, like http://192.168.1.20:8000, and type the 8-digit code once; the QR code includes it. `./kit share` shows them again. `./kit share new-code` replaces the code and signs every device out. `./kit share off` stops sharing.
 - How it works: tools/share.py listens on the network on port 8000 (`share_port` in data/kit.json), asks for the code, and passes requests on: /ai/ to the AI, /tiles/, /geocoder/ and /routing/ to the map, everything else to the library. It answers only devices with home network addresses, turns away names that aren't this computer's, and allows 10 wrong codes per 10 minutes from each device.
 - Programs can use the code as an API key: `Authorization: Bearer CODE` with the OpenAI-compatible API at http://ADDRESS:8000/ai/v1.
@@ -208,7 +228,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 - In a git checkout, run `git pull` instead of `./kit update`.
 - An update can bring models too big for this computer: `./kit fit` names them, and `./kit fit --skip` leaves them out. On a kit with just the essentials, `./kit space . --json` says when the rest fits; then run `./kit essentials off` before syncing. SETUP asks about both by itself.
 - If `./kit update` says a version isn't signed with the kit's release key, stop: don't install it another way. Tell the person, and report it at https://github.com/tudor-city-ventures/tinfoil-kit/security.
-- Double-clicking SETUP again (SETUP.command, or SETUP-Windows.bat on Windows), or Update in the Mac app, does all four.
+- Double-clicking SETUP again (SETUP.command, or SETUP-Windows.bat on Windows), or Update in the Mac app, does all four. As an agent, give them `bash "<kit folder>/app/SETUP.command" --yes` (`& "<kit folder>\app\SETUP-Windows.bat" --yes` on Windows), which does the same without asking.
 - A normal update brings new library editions, the program builds the new kit version names (the AI engine and the rest), any re-released models and fresh map data. Only what changed downloads.
 - A newer download of the kit (a new ZIP, or a new Mac app) doesn't start over. Its SETUP finds the kit set up before, in the home folder or on a drive plugged in (`./kit kits` lists them), and updates that one; the Mac app opens it. A kit whose app folder was deleted gets the download's (`./kit place` that kit puts it there). Nothing the kit has downloads again, not even a file an older version kept under another name, and the kit keeps working with the editions it has: the plan lists the newer ones before anything downloads, and the person can say no.
 - A book with `refresh_days` in kit.json keeps the edition it has until it's that many days old: Wikipedia (115 GB) has 365, so most updates don't download it again. The plan marks it `later`. `./kit sync --only wikipedia_en_all_maxi` gets the newest now.
@@ -217,7 +237,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 
 ## Remove it
 
-Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's app folder, or click Remove in the Mac app. Once the person types "delete", it removes the kit folder and everything the kit downloaded, and the Python SETUP got (on Windows, or on a Mac that had none). On a drive it leaves the rest of the drive alone. If the app folder sits in a folder with other things in it, it deletes nothing and says so. The Mac app stays in Applications until it's dragged to the Trash. As an agent, run `bash UNINSTALL.command --yes` (`.\UNINSTALL-Windows.bat --yes` on Windows), which skips the question, only after the person's explicit yes.
+Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's app folder, or click Remove in the Mac app. Once the person types "delete", it removes the kit folder and everything the kit downloaded, and the Python SETUP got (on Windows, or on a Mac that had none). On a drive it leaves the rest of the drive alone. If the app folder sits in a folder with other things in it, it deletes nothing and says so. The Mac app stays in Applications until it's dragged to the Trash. As an agent, give them `bash UNINSTALL.command --yes` (`.\UNINSTALL-Windows.bat --yes` on Windows), which skips the question, only once they've said yes to deleting all of it.
 
 ## When something goes wrong
 
@@ -254,6 +274,7 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 
 ## Rules
 
+- Don't set the kit up yourself: give the person the command (see "Set it up").
 - Start programs and models only through the kit's own commands. Don't run downloaded files to see what they do.
 - Don't delete files in downloads/ by hand. `./kit verify --fix` removes corrupt files, and the next sync replaces them. To remove the whole kit, use UNINSTALL.command.
 - data/ is the person's: change their kit.json only as they ask, and never delete anything there. The app folder is the one that can go, for a new version's.
