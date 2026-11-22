@@ -94,7 +94,7 @@ async function expect(name, opts, closed) {
     await guard(github, { repo: REPO, payload: { pull_request: p } }, { info() {}, setFailed(m) { failure = m; } });
     return failure;
   }
-  check("an ordinary change passes", !(await files(["tools/kit.py", "kit.json", ".github/CONTRIBUTING.md", "site/app/page.jsx"])));
+  check("an ordinary change passes", !(await files(["tools/tinfoilkit/sync.go", "kit.json", ".github/CONTRIBUTING.md", "site/app/page.jsx"])));
   for (const f of [".github/workflows/check.yml", ".github/workflows/new.yaml", ".github/CODEOWNERS", ".github/dependabot.yml",
                    ".github/release.sh", ".gitattributes", "tools/release-signers", "tools/pins.json", "mac/build.sh"]) {
     const m = await files(["README.md", f]);

@@ -1,31 +1,32 @@
 #!/bin/bash
-# Tinfoil Kit command line:  ./kit plan | sync | verify | status | search WORDS | test
+# Tinfoil Kit command line:  ./kit plan | sync | verify | status | search WORDS | test  (./kit --help lists them all)
+# It runs the kit's own program for this computer, tools/tinfoilkit-*, which every download carries. A git checkout
+# or GitHub's Download ZIP has none until tools/tinfoilkit/build.sh builds it from the Go source in tools/tinfoilkit:
+# with Go installed, this builds it then, and again in a git checkout whose source is newer than its program.
 DIR="$(cd "$(dirname "$0")" && pwd)"
 KIT="$DIR"    # the kit folder: the app folder's, or a git checkout itself
 case "$(basename "$DIR" | tr '[:upper:]' '[:lower:]')" in app) [ -e "$DIR/.git" ] || KIT="$(dirname "$DIR")" ;; esac
-# The kit's own program (tools/tinfoilkit, which releases carry built for each computer) runs the commands when it's
-# here and runs on this computer. Without it, tools/kit.py does, on Python. KIT_NO_GO=1 keeps to Python.
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) TK="$DIR/tools/tinfoilkit-macos-arm64" ;;
   Linux-x86_64) TK="$DIR/tools/tinfoilkit-linux-x64" ;;
-  *) TK="" ;;
+  *) echo "Tinfoil Kit runs on Macs with Apple silicon and on Windows and Linux PCs (x64), not on this computer ($(uname -s) $(uname -m))." >&2
+     exit 1 ;;
 esac
-if [ -z "$KIT_NO_GO" ] && [ -n "$TK" ] && [ -f "$TK" ]; then
-  chmod +x "$TK" 2>/dev/null
-  if [ "$(uname -s)" = Darwin ]; then xattr -d com.apple.quarantine "$TK" 2>/dev/null; fi
-  "$TK" version >/dev/null 2>&1 && exec "$TK" --root "$KIT" "$@"
+if [ -f "$DIR/tools/tinfoilkit/build.sh" ] && command -v go >/dev/null &&
+   { [ ! -f "$TK" ] || { [ -e "$DIR/.git" ] && [ -n "$(find "$DIR/tools/tinfoilkit" -type f -newer "$TK" | head -1)" ]; }; }; then
+  echo "Building the kit's program from its source (tools/tinfoilkit/build.sh)..." >&2
+  bash "$DIR/tools/tinfoilkit/build.sh" >&2 || echo "It didn't build." >&2
 fi
-# The Python SETUP got for a Mac without one, or else python3. Until Apple's developer tools are installed, a Mac's
-# /usr/bin/python3 only offers to install them.
-PY="$HOME/Library/Application Support/TinfoilKit/python/bin/python3"
-if [ ! -x "$PY" ]; then
-  PY="$(command -v python3)"
-  if [ "$(uname -s)" = Darwin ] && { [ -z "$PY" ] || { [ "$PY" = /usr/bin/python3 ] && ! xcode-select -p >/dev/null 2>&1; }; }; then
-    echo "The kit needs Python. Double-click SETUP.command: it gets it."
-    exit 1
-  elif [ -z "$PY" ]; then
-    echo "The kit needs python3 (3.9 or newer). Install it (Debian, Ubuntu: sudo apt install python3), then try again."
-    exit 1
-  fi
+if [ ! -f "$TK" ]; then
+  echo "This copy of the kit doesn't have its program for this computer (tools/${TK##*/}). Download the kit from" >&2
+  echo "https://tinfoilkit.com, or build the program with tools/tinfoilkit/build.sh (it needs Go: https://go.dev/dl)." >&2
+  exit 1
 fi
-exec "$PY" "$DIR/tools/kit.py" --root "$KIT" "$@"
+chmod +x "$TK" 2>/dev/null
+# A download's files carry macOS's quarantine mark, which stops a program that Apple hasn't notarized from running.
+if [ "$(uname -s)" = Darwin ]; then xattr -d com.apple.quarantine "$TK" 2>/dev/null; fi
+if ! "$TK" version >/dev/null 2>&1; then
+  echo "The kit's program (tools/${TK##*/}) doesn't run on this computer. Download the kit again from https://tinfoilkit.com." >&2
+  exit 1
+fi
+exec "$TK" --root "$KIT" "$@"

@@ -973,7 +973,7 @@ func adopt(root string, state *obj, it *item, f *remoteFile, final string, expec
 	if len(expected) == 0 || !isDir(top) {
 		return ""
 	}
-	// (kit.py's list of other items' folders, as it has it: the downloads folder itself)
+	// (other items' folders, as ./kit has always listed them: the downloads folder itself)
 	theirs := map[string]bool{}
 	for _, i := range itemsFromConfig(cfg) {
 		if i.enabled() && i.key() != it.key() {

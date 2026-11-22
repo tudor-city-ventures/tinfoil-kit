@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick gate: run before calling any change done. Needs python3 and node; uses shellcheck if installed.
+# Quick gate: run before calling any change done. Needs python3, node and Go; uses shellcheck if installed.
 cd "$(dirname "$0")/.." || exit 1
 fail=0
 step() { echo "== $*"; }
@@ -8,10 +8,10 @@ run() { if "$@"; then :; else echo "FAIL: $*"; fail=1; fi; }
 fails() { awk '/^(PASS|SKIP|ALL|[0-9]+ FAILED)/ {on = 0} /^FAIL/ {on = 1} on'; }
 
 step "python compiles"
-run python3 -m py_compile tools/kit.py tools/share.py tools/data.py tests/*.py site/*.py
+run python3 -m py_compile tests/*.py site/*.py
 
 step "bash parses"
-SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command tools/launch.sh mac/app.sh mac/build.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles tools/tinfoilkit/build.sh)
+SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command mac/app.sh mac/build.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles tools/tinfoilkit/build.sh)
 for f in "${SH[@]}"; do run bash -n "$f"; done
 
 step "shellcheck"
@@ -39,10 +39,10 @@ import sys; sys.path.insert(0, 'site'); from skills import tame
 md = tame('---\\nname: x\\nallowed-tools: Bash(npx x *)\\nhooks:\\n  PreToolUse:\\n    - x\\ndescription: y\\n---\\nRun !\\x60npx x info\\x60 now.\\n')
 sys.exit(0 if md.startswith('---\\nname: x\\ndescription: y\\n---\\n') and 'npx x info' in md and '!\\x60' not in md else 'not tamed: ' + md)"
 
-step "archives of the kit stamp kit.py with their commit (./kit update needs it)"
+step "archives of the kit write their commit into tools/commit (./kit update needs it)"
 if git rev-parse --git-dir >/dev/null 2>&1; then
-  run grep -q '^KIT_COMMIT = "\$Format:%H\$"' tools/kit.py
-  run sh -c 'git check-attr export-subst tools/kit.py | grep -q ": set$"'
+  run grep -qx '\$Format:%H\$' tools/commit
+  run sh -c 'git check-attr export-subst tools/commit | grep -q ": set$"'
   # and carry the kit's own files only: no tests, docs, website (besides the two site files the kit reads) or Mac app
   run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -Ev "^(site/|site/kit.json|site/sources.json)$" | grep -E "^(tests|docs|\.github|site|mac)/"'
   # and none of the developer tools (package.json's)
@@ -78,7 +78,7 @@ fi
 
 step "nothing the kit runs installs or runs npm's developer tools"
 run sh -c '! grep -nwE "npm|npx|node_modules" kit kit.cmd SETUP.command SETUP-Windows.bat UNINSTALL.command UNINSTALL-Windows.bat \
-  "Open Tinfoil Kit.command" "Open Tinfoil Kit for Windows.bat" tools/launch.sh tools/share.py mac/app.sh mac/TinfoilKit.m'
+  "Open Tinfoil Kit.command" "Open Tinfoil Kit for Windows.bat" mac/app.sh mac/TinfoilKit.m'
 
 step "contribution gate"
 out=$(node tests/pr_gate_test.js 2>&1); rc=$?
@@ -90,46 +90,30 @@ out=$(python3 tests/actions_test.py 2>&1); rc=$?
 echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
-step "what AI agents read names only commands and options that exist"
-out=$(python3 tests/skills_test.py 2>&1); rc=$?
-echo "$out" | fails ; echo "$out" | tail -1
-[ $rc -eq 0 ] || fail=1
-
 step "the kit's own program (tools/tinfoilkit): the Go checks, and a build for each computer, which the tests below run"
 if command -v go >/dev/null; then
   run tools/tinfoilkit/build.sh check
   run tools/tinfoilkit/build.sh
 else
-  echo "skipped (Go not installed): the tests below check launch.sh and share.py only"
+  echo "FAIL: Go isn't installed (https://go.dev/dl), so the kit's program isn't built for the tests below"; fail=1
 fi
+
+step "what AI agents read names only commands and options that exist"
+out=$(python3 tests/skills_test.py 2>&1); rc=$?
+echo "$out" | fails ; echo "$out" | tail -1
+[ $rc -eq 0 ] || fail=1
 
 step "sync engine against the mock internet"
 out=$(python3 tests/sync_test.py 2>&1); rc=$?
 echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
-step "the same, and sharing and the skills' commands, with the kit's own program in place of kit.py"
-case "$(uname -s)-$(uname -m)" in
-  Linux-x86_64) prog=tools/tinfoilkit-linux-x64 ;;
-  Darwin-arm64) prog=tools/tinfoilkit-macos-arm64 ;;
-  *) prog="" ;;
-esac
-if [ -n "$prog" ] && [ -x "$prog" ]; then
-  for t in sync_test share_test skills_test; do
-    out=$(KIT_ENGINE=go python3 "tests/$t.py" 2>&1); rc=$?
-    echo "$out" | fails ; echo "$t: $(echo "$out" | tail -1)"
-    [ $rc -eq 0 ] || fail=1
-  done
-else
-  echo "skipped (not built)"
-fi
-
 step "sharing on the home network: the gate, the QR code, ./kit share and autostart"
 out=$(python3 tests/share_test.py 2>&1); rc=$?
 echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
-step "notes and pins: tools/data.py keeps them in the data folder, for the kit's page only"
+step "notes and pins: the kit's program keeps them in the data folder, for the kit's page only"
 out=$(python3 tests/data_test.py 2>&1); rc=$?
 echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1

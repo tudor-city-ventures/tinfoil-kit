@@ -130,21 +130,6 @@ print("kiwix-tools_%s-%s.%s" % (plat, newest, ext))' "$TMP/kiwix.html" "$plat")
     get "https://download.kiwix.org/release/kiwix-tools/$name" "$DL/$name"
     cp "$DL/$name" "$R/release/kiwix-tools/kiwix-tools_${plat%%.*}-3.8.2.${plat#*.}"
   done
-  # The very Python SETUP-Windows.bat names, which must match the checksum there
-  pyv=$(tr -d '\r' < "$TESTS/../SETUP-Windows.bat" | sed -n 's/^set "PYV=\(.*\)"$/\1/p')
-  pysha=$(tr -d '\r' < "$TESTS/../SETUP-Windows.bat" | sed -n 's/^set "PYSHA=\(.*\)"$/\1/p')
-  get "https://api.nuget.org/v3-flatcontainer/python/$pyv/python.$pyv.nupkg" "$DL/python.$pyv.nupkg"
-  mkdir -p "$R/nuget" && cp "$DL/python.$pyv.nupkg" "$R/nuget/python.nupkg"
-  python3 -c 'import hashlib, sys; sys.exit(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() != sys.argv[2])' \
-    "$R/nuget/python.nupkg" "$pysha" || { echo "python.$pyv.nupkg doesn't match the checksum in SETUP-Windows.bat"; exit 1; }
-  # and the very Python SETUP.command gets for a Mac without one
-  pyurl=$(sed -n 's/^PY_URL="${KIT_MAC_PYTHON_URL:-\(.*\)}"$/\1/p' "$TESTS/../SETUP.command")
-  pysha=$(sed -n 's/^PY_SHA256="${KIT_MAC_PYTHON_SHA256:-\(.*\)}"$/\1/p' "$TESTS/../SETUP.command")
-  get "$pyurl" "$DL/${pyurl##*/}"
-  mkdir -p "$R/pbs" && cp "$DL/${pyurl##*/}" "$R/pbs/python.tar.gz"
-  python3 -c 'import hashlib, sys; sys.exit(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() != sys.argv[2])' \
-    "$R/pbs/python.tar.gz" "$pysha" || { echo "${pyurl##*/} doesn't match the checksum in SETUP.command"; exit 1; }
-
   echo "== drive test: the real map programs for each computer, Andorra's roads and addresses, and a map build with tiles at zoom 0-5"
   # They replace the e2e's stand-ins: pmtiles and Java for the Mac, Windows and Linux, and GraphHopper (a fake jar)
   rm -f "$R"/gh2/go-pmtiles_* "$R"/adoptium/OpenJDK21U-*

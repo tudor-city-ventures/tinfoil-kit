@@ -63,12 +63,7 @@ THIS="this computer"; [ $MAC = 1 ] && THIS="this Mac"
 FIRST=1; grep -q '"last_sync"' "$KIT/data/.kit/state.json" 2>/dev/null && FIRST=0    # 0: set up before, so this run is an update
 # Steps are counted across the times this script starts itself again (after moving or updating the kit).
 case "${1:-}" in --placed|--updated) ;; *) KIT_STEP=0; KIT_STEPS=3; export KIT_STEP KIT_STEPS ;; esac
-# A Mac without Python gets this build of it (python-build-standalone, checked against its SHA-256), kept in the
-# home folder's Library rather than in the kit: its files include symlinks, which a drive's exFAT can't hold.
-# Changing these two gets Macs the new build at their next SETUP.
-PY_URL="${KIT_MAC_PYTHON_URL:-https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.13.14%2B20260718-aarch64-apple-darwin-install_only_stripped.tar.gz}"
-PY_SHA256="${KIT_MAC_PYTHON_SHA256:-06469835e1b0f73bcdb6c498a1d60ce579cc43a980754490a6f1e30062f43850}"
-PY_HOME="$HOME/Library/Application Support/TinfoilKit"
+SUPPORT="$HOME/Library/Application Support/TinfoilKit"    # where the Mac app looks for the kit
 APP=""    # the Mac app (the website's Mac download), once it's in Applications: the kit opens with it
 for a in "/Applications/Tinfoil Kit.app" "$HOME/Applications/Tinfoil Kit.app"; do [ $MAC = 1 ] && [ -d "$a" ] && APP="$a" && break; done
 
@@ -108,67 +103,15 @@ problems() {
                         on && /^  - / {buf = buf $0 "\n"} /^Re-run/ {on = 0} END {printf "%s", buf}' "$log"
 }
 
-# Whether the kit's own program for this computer (tools/tinfoilkit-*, which releases carry) runs here: then ./kit runs
-# it, and the kit needs no Python. KIT_NO_GO=1 keeps to Python.
-program_runs() {
-  local p
-  case "$(uname -s)-$(uname -m)" in
-    Darwin-arm64) p="$CODE/tools/tinfoilkit-macos-arm64" ;;
-    Linux-x86_64) p="$CODE/tools/tinfoilkit-linux-x64" ;;
-    *) return 1 ;;
-  esac
-  [ -z "${KIT_NO_GO:-}" ] && [ -f "$p" ] || return 1
-  chmod +x "$p" 2>/dev/null
-  [ $MAC = 0 ] || xattr -d com.apple.quarantine "$p" 2>/dev/null
-  "$p" version >/dev/null 2>&1
-}
-# The kit's commands run on its own program, or else on python3 (3.9 or newer), and download with curl. A Mac has
-# curl, but until Apple's developer tools (several GB) are installed its python3 only offers to install them: without
-# them, SETUP gets a Python for the kit instead.
+# The kit's commands run on its own program (./kit says what to do when this computer has none), which downloads
+# with curl.
 need_tools() {
-  if program_runs; then
-    command -v curl >/dev/null && return
-    say "The kit needs curl. Install it, then run SETUP again:"
-    echo "  Debian, Ubuntu, Mint:  sudo apt install curl"
-    echo "  Fedora:                sudo dnf install curl"
-    finish 1
-  fi
-  if [ $MAC = 0 ]; then
-    python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' >/dev/null 2>&1 && command -v curl >/dev/null && return
-    say "The kit needs python3 (3.9 or newer) and curl. Install them, then run SETUP again:"
-    echo "  Debian, Ubuntu, Mint:  sudo apt install python3 curl"
-    echo "  Fedora:                sudo dnf install python3 curl"
-    finish 1
-  fi
-  if [ -x "$PY_HOME/python/bin/python3" ]; then
-    [ "$(cat "$PY_HOME/python/.kit-sha256" 2>/dev/null)" = "$PY_SHA256" ] && return
-    say "First, a newer Python for the kit's tools (about 25 MB)."
-    get_python || echo "The kit keeps using the Python it has."
-    return
-  fi
-  if [ -z "${KIT_OWN_PYTHON:-}" ] && { [ "$(command -v python3)" != /usr/bin/python3 ] || xcode-select -p >/dev/null 2>&1; } &&
-     python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' >/dev/null 2>&1; then
-    return
-  fi
-  say "First, the kit gets the Python its tools run on (about 25 MB)."
-  get_python || finish 1
-}
-# Downloads PY_URL, checks it and unpacks it into $PY_HOME/python. Says why not and returns 1 if it can't.
-get_python() {
-  local tgz="$PY_HOME/python.tar.gz" new="$PY_HOME/python.partial"
-  rm -rf "$new" && mkdir -p "$new" || { say "Can't save anything in $PY_HOME."; return 1; }
-  if ! curl -fL --retry 3 --progress-bar -o "$tgz" "$PY_URL"; then
-    say "Couldn't download it. Check that $THIS is online (on hotel or cafe Wi-Fi, open any web page and sign in first), then double-click SETUP again."
-  elif [ "$( (shasum -a 256 "$tgz" 2>/dev/null || sha256sum "$tgz") | awk '{print $1}')" != "$PY_SHA256" ]; then
-    say "That download isn't the file it should be (its checksum doesn't match), so it wasn't used. Try again later."
-  elif ! tar -xzf "$tgz" -C "$new" || ! "$new/python/bin/python3" -c "" >/dev/null 2>&1; then
-    say "Couldn't unpack it. Double-click SETUP again."
-  else
-    echo "$PY_SHA256" > "$new/python/.kit-sha256"
-    rm -rf "$PY_HOME/python" "$tgz" && mv "$new/python" "$PY_HOME/python" && rm -rf "$new" && return 0
-  fi
-  rm -rf "$new" "$tgz"
-  return 1
+  ./kit --help >/dev/null || finish 1
+  command -v curl >/dev/null && return
+  say "The kit needs curl. Install it, then run SETUP again:"
+  echo "  Debian, Ubuntu, Mint:  sudo apt install curl"
+  echo "  Fedora:                sudo dnf install curl"
+  finish 1
 }
 
 # How the kit fits at a place (./kit space): FULL and ESS say whether all of it and just the essentials fit with room
@@ -567,7 +510,7 @@ home_server() {
 # it there and started this script): ./kit layout moves it into them, by renaming, and the copy of this script in app/
 # carries on. At the top of a kit with an app folder, that folder's copy takes over.
 if [ "$CODE" = "$KIT" ] && [ ! -e .git ]; then
-  if [ -f tools/kit.py ]; then
+  if [ -d tools ]; then
     need_tools
     ./kit layout || finish 1
   fi
@@ -602,7 +545,7 @@ if [ "${1:-}" != "--updated" ]; then
   fi
   checks
   # The Mac app looks for the kit here, and names its drive if it isn't plugged in.
-  [ $MAC = 1 ] && { mkdir -p "$PY_HOME" && printf '%s\n' "$KIT" > "$PY_HOME/last-kit"; } 2>/dev/null
+  [ $MAC = 1 ] && { mkdir -p "$SUPPORT" && printf '%s\n' "$KIT" > "$SUPPORT/last-kit"; } 2>/dev/null
   echo
   ./kit update ${KIT_YES:+--yes}
   [ $? -eq 3 ] && exec bash "$CODE/SETUP.command" --updated

@@ -1,6 +1,6 @@
 // Tinfoil Kit's Mac app. Double-click it to set the kit up, and after that to open it. Apple notarizes it, so macOS
 // opens it with no trip to System Settings, which a downloaded script needs. It carries a copy of the kit for the
-// first setup; SETUP and ./kit update keep the kit current after that, and SETUP gets a Mac its own Python.
+// first setup; SETUP and ./kit update keep the kit current after that.
 // The windows are here; the file work is in app.sh. mac/build.sh builds it.
 #import <Cocoa/Cocoa.h>
 #include <signal.h>
@@ -19,7 +19,7 @@ static void heard(int sig) { (void)sig; }
   NSArray<NSString *> *answers;     // KIT_APP_ANSWERS: the buttons a test presses, in order, numbered from 1
   NSUInteger answered;
   NSString *kit, *where, *url;      // the kit this window opened, where it is, and its page
-  NSTask *task;                     // the kit's launcher, tools/launch.sh
+  NSTask *task;                     // the kit's launcher, Open Tinfoil Kit.command
   BOOL libraryUp, quitting;
   NSMutableData *pending;           // the launcher's output that isn't a whole line yet
   NSWindow *window;
@@ -161,9 +161,9 @@ static void heard(int sig) { (void)sig; }
   pending = [NSMutableData data];
   task = [NSTask new];
   task.executableURL = [NSURL fileURLWithPath:@"/bin/bash"];
-  NSString *launcher = [kit stringByAppendingPathComponent:@"app/tools/launch.sh"];    // or a kit from before app/
+  NSString *launcher = [kit stringByAppendingPathComponent:@"app/Open Tinfoil Kit.command"];    // or a kit from before app/
   if (![NSFileManager.defaultManager fileExistsAtPath:launcher])
-    launcher = [kit stringByAppendingPathComponent:@"tools/launch.sh"];
+    launcher = [kit stringByAppendingPathComponent:@"Open Tinfoil Kit.command"];
   task.arguments = @[launcher];
   task.currentDirectoryURL = [NSURL fileURLWithPath:kit];
   task.standardInput = [NSFileHandle fileHandleWithNullDevice];

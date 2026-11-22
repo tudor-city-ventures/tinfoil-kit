@@ -1,10 +1,10 @@
-// Command tinfoilkit is Tinfoil Kit's own program. It starts the kit's servers and opens its page (open), keeps the
-// page's notes and pins in the data folder (data), and shares the kit on the home network behind the access code
-// (gate, banner). Standard library only, so anyone can
-// build it and get the same bytes: tools/tinfoilkit/build.sh.
+// Command tinfoilkit is Tinfoil Kit's own program: every ./kit command, among them starting the kit's servers and
+// opening its page (open), keeping the page's notes and pins in the data folder (data), and sharing the kit on the
+// home network behind the access code (gate, banner). Standard library only, so anyone can build it and get the same
+// bytes: tools/tinfoilkit/build.sh.
 //
-//	tinfoilkit open [--share] [--model=NAME] [--no-browser] [--no-maps] [--root KIT]
-//	tinfoilkit [kit] [--root KIT] sync|plan|status|...   ./kit's commands (tinfoilkit kit --help lists them)
+//	tinfoilkit [kit] [--root KIT] open|sync|plan|status|...   ./kit's commands (tinfoilkit kit --help lists them)
+//	tinfoilkit     on its own, as a double-click starts it: open
 //	tinfoilkit data --data KIT/data --port 8095 --library 8888
 //	tinfoilkit gate --root KIT --port 8000 --library 8888 --ai 8080 [--data N --tiles N --geocoder N --routing N]
 //	tinfoilkit banner --root KIT --port 8000 [--qr]
@@ -30,6 +30,9 @@ var (
 	mac     = runtime.GOOS == "darwin"
 )
 
+const usage = "usage: tinfoilkit [kit] COMMAND | data | gate | banner | compare | list | version " +
+	"(tinfoilkit kit --help lists the commands; tools/tinfoilkit/main.go says more)"
+
 func main() {
 	if windows { // the copy of this program an update replaced while it ran (installRelease)
 		if me, err := os.Executable(); err == nil {
@@ -37,18 +40,16 @@ func main() {
 		}
 	}
 	args := os.Args[1:]
-	cmd := "open"
-	if len(args) > 0 && (args[0] == "--root" || strings.HasPrefix(args[0], "--root=") || isKitCommand(args[0])) {
+	if len(args) == 0 {
+		args = []string{"open"}
+	}
+	if args[0] == "--root" || strings.HasPrefix(args[0], "--root=") || isKitCommand(args[0]) {
 		os.Exit(runKit(args))
 	}
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		cmd, args = args[0], args[1:]
-	}
+	cmd, args := args[0], args[1:]
 	switch cmd {
 	case "kit":
 		os.Exit(runKit(args))
-	case "open":
-		os.Exit(runOpen(args))
 	case "data":
 		os.Exit(runData(args))
 	case "gate":
@@ -61,8 +62,10 @@ func main() {
 		os.Exit(runList(args))
 	case "version":
 		fmt.Printf("Tinfoil Kit's program for %s (%s)\n", plat(), runtime.Version())
+	case "-h", "--help":
+		fmt.Println(usage)
 	default:
-		fmt.Fprintln(os.Stderr, "usage: tinfoilkit open | kit | data | gate | banner | compare | list | version (tools/tinfoilkit/main.go says more)")
+		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
 }
@@ -105,7 +108,7 @@ func kitLayout(root string) layout {
 	}
 	l.conf = filepath.Join(l.data, "kit.json")
 	if !isFile(l.conf) {
-		l.conf = filepath.Join(l.app, "kit.json") // kit.py makes the person's copy the first time it runs
+		l.conf = filepath.Join(l.app, "kit.json") // ./kit makes the person's copy the first time it runs
 	}
 	return l
 }

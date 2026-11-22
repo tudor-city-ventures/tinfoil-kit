@@ -40,9 +40,9 @@ three_folders() { # KIT
   [ "$top" = "app data downloads " ] || fail "$1 holds $top, not just app, data and downloads"
 }
 # The kit's servers, gone before the next kit starts: a map server still answering would stand in for the next one's.
-SERVERS='llama-server|kiwix-serve|pmtiles serve|graphhopper-web|photon-|tools/data.py'
+SERVERS='llama-server|kiwix-serve|pmtiles serve|graphhopper-web|photon-'
 stop_kit() {
-  pkill -f 'tools/launch.sh|tools/tinfoilkit-'; sleep 1; pkill -f "$SERVERS"
+  pkill -f 'tools/tinfoilkit-'; sleep 1; pkill -f "$SERVERS"
   for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "$SERVERS" > /dev/null || break; sleep 1; done
 } 2>/dev/null
 
@@ -70,7 +70,7 @@ terminal() { # FOLDER LOG ANSWERS COMMAND...
   { echo '#!/bin/bash'
     echo 'printf "\033[3;0;0t\033[8;34;100t\033[2J\033[H"'    # Terminal: top left, 100 columns by 34 rows, cleared
     printf 'cd %q && . %q\n' "$dir" "$TESTS/env.sh"
-    for i in $(compgen -e | grep '^KIT_'); do printf 'export %s=%q\n' "$i" "${!i}"; done    # KIT_OWN_PYTHON=1 setup ...
+    for i in $(compgen -e | grep '^KIT_'); do printf 'export %s=%q\n' "$i" "${!i}"; done    # KIT_YES=1 setup ...
     printf '%q ' "$(command -v python3)" "$TESTS/drive.py" type "$log" "$answers" -- "$@"; echo
     printf 'echo $? > %q\n' "$log.exit"
   } > "$run"
@@ -112,7 +112,7 @@ share_check() { # KIT
 
 # Fails unless the kit's own program is what runs the kit: the launchers hand over to it.
 program_runs() { # PROGRAM WHAT [CONTAINER]
-  if [ -n "${3:-}" ]; then docker top "$3" | grep -q "tools/$1 open"; else pgrep -f "tools/$1 open" > /dev/null; fi &&
+  if [ -n "${3:-}" ]; then docker top "$3" | grep -q "tools/$1 --root .* open"; else pgrep -f "tools/$1 --root .* open" > /dev/null; fi &&
     echo "The kit's own program ($1) runs $2" || fail "$2: the launcher didn't hand over to the kit's own program ($1)"
 }
 
@@ -128,7 +128,7 @@ run_app() { # LOG SECONDS [VAR=VALUE...]
 
 mac() {
   local img="$W/drive.img" vol=/Volumes/TINFOIL disk kit src mock f much same
-  local py="$HOME/Library/Application Support/TinfoilKit"    # SETUP's Python for a Mac without one, and the app's notes
+  local support="$HOME/Library/Application Support/TinfoilKit"    # where the Mac app keeps where the kit is
   local app="$HOME/Applications/Tinfoil Kit.app"
   step "a 4 GB disk, erased as exFAT the way Disk Utility does"
   hdiutil detach "$vol" > /dev/null 2>&1
@@ -164,10 +164,9 @@ mac() {
 
   python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
   mock=$!
-  step "SETUP.command in the unzipped download, on a Mac without Python: the kit's own program runs it, so it gets"
-  echo "none; pick the drive; it moves the kit there and gets the try-it kit"
+  step "SETUP.command in the unzipped download: pick the drive; it moves the kit there and gets the try-it kit"
   src="$W/Downloads/TinfoilKit" kit="$vol/TinfoilKit"
-  rm -rf "$py"
+  rm -rf "$support"
   download_kit "$src" maps
   n="$(drive_number "$src" TINFOIL)"
   echo "SETUP lists TINFOIL as drive ${n:-(not at all)}"
@@ -175,7 +174,7 @@ mac() {
   # Answers: keep where it's for, an external drive, TINFOIL, all of it even if that leaves less free than SETUP
   # likes (it asks then), start downloading, don't open the kit, close.
   much=""; [ "$("$src/app/kit" space "$kit" | cut -f1)" = tight ] && much="2\n"
-  KIT_OWN_PYTHON=1 setup "$src" setup.log "\n1\n${n:-1}\n${much}y\nn\n\n"
+  setup "$src" setup.log "\n1\n${n:-1}\n${much}y\nn\n\n"
   grep -q "The try-it kit works" "$L/setup.log" || kit_logs "$kit" test-tiles.log test-llama.log
   [ -d "$kit/downloads/models/Two" ] || fail "the try-it kit didn't get its sample AI"
   [ -d "$kit/downloads/maps/routing" ] && fail "the try-it kit got the map's roads, which come with the rest"
@@ -186,12 +185,11 @@ mac() {
   # Answers: keep where it's for, Recommended, all of it even if that leaves less free than SETUP likes (it asks
   # then), start downloading, don't open the kit, close.
   much=""; [ "$("$kit/app/kit" space "$kit" | cut -f1)" = tight ] && much="2\n"
-  KIT_OWN_PYTHON=1 setup "$kit" setup-rest.log "\n\n${much}y\nn\n\n"
+  setup "$kit" setup-rest.log "\n\n${much}y\nn\n\n"
   grep -q "All set" "$L/setup-rest.log" || kit_logs "$kit" test-tiles.log test-geocoder.log test-routing.log
   grep -q "What goes in the kit?" "$L/setup-rest.log" || fail "SETUP didn't ask what goes in the kit"
   [ -f "$kit/downloads/maps/routing/graph-cache/properties" ] || fail "SETUP didn't build the map's roads on the drive"
   [ -d "$kit/downloads/models/Two" ] && fail "the try-it kit's sample AI is still there after the rest"
-  [ -e "$py/python" ] && fail "SETUP got a Python, though the kit's own program runs on this Mac"
   [ -d "$kit/downloads/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
 
@@ -200,21 +198,21 @@ mac() {
   rm -rf "$kit/app"
   download_kit "$src" maps
   # Answers: update the kit on the drive, keep where it's for, start downloading, don't open the kit, close.
-  KIT_OWN_PYTHON=1 setup "$src" setup-new-app.log "\n\ny\nn\n\n"
+  setup "$src" setup-new-app.log "\n\ny\nn\n\n"
   grep -q "this version's is in it now" "$L/setup-new-app.log" || fail "SETUP from a new download didn't put its app folder in the kit"
   grep -q "TINFOIL KIT UPDATE" "$L/setup-new-app.log" || fail "SETUP from a new download didn't update the kit on the drive"
   grep -E "^ +downloading " "$L/setup-new-app.log" && fail "SETUP downloaded something again after the app folder was replaced"
   [ -f "$kit/app/SETUP.command" ] || fail "the kit on the drive has no app folder after SETUP from a new download"
   three_folders "$kit"
   echo "$(find "$kit" -name '._*' | wc -l | tr -d ' ') ._ files on the drive"
-  for f in "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command tools/launch.sh; do
+  for f in "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command kit tools/tinfoilkit-macos-arm64; do
     xattr -p com.apple.quarantine "$kit/app/$f" > /dev/null 2>&1 && fail "$f is still marked as from the internet"
   done
   [ -f "$vol/.metadata_never_index" ] || fail "no .metadata_never_index, so Spotlight would index the drive"
   if [ -d "$app" ]; then
     grep -q "open Tinfoil Kit, in Applications" "$L/setup-rest.log" || fail "SETUP didn't say to open the app in an outage"
   fi
-  [ "$(cat "$py/last-kit" 2> /dev/null)" = "$kit" ] || fail "SETUP didn't note where the kit is, for the app"
+  [ "$(cat "$support/last-kit" 2> /dev/null)" = "$kit" ] || fail "SETUP didn't note where the kit is, for the app"
 
   step "double-click Open Tinfoil Kit.command: Terminal runs it, and it opens the page in Safari"
   open "$kit/app/Open Tinfoil Kit.command"
@@ -243,7 +241,7 @@ mac() {
   step "the app: it finds the kit on the drive and starts it, and quitting it stops the kit"
   stop_kit
   if [ -d "$app" ]; then
-    rm -f "$py/last-kit"
+    rm -f "$support/last-kit"
     run_app mac_app.log 0 KIT_APP_ANSWERS=0
     python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit the app started (logs/mac_app.log)"
     program_runs tinfoilkit-macos-arm64 "the kit the app started"
@@ -256,7 +254,7 @@ mac() {
     grep -q "^ASK:" "$L/mac_app.log" && fail "the app asked something, with one kit plugged in and ready"
     for f in 1 2 3 4 5; do curl -s -o /dev/null -m 2 http://127.0.0.1:8888/ || break; sleep 1; done
     curl -s -o /dev/null -m 2 http://127.0.0.1:8888/ && fail "quitting the app left the kit running"
-    [ "$(cat "$py/last-kit" 2> /dev/null)" = "$kit" ] || fail "the app didn't note the kit it opened"
+    [ "$(cat "$support/last-kit" 2> /dev/null)" = "$kit" ] || fail "the app didn't note the kit it opened"
   fi
 
   step "using it from Finder leaves ._ files beside books and models; then eject"
@@ -272,13 +270,13 @@ mac() {
   kit="$HOME/TinfoilKit" agent="$HOME/Library/LaunchAgents/com.tinfoilkit.kit.plist"
   rm -rf "$kit"
   if [ -d "$app" ]; then
-    src="$py/Setup/TinfoilKit"
+    src="$support/Setup/TinfoilKit"
     xattr -r -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$app/Contents/Resources/kit"    # as downloaded
     run_app mac_app_setup.log 30 KIT_APP_ANSWERS=2,1 KIT_APP_OPEN=echo || { fail "the app didn't quit after starting setup"; kill -9 "$APP_PID"; }
     grep -E "^(ASK|RAN):" "$L/mac_app_setup.log"
     grep -q "^ASK: Plug in the drive TINFOIL" "$L/mac_app_setup.log" || fail "the app didn't ask for the drive it opened last"
     grep -q "^$src/app/SETUP.command" "$L/mac_app_setup.log" || fail "the app didn't open its copy's SETUP (logs/mac_app_setup.log)"
-    for f in SETUP.command tools/launch.sh; do
+    for f in SETUP.command "Open Tinfoil Kit.command"; do
       xattr -p com.apple.quarantine "$src/app/$f" > /dev/null 2>&1 && fail "the app's copy of $f is still marked as from the internet"
     done
     python3 "$TESTS/drive.py" kitjson "$src/app/kit.json"
@@ -307,7 +305,7 @@ mac() {
   tail -4 "$L/uninstall-mac.log"
   [ -e "$kit" ] && fail "$kit is still there after UNINSTALL"
   [ -e "$agent" ] && fail "UNINSTALL left the LaunchAgent, which would start a kit that's gone"
-  [ -e "$py" ] && fail "UNINSTALL left the kit's own Python in $py"
+  [ -e "$support" ] && fail "UNINSTALL left the Mac app's note of where the kit is, in $support"
   [ -d "$app" ] && ! grep -q "drag it from Applications" "$L/uninstall-mac.log" && fail "UNINSTALL didn't say how to remove the app"
   sleep 2
   curl -s -o /dev/null -m 3 http://127.0.0.1:8888/ && fail "the kit is still running after UNINSTALL"

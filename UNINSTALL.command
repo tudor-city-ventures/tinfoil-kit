@@ -9,14 +9,14 @@ KIT="$CODE"
 case "$(basename "$CODE" | tr '[:upper:]' '[:lower:]')" in app) [ -e .git ] || KIT="$(dirname "$CODE")" ;; esac
 YES=0; [ "${1:-}" = "--yes" ] && YES=1
 THIS="this computer"; [ "$(uname -s)" = Darwin ] && THIS="this Mac"
-PY_HOME="$HOME/Library/Application Support/TinfoilKit"    # the Python SETUP got for a Mac without one
+SUPPORT="$HOME/Library/Application Support/TinfoilKit"    # where the Mac app keeps where the kit is
 say() { printf '\n%s\n' "$*"; }
 finish() { [ $YES = 1 ] || { printf '\nPress Return to close this window.'; read -r _; }; exit "${1:-0}"; }
 dev_of() { stat -c %d "$1" 2>/dev/null || stat -f %d "$1" 2>/dev/null; }    # Linux, then macOS
 
 say "REMOVE TINFOIL KIT"
 # This deletes the kit folder it's in, so make sure that's a kit, and not a home folder or a whole drive.
-if [ ! -f "$CODE/kit" ] || [ ! -f "$CODE/tools/kit.py" ] || [ "$KIT" = "$HOME" ] || [ "$KIT" = / ]; then
+if [ ! -f "$CODE/kit" ] || [ ! -f "$CODE/tools/pins.json" ] || [ "$KIT" = "$HOME" ] || [ "$KIT" = / ]; then
   echo "This folder ($KIT) doesn't look like a Tinfoil Kit, so nothing was deleted."
   finish 1
 fi
@@ -55,7 +55,6 @@ if [ -n "$drive" ]; then where="from the drive $drive"; else where="from $THIS";
 echo
 echo "This deletes Tinfoil Kit $where: the folder $KIT,"
 echo "with the AI models, books, maps and programs it downloaded, and your settings, notes and pins ($size in all)."
-[ -d "$PY_HOME/python" ] && echo "Also the Python it downloaded for $THIS, in $PY_HOME."
 echo "It can't be undone. The files don't go to the Trash."
 [ -n "$drive" ] && echo "Nothing else on the drive is touched."
 if [ $YES = 0 ]; then
@@ -66,9 +65,9 @@ fi
 
 # A home server starts the kit with the computer (./kit autostart): undo that, which also stops it.
 ./kit autostart off >/dev/null 2>&1
-# Stop the kit if it's running (its servers run from its downloads; the kit's own program, the notes and pins server
-# and the sharing gate from its app folder), so nothing holds its files open, and an open page can't save into a
-# folder that's gone. The folders reach awk through its environment: in its arguments, ps would list awk as a match.
+# Stop the kit if it's running (its servers run from its downloads, and the kit's own program, which also keeps the
+# notes and pins and shares the kit, from its app folder), so nothing holds its files open, and an open page can't save
+# into a folder that's gone. The folders reach awk through its environment: in its arguments, ps would list awk as a match.
 pids="$(ps -axo pid=,command= 2>/dev/null | A="$KIT/downloads/bin/" B="$KIT/bin/" C="$CODE/tools/" \
   awk 'index($0, ENVIRON["A"]) || index($0, ENVIRON["B"]) || index($0, ENVIRON["C"]) {print $1}')"
 if [ -n "$pids" ]; then
@@ -85,7 +84,7 @@ if [ -e "$KIT" ]; then
   echo "turn on Removable Volumes under Terminal, and run this again. Or drag the folder to the Trash."
   finish 1
 fi
-rm -rf "$PY_HOME"
+rm -rf "$SUPPORT"
 # The kit told Spotlight to skip the drive it's at the top of (it would index hundreds of GB of downloads). Undo that.
 top="${KIT%/*}"
 [ -n "$drive" ] && [ "$(dev_of "$top")" != "$(dev_of "$top/..")" ] && rm -f "$top/.metadata_never_index"

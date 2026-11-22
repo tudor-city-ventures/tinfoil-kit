@@ -739,7 +739,7 @@ func checkRelease(fresh string) error {
 	if err != nil {
 		return fmt.Errorf("its kit.json doesn't parse (%s)", err)
 	}
-	for _, script := range []string{"kit", "SETUP.command", "Open Tinfoil Kit.command", "UNINSTALL.command", "tools/launch.sh"} {
+	for _, script := range []string{"kit", "SETUP.command", "Open Tinfoil Kit.command", "UNINSTALL.command"} {
 		p := filepath.Join(fresh, filepath.FromSlash(script))
 		if which("bash") && isFile(p) {
 			if _, _, rc := output("bash", "-n", p); rc != 0 {
@@ -840,14 +840,14 @@ func kitGithub(p string, keys ...string) *obj {
 	return nil
 }
 
-var commitLine = regexp.MustCompile(`(?m)^KIT_COMMIT = "([0-9a-f]{40})"`)
+var commitLine = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // kitCommit is the commit this copy of the kit was packed from: git archive (a release, or Code > Download ZIP)
-// writes it into tools/kit.py. "" in a git checkout.
+// writes it into tools/commit. "" in a git checkout.
 func kitCommit() string {
-	data, _ := os.ReadFile(filepath.Join(codeRoot, "tools", "kit.py"))
-	if m := commitLine.FindSubmatch(data); m != nil {
-		return string(m[1])
+	data, _ := os.ReadFile(filepath.Join(codeRoot, "tools", "commit"))
+	if c := strings.TrimSpace(string(data)); commitLine.MatchString(c) {
+		return c
 	}
 	return ""
 }
@@ -996,7 +996,7 @@ func launcherFile(root, code string) string {
 	if windows {
 		return filepath.Join(code, "Open Tinfoil Kit for Windows.bat")
 	}
-	return filepath.Join(code, "tools", "launch.sh")
+	return filepath.Join(code, "Open Tinfoil Kit.command")
 }
 
 // systemdUnit is a systemd user service: it runs as you, without sudo, and from boot when lingering is on.
@@ -1026,6 +1026,9 @@ func unitFile() string {
 func agentFile() string {
 	return filepath.Join(homeDir(), "Library", "LaunchAgents", agentName+".plist")
 }
+
+// startNow opens a file as a double-click would: startupOn starts the kit the way signing in will. Tests stand in for it.
+var startNow = startFile
 
 // startupFile: Windows runs what's in this folder when you sign in.
 func startupFile() string {
@@ -1126,11 +1129,16 @@ func linger() bool {
 	return false
 }
 
+// ours says whether an autostart entry starts this kit: with its launcher, or on a Mac or Linux with tools/launch.sh,
+// the launcher kits had before this program (so moving a kit from before the three folders rewrites its entry).
 func ours(text, root, code string) bool {
 	if windows { // where names are the same in any case
 		return strings.Contains(strings.ToLower(text), strings.ToLower(launcherFile(root, code)))
 	}
-	return strings.Contains(text, launcherFile(root, code))
+	if code == "" {
+		code = codeDir(root)
+	}
+	return strings.Contains(text, launcherFile(root, code)) || strings.Contains(text, filepath.Join(code, "tools", "launch.sh"))
 }
 
 // autostartState is "on", "off" or "other" (set up for a different kit folder, or for this one's code where it was
@@ -1305,7 +1313,7 @@ func startupOn(root string, say func(string)) int {
 		err = os.WriteFile(f, []byte(startupScript(root)), 0o644)
 	}
 	if err == nil {
-		err = startFile(f) // start it now, the way it starts when you sign in
+		err = startNow(f)
 	}
 	if err != nil {
 		say("Couldn't set up starting the kit when you sign in: " + err.Error())
@@ -1453,7 +1461,8 @@ func moveInto(src, dst string) error {
 // moved.
 func ensureLayout(root string) bool {
 	git, app, meta := exists(filepath.Join(root, ".git")), filepath.Join(root, "app"), metaDir(root)
-	old := !git && isFile(filepath.Join(root, "kit")) && isFile(filepath.Join(root, "tools", "kit.py"))
+	// its code at the top
+	old := !git && isFile(filepath.Join(root, "kit")) && isDir(filepath.Join(root, "tools"))
 	placed := isDir(filepath.Join(root, ".kit")) // (it moves last: while it's at the top, the move isn't finished)
 	if !old && !placed {
 		return false

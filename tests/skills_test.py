@@ -7,7 +7,6 @@ one of them, the skills cover every command people use, AGENTS.md and llms.txt l
 command or approves a tool when it loads.
 Usage: python3 tests/skills_test.py
 """
-import os
 import platform
 import re
 import subprocess
@@ -34,10 +33,12 @@ def check(name, ok, detail=""):
         print(f"FAIL  {name}" + (f": {detail}" if detail else ""))
 
 
-# KIT_ENGINE=go reads the commands from the kit's own program (tools/tinfoilkit/build.sh builds it) instead of kit.py.
-PROGRAM = ROOT / "tools" / ("tinfoilkit-" + {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get(
-    (platform.system(), platform.machine()), ""))
-KIT_LINE = [str(PROGRAM), "kit"] if os.environ.get("KIT_ENGINE") == "go" else [sys.executable, str(ROOT / "tools" / "kit.py")]
+# The commands and options come from the kit's own program, which tools/tinfoilkit/build.sh builds.
+PLAT = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get((platform.system(), platform.machine()))
+PROGRAM = ROOT / "tools" / f"tinfoilkit-{PLAT}"
+if not PLAT or not PROGRAM.exists():
+    sys.exit("The tests need the kit's program for this computer: tools/tinfoilkit/build.sh builds it")
+KIT_LINE = [str(PROGRAM), "kit"]
 
 
 def kit_help(*args):
@@ -55,7 +56,7 @@ def kit_help(*args):
 
 top, commands = kit_help()
 KIT = {c: kit_help(c) for c in sorted(commands)}
-check("kit.py's commands and options can be read", {"sync", "pick", "share"} <= commands and "--root" in top
+check("./kit's commands and options can be read", {"sync", "pick", "share"} <= commands and "--root" in top
       and "--yes" in KIT["sync"][0] and "new-code" in KIT["share"][1], f"{sorted(commands)} {top}")
 
 
@@ -67,9 +68,9 @@ def script_options(path, prefix):
 
 SETUP = {"SETUP.command": script_options(ROOT / "SETUP.command", "#"),
          "SETUP-Windows.bat": script_options(ROOT / "SETUP-Windows.bat", "rem")}
-LAUNCH = set(re.findall(r"^\s+(--[a-z][\w-]*)\)", (ROOT / "tools" / "launch.sh").read_text(encoding="utf-8"), re.M))
-LAUNCH |= {o.rstrip("=*") for o in re.findall(r"^\s+(--[a-z][\w-]*=)\*\)", (ROOT / "tools" / "launch.sh").read_text(encoding="utf-8"), re.M)}
-WIN_LAUNCH = set(re.findall(r'"%%~a"=="(--[a-z][\w-]*)"', (ROOT / "Open Tinfoil Kit for Windows.bat").read_text(encoding="utf-8")))
+LAUNCH = set(re.findall(r"^\s+(--[a-z][\w-]*)", subprocess.run([str(PROGRAM), "open", "--help"], capture_output=True,
+                                                                text=True, timeout=30).stdout, re.M))
+WIN_LAUNCH = LAUNCH    # both launchers hand their options to the program's open
 check("the scripts' options can be read", len(SETUP["SETUP.command"]) >= 10 and {"--share", "--no-maps", "--model"} <= LAUNCH
       and {"--share", "--no-browser"} <= WIN_LAUNCH, f"{SETUP} {LAUNCH} {WIN_LAUNCH}")
 check("SETUP takes the same options on a Mac or Linux and on Windows", SETUP["SETUP.command"] == SETUP["SETUP-Windows.bat"],

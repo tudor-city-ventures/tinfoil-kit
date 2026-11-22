@@ -2,8 +2,7 @@ package main
 
 // Keeping what the person writes on the kit page in the kit's data folder, which a new version never touches: the
 // notes Ask hands the AI with every question (data/notes.txt) and the map's home and pins (data/places.json). Plain
-// files, readable without the kit. This is tools/data.py, which a kit without this program runs: the same files,
-// answers and checks, so tests/data_test.py checks both.
+// files, readable without the kit. tests/data_test.py checks what it saves and what it turns away.
 //
 // It listens on 127.0.0.1 and answers the kit page only: another web page is turned away by its Origin, and any name
 // but this computer's own (a website pointing a name of its own at 127.0.0.1) by its Host. Through the gate, the

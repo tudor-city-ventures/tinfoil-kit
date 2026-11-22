@@ -43,8 +43,8 @@ type access struct {
 	Key  string `json:"key"`
 }
 
-// shareData is the folder with the kit's records (.kit), as tools/share.py finds it: the top of a kit from before the
-// three folders, which keeps .kit there, else its data folder.
+// shareData is the folder with the kit's records (.kit): the top of a kit from before the three folders, which keeps
+// .kit there, else its data folder.
 func shareData(kit string) string {
 	if isDir(filepath.Join(kit, ".kit")) {
 		return kit

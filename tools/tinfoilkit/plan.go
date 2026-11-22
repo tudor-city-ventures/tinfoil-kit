@@ -167,7 +167,7 @@ func (r *resolver) resolve(it *item) {
 		"url": r.url, "adoptium": r.adoptium, "maven": r.maven, "npm": r.npm, "github_archive": r.githubArchive,
 		"protomaps": r.protomaps, "routing": r.routing, "photon_db": r.photonDB}
 	err := func() (err error) {
-		defer func() { // a publisher's answer that isn't what it should be is that item's error, as in kit.py
+		defer func() { // a publisher's answer that isn't what it should be is that item's error
 			if p := recover(); p != nil {
 				if bad, ok := p.(badAnswer); ok {
 					err = bad

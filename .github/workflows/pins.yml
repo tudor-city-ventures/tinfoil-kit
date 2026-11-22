@@ -49,7 +49,7 @@ jobs:
           python3 -I - "$NEW" tools/pins.json kit.json <<'PY'
           import json, re, sys
           new, old, kit = (json.load(open(p)) for p in sys.argv[1:4])
-          # kit.json's programs, and the map viewer's three that kit.py lists itself
+          # kit.json's programs, and the map viewer's three that the kit's program lists itself
           known = {e.get("id") for s in ("runtimes", "extras") for e in kit.get(s, [])}
           known |= {"maplibre-gl", "protomaps-basemaps", "basemaps-assets"}
           word = re.compile(r"[\w.+-]{1,64}")

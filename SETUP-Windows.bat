@@ -19,11 +19,8 @@ rem   --add IDS           add these, like the books that are off unless asked fo
 rem   --share             share the kit on the home network, behind an access code, whenever it's open
 rem   --home-server       share it, and start it whenever you sign in: for a PC that stays on
 rem   --yes               ask nothing: what isn't given keeps its default, and SETUP stops and says why instead of asking
-rem The kit's commands run on its own program, tools\tinfoilkit-windows-x64.exe, which releases carry. Without it
-rem (GitHub's Download ZIP has none) they run on Python: SETUP gets python.org's own build from nuget.org (about
-rem 15 MB, once), checks it against the checksum below, and keeps it in %LOCALAPPDATA%\TinfoilKit, outside the kit
-rem folder, so the kit can move. UNINSTALL-Windows.bat removes it. KIT_PYTHON_URL: get the same file from there
-rem instead (tests). KIT_NO_GO=1 keeps to Python.
+rem The kit's commands run on its own program, tools\tinfoilkit-windows-x64.exe, which every download carries.
+rem GitHub's Download ZIP is just the source code, without it: SETUP says where to get the kit instead.
 rem cmd reads this file a line at a time while it runs, and kit update can replace it, so each line that hands
 rem over to a new copy of SETUP also ends this one.
 rem The kit's folder holds three: app (this script and the rest of the code, as released), downloads (what sync gets)
@@ -53,18 +50,8 @@ for %%d in ("%CD%") do if /i "%%~nxd"=="app" if not exist "%CD%\.git" for %%p in
 rem (out of app, so nothing holds it open while kit update replaces it)
 cd /d "%KIT%"
 set "NAME=TinfoilKit"
-set "PYV=3.14.10"
-set "PYSHA=f54ba67c9951c3d773ea47d2bb095150c037c399f0423a968bcda22809241784"
-set "PYURL=https://api.nuget.org/v3-flatcontainer/python/%PYV%/python.%PYV%.nupkg"
-if defined KIT_PYTHON_URL set "PYURL=%KIT_PYTHON_URL%"
-set "PYHOME=%LOCALAPPDATA%\TinfoilKit\python-%PYV%"
-set "PY=%PYHOME%\tools\python.exe"
-set "PYTHONUTF8=1"
-rem What runs the kit's commands, as "%KITEXE%" %KITPY% --root "%KIT%" COMMAND: the program, if it runs on this PC.
-set "KITEXE=%PY%"
-set KITPY="%APP%\tools\kit.py"
+rem What runs the kit's commands, as "%TK%" --root "%KIT%" COMMAND
 set "TK=%APP%\tools\tinfoilkit-windows-x64.exe"
-if not defined KIT_NO_GO if exist "%TK%" "%TK%" version >nul 2>&1 && (set "KITEXE=%TK%" & set "KITPY=")
 set "SYS=%SystemRoot%\System32"
 set "OUT=%TEMP%\tinfoilkit-setup-%RANDOM%.txt"
 set "TRIES=0"
@@ -72,14 +59,26 @@ title Tinfoil Kit setup
 rem Steps are counted across the times this script starts itself again (after moving or updating the kit).
 if not "%~1"=="--placed" if not "%~1"=="--updated" (set "KIT_STEP=0" & set "KIT_STEPS=3")
 
-if not exist "%APP%\tools\kit.py" (
+if not exist "%APP%\tools\" (
   echo(
   echo This is only part of Tinfoil Kit. If you opened the ZIP file, extract it first: right-click it, choose
   echo Extract All, then double-click SETUP-Windows.bat in the folder that makes.
   call :finish 1
 )
+if not exist "%TK%" (
+  echo(
+  echo This copy of Tinfoil Kit doesn't have the program it runs on, tools\tinfoilkit-windows-x64.exe: GitHub's
+  echo Download ZIP is just the source code. Download the kit from https://tinfoilkit.com instead.
+  call :finish 1
+)
+"%TK%" version >nul 2>&1 || (
+  echo(
+  echo The kit's program, tools\tinfoilkit-windows-x64.exe, doesn't run on this PC. Tinfoil Kit runs on Windows
+  echo PCs with x64 processors. If this is one, download the kit again from https://tinfoilkit.com.
+  call :finish 1
+)
 rem An app folder put on its own at the top of a drive or in the user folder, which hold more than the kit: it needs
-rem a folder of its own (kit.py won't use those either).
+rem a folder of its own (the kit's commands won't use those either).
 set "LOOSE="
 if "%KIT:~3%"=="" set "LOOSE=1"
 if /i "%KIT%"=="%USERPROFILE%" set "LOOSE=1"
@@ -92,7 +91,7 @@ if defined LOOSE (
 rem Code that isn't in an app folder: a download with it all in one folder, or a kit from before the three folders,
 rem where kit update just put this copy. kit layout moves it all into them, this file too, so the same line goes on
 rem in app's copy. (In a git checkout it moves only what was downloaded and the person's own files.)
-if "!APP!"=="!KIT!" (call :python || call :finish 1) & (if exist "%KIT%\bin\" call :stop_kit) & ("%PY%" "%APP%\tools\kit.py" --root "%KIT%" layout || call :finish 1) & if exist "%KIT%\app\SETUP-Windows.bat" call "%KIT%\app\SETUP-Windows.bat" %* & exit
+if "!APP!"=="!KIT!" (if exist "%KIT%\bin\" call :stop_kit) & (call :layout || call :finish 1) & if exist "%KIT%\app\SETUP-Windows.bat" call "%KIT%\app\SETUP-Windows.bat" %* & exit
 rem UPDATE: set up before, so this run is an update
 set "UPDATE="
 if exist "%KIT%\data\.kit\state.json" findstr /c:"\"last_sync\"" "%KIT%\data\.kit\state.json" >nul 2>&1 && set "UPDATE=1"
@@ -137,7 +136,7 @@ call :writable || call :finish 1
 echo(
 set "UPDATE_ARGS="
 if defined KIT_YES set "UPDATE_ARGS=--yes"
-"%KITEXE%" %KITPY% --root "%KIT%" update !UPDATE_ARGS! & if errorlevel 3 call "%APP%\SETUP-Windows.bat" --updated & exit
+"%TK%" --root "%KIT%" update !UPDATE_ARGS! & if errorlevel 3 call "%APP%\SETUP-Windows.bat" --updated & exit
 
 :download
 call :runtime || call :finish 1
@@ -176,7 +175,7 @@ if defined UPDATE if not defined TRY call :how_much_now
 if not defined TRY goto update_all
 if defined UPDATE goto the_rest
 
-"%KITEXE%" %KITPY% --root "%KIT%" estimate > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" estimate > "%OUT%" 2>nul
 set "SMALL=0"
 for /f "usebackq delims=" %%g in ("%OUT%") do set "SMALL=%%g"
 call :gb SMALL
@@ -282,7 +281,7 @@ echo(
 echo The try-it kit works. It's !WHERE!, in !KIT!
 echo Turn off Wi-Fi and try it: ask the AI something, look something up, find your street on the map.
 set "REMAIN=0" & set "TOOK="
-"%KITEXE%" %KITPY% --root "%KIT%" estimate --rest > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" estimate --rest > "%OUT%" 2>nul
 for /f "usebackq tokens=1,2 delims=	" %%a in ("%OUT%") do (set "REMAIN=%%a" & set "TOOK=%%b")
 call :gb REMAIN
 set "SAY=The rest of the kit"
@@ -423,7 +422,7 @@ set "PLACE="
 set /p "PLACE=!Q!"
 if defined PLACE set "PLACE=!PLACE:"=!"
 if not defined PLACE goto region_size
-"%KITEXE%" %KITPY% --root "%KIT%" region --find "!PLACE!" > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" region --find "!PLACE!" > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
@@ -456,7 +455,7 @@ goto region_ask
 :region_languages
 set "WIKI=!KIT_WIKIPEDIA!"
 if defined WIKI goto region_set
-"%KITEXE%" %KITPY% --root "%KIT%" region --languages "!RID!" > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" region --languages "!RID!" > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
@@ -477,7 +476,7 @@ rem How much of Wikipedia, the first time: the sizes Kiwix makes in its language
 :region_size
 if not "%~1"=="first" goto :eof
 if defined KIT_WIKIPEDIA_SIZE goto :eof
-"%KITEXE%" %KITPY% --root "%KIT%" region --sizes > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" region --sizes > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
@@ -545,10 +544,9 @@ call :kit fit !FIT!
 goto :eof
 
 rem The lines kit region wrote, numbered, as "  1  NAME (GROUP)" with this label's argument after GROUP. The kit's
-rem program (or Python) prints them, since cmd would garble letters with accents.
+rem program prints them, since cmd would garble letters with accents.
 :list
-if not defined KITPY "%KITEXE%" list "%OUT%" "%~1" & goto :eof
-"%PY%" -c "import sys; [print('  {}  {} ({}{})'.format(i, *l.rstrip('\r\n').split('\t')[1:3], sys.argv[2])) for i, l in enumerate(open(sys.argv[1], encoding='utf-8'), 1)]" "%OUT%" "%~1"
+"%TK%" list "%OUT%" "%~1"
 goto :eof
 
 rem ---------------------------------------------------------------------------- first run: where the kit goes
@@ -558,7 +556,7 @@ rem only what's new downloads, rather than setting up a second kit. --this-compu
 :other_kit
 if defined KIT_PLACE goto :eof
 set "OTHER_KIT=" & set "OTHER_AT=" & set "OTHER_GB=" & set "OTHER_WHEN="
-"%KITEXE%" %KITPY% --root "%KIT%" kits > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" kits > "%OUT%" 2>nul
 for /f "usebackq tokens=1-4 delims=	" %%a in ("%OUT%") do if not defined OTHER_KIT (
   set "OTHER_KIT=%%a" & set "OTHER_AT=%%b" & set "OTHER_GB=%%c" & set "OTHER_WHEN=%%d"
 )
@@ -577,7 +575,7 @@ goto :eof
 :other_kit_update
 rem (one whose app folder was deleted, for a new version's, gets a copy of this one: kit place says so)
 if not exist "!THERE!" (
-  "%KITEXE%" %KITPY% --root "%KIT%" place "!OTHER_KIT!" > "%OUT%" || call :finish 1
+  "%TK%" --root "%KIT%" place "!OTHER_KIT!" > "%OUT%" || call :finish 1
   call :setup_in "!OTHER_KIT!"
 )
 del "%OUT%" 2>nul & cd /d "!OTHER_KIT!" & call "!THERE!" & exit
@@ -615,7 +613,7 @@ goto put_kit
 
 :which_drive
 set "N=0"
-"%KITEXE%" %KITPY% --root "%KIT%" drives > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" drives > "%OUT%" 2>nul
 for /f "usebackq tokens=1-5 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
   set "D!N!=%%a" & set "F!N!=%%b" & set "W!N!=%%d" & set "L!N!=%%e"
@@ -663,7 +661,7 @@ rem The copy there records how much of the kit it gets in its kit.json
 set "KIT_ESSENTIALS=off"
 if "!ONLY!"=="essentials" set "KIT_ESSENTIALS=on"
 rem kit place says what it did, or why it can't, and prints the kit's new folder
-"%KITEXE%" %KITPY% --root "%KIT%" place "%DEST%" > "%OUT%" || call :finish 1
+"%TK%" --root "%KIT%" place "%DEST%" > "%OUT%" || call :finish 1
 set "NEW="
 for /f "usebackq delims=" %%l in ("%OUT%") do set "NEW=%%l"
 if not defined NEW call :finish 1
@@ -699,7 +697,7 @@ if not exist "!VOL!\" (
   exit /b 1
 )
 set "WHY=-" & set "FMT="
-"%KITEXE%" %KITPY% --root "%KIT%" drives > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" drives > "%OUT%" 2>nul
 for /f "usebackq tokens=1-5 delims=	" %%a in ("%OUT%") do (
   set "P=%%a"
   if "!P:~-1!"=="\" set "P=!P:~0,-1!"
@@ -808,7 +806,7 @@ rem Remove the download the kit was copied from: only a fresh one, never a git c
 set "OLD=%~1"
 set "OLD_APP=%OLD%\app"
 if exist "%OLD%\.git\" goto :eof
-if not exist "%OLD_APP%\tools\kit.py" goto :eof
+if not exist "%OLD_APP%\kit.cmd" goto :eof
 if not exist "%OLD_APP%\SETUP-Windows.bat" goto :eof
 if "%OLD:~3%"=="" goto :eof
 if /i "%OLD%"=="%USERPROFILE%" goto :eof
@@ -832,7 +830,7 @@ if not exist "!THERE!" set "THERE=%~1\SETUP-Windows.bat"
 goto :eof
 
 rem Whether the folder %1 holds just the kit, so it can go whole: app, downloads, data, and what computers leave in
-rem any folder (alone in kit.py). errorlevel 1 when something else is there too.
+rem any folder (as the kit's program checks too). errorlevel 1 when something else is there too.
 :alone
 for /f "eol=: delims=" %%f in ('dir /b /a "%~1" 2^>nul') do (
   set "ENTRY=%%f"
@@ -841,7 +839,7 @@ for /f "eol=: delims=" %%f in ('dir /b /a "%~1" 2^>nul') do (
 exit /b 0
 
 :kit
-"%KITEXE%" %KITPY% --root "%KIT%" %*
+"%TK%" --root "%KIT%" %*
 exit /b %errorlevel%
 
 rem How the kit fits at a place (kit space): FULL and ESS say whether all of it and just the essentials fit with
@@ -850,7 +848,7 @@ rem disk, NEED and NEED_ESS GB for all of it and the essentials, and LEAVE GB wo
 rem (FREE_GB and so on), with LEFT_GB and LEFT_ESS_GB free after them, and NOTE on what fits.
 :space
 set "FULL=fits" & set "ESS=fits" & set "FREE=0" & set "TOTAL=0" & set "NEED=0" & set "NEED_ESS=0" & set "LEAVE=0"
-"%KITEXE%" %KITPY% --root "%KIT%" space "%~1" > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" space "%~1" > "%OUT%" 2>nul
 for /f "usebackq tokens=1-7 delims=	" %%a in ("%OUT%") do (
   set "FULL=%%a" & set "ESS=%%b" & set "FREE=%%c" & set "TOTAL=%%d" & set "NEED=%%e" & set "NEED_ESS=%%f" & set "LEAVE=%%g"
 )
@@ -879,60 +877,31 @@ echo(
 echo Step !KIT_STEP! of !KIT_STEPS!: !MSG!
 goto :eof
 
-rem What the kit's commands need: its own program, which downloads with Windows' curl (Windows 10 1803 or newer), or
-rem else Python.
+rem What the kit's program needs: Windows' curl, which it downloads with (Windows 10 1803 or newer).
 :runtime
-if defined KITPY goto python
-if not exist "%SYS%\curl.exe" goto old_windows
-exit /b 0
-
-rem Python for the kit's tools: python.org's build, checked against PYSHA. Needs Windows 10 1803+ (curl, tar).
-:python
-if exist "%PY%" exit /b 0
-if not exist "%SYS%\curl.exe" goto old_windows
-if not exist "%SYS%\tar.exe" goto old_windows
-echo(
-echo First, the kit needs Python, which its tools run on. Getting python.org's own build (about 15 MB, once)...
-if not exist "%LOCALAPPDATA%\TinfoilKit\" mkdir "%LOCALAPPDATA%\TinfoilKit"
-set "PKG=%PYHOME%.nupkg"
-"%SYS%\curl.exe" -fL --retry 3 --progress-bar -o "%PKG%" "%PYURL%" || (
-  del "%PKG%" 2>nul
-  echo Couldn't download Python. Is this PC online? Then double-click SETUP again.
-  exit /b 1
-)
-set "GOT="
-for /f "skip=1 delims=" %%h in ('certutil -hashfile "%PKG%" SHA256') do if not defined GOT set "GOT=%%h"
-set "GOT=!GOT: =!"
-if /i not "!GOT!"=="%PYSHA%" (
-  del "%PKG%" 2>nul
-  echo Python's download didn't match its checksum, so it was deleted. Double-click SETUP again.
-  exit /b 1
-)
-rd /s /q "%PYHOME%.partial" 2>nul
-mkdir "%PYHOME%.partial"
-"%SYS%\tar.exe" -xf "%PKG%" -C "%PYHOME%.partial" || (
-  echo Couldn't unpack Python. Double-click SETUP again.
-  exit /b 1
-)
-rd /s /q "%PYHOME%" 2>nul
-move "%PYHOME%.partial" "%PYHOME%" >nul || exit /b 1
-del "%PKG%" 2>nul
-"%PY%" -c "import sys" || (
-  echo Python won't start on this PC.
-  exit /b 1
-)
-goto :eof
-:old_windows
+if exist "%SYS%\curl.exe" exit /b 0
 echo(
 echo Tinfoil Kit needs Windows 10 (version 1803 or newer) or Windows 11.
 exit /b 1
+
+rem kit layout, run from a copy of the kit's program in TEMP: Windows won't move the folder of a program that's
+rem running. KIT_CODE tells the copy where the kit's code is.
+:layout
+set "TK_COPY=%TEMP%\tinfoilkit-layout-%RANDOM%.exe"
+copy /y "%TK%" "%TK_COPY%" >nul || exit /b 1
+set "KIT_CODE=%APP%"
+"%TK_COPY%" --root "%KIT%" layout
+set "ERR=%errorlevel%"
+set "KIT_CODE="
+del "%TK_COPY%" 2>nul
+exit /b %ERR%
 
 rem "on this PC" or "on the drive NAME", in WHERE
 :where_kit
 set "WHERE=on this PC"
 if /i "%KIT:~0,2%"=="%USERPROFILE:~0,2%" goto :eof
 set "WHERE=on the drive %KIT:~0,2%"
-"%KITEXE%" %KITPY% --root "%KIT%" drives > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" drives > "%OUT%" 2>nul
 for /f "usebackq tokens=1,5 delims=	" %%a in ("%OUT%") do (
   set "P=%%a"
   if /i "!P:~0,2!"=="%KIT:~0,2%" set "WHERE=on the drive %%b"
@@ -950,17 +919,14 @@ del "%KIT%\.kit-write-test" 2>nul
 goto :eof
 
 rem The kit's programs hold their files open, and Windows won't replace or move an open file: stop them first. They run
-rem from its downloads\bin folder (bin, before the three folders) and its tools folder (the kit's own program), and
-rem sharing and the notes and pins run its tools\share.py and tools\data.py; the Open Tinfoil Kit window that
-rem started them goes too.
+rem from its downloads\bin folder (bin, before the three folders) and its tools folder (the kit's own program, which
+rem also shares the kit and keeps the notes and pins); the Open Tinfoil Kit window that started them goes too.
 :stop_kit
 set "TK_BIN=%KIT%\downloads\bin\"
 if not exist "%KIT%\downloads\" set "TK_BIN=%KIT%\bin\"
 set "TK_TOOLS=%APP%\tools\"
-set "TK_GATE=%APP%\tools\share.py"
-set "TK_DATA=%APP%\tools\data.py"
 set "TK_START=%APP%\Open Tinfoil Kit for Windows.bat"
-powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and ($c.IndexOf($env:TK_GATE, $k) -ge 0 -or $c.IndexOf($env:TK_DATA, $k) -ge 0)) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'The kit is running. Stopping it, so its files can be updated...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
+powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and $_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0 } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'The kit is running. Stopping it, so its files can be updated...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 goto :eof
 
 rem The list of what failed, from the newest sync log: the sync's own copy has scrolled far up by now.

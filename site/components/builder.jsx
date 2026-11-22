@@ -14,7 +14,7 @@ import { loadJSON } from '@/lib/data';
 
 const VISIBLE = 6;   // cards a group shows before "Show all"
 const WIKI = /^wikipedia_[a-z-]+_(all|top)_(maxi|nopic|mini)$/;
-// Wikipedia's sizes, as ./kit region --wikipedia-size names them, with Kiwix's edition of each (kit.py's WIKI_SIZES).
+// Wikipedia's sizes, as ./kit region --wikipedia-size names them, with Kiwix's edition of each (wikiSizes in tools/tinfoilkit/kit.go).
 const SIZES = [
   ['all', 'all_maxi', 'All, with pictures'],
   ['all-text', 'all_nopic', 'All, text only'],
@@ -23,7 +23,7 @@ const SIZES = [
   ['top-intros', 'top_mini', 'Best 50,000 articles, opening paragraphs'],
 ];
 const EDITIONS = ['top_mini', 'top_nopic', 'top_maxi', 'all_mini', 'all_nopic', 'all_maxi'];   // smallest first
-const WIKI_PRESET = { essentials: 'top-text' };   // the size a preset takes, else all (kit.py's WIKI_PRESET)
+const WIKI_PRESET = { essentials: 'top-text' };   // the size a preset takes, else all (wikiPreset in tools/tinfoilkit/kit.go)
 // The US has whole states (ids like us/texas) and a few areas of several (us-northeast): the areas get their own section, on top.
 const US_AREAS = 'Groups of US states', US_STATES = 'US states';
 const GROUPS = [US_AREAS, US_STATES, 'North America', 'Central America', 'South America', 'Europe', 'Africa', 'Asia'];

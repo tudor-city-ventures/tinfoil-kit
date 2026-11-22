@@ -14,7 +14,7 @@
 # the Applications folder.
 RES="$(cd "$(dirname "$0")" && pwd)"
 VOLUMES="${KIT_VOLUMES:-/Volumes}"
-# SETUP keeps a Mac's own Python here too, and UNINSTALL deletes the folder, which also forgets the kit.
+# UNINSTALL deletes the folder, which forgets the kit.
 SUPPORT="$HOME/Library/Application Support/TinfoilKit"
 LAST="$SUPPORT/last-kit"
 
@@ -32,7 +32,7 @@ find_kits() {
     seen="$seen$k|"
     d="$(drive_of "$k")"
     c="$(code_of "$k")"
-    if [ -f "$c/kit" ] && [ -f "$c/tools/kit.py" ]; then
+    if [ -f "$c/kit" ] && [ -f "$c/tools/pins.json" ]; then
       if { ls "$k"/downloads/library/*.zim || ls "$k"/library/*.zim; } > /dev/null 2>&1; then st=ready; else st=unfinished; fi
     elif [ "$k" = "$last" ] && [ -n "$d" ] && [ ! -d "$VOLUMES/$d" ]; then
       st=unplugged

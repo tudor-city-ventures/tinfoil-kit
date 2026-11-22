@@ -34,7 +34,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - run: npm ci --ignore-scripts    # axe-core, for the accessibility checks, from package.json
-      # The kit's own program, which the test's kit then carries, as a release does: the launcher hands over to it.
+      # The kit's own program, which the test's kit carries as a release does: ./kit and the launcher run it.
       - run: tools/tinfoilkit/build.sh
       - run: tests/run_all.sh
         env:

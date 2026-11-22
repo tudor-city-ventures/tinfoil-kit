@@ -1,5 +1,5 @@
 @echo off
-rem Double-click me (Windows) to remove Tinfoil Kit, everything it downloaded, and the Python SETUP got for it.
+rem Double-click me (Windows) to remove Tinfoil Kit and everything it downloaded.
 rem It says what it will delete and asks first. --yes skips the question, for scripts and AI agents.
 rem cmd reads a script as it runs, and this one deletes itself, so it carries on from a copy in %TEMP%.
 setlocal EnableExtensions EnableDelayedExpansion
@@ -25,8 +25,8 @@ if "%KIT:~3%"=="" (
   goto finish1
 )
 set "OK=1"
-if not exist "%APP%\kit" set "OK="
-if not exist "%APP%\tools\kit.py" set "OK="
+if not exist "%APP%\kit.cmd" set "OK="
+if not exist "%APP%\tools\pins.json" set "OK="
 if /i "%KIT%"=="%USERPROFILE%" set "OK="
 if not defined OK (
   echo This folder ^(!KIT!^) doesn't look like a Tinfoil Kit, so nothing was deleted.
@@ -72,15 +72,13 @@ goto finish0
 
 :delete
 rem Stop the kit if it's running, so nothing holds its files open: its programs run from its downloads\bin folder
-rem (bin, before the three folders) and its tools folder (the kit's own program), sharing and the notes and pins run
-rem its tools\share.py and tools\data.py, and the Open Tinfoil Kit window that started them goes too.
+rem (bin, before the three folders) and its tools folder (the kit's own program, which also shares the kit and keeps
+rem the notes and pins), and the Open Tinfoil Kit window that started them goes too.
 set "TK_BIN=%KIT%\downloads\bin\"
 if not exist "%KIT%\downloads\" set "TK_BIN=%KIT%\bin\"
 set "TK_TOOLS=%APP%\tools\"
-set "TK_GATE=%APP%\tools\share.py"
-set "TK_DATA=%APP%\tools\data.py"
 set "TK_START=%APP%\Open Tinfoil Kit for Windows.bat"
-powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and ($c.IndexOf($env:TK_GATE, $k) -ge 0 -or $c.IndexOf($env:TK_DATA, $k) -ge 0)) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'Stopping the kit, which is running...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
+powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and $_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0 } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'Stopping the kit, which is running...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 rem And Windows no longer starts it as you sign in (kit.cmd autostart on), if this is the kit it starts.
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Tinfoil Kit.cmd"
 if exist "%STARTUP%" findstr /i /c:"%APP%\Open Tinfoil Kit for Windows.bat" "%STARTUP%" >nul && del "%STARTUP%"
@@ -92,7 +90,6 @@ if exist "%KIT%\" (
   echo Close any window that's using the kit ^(Open Tinfoil Kit or SETUP^) and run this again, or delete the folder in File Explorer.
   goto finish1
 )
-rd /s /q "%LOCALAPPDATA%\TinfoilKit" 2>nul
 rem A Mac told Spotlight to skip the drive the kit is at the top of. Undo that too.
 for %%p in ("%KIT%\..") do set "TOP=%%~fp"
 if defined DRIVE if "!TOP:~3!"=="" del /a /q "!TOP!.metadata_never_index" 2>nul

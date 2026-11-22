@@ -1,10 +1,9 @@
 package main
 
-// Opening the kit: start the library server (kiwix-serve), the AI server (llama-server) and the map servers on
-// 127.0.0.1, keep the page's notes and pins (in this program), share them on the home network if asked, then open the
-// kit's page in the browser. Closing the window,
-// Ctrl-C or the Mac app's Quit stops them all. What it prints matches tools/launch.sh (the Mac app reads it) and
-// Open Tinfoil Kit for Windows.bat.
+// Opening the kit (./kit open): start the library server (kiwix-serve), the AI server (llama-server) and the map
+// servers on 127.0.0.1, keep the page's notes and pins (in this program), share them on the home network if asked,
+// then open the kit's page in the browser. Closing the window, Ctrl-C or the Mac app's Quit stops them all. The Mac
+// app reads what it prints: its "Open:" line says the page is up.
 
 import (
 	"errors"
@@ -49,34 +48,18 @@ type launcher struct {
 
 type openOptions struct {
 	share, noBrowser, noMaps, chosen bool
-	model, root                      string
+	model                            string
 }
 
-func runOpen(args []string) int {
-	var o openOptions
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case a == "--share":
-			o.share = true
-		case a == "--no-browser":
-			o.noBrowser = true
-		case a == "--no-maps":
-			o.noMaps = true
-		case strings.HasPrefix(a, "--model="):
-			o.model, o.chosen = a[len("--model="):], true
-		case a == "--root" && i+1 < len(args):
-			o.root = args[i+1]
-			i++
-		case strings.HasPrefix(a, "--root="):
-			o.root = a[len("--root="):]
-		}
-	}
-	l := &launcher{layout: kitLayout(o.root)}
+// openKit is ./kit open: ROOT is the kit folder, or empty for the one this program is in.
+func openKit(root string, a *cliArgs) int {
+	o := openOptions{share: a.flag("share"), noBrowser: a.flag("no_browser"), noMaps: a.flag("no_maps"),
+		model: a.str("model"), chosen: a.has("model")}
+	l := &launcher{layout: kitLayout(root)}
 	return l.open(o)
 }
 
-// onThis picks what to say: tools/launch.sh's words on a Mac or Linux, Open Tinfoil Kit for Windows.bat's on Windows.
+// onThis picks what to say on a Mac or Linux, and on Windows.
 func onThis(unix, win string) string {
 	if windows {
 		return win

@@ -1402,8 +1402,7 @@ func cmdSync(root string, a *cliArgs) {
 	exit(code)
 }
 
-// installItem downloads and installs one item. A mistake in the kit itself fails that item, not the whole sync, as
-// in kit.py.
+// installItem downloads and installs one item. A mistake in the kit itself fails that item, not the whole sync.
 func installItem(root string, it *item, state, cfg *obj, force bool) (n int64, err error) {
 	defer func() {
 		if r := recover(); r != nil {

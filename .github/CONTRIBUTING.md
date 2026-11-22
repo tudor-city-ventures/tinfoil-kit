@@ -33,7 +33,7 @@ A check fails on pull requests with unsigned commits. Fix them with `git commit 
 
 ## Code rules
 
-[AGENTS.md](../AGENTS.md) has them, for people and agents alike: Python 3.9 standard library, bash 3.2, no symlinks, every download source overridable for the tests. Skip its Workflow section, which is for the maintainers.
+[AGENTS.md](../AGENTS.md) has them, for people and agents alike: Go's standard library, bash 3.2, no symlinks, every download source overridable for the tests. Skip its Workflow section, which is for the maintainers.
 
 ## Also
 

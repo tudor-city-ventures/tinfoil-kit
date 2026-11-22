@@ -32,7 +32,7 @@ flowchart TB
     start --> ai["AI<br/>llama-server"]
     start --> library["Library<br/>kiwix-serve"]
     start --> maps["Maps<br/>pmtiles, Photon,<br/>GraphHopper"]
-    start --> notes["Notes and pins<br/>tools/data.py"]
+    start --> notes["Notes and pins<br/>the kit's program"]
     ai --> page
     library --> page
     maps --> page
@@ -52,11 +52,11 @@ The first time, SETUP asks where you live (a US state or a country), which sets 
 2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in `kit.json` and downloads only what changed, into `downloads`. Programs are the exception: each version of the kit names the exact build of each one it installs (`tools/pins.json`), so a new AI engine arrives with a kit update. A big book can wait for its next edition: Wikipedia (127 GB in English) keeps the one it has until it's a year old (`refresh_days` in kit.json). A big file comes over eight connections at once, which is often several times faster than one, and downloads resume after a break. A file the kit already has is never downloaded again, even one an older version kept under another name. Every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
 3. **Check** (`./kit test`): starts every server offline and checks that each one answers.
 
-Nothing needs installing first. The kit's own program (`tools/tinfoilkit-*`, one for each computer, built from the Go source in `tools/tinfoilkit/`) runs `./kit` and the servers, and only needs curl, which Macs and Windows come with. A git checkout or GitHub's Download ZIP has no program until `tools/tinfoilkit/build.sh` builds it: until then the same steps run on Python (`tools/kit.py`, `tools/launch.sh`, `tools/share.py`, `tools/data.py`, standard library only). There, `SETUP-Windows.bat` gets python.org's own build from nuget.org (about 15 MB, checked against its SHA-256) into `%LOCALAPPDATA%\TinfoilKit`, and on a Mac without Apple's Command Line Tools (whose python3 only offers to install them) `SETUP.command` gets a standalone Python from python-build-standalone on GitHub (about 25 MB, checked against its SHA-256) into `~/Library/Application Support/TinfoilKit`, both outside the kit (its symlinks wouldn't fit on exFAT).
+Nothing needs installing first. The kit's own program (`tools/tinfoilkit-*`, one for each computer, built from the Go source in `tools/tinfoilkit/`) runs `./kit`, SETUP's steps and the servers, and only needs curl, which Macs and Windows come with. Every download of the kit carries it. A git checkout or GitHub's Download ZIP has none until `tools/tinfoilkit/build.sh` builds it, which needs Go; with Go installed, `./kit` builds it by itself.
 
 ### Using it (offline)
 
-`Open Tinfoil Kit.command` (`tools/launch.sh`; `Open Tinfoil Kit for Windows.bat` on Windows) starts these servers on your computer and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the computer's memory. Every server listens only on 127.0.0.1, so nothing else on the network can reach them. (When the computer's loopback has a second address, kiwix-serve can't see 127.0.0.1: the library then listens on ::1, the other loopback address, and the launcher forwards 127.0.0.1 to it.) Sharing, off by default, adds one more on the network.
+`Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows) runs `./kit open`, which starts these servers on your computer and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the computer's memory. Every server listens only on 127.0.0.1, so nothing else on the network can reach them. (When the computer's loopback has a second address, kiwix-serve can't see 127.0.0.1: the library then listens on ::1, the other loopback address, and the launcher forwards 127.0.0.1 to it.) Sharing, off by default, adds one more on the network.
 
 | Part | Program | Port | What it does |
 | --- | --- | --- | --- |
@@ -65,8 +65,8 @@ Nothing needs installing first. The kit's own program (`tools/tinfoilkit-*`, one
 | Map | `pmtiles` | 8090 | Serves the map: street detail where you live (a US state, a country, or part of a big one) and a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy (the whole US by default) |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
-| Notes and pins | `tools/data.py` | 8095 | Keeps the Notes tab and the map's home and pins in `data`, so a new version keeps them and every browser on the kit sees the same ones. The kit's own program (`tools/tinfoilkit-*`) does this itself; a kit without it runs `tools/data.py` on the Python SETUP uses, and without either they stay in the browser |
-| Sharing (off by default) | `tools/share.py` | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on (`.\kit.cmd share on` on Windows), `--share` for one run |
+| Notes and pins | the kit's program | 8095 | Keeps the Notes tab and the map's home and pins in `data`, so a new version keeps them and every browser on the kit sees the same ones |
+| Sharing (off by default) | the kit's program | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on (`.\kit.cmd share on` on Windows), `--share` for one run |
 
 Photon and GraphHopper run on a Java that's in the kit. The kit has each program for Macs, Windows PCs and Linux PCs, so a drive set up on one starts on all three.
 
@@ -132,7 +132,7 @@ Or from a terminal on a Mac or Linux:
 ```sh
 git clone https://github.com/tudor-city-ventures/tinfoil-kit ~/TinfoilKit    # or /Volumes/<drive>/TinfoilKit
 cd ~/TinfoilKit
-tools/tinfoilkit/build.sh    # the kit's own program (needs Go); without it, the kit runs on Python 3.9 or newer
+tools/tinfoilkit/build.sh    # the kit's own program, from its Go source (needs Go: https://go.dev/dl)
 ./kit plan    # preview what will download
 ./kit sync    # download everything (a few hours)
 ./kit test    # start every server offline and check it answers
@@ -148,7 +148,7 @@ Or replace the app folder yourself: delete it, put a new download's app folder i
 
 ## Remove
 
-Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit's app folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. It also removes the Python SETUP got, if it got one. `--yes` skips the question.
+Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit's app folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. `--yes` skips the question.
 
 ## Home server
 
@@ -164,7 +164,7 @@ The kit downloads programs and runs them on your computer, so here is what prote
 - **No administrator password.** The kit runs as you, and starts only when you start it unless you set up a home server. UNINSTALL undoes everything setup did. The site's "What does setup change on my computer?" lists every change outside the kit folder.
 - **Servers on 127.0.0.1.** The AI, library and maps answer only this computer. A website open while the kit runs can still reach them, as browsers allow: it could read the books and maps and use the AI as the kit page does (the directions server answers any page, and DNS rebinding opens the rest). Chrome asks your permission before a website reaches your computer's own servers; other browsers may not.
 - **Sharing is off until you turn it on.** Then one gate, on port 8000 by default, stands in front of everything: it asks for an 8-digit code, stops answering a device after 10 wrong tries in 10 minutes, and refuses addresses and names outside a home network, so other websites can't reach it. It's plain HTTP, so share on your own Wi-Fi or hotspot: anyone on a public network who watches the traffic could read the code.
-- **Readable code.** Python's and Go's standard libraries, shell scripts and one HTML page, with no packages to install. The one built file is the kit's own program (`tools/tinfoilkit-*`, from the Go source in `tools/tinfoilkit/`), and the same source builds the same bytes on any computer, so you can check that it's the code you read (below). It's written with AI coding tools; the tests in `tests/` run it against mocks of every download source and server on every change.
+- **Readable code.** Go's standard library, shell scripts and one HTML page, with no packages to install. The one built file is the kit's own program (`tools/tinfoilkit-*`, from the Go source in `tools/tinfoilkit/`), and the same source builds the same bytes on any computer, so you can check that it's the code you read (below). It's written with AI coding tools; the tests in `tests/` run it against mocks of every download source and server on every change.
 - **The repo.** Every GitHub Action is pinned to a commit and runs with a read-only token, except a few jobs that never run code from a pull request or a download. An outside pull request that touches the workflows, CODEOWNERS, the release key or the program pins fails a check that only the maintainer can merge past.
 - **What it can't protect against:** a bad file from a hacked publisher, if it's a book, model or map (its checksum comes from the same place as the file) or a program that was already bad when a release pinned it; someone with your unlocked computer or drive, since the kit isn't encrypted (use FileVault, BitLocker or an encrypted drive for that); and an AI answer that's wrong, so check its sources.
 

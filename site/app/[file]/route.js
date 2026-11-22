@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-// The kit builder's data, served byte for byte from site/: sources.json, kit.json (which tools/kit.py reads there
-// too) and regions.json, all written by site/build_sources.py. Any other name is a 404.
+// The kit builder's data, served byte for byte from site/: sources.json, kit.json (which the kit's program reads
+// there too) and regions.json, all written by site/build_sources.py. Any other name is a 404.
 const FILES = ['kit.json', 'sources.json', 'regions.json'];
 
 export const dynamic = 'force-static';

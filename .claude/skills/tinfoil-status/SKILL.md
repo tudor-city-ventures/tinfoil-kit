@@ -37,7 +37,7 @@ The logs are in data/logs: sync-*.log for downloads, llama-server.log for the AI
 - A program's publisher no longer has the build the kit names: `./kit update` first. If it says a program's file changed after the kit pinned it, don't work around it: report it at https://github.com/tudor-city-ventures/tinfoil-kit/security.
 - A model won't load or is very slow: quit other apps, pick Gemma 4 E4B on the Ask page, or open the kit with `--no-maps` to free about 5 GB of memory.
 - Address search or directions "not running": they take up to a minute to start. If they never do, read geocoder.log and routing.log. A "lock" error in test-geocoder.log means the drive's exFAT format is the cause.
-- The Notes or Map tab says notes or pins are saved in this browser: the kit couldn't start the server that keeps them. Read data.log. A kit without its own program (tools/tinfoilkit-*) runs it on Python: SETUP gets one on a Mac or Windows; on Linux, install python3. They move into the kit the next time it starts.
+- The Notes or Map tab says notes or pins are saved in this browser: the kit couldn't start the server that keeps them. Read data.log. They move into the kit the next time it starts.
 - Linux, Fedora 45 or later: the AI needs `sudo dnf install openssl3-libs`, installed while there's internet.
 - The previous version of each program stays in downloads/bin and starts by itself if the newest won't. If the library won't start at all, the Kiwix app in downloads/installers opens the books in downloads/library.
 
@@ -47,4 +47,4 @@ The logs are in data/logs: sync-*.log for downloads, llama-server.log for the AI
 - Windows: double-click Open Tinfoil Kit for Windows.bat in the app folder, or run `& ".\Open Tinfoil Kit for Windows.bat"`.
 - Linux: `bash "Open Tinfoil Kit.command"`.
 
-It opens http://127.0.0.1:8888 in the browser, and needs no internet. Keep its window open: closing it stops everything. Open Tinfoil Kit.command takes `--share` (phones and laptops at home, with the access code, this time only), `--no-maps`, `--model=NAME` (the model to load first) and `--no-browser`. The Windows one takes `--share` and `--no-browser`.
+It opens http://127.0.0.1:8888 in the browser, and needs no internet. Keep its window open: closing it stops everything. In a terminal in the app folder, `./kit open` (`.\kit.cmd open` on Windows) does the same. Each of them takes `--share` (phones and laptops at home, with the access code, this time only), `--no-maps` (frees about 5 GB of memory), `--model=NAME` (the model to load first) and `--no-browser`.

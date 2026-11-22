@@ -322,10 +322,6 @@ class H(BaseHTTPRequestHandler):
             return self.send_file(f, head)
         if path.startswith("/gh/"):
             return self.send_file(R / "gh" / path[4:], head)
-        if path.startswith("/nuget/"):    # the Python SETUP-Windows.bat gets
-            return self.send_file(R / "nuget" / path.split("/")[-1], head)
-        if path.startswith("/pbs/"):    # the Python SETUP.command gets for a Mac without one
-            return self.send_file(R / "pbs" / path.split("/")[-1], head)
         m = re.match(r"^/api/models/([^/]+/[^/]+)(/tree/[^/]+)?$", path)
         if m:
             repo = m.group(1)

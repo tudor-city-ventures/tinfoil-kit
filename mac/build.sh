@@ -17,7 +17,7 @@ die() { echo "mac/build.sh: $*" >&2; exit 1; }
 rm -rf "$app" "$out/TinfoilKit-Mac.zip"
 mkdir -p "$app/Contents/MacOS" "$res/kit"
 if [ -d "$src" ]; then cp -R "$src/." "$res/kit/"; else tar -xzf "$src" -C "$res/kit" --strip-components 1; fi
-[ -f "$res/kit/SETUP.command" ] && [ -f "$res/kit/tools/kit.py" ] || die "$src isn't a kit"
+[ -f "$res/kit/SETUP.command" ] && [ -f "$res/kit/tools/pins.json" ] || die "$src isn't a kit"
 clang -arch arm64 -mmacosx-version-min=12.0 -fobjc-arc -O2 -Wall -Wno-deprecated-declarations -framework Cocoa \
   -o "$app/Contents/MacOS/Tinfoil Kit" "$here/TinfoilKit.m"
 cp "$here/app.sh" "$here/AppIcon.icns" "$res/"

@@ -40,8 +40,8 @@ func fingerprint(g qrGrid) string {
 	return hex.EncodeToString(sum[:])[:16]
 }
 
-// The same codes tests/share_test.py pins: checked against Project Nayuki's QR Code generator and read back with
-// the jsQR decoder. A change that alters them needs that check again.
+// Codes checked against Project Nayuki's QR Code generator (the same modules for every mask, and the same mask
+// chosen) and read back with the jsQR decoder. A change that alters them needs that check again.
 func TestQRCode(t *testing.T) {
 	known := map[string]struct {
 		size int
@@ -81,28 +81,6 @@ func dark(g qrGrid) int {
 	return n
 }
 
-// QR_FINGERPRINTS (text<TAB>size<TAB>fingerprint lines, from share.py) checks many more codes against share.py.
-func TestQRCodeMatchesShare(t *testing.T) {
-	file := os.Getenv("QR_FINGERPRINTS")
-	if file == "" {
-		t.Skip("set QR_FINGERPRINTS")
-	}
-	data, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	n := 0
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-		f := strings.Split(line, "\t")
-		g, err := qrCode(f[0], -1)
-		if err != nil || fingerprint(g) != f[2] {
-			t.Errorf("%q: %s, share.py %s", f[0], fingerprint(g), f[2])
-		}
-		n++
-	}
-	t.Logf("%d codes match", n)
-}
-
 func TestAccessCodes(t *testing.T) {
 	if prettyCode("48217736") != "4821 7736" || prettyCode("abc123") != "abc123" || prettyCode("") != "" {
 		t.Error("access codes: digits read in fours")
@@ -131,7 +109,7 @@ func TestAccessCodes(t *testing.T) {
 	b, _ := loadAccess(kit, true)
 	data, _ := os.ReadFile(filepath.Join(kit, "data", ".kit", "share.json"))
 	if b != a || !strings.HasPrefix(string(data), `{"code": "`) {
-		t.Errorf("the access code is kept in data/.kit, as share.py writes it: %s", data)
+		t.Errorf("the access code is kept in data/.kit, as the kit always has: %s", data)
 	}
 	old := t.TempDir() // a kit from before the three folders keeps .kit at its top
 	os.MkdirAll(filepath.Join(old, ".kit"), 0o755)
@@ -169,23 +147,6 @@ func TestLayout(t *testing.T) {
 	os.MkdirAll(filepath.Join(old, "tools"), 0o755)
 	if l = kitLayout(old); l.app != old || l.dl != old || l.data != old {
 		t.Errorf("an older kit: %+v", l)
-	}
-}
-
-// The access code page is share.py's, word for word, while both are in the kit.
-func TestLoginPageMatchesShare(t *testing.T) {
-	src, err := os.ReadFile(filepath.Join("..", "share.py"))
-	if err != nil {
-		t.Skip("no share.py")
-	}
-	s := string(src)
-	i := strings.Index(s, `LOGIN = """`)
-	if i < 0 {
-		t.Fatal("share.py has no LOGIN")
-	}
-	s = s[i+len(`LOGIN = """`):]
-	if s = s[:strings.Index(s, `"""`)]; s != loginHTML {
-		t.Error("gate.go's loginHTML differs from share.py's LOGIN: copy it over")
 	}
 }
 
@@ -698,6 +659,21 @@ func TestLockKit(t *testing.T) {
 	}
 }
 
+// The code's folder is the one above the program's (app, above app/tools), or KIT_CODE's for a copy run from elsewhere.
+func TestCodeRoot(t *testing.T) {
+	t.Setenv("KIT_CODE", "")
+	exe, _ := os.Executable()
+	exe, _ = filepath.EvalSymlinks(exe)
+	if got := findCodeRoot(); got != filepath.Dir(filepath.Dir(exe)) {
+		t.Errorf("the code's folder is %s, not the one above the program's", got)
+	}
+	dir := t.TempDir()
+	t.Setenv("KIT_CODE", dir)
+	if got := findCodeRoot(); got != dir {
+		t.Errorf("with KIT_CODE=%s the code's folder is %s", dir, got)
+	}
+}
+
 func firstRegion(t *testing.T, ok func(*obj) bool) *obj {
 	for _, r := range regions().objs("regions") {
 		if ok(r) {
@@ -953,5 +929,67 @@ func TestDownloadRoundedSize(t *testing.T) {
 		if got, _ := os.ReadFile(part); err != nil || !bytes.Equal(got, book) {
 			t.Errorf("run %d: %v", i+1, err)
 		}
+	}
+}
+
+// What ./kit autostart writes to Windows' Startup folder and reads back. The drive test runs the real thing on Windows.
+func TestAutostartWindows(t *testing.T) {
+	savedWindows, savedStart := windows, startNow
+	defer func() { windows, startNow = savedWindows, savedStart }()
+	windows = true
+	var started []string
+	startNow = func(p string) error { started = append(started, p); return nil }
+	tmp := t.TempDir()
+	t.Setenv("APPDATA", filepath.Join(tmp, "Roaming"))
+	kit, elsewhere := filepath.Join(tmp, "Tinfoil Kit 100% café"), filepath.Join(tmp, "elsewhere")
+	os.MkdirAll(filepath.Join(kit, "app", "tools"), 0o755)
+	var said strings.Builder
+	if rc := autostart(kit, "on", &said); rc != 0 {
+		t.Fatalf("./kit autostart on: %d %s", rc, said.String())
+	}
+	entry := startupFile()
+	data, _ := os.ReadFile(entry)
+	text := string(data)
+	bat := strings.ReplaceAll(filepath.Join(kit, "app", "Open Tinfoil Kit for Windows.bat"), "%", "%%")
+	if !strings.Contains(text, `if exist "`+bat+`" start "Tinfoil Kit" /min "`+bat+`" --no-browser`+"\r\n") {
+		t.Errorf("the Startup entry starts Open Tinfoil Kit for Windows.bat, minimized, with no browser:\n%s", text)
+	}
+	if strings.Count(text, "\n") != strings.Count(text, "\r\n") || !strings.Contains(text, "chcp 65001") ||
+		!strings.Contains(text, "café") || !strings.Contains(text, `.\kit.cmd autostart off`) {
+		t.Errorf("the Startup entry is CRLF and UTF-8, for a folder named in any language, and says how to remove it:\n%q", text)
+	}
+	if len(started) != 1 || started[0] != entry || !strings.Contains(said.String(), "whenever you sign in") {
+		t.Errorf("./kit autostart on starts the kit now too, and says it starts as you sign in: %v %s", started, said.String())
+	}
+	upper := strings.ToUpper(kit)
+	if autostartState(kit, "") != "on" || autostartState(upper, filepath.Join(upper, "APP")) != "on" {
+		t.Error("the entry reads back, % and all, in any case")
+	}
+	if autostartState(elsewhere, "") != "other" {
+		t.Error("another kit folder's entry is another's")
+	}
+	if restartIfAutostarted(kit) {
+		t.Error("a sharing change doesn't restart the kit: which window Windows started can't be told")
+	}
+	if localName() != "" {
+		t.Error("phones can't find a Windows PC by name")
+	}
+	autostart(elsewhere, "off", io.Discard)
+	kept := exists(entry)
+	autostart(kit, "off", io.Discard)
+	if !kept || exists(entry) {
+		t.Error("./kit autostart off removes this kit's entry, and only this kit's")
+	}
+}
+
+func TestSystemdUnit(t *testing.T) {
+	if windows {
+		t.Skip("systemd is Linux's")
+	}
+	odd := filepath.Join(t.TempDir(), "a kit 100% $HOME")
+	os.MkdirAll(filepath.Join(odd, "app", "tools"), 0o755)
+	want := `ExecStart=/bin/bash "` + strings.NewReplacer("%", "%%", "$", "$$").Replace(odd) + `/app/Open Tinfoil Kit.command" --no-browser`
+	if unit := systemdUnit(odd); !strings.Contains(unit, want+"\n") {
+		t.Errorf("a folder with spaces, %% and $ survives systemd's quoting:\n%s", unit)
 	}
 }

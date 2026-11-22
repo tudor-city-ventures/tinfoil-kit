@@ -2313,7 +2313,7 @@
       if (typeof document !== "undefined")
         (function () {
           "use strict";
-          // Set by tools/share.py when the page comes through the gate that shares the kit on the home network. Then
+          // Set by the kit's gate when the page comes through it, sharing the kit on the home network. Then
           // the AI and the map servers are paths on this same address, behind the access code.
           var GATE = window.KIT_GATE || null;
           if (!GATE && location.hostname === "localhost") {
@@ -2338,7 +2338,7 @@
           }
           var aiPort = params.get("ai") || stored("ai") || "8080";
           var AI = GATE ? location.origin + "/ai" : location.protocol + "//" + location.hostname + ":" + aiPort;
-          // tools/data.py, which keeps the notes, the pins and home in the kit's data folder
+          // the kit's notes and pins server, which keeps the notes, the pins and home in its data folder
           var dataPort = params.get("data") || stored("data") || "8095";
           var DATA = GATE ? location.origin + "/data" : location.protocol + "//" + location.hostname + ":" + dataPort;
           var preferredModel = params.get("model") || stored("model") || "";
@@ -2681,9 +2681,9 @@
           });
 
           /* ---------------------------------------------------------------- notes, pins and home, kept in the kit */
-          // tools/data.py keeps them in the kit's data folder (notes.txt, places.json), which a new version never
-          // touches, so they go where the kit goes and the phones at home see the same. Without it (no Python on this
-          // computer), they stay in this browser, and move into the kit the next time it can keep them.
+          // The kit keeps them in its data folder (notes.txt, places.json), which a new version never touches, so they
+          // go where the kit goes and the phones at home see the same. When its server doesn't answer, they stay in
+          // this browser, and move into the kit the next time it can keep them.
           async function dataApi(method, path, body) {
             var c = new AbortController(),
               t = setTimeout(function () {

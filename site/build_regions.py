@@ -15,19 +15,25 @@ import gzip
 import io
 import json
 import math
+import os
 import re
+import subprocess
 import sys
 import time
 import unicodedata
 import urllib.parse
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "tools"))
-import kit  # noqa: E402  the kit's own downloads (curl), Kiwix catalog and Photon page readers
-
-GEOFABRIK = kit.GEOFABRIK.rstrip("/") + "/"
+# The sources as the kit's program has them (tools/tinfoilkit/kit.go), each overridable by the same KIT_* variable.
+GEOFABRIK = os.environ.get("KIT_GEOFABRIK", "https://download.geofabrik.de").rstrip("/") + "/"
+KIWIX_CATALOG = os.environ.get("KIT_KIWIX_CATALOG", "https://library.kiwix.org/catalog/v2/entries?count=-1")
+PHOTON_DUMPS = os.environ.get("KIT_PHOTON_DUMPS", "https://download1.graphhopper.com/public/")
+EDITIONS = ("top_mini", "top_nopic", "top_maxi", "all_mini", "all_nopic", "all_maxi")    # Wikipedia's, as the kit's
+USER_AGENT = "TinfoilKit/1.0 (+https://github.com/tudor-city-ventures/tinfoil-kit)"
+ZIM_RE = re.compile(r"^(?P<prefix>.+)_(?P<date>\d{4}-\d{2})\.zim$")
 INDEX = GEOFABRIK + "index-v1.json"
 TOWNS = "https://download.geonames.org/export/dump/cities1000.zip"
 COUNTRIES = "https://download.geonames.org/export/dump/countryInfo.txt"
@@ -84,6 +90,80 @@ SAFE = re.compile(r"^[a-z0-9][a-z0-9/_-]*$")
 warnings = []
 
 
+
+# ----------------------------------------------------------------------------- downloads and the pages it reads
+class HttpError(Exception):
+    pass
+
+
+def http_get(url, timeout=120):
+    """A download, through curl as the kit's are."""
+    p = subprocess.run(["curl", "-fsSL", "--retry", "3", "--retry-delay", "2", "--connect-timeout", "20",
+                        "--max-time", str(timeout), "-A", USER_AGENT, url], capture_output=True)
+    if p.returncode != 0:
+        raise HttpError(f"{p.stderr.decode(errors='replace').strip() or f'curl exit {p.returncode}'} ({url})")
+    return p.stdout
+
+
+def head_size(url):
+    """A remote file's size from its headers (after redirects), or None when the server doesn't say."""
+    p = subprocess.run(["curl", "-fsSIL", "--connect-timeout", "20", "--max-time", "60", "-A", USER_AGENT, url],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        raise HttpError(f"{p.stderr.strip() or 'HEAD failed'} ({url})")
+    blocks = [b for b in re.split(r"\r?\n\r?\n", p.stdout.strip()) if b.strip()]
+    m = re.search(r"^content-length:\s*(\d+)", blocks[-1] if blocks else "", re.I | re.M)
+    return (int(m.group(1)) or None) if m else None
+
+
+def version_key(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v))
+
+
+def photon_regions(html):
+    """Rows of the region table on Photon's download pages: region, has a DB dump, ISO country codes."""
+    rows = []
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", html, flags=re.S | re.I):
+        cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", tr, flags=re.S | re.I)
+        if len(cells) < 3:
+            continue
+        link = re.search(r'href="([^"]+)"', cells[0])
+        text = re.sub(r"<[^>]+>", "", cells[0]).strip()
+        slug = (link.group(1).replace("index.html", "").strip("/").split("/")[-1] if link else "") or text
+        slug = slug.lower().replace(" ", "-")
+        if not slug or slug == "region":
+            continue
+        codes = [c.strip().lower() for c in re.sub(r"<[^>]+>", "", cells[2]).split(",") if c.strip()]
+        rows.append({"slug": slug, "db": "\u2713" in cells[1] or "&#10003;" in cells[1], "codes": codes})
+    return rows
+
+
+def parse_kiwix_catalog(data):
+    """Kiwix's catalog: file prefix (wikipedia_en_all_maxi) -> its newest entry (url, size, date)."""
+    best = {}
+    for entry in ET.fromstring(data):
+        if not entry.tag.endswith("entry"):
+            continue
+        info = {}
+        for child in entry:
+            if child.tag.split("}")[-1] == "link" and child.get("type") == "application/x-zim":
+                info["url"] = (child.get("href") or "").split(".meta4")[0]
+                info["size"] = int(child.get("length") or 0) if (child.get("length") or "0").isdigit() else 0
+        m = ZIM_RE.match(urllib.parse.unquote(info.get("url", "").rstrip("/").split("/")[-1]))
+        if m and (m.group("prefix") not in best or m.group("date") > best[m.group("prefix")]["date"]):
+            best[m.group("prefix")] = {**info, "prefix": m.group("prefix"), "date": m.group("date")}
+    return best
+
+
+def tiles_estimate(bbox, maxzoom, roads_bytes=None):
+    """The map tiles' rough size, as the kit estimates it (tilesEstimate in tools/tinfoilkit/plan.go): about 1 GB of
+    world overview, plus street detail at about 40 MB per square degree, capped at twice the area's road data."""
+    w, s, e, n = (float(x) for x in bbox)
+    detail = abs(e - w) * abs(n - s) * math.cos(math.radians((n + s) / 2)) * 40e6
+    if roads_bytes:
+        detail = min(detail, 2 * roads_bytes)
+    return int(1e9 + detail * 0.4 ** max(0, 15 - int(maxzoom)))
+
 def warn(msg):
     warnings.append(msg)
     print("WARNING: " + msg, flush=True)
@@ -94,7 +174,7 @@ def fetch(url, cache, name, timeout=900):
         p = cache / name
         if p.exists():
             return p.read_bytes()
-    data = kit.http_get(url, timeout=timeout)
+    data = http_get(url, timeout=timeout)
     if cache:
         cache.mkdir(parents=True, exist_ok=True)
         (cache / name).write_bytes(data)
@@ -108,10 +188,10 @@ def head(url):
     """A file's size, asking again when the server is busy, but not once it keeps saying no."""
     for attempt in range(1 if failed_in_a_row[0] > 10 else 4):
         try:
-            size = kit.content_length(kit.http_head(url))
+            size = head_size(url)
             failed_in_a_row[0] = 0
             return size
-        except kit.HttpError as e:
+        except HttpError as e:
             err = e
             if re.search(r"error: 40[34]", str(e)):
                 break
@@ -137,9 +217,9 @@ def page_sizes(pages):
     out, read = {}, 0
     for page in pages:
         try:
-            html = kit.http_get(page, timeout=60).decode(errors="replace")
+            html = http_get(page, timeout=60).decode(errors="replace")
             read += 1
-        except kit.HttpError as e:
+        except HttpError as e:
             warn(f"{page}: {e}")
             continue
         for href, num, unit in PAGE_SIZE.findall(html):
@@ -251,13 +331,13 @@ def load_countries(data):
 
 
 def photon_db(cc, base, pages):
-    """Where Photon's address database for a country is: (folder, file, fallback?). The same search kit.py's
-    _photon_db does: a country's own database, or else the one for the region of the world it's in."""
+    """Where Photon's address database for a country is: (folder, file, fallback?). The same search the kit's program
+    does: a country's own database, or else the one for the region of the world it's in."""
     def page(path):
         if path not in pages:
             try:
-                pages[path] = kit.photon_regions(kit.http_get(base + path).decode(errors="replace"))
-            except kit.HttpError as e:
+                pages[path] = photon_regions(http_get(base + path).decode(errors="replace"))
+            except HttpError as e:
                 warn(f"Photon page {base + path}: {e}")
                 pages[path] = []
         return pages[path]
@@ -277,11 +357,11 @@ def photon_db(cc, base, pages):
         return None
     folder = "/".join(path) + "/"
     try:
-        listing = kit.http_get(base + folder).decode(errors="replace")
-    except kit.HttpError:
+        listing = http_get(base + folder).decode(errors="replace")
+    except HttpError:
         listing = ""
     found = sorted(set(re.findall(r"photon-db-" + re.escape(path[-1]) + r"-(\d+\.\d+)-latest\.tar\.bz2", listing)),
-                   key=kit.version_key, reverse=True)
+                   key=version_key, reverse=True)
     if not found:
         warn(f"Photon folder {folder} lists no database file")
         return None
@@ -364,7 +444,7 @@ def main():
     countries = load_countries(fetch(COUNTRIES, args.cache, "countryInfo.txt"))
     states = load_states(fetch(STATES, args.cache, "admin1CodesASCII.txt"))
     towns = load_towns(fetch(TOWNS, args.cache, "cities1000.zip"))
-    catalog = kit.parse_kiwix_catalog(kit.http_get(kit.KIWIX_CATALOG, timeout=900))
+    catalog = parse_kiwix_catalog(http_get(KIWIX_CATALOG, timeout=900))
     continents = [(prop(t, "name"), polygons(feats[t].get("geometry")))
                   for t in kids.get(None, []) if t not in SKIP and t != "russia"]
     outline = {t: polygons(feats[t].get("geometry")) for t in kids.get(None, [])}
@@ -380,7 +460,7 @@ def main():
         return None, None
 
     regions, used_langs, photon_pages, photon_cache = [], {"en"}, {}, {}
-    photon_base = kit.PHOTON_DUMPS.rstrip("/") + "/"
+    photon_base = PHOTON_DUMPS.rstrip("/") + "/"
     for ident in picked:
         chain = [ident] + ancestors(ident)
         country = next((a for a in chain if iso(a)), None)      # the extract that is the whole country
@@ -476,7 +556,7 @@ def main():
             if fold(where) != fold(name):
                 r["addresses"] = where
             if ph[2]:
-                r["addresses_wide"] = True      # kit.py leaves it out of just the essentials
+                r["addresses_wide"] = True      # the kit leaves it out of just the essentials
         r["_pbf_bytes"] = size[ident]
         r["_polys"] = polys
         regions.append(r)
@@ -496,7 +576,7 @@ def main():
     for r in regions:
         pbf = r.pop("_pbf_bytes") or 0
         addr = photon_sizes.get(photon_base + r.get("photon", "")) or 0
-        tiles = kit.tiles_estimate(r["bbox"], 15, pbf)
+        tiles = tiles_estimate(r["bbox"], 15, pbf)
         r["mb"] = {"tiles": round(tiles / 1e6), "roads": round(pbf / 1e6), "addresses": round(addr / 1e6)}
 
     languages = {}
@@ -510,9 +590,9 @@ def main():
             warn(f"no name for language '{code}'; add it to NAMES")
         languages[code] = {"name": en, "native": native, "zim": e["prefix"], "mb": round((e.get("size") or 0) / 1e6),
                            "pictures": flavour == "maxi",
-                           # every edition Kiwix makes, for Wikipedia's sizes (kit.EDITIONS)
+                           # every edition Kiwix makes, for Wikipedia's sizes (EDITIONS)
                            "sizes": {ed: round((catalog[f"wikipedia_{code}_{ed}"].get("size") or 0) / 1e6)
-                                     for ed in kit.EDITIONS if f"wikipedia_{code}_{ed}" in catalog}}
+                                     for ed in EDITIONS if f"wikipedia_{code}_{ed}" in catalog}}
 
     order = {"United States": "0"}
     regions.sort(key=lambda r: (order.get(r["group"], "1" + r["group"]), fold(r["name"])))
@@ -573,7 +653,7 @@ def check(regions, languages):
     for c, v in languages.items():
         if not re.fullmatch(r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)", v["zim"]):
             bad.append(f"language {c}: bad Wikipedia name {v['zim']}")
-        if not all(e in kit.EDITIONS and isinstance(mb, int) and mb >= 0 for e, mb in v["sizes"].items()):
+        if not all(e in EDITIONS and isinstance(mb, int) and mb >= 0 for e, mb in v["sizes"].items()):
             bad.append(f"language {c}: bad Wikipedia sizes {v['sizes']}")
     if bad:
         sys.exit("regions.json would be wrong:\n  " + "\n  ".join(bad))

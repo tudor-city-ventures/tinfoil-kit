@@ -24,7 +24,7 @@ def check(name, ok, detail=""):
 def make_kit(folder, books=False, flat=False):
     """A kit folder: its code in app/ and its books in downloads/, or all at its top (flat: a kit from before app/,
     or the copy of the code inside the app)."""
-    for f in ("kit", "tools/kit.py", "SETUP.command", "UNINSTALL.command"):
+    for f in ("kit", "tools/pins.json", "SETUP.command", "UNINSTALL.command"):
         (folder / ("" if flat else "app") / f).parent.mkdir(parents=True, exist_ok=True)
         (folder / ("" if flat else "app") / f).write_text(f)
     if books:

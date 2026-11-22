@@ -1,6 +1,6 @@
 """Drive the real portal map in headless Chrome: real MapLibre + Protomaps style + embedded fonts/icons,
 against mock tile / address / routing servers and a mock tool-calling AI. Home and pins are kept in the kit by its
-notes and pins server (tools/data.py, on 18095)."""
+notes and pins server, which the launcher starts (on 18095)."""
 import json
 import os
 import re

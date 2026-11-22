@@ -1,7 +1,6 @@
 package main
 
-// The kit's command line, as ./kit and kit.cmd run it: tinfoilkit --root KIT COMMAND. The same commands, output and
-// files as tools/kit.py, which this replaces.
+// The kit's command line, as ./kit and kit.cmd run it: tinfoilkit --root KIT COMMAND.
 
 import (
 	"bytes"
@@ -36,6 +35,9 @@ Commands (run from the kit's app folder, e.g.  ./kit sync):
   status             What's installed, when it was last updated, free space.
   search WORDS...    Search the Kiwix catalog for more library content to add to kit.json.
   test               Start the offline servers briefly and check they actually work.
+  open [--share]     Start the servers and open the kit's page, as Open Tinfoil Kit does, until this
+                     window closes. --share lets the home network in too, --model=NAME picks the AI,
+                     --no-browser doesn't open the page, --no-maps leaves the map's servers off.
   update [-y]        Replace the kit's own code with its newest release on GitHub, if it's signed
                      with the kit's release key (tools/release-signers), keeping your kit.json
                      changes. Shows what's new and asks first. SETUP.command runs it first.
@@ -189,8 +191,17 @@ func isArchive(name string) bool {
 	return false
 }
 
-// codeRoot is this code's own folder: the app folder this program is in (app/tools), or a git checkout.
-var codeRoot = func() string {
+// codeRoot is this code's own folder: the app folder this program is in (app/tools), or a git checkout. KIT_CODE
+// names it for a copy of the program run from elsewhere: Windows won't move the folder of a program that's running,
+// so SETUP-Windows.bat moves a kit's code into its app folder with a copy in TEMP.
+var codeRoot = findCodeRoot()
+
+func findCodeRoot() string {
+	if c := os.Getenv("KIT_CODE"); c != "" {
+		if abs, err := filepath.Abs(c); err == nil {
+			return abs
+		}
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		wd, _ := os.Getwd()
@@ -200,7 +211,7 @@ var codeRoot = func() string {
 		exe = r
 	}
 	return filepath.Dir(filepath.Dir(exe))
-}()
+}
 
 func regionsFile() string { return filepath.Join(codeRoot, "tools", "regions.json") }
 
@@ -229,7 +240,7 @@ func metaDir(root string) string { return filepath.Join(root, "data", ".kit") }
 // from before the app folder).
 func hasCode(folder string) bool {
 	for _, c := range []string{filepath.Join(folder, "app"), folder} {
-		if isFile(filepath.Join(c, "kit")) && isFile(filepath.Join(c, "tools", "kit.py")) {
+		if isFile(filepath.Join(c, "kit")) && isDir(filepath.Join(c, "tools")) {
 			return true
 		}
 	}
@@ -290,8 +301,7 @@ func fileSize(p string) int64 {
 
 // ----------------------------------------------------------------------------- output
 
-// log prints a line, and adds it to this sync's log file. A reader that stopped reading (| head) ends the kit, as
-// Python's kit did.
+// log prints a line, and adds it to this sync's log file. A reader that stopped reading (| head) ends the kit quietly.
 func log(msg string) { logEnd(msg, "\n") }
 
 func logEnd(msg, end string) {
@@ -1268,7 +1278,7 @@ func merge3(base, ours, theirs any) any {
 
 // ----------------------------------------------------------------------------- the command line
 
-// A command and its options, which parse and print help the way Python's argparse did for kit.py.
+// A command and its options, which parse and print help the way Python's argparse does, as ./kit always has.
 type cliArg struct {
 	names   []string // "-y", "--yes"; none for a positional
 	dest    string
@@ -1724,6 +1734,11 @@ func init() {
 		{name: "search", help: "search the Kiwix catalog for more content", run: cmdSearch, args: []cliArg{posArg("words", "+", "")}},
 		{name: "test", help: "check that the offline servers start and answer", run: cmdTest, args: []cliArg{
 			valueArg("--model", "", "model folder name to test (default: the smallest)")}},
+		{name: "open", help: "start the kit's servers and open its page, as Open Tinfoil Kit does", args: []cliArg{
+			flagArg("--share", "let phones and laptops on your home network in too, with the access code"),
+			valueArg("--model", "NAME", "the AI to load first: a folder in downloads/models"),
+			flagArg("--no-browser", "don't open the page in a browser"),
+			flagArg("--no-maps", "don't start the map's servers, which saves about 5 GB of memory")}},
 		{name: "update", help: "install the newest version of the kit's own code, keeping kit.json changes", run: cmdUpdate, args: []cliArg{
 			flagArg("--force", "reinstall even if this is the newest version"),
 			flagArg("-y --yes", "don't ask before installing")}},
@@ -1813,6 +1828,9 @@ func runKit(words []string) (code int) {
 		return 0
 	}
 	a := parseArgs(cmd, rest)
+	if cmd.name == "open" { // the launcher stops its servers on Ctrl-C itself, and opens a kit as it is
+		return openKit(root, a)
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			switch v := r.(type) {

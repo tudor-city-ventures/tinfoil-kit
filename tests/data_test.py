@@ -1,6 +1,6 @@
-"""The server that keeps the kit page's notes, pins and home in the kit's data folder: tools/data.py, then the kit's own
-program's (tools/tinfoilkit data), which must pass the same checks. What it saves, what it turns away (other web
-pages, other names for this computer, bad input), and that a save is all or nothing."""
+"""The server that keeps the kit page's notes, pins and home in the kit's data folder: the kit's own program's
+(tools/tinfoilkit data). What it saves, what it turns away (other web pages, other names for this computer, bad
+input), and that a save is all or nothing. Needs the program, which tools/tinfoilkit/build.sh builds."""
 import http.client
 import json
 import platform
@@ -14,22 +14,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 fails = 0
-who = ""
 
 
 def check(name, ok, detail=""):
     global fails
-    name = f"{who}: {name}"
     print(("PASS  " + name) if ok else ("FAIL  " + name + (f": {detail}" if detail else "")))
     fails += 0 if ok else 1
 
 
-def program():
-    """The kit's own program for this computer (tools/tinfoilkit-*), if tools/tinfoilkit/build.sh has built it."""
-    name = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64",
-            ("Windows", "AMD64"): "windows-x64.exe"}.get((platform.system(), platform.machine()))
-    p = ROOT / "tools" / f"tinfoilkit-{name}"
-    return p if name and p.exists() else None
+PLAT = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64",
+        ("Windows", "AMD64"): "windows-x64.exe"}.get((platform.system(), platform.machine()))
+PROGRAM = ROOT / "tools" / f"tinfoilkit-{PLAT}"    # the kit's own program for this computer
+if not PLAT or not PROGRAM.exists():
+    sys.exit("The tests need the kit's program for this computer: tools/tinfoilkit/build.sh builds it")
 
 
 def free_port():
@@ -183,14 +180,7 @@ def run(server, server_cmd, work, data):
     check("without a data folder, it doesn't start", p.returncode != 0 and "no data folder" in p.stderr, p.stderr)
 
 
-who = "data.py"
-checks([sys.executable, str(ROOT / "tools" / "data.py")])
-PROGRAM = program()
-if PROGRAM:
-    who = "data (Go)"
-    checks([str(PROGRAM), "data"])
-else:
-    print("SKIP  the kit's own program: not built (tools/tinfoilkit/build.sh)")
+checks([str(PROGRAM), "data"])
 
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
 sys.exit(1 if fails else 0)
