@@ -52,6 +52,11 @@ out=$(node tests/pr_gate_test.js 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
+step "workflows: pinned actions, read-only tokens, no injection"
+out=$(python3 tests/actions_test.py 2>&1); rc=$?
+echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+[ $rc -eq 0 ] || fail=1
+
 step "sync engine against the mock internet"
 out=$(python3 tests/sync_test.py 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
