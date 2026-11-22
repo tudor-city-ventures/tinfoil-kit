@@ -668,6 +668,36 @@ func captured(t *testing.T, f func()) string {
 	return string(data)
 }
 
+// dies says whether f stopped the command (die), with what it printed.
+func dies(t *testing.T, f func()) (died bool, said string) {
+	said = captured(t, func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if _, ok := r.(exitCode); !ok {
+					panic(r)
+				}
+				died = true
+			}
+		}()
+		f()
+	})
+	return
+}
+
+// A second sync on a kit stops while one holds its lock, and goes once that lets go. (Windows' lock, LockFileEx, needs
+// the file open for reading or writing: one opened to append always failed, as if another sync had it.)
+func TestLockKit(t *testing.T) {
+	root := t.TempDir()
+	unlock := lockKit(root)
+	if died, said := dies(t, func() { lockKit(root)() }); !died || !strings.Contains(said, "another ./kit sync is already running") {
+		t.Errorf("a second sync didn't stop while the first held the lock: %q", said)
+	}
+	unlock()
+	if died, said := dies(t, func() { lockKit(root)() }); died {
+		t.Errorf("a sync stopped after the first let go: %q", said)
+	}
+}
+
 func firstRegion(t *testing.T, ok func(*obj) bool) *obj {
 	for _, r := range regions().objs("regions") {
 		if ok(r) {

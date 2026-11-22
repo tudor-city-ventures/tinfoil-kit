@@ -138,7 +138,7 @@ func lockFile(f *os.File) error {
 	const exclusive, failImmediately = 2, 1
 	var ol syscall.Overlapped
 	r, _, e := kernel32.NewProc("LockFileEx").Call(f.Fd(), exclusive|failImmediately, 0, 1, 0, uintptr(unsafe.Pointer(&ol)))
-	if r == 0 && (errors.Is(e, syscall.Errno(33)) || errors.Is(e, syscall.ERROR_ACCESS_DENIED)) { // a lock violation
+	if r == 0 && errors.Is(e, syscall.Errno(33)) { // ERROR_LOCK_VIOLATION
 		return errLocked
 	}
 	return nil

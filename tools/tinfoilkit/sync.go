@@ -2141,7 +2141,9 @@ func keepAwake() func() {
 func lockKit(root string) func() {
 	p := filepath.Join(metaDir(root), "lock")
 	os.MkdirAll(filepath.Dir(p), 0o755)
-	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644) // not truncated: Windows won't empty a file another sync has locked
+	// Read and write, not append: Windows locks only a file opened for one of those (Go opens an appending one for
+	// neither). Not truncated: Windows won't empty a file another sync has locked.
+	f, err := os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
 		return func() {}
 	}
