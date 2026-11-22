@@ -61,22 +61,30 @@ jobs:
           ok = rest(new) == rest(old) and all(type(s["bytes"]) is int and type(s["estimated"]) is bool for s in new["sources"])
           sys.exit(0 if ok else "The new sources.json changes more than sizes, so it isn't committed. Run build_sources.py by hand.")
           PY
-          # The kit downloads what regions.json names: only Geofabrik extracts and Photon databases (by relative path,
-          # no ".."), two-letter country codes, and Wikipedia's file names.
-          python3 -I - "$REGIONS" <<'PY'
+          # A weekly refresh may change sizes, which files a place downloads (relative paths on Geofabrik and Photon,
+          # and Wikipedia's file names) and which languages it offers. Every id, name, nickname and home town, which
+          # SETUP prints and the site's agent prompt quotes, stays as a person last committed it: GeoNames, one of the
+          # sources, is edited by the public.
+          python3 -I - "$REGIONS" tools/regions.json <<'PY'
           import json, re, sys
-          d = json.load(open(sys.argv[1], encoding="utf-8"))
-          pbf = re.compile(r"[a-z0-9][a-z0-9/_-]*-latest\.osm\.pbf")
-          photon = re.compile(r"[a-z0-9][a-z0-9/_-]*/photon-db-[a-z0-9_-]+-\d+\.\d+-latest\.tar\.bz2")
-          regions, langs = d.get("regions"), d.get("languages")
-          ok = isinstance(regions, list) and len(regions) > 100 and isinstance(langs, dict) and "en" in langs
-          ok = ok and all(pbf.fullmatch(r["pbf"]) and re.fullmatch(r"[a-z]{2}", r["country"])
-                          and (photon.fullmatch(r["photon"]) if "photon" in r else True)
-                          and all(c in langs for c in r["langs"]) for r in regions)
-          ok = ok and all(re.fullmatch(r"[a-z]{2,3}(-[a-z]+)?", c) and re.fullmatch(r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)", v["zim"])
-                          for c, v in langs.items())
-          ok = ok and not any(".." in r["pbf"] or ".." in r.get("photon", "") for r in regions)
-          sys.exit(0 if ok else "The new regions.json has something the kit shouldn't download, so it isn't committed.")
+          new, old = (json.load(open(p, encoding="utf-8")) for p in sys.argv[1:])
+          seg = r"[a-z0-9][a-z0-9_-]*"
+          pbf = re.compile(rf"{seg}(/{seg})*-latest\.osm\.pbf")
+          photon = re.compile(rf"{seg}(/{seg})*/photon-db-[a-z0-9_-]+-\d+\.\d+-latest\.tar\.bz2")
+          zim = re.compile(r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)")
+          def fixed(d):    # everything but sizes and what to download
+              return (d["_readme"], [{k: v for k, v in r.items() if k not in ("mb", "pbf", "photon", "langs")} for r in d["regions"]],
+                      {c: {k: v for k, v in l.items() if k not in ("zim", "mb", "pictures")} for c, l in d["languages"].items()})
+          def size(x):
+              return type(x) in (int, float) and x >= 0
+          langs = new["languages"]
+          ok = fixed(new) == fixed(old)
+          ok = ok and all(pbf.fullmatch(r["pbf"]) and (photon.fullmatch(r["photon"]) if "photon" in r else True)
+                          and type(r["langs"]) is list and all(c in langs for c in r["langs"])
+                          and all(size(v) for v in r["mb"].values()) for r in new["regions"])
+          ok = ok and all(zim.fullmatch(l["zim"]) and size(l["mb"]) and type(l["pictures"]) is bool for l in langs.values())
+          sys.exit(0 if ok else "The new regions.json changes more than sizes and downloads, or names something the kit "
+                   "shouldn't download, so it isn't committed. Run site/build_regions.py by hand and read its diff.")
           PY
           cp "$NEW" site/sources.json
           cp "$REGIONS" tools/regions.json
