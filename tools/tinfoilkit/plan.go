@@ -1816,10 +1816,12 @@ func onThisComputer(root string) bool {
 }
 
 // keepFree is the bytes to leave free. The computer's own disk keeps more, so it still has room for system updates.
-func keepFree(root string, cfg *obj) float64 {
+func keepFree(root string, cfg *obj) float64 { return keepFreeOn(onThisComputer(root), cfg) }
+
+func keepFreeOn(computer bool, cfg *obj) float64 {
 	s := cfg.child("settings")
 	gb := floatOr(s.getOr("keep_free_gb", 25), 25)
-	if onThisComputer(root) {
+	if computer {
 		gb = math.Max(gb, floatOr(s.getOr("keep_free_gb_this_computer", 50), 50))
 	}
 	return gb * GB
@@ -1830,11 +1832,27 @@ func keepFree(root string, cfg *obj) float64 {
 // keepFree.
 func leaveFree(root string, cfg *obj) float64 {
 	_, total := diskUsage(root)
+	return leaveFreeOn(onThisComputer(root), total, cfg)
+}
+
+func leaveFreeOn(computer bool, total int64, cfg *obj) float64 {
 	share := 0.05
-	if onThisComputer(root) {
+	if computer {
 		share = 0.10
 	}
-	return math.Max(keepFree(root, cfg), float64(total)*share)
+	return math.Max(keepFreeOn(computer, cfg), float64(total)*share)
+}
+
+// room is how need bytes fit in free ones: "fits" (leaving leave), "tight" (fits, but leaves less) or "no" (it
+// would leave less than keep).
+func room(free, need int64, keep, leave float64) string {
+	switch {
+	case float64(free-need) >= leave:
+		return "fits"
+	case float64(free-need) >= keep:
+		return "tight"
+	}
+	return "no"
 }
 
 func ensureSpace(root string, need int64, cfg *obj) bool {

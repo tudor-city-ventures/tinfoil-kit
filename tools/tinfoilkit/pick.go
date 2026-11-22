@@ -998,18 +998,9 @@ func spaceAt(path, root string, cfg *obj) *obj {
 	}
 	full := max(0, estimateGB(root, cfg, &no, nil, false)*GB-have)
 	ess := max(0, estimateGB(root, cfg, &yes, nil, false)*GB-have)
-	verdict := func(need int64) string {
-		switch {
-		case float64(free-need) >= leave:
-			return "fits"
-		case float64(free-need) >= keep:
-			return "tight"
-		}
-		return "no"
-	}
 	return newObj("path", path, "free_bytes", free, "total_bytes", total, "keeps_free_bytes", int64(keep),
-		"leaves_free_bytes", int64(leave), "full_bytes", full, "essentials_bytes", ess, "full", verdict(full),
-		"essentials", verdict(ess))
+		"leaves_free_bytes", int64(leave), "full_bytes", full, "essentials_bytes", ess, "full", room(free, full, keep, leave),
+		"essentials", room(free, ess, keep, leave))
 }
 
 // expandUser is os.path.expanduser: ~ is the home folder.

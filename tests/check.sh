@@ -4,6 +4,8 @@ cd "$(dirname "$0")/.." || exit 1
 fail=0
 step() { echo "== $*"; }
 run() { if "$@"; then :; else echo "FAIL: $*"; fail=1; fi; }
+# A test's failed checks, each with all of its detail (a command's output can run over many lines).
+fails() { awk '/^(PASS|SKIP|ALL|[0-9]+ FAILED)/ {on = 0} /^FAIL/ {on = 1} on'; }
 
 step "python compiles"
 run python3 -m py_compile tools/kit.py tools/share.py tools/data.py tests/*.py site/*.py
@@ -80,17 +82,17 @@ run sh -c '! grep -nwE "npm|npx|node_modules" kit kit.cmd SETUP.command SETUP-Wi
 
 step "contribution gate"
 out=$(node tests/pr_gate_test.js 2>&1); rc=$?
-echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
 step "workflows: pinned actions, read-only tokens, no injection"
 out=$(python3 tests/actions_test.py 2>&1); rc=$?
-echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
 step "what AI agents read names only commands and options that exist"
 out=$(python3 tests/skills_test.py 2>&1); rc=$?
-echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
 step "the kit's own program (tools/tinfoilkit): the Go checks, and a build for each computer, which the tests below run"
@@ -103,7 +105,7 @@ fi
 
 step "sync engine against the mock internet"
 out=$(python3 tests/sync_test.py 2>&1); rc=$?
-echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
 step "the same, and sharing and the skills' commands, with the kit's own program in place of kit.py"
@@ -115,7 +117,7 @@ esac
 if [ -n "$prog" ] && [ -x "$prog" ]; then
   for t in sync_test share_test skills_test; do
     out=$(KIT_ENGINE=go python3 "tests/$t.py" 2>&1); rc=$?
-    echo "$out" | grep -E "^FAIL" ; echo "$t: $(echo "$out" | tail -1)"
+    echo "$out" | fails ; echo "$t: $(echo "$out" | tail -1)"
     [ $rc -eq 0 ] || fail=1
   done
 else
@@ -124,17 +126,17 @@ fi
 
 step "sharing on the home network: the gate, the QR code, ./kit share and autostart"
 out=$(python3 tests/share_test.py 2>&1); rc=$?
-echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
 step "notes and pins: tools/data.py keeps them in the data folder, for the kit's page only"
 out=$(python3 tests/data_test.py 2>&1); rc=$?
-echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
 step "the Mac app's file work and icon"
 out=$(python3 tests/mac_test.py 2>&1); rc=$?
-echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
 step "map logic against mocks"
@@ -144,7 +146,7 @@ start photon 12322; MOCK_PHOTON_OLD=1 start photon 12323; start graphhopper 1898
 trap 'kill $pids 2>/dev/null' EXIT
 sleep 1.5
 out=$(timeout 120 node tests/map_logic_test.js tools/portal.html); rc=$?
-echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+echo "$out" | fails ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
 echo
