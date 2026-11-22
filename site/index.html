@@ -112,10 +112,12 @@ nav.links{margin-left:auto}
 .hero h1{font-size:clamp(34px,6vw,64px);line-height:1.02;font-weight:700;letter-spacing:-.02em}
 .lede{font-size:20px;line-height:1.5;color:var(--ink2);max-width:560px}
 .ctas{display:flex;flex-wrap:wrap;gap:12px 16px}
-/* a lighter third action: beside the two buttons when there's room, under them when there isn't */
+/* a lighter third action: beside the two buttons, or on its own line under them on phones */
 .ctas .star{display:inline-flex;align-items:center;gap:8px;min-height:44px;font:600 17px var(--sans);color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:5px}
 .ctas .star:hover{color:var(--signal-text)}
 .ctas .star svg{color:var(--signal);flex:none}
+@media (max-width:600px){.ctas{display:grid;grid-template-columns:1fr 1fr}.ctas .btn{justify-content:center;padding:0 12px}.ctas .star{grid-column:1/-1;justify-self:start}}
+@media (max-width:359px){.ctas{grid-template-columns:1fr}}
 .fig{flex:1 1 480px;min-width:0;margin:0;border:var(--rule);background:var(--paper2);padding:24px}
 .fig canvas{display:block;width:100%;height:auto;aspect-ratio:600/380}
 .fig figcaption{display:flex;justify-content:space-between;align-items:center;gap:12px;font:12px var(--mono);color:var(--ink2);margin-top:12px}
