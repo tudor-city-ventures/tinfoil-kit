@@ -75,12 +75,15 @@ Recommend a drive when the Mac is short of space or the person wants a kit they 
 
 ### 1. Download the kit and size it up
 
+Ask the person to plug in the drive first, if they have one.
+
     cd ~
     curl -fL -o tinfoilkit.zip https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip
-    unzip -q tinfoilkit.zip && mv tinfoilkit-main TinfoilKit && rm tinfoilkit.zip
-    cd ~/TinfoilKit
-    ./kit estimate   # GB this kit needs (no internet needed)
-    df -h ~          # free space on the Mac's own disk
+    unzip -qo tinfoilkit.zip && rm tinfoilkit.zip
+    cd tinfoilkit-main
+    ./kit drives --json   # what the kit needs, this Mac's free space, and every drive plugged in
+
+It needs no internet and prints needs_gb (the GB the current kit.json needs), this_computer (path, free_bytes, and keeps_free_gb, the space sync always leaves free there) and drives (each with path, format, free_bytes, problem, has_kit and kit_path).
 
 If the Command Line Tools aren't installed, macOS offers to install them the first time `./kit` runs (or run `xcode-select --install`). It takes 5 to 15 minutes; then run the command again. `xcode-select -p` shows whether they're there.
 
@@ -88,7 +91,12 @@ Developers can `git clone https://github.com/tudor-city-ventures/tinfoilkit` str
 
 ### 2. Decide where it lives
 
-Go through "Where it can live" with the person, using the numbers from step 1.
+Go through "Where it can live" with the person, with the numbers from step 1:
+
+- This Mac fits when its free space is at least needs_gb plus keeps_free_gb.
+- A drive fits when its free space is at least needs_gb plus 25 GB and its problem is null. exFAT works on Mac, Windows and Linux: the best choice for an emergency drive. APFS is fine if the drive will only ever meet Macs.
+- A drive with a problem is FAT32 (it can't hold files over 4 GB) or NTFS (a Mac can't write to it). It needs erasing as exFAT first: in Disk Utility, select the drive, click Erase and choose ExFAT. Erasing deletes everything on the drive: confirm which disk it is and get the person's explicit yes first.
+- A drive with has_kit already holds a kit: offer to update that one instead (see "Update it").
 
 ### 3. Choose what goes in it (optional)
 
@@ -107,20 +115,16 @@ To change it:
 
 Run `./kit estimate` again after any change.
 
-### 4. Fill it
+### 4. Put it in place and fill it
 
-On a drive, check its format first: `diskutil info "/Volumes/<drive>" | grep Personality`.
+Put the kit where the person chose, with one of:
 
-- exFAT works on Mac, Windows and Linux: the best choice for an emergency drive.
-- APFS is fine if the drive will only ever meet Macs.
-- FAT32 can't hold files over 4 GB, and a Mac can't write to NTFS. Those drives need erasing as exFAT (Disk Utility: select the drive, Erase, Format: ExFAT). Erasing deletes everything on the drive: confirm which disk it is and get the person's explicit yes first.
+    KIT="$(./kit place ~/TinfoilKit)" && cd "$KIT"                   # this Mac
+    KIT="$(./kit place "/Volumes/<drive>/TinfoilKit")" && cd "$KIT"  # a drive: its kit_path from step 1
 
-Then move the kit onto it:
+`./kit place` moves the download there (to another disk it copies the kit, then removes the download), prints the kit's new folder as its only output and sends its messages to stderr. If a kit is already there, it carries on with that one. When it can't, it exits 1 and says why: the drive isn't plugged in, a folder that isn't a kit has the name, or macOS won't let Terminal write to the drive (see "When something goes wrong").
 
-    mv ~/TinfoilKit "/Volumes/<drive>/TinfoilKit"
-    cd "/Volumes/<drive>/TinfoilKit"
-
-On this Mac, leave it at ~/TinfoilKit. Either way, in the kit folder:
+Then, in the kit folder:
 
     ./kit plan     # every item, version and size. Show the person the total and get a yes.
     ./kit sync -y  # download, check, install: a few hours the first time
