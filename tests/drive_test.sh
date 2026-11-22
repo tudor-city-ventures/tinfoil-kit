@@ -28,15 +28,7 @@ stop_kit() { pkill -f tools/launch.sh; sleep 1; pkill -f llama-server; pkill -f 
 download_kit() { # DIR
   rm -rf "$1" && mkdir -p "$1"
   git -C "$ROOT" archive HEAD | tar -xf - -C "$1"
-  python3 - "$TESTS/drive_kit.json" "$ROOT/kit.json" > "$1/kit.json" <<'EOF'
-import json, sys
-t, k = (json.load(open(p)) for p in sys.argv[1:3])
-t["runtimes"] = [r for r in k["runtimes"] if not r.get("requires")]    # the real Mac, Windows and Linux programs
-t["models"] = [m for m in t["models"] if m["id"] == "Tiny"]
-t["library"] = [z for z in t["library"] if z["zim"] in ("testmed_en_all_maxi", "testsurvival_en")]
-t["settings"].update(library_port=8888, ai_port=8080)    # the ports START-HERE-Windows.bat uses
-print(json.dumps(t, indent=2))
-EOF
+  python3 "$TESTS/drive.py" kitjson "$1/kit.json"
   xattr -r -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$1"
 }
 # Where SETUP lists a drive: its line in ./kit drives (folder, format, GB free, problem, name).

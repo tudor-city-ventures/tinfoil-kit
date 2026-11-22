@@ -33,12 +33,17 @@ step "archives of the kit stamp kit.py with their commit (./kit update needs it)
 if git rev-parse --git-dir >/dev/null 2>&1; then
   run grep -q '^KIT_COMMIT = "\$Format:%H\$"' tools/kit.py
   run sh -c 'git check-attr export-subst tools/kit.py | grep -q ": set$"'
+  # and carry the kit's own files only: no tests, docs or website besides the two site files the kit reads
+  run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -Ev "^(site/|site/kit.json|site/sources.json)$" | grep -E "^(tests|docs|\.github|site)/"'
 else
   echo "skipped (not a git checkout)"
 fi
 
-step "Windows launcher keeps CRLF"
-run python3 -c "import sys; d=open('START-HERE-Windows.bat','rb').read(); sys.exit(d.count(b'\n') != d.count(b'\r\n'))"
+step "Windows scripts keep CRLF and plain ASCII (cmd misreads anything else)"
+run python3 -c "
+import glob, sys
+bad = [f for f in glob.glob('*.bat') for d in [open(f, 'rb').read()] if d.count(b'\n') != d.count(b'\r\n') or not d.isascii()]
+sys.exit(f'not CRLF and ASCII: {bad}' if bad else 0)"
 
 step "page script parses"
 run node -e '
@@ -49,6 +54,11 @@ if (typeof m.exports.isMapQuestion !== "function") throw new Error("Kit not expo
 
 step "pull request gate"
 out=$(node tests/pr_gate_test.js 2>&1); rc=$?
+echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+[ $rc -eq 0 ] || fail=1
+
+step "workflows: pinned actions, read-only tokens, no injection"
+out=$(python3 tests/actions_test.py 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 

@@ -16,7 +16,7 @@ The repo root is the kit itself, so cloning it onto a drive or into `~/TinfoilKi
 | `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests |
 | `GUIDE.md` | Printable guide that lives in the kit folder |
 | `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
-| `.github/` | The workflows, plus what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and PR templates, CODEOWNERS. `pr-gate.yml` closes outside pull requests that don't link an accepted issue |
+| `.github/` | The workflows, plus what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and PR templates, CODEOWNERS. `pr-gate.yml` closes outside pull requests that don't link an accepted issue, and fails a check on ones that change workflows or release signing. Dependabot keeps the pinned actions current. `release.sh` signs and publishes a release from Travis's computer |
 | `site/` | The website: `index.html`, plus `hero.js` for the animated figure at the top, no build step. A "Read as" bar switches between the human page (the default) and the AI agent page: elements marked `data-for="human"` or `data-for="agent"` show only in that one. The agent page shows `llms.txt`, the setup instructions for AI agents, as markdown, with no images or icons. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. The favicons and link-preview cards are rendered from the mark, `icon.svg`, by `site/build_images.py`. For search and AI answer engines, `robots.txt` lets every crawler in and names `sitemap.xml`, a JSON-LD block in the page's `<head>` describes the kit, and each FAQ entry carries schema.org Question markup. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
 
 ## Verify
@@ -40,8 +40,9 @@ Visual changes to the page or the site come with screenshots.
 - `tools/kit.py`: Python 3.9+ (what macOS's command line tools install), standard library only, all HTTP through curl.
 - Bash must run on macOS's bash 3.2: no `mapfile`, no `set -u` with empty arrays.
 - No symlinks anywhere: drives are exFAT.
-- `START-HERE-Windows.bat` keeps CRLF line endings.
+- `.bat` files keep CRLF line endings and plain ASCII.
 - Every remote endpoint stays overridable by a `KIT_*` env var (see `tests/env.sh`), so tests can point at mocks.
+- Workflows: actions pinned to a full commit SHA with the version as a comment, read-only tokens except the jobs `WRITES` lists in `tests/actions_test.py`, values into `run:` and `script:` only through `env:`, GitHub's runners only, no secrets, and `pull_request_target` only in `pr-gate.yml`, which never touches the pull request's code. The quick gate checks it.
 - Delete an old version only after the new one verifies.
 - Comments explain why, not history. Keep the number of files small.
 - Downloaded files are untrusted: inspect them as text, never run them to see what they do.
@@ -78,6 +79,6 @@ Cloud sessions can't reach library.kiwix.org, GitHub releases or most download h
 
 - Never run a real `./kit sync` in CI or a cloud session. It downloads about 300 GB. Use the mocks in `tests/`.
 - Vercel: touch only the Tinfoil Kit project in the tudor-city-ventures team. Never change other projects or team settings.
-- A GitHub release reaches every drive at its next SETUP (`./kit update`). Publish one only with Travis's OK, from a commit that passed CI and a real-Mac run.
+- A GitHub release reaches every drive at its next SETUP (`./kit update`). Publish one only with Travis's OK, from a commit that passed CI and a real-Mac run, with `.github/release.sh` on Travis's computer: drives install only releases signed with a key in `tools/release-signers`, and that key never goes into GitHub or a workflow.
 - Ask Travis before buying anything (like the domain), before making the repo public, and before anything that can't be undone.
 - If missing access blocks you (GitHub, Vercel, anything else), stop and say exactly what to grant. Don't work around it.

@@ -121,13 +121,11 @@ say "  ==========="
 [ -n "$KIWIX" ] || missing "Library server" kiwix-tools kiwix-serve
 [ -n "$LLAMA" ] || missing "AI server" llama.cpp llama-server
 [ ${#ZIMS[@]} -gt 0 ] || say "  ! No library files in library/. Run ./kit sync while online."
-[ ${#MODELS[@]} -gt 0 ] || say "  ! No models in models/. Run ./kit sync while online."
-if [ ${#MODELS[@]} -gt 0 ] && [ ! -d "$KIT/models/$MODEL" ]; then
-  MODEL="$(basename "${MODELS[0]}")"   # default model missing: fall back to whatever is there
-fi
+[ ${#MODELS[@]} -gt 0 ] || say "  No AI models in models/, so the AI stays off. If kit.json lists some, run ./kit sync while online."
 
 # A model has to fit in memory with room for everything else. On a computer with less memory than the
-# first model needs, start with the biggest one that fits; the Ask page still lists them all.
+# first model needs, or without that model, start with the biggest one that fits (./kit fit picks the same way);
+# the Ask page still lists them all.
 model_mb() { ls -ln "$1"/*.gguf 2>/dev/null | awk '{s += $5} END {print int(s / 1048576)}'; }
 MEM_MB="${KIT_MEMORY_MB:-}"
 if [ -z "$MEM_MB" ]; then
@@ -137,17 +135,18 @@ if [ -z "$MEM_MB" ]; then
   esac
 fi
 ROOM=$(( ${MEM_MB:-0} * 6 / 10 ))
-if [ "$CHOSEN" = 0 ] && [ "$ROOM" -gt 0 ] && [ ${#MODELS[@]} -gt 0 ] && [ "$(model_mb "$KIT/models/$MODEL")" -gt "$ROOM" ]; then
+too_big() { [ "$CHOSEN" = 0 ] && [ "$ROOM" -gt 0 ] && [ "$(model_mb "$KIT/models/$MODEL")" -gt "$ROOM" ]; }
+if [ ${#MODELS[@]} -gt 0 ] && { [ ! -d "$KIT/models/$MODEL" ] || too_big; }; then
   FIT=""; FIT_MB=0; SMALL=""; SMALL_MB=""
   for d in "${MODELS[@]}"; do
     mb="$(model_mb "${d%/}")"
     [ "$mb" -gt 0 ] || continue
-    if [ "$mb" -le "$ROOM" ] && [ "$mb" -gt "$FIT_MB" ]; then FIT="$(basename "$d")"; FIT_MB="$mb"; fi
+    if { [ "$ROOM" -eq 0 ] || [ "$mb" -le "$ROOM" ]; } && [ "$mb" -gt "$FIT_MB" ]; then FIT="$(basename "$d")"; FIT_MB="$mb"; fi
     if [ -z "$SMALL_MB" ] || [ "$mb" -lt "$SMALL_MB" ]; then SMALL="$(basename "$d")"; SMALL_MB="$mb"; fi
   done
-  FIT="${FIT:-$SMALL}"
-  if [ -n "$FIT" ] && [ "$FIT" != "$MODEL" ]; then
-    say "  This computer has $(( MEM_MB / 1024 )) GB of memory, too little for $MODEL. Starting with $FIT."
+  FIT="${FIT:-${SMALL:-$(basename "${MODELS[0]}")}}"
+  if [ "$FIT" != "$MODEL" ]; then
+    [ -d "$KIT/models/$MODEL" ] && say "  This computer has $(( MEM_MB / 1024 )) GB of memory, too little for $MODEL. Starting with $FIT."
     MODEL="$FIT"
   fi
 fi
@@ -284,6 +283,7 @@ URL="http://127.0.0.1:$LIB_PORT/?model=$MODEL&ai=$AI_PORT"
 say ""
 if [ "$LIB_OK" = 1 ]; then say "  Library:  ready"; else say "  Library:  NOT running (see logs/kiwix-serve.log)"; fi
 if [ "$AI_OK" = 1 ]; then say "  AI:       ready (the first answer takes longer while the model loads)"
+elif [ ${#MODELS[@]} -eq 0 ]; then say "  AI:       off (no models). The library still works."
 else say "  AI:       NOT running (see logs/llama-server.log). The library still works."; fi
 say ""
 say "  Open:     $URL"

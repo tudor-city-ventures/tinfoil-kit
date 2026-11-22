@@ -1,12 +1,20 @@
 name: drive test
-# The kit on a real exFAT disk: set up on a Mac, then plugged into Windows and Linux (tests/drive_test.sh).
+# The kit on a real exFAT disk: set up on a Mac, then plugged into Windows and Linux (tests/drive_test.sh). And set
+# up on Windows from a download, onto the PC and onto a drive (tests/drive_windows.ps1).
 # By hand (Actions > drive test > Run workflow) once the bulk of a change is done. Nightly and on pushes only when
 # something it covers changed (the changes job), so site edits never start it. Pushes start it only once the
 # repo is public, since Mac minutes cost money while it's private.
+run-name: drive test${{ inputs.only == 'windows-setup' && ', Windows setup only' || '' }}
 on:
   schedule:
     - cron: "17 9 * * *"
   workflow_dispatch:
+    inputs:
+      only:
+        description: Run just one part (windows-setup skips the Mac, so it costs no Mac minutes)
+        type: choice
+        options: [all, windows-setup]
+        default: all
   push:
     branches: [main]
 concurrency:    # per event too, so a push run whose jobs are skipped can't cancel a run in progress
@@ -24,7 +32,7 @@ jobs:
     outputs:
       run: ${{ steps.diff.outputs.run }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -36,12 +44,12 @@ jobs:
         run: |
           case "$EVENT" in
             push) base="$BEFORE" ;;
-            schedule) base="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/drive.yml/runs?status=success&per_page=1" \
-                                -q '.workflow_runs[0].head_sha')" || base="" ;;
+            schedule) base="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/drive.yml/runs?status=success&per_page=30" \
+                                -q '[.workflow_runs[] | select(.display_title | contains("only") | not)][0].head_sha')" || base="" ;;
             *) base="" ;;    # by hand: always
           esac
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2> /dev/null &&
-             git diff --quiet "$base" HEAD -- tools kit kit.json SETUP.command START-HERE.command START-HERE-Windows.bat UNINSTALL.command \
+             git diff --quiet "$base" HEAD -- tools kit kit.json SETUP.command START-HERE.command UNINSTALL.command '*.bat' \
                'tests/drive*' tests/build_fixtures.sh tests/env.sh tests/mock_remote.py tests/ui_test.py .github/workflows/drive.yml
           then
             echo "Nothing the drive test covers changed since $base, so it doesn't run."
@@ -55,21 +63,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
       - run: pip install gguf numpy libzim
-      - uses: actions/cache@v5
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: tests/work/downloads
           key: drive-downloads-${{ hashFiles('tests/build_fixtures.sh') }}
       - run: tests/build_fixtures.sh drive
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: mock-internet
           path: tests/work/remote
@@ -77,19 +85,20 @@ jobs:
 
   mac:
     needs: fixtures
+    if: inputs.only != 'windows-setup'
     runs-on: macos-26
     timeout-minutes: 30
     outputs:
       drive: ${{ steps.made.outputs.drive }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
       - run: pip install playwright && python -m playwright install webkit
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: mock-internet
           path: tests/work/remote
@@ -98,13 +107,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: if [ -f tests/work/drive.vhd ]; then echo "drive=yes" >> "$GITHUB_OUTPUT"; fi
       - if: ${{ !cancelled() && steps.made.outputs.drive == 'yes' }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: drive
           path: tests/work/drive.vhd
           retention-days: 1
       - if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: mac-logs-and-screenshots
           path: |
@@ -117,14 +126,14 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
       - run: pip install playwright
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: drive
           path: tests/work
@@ -158,10 +167,34 @@ jobs:
           python tests/ui_test.py
           if ($checked -ne 0 -or $LASTEXITCODE -ne 0) { exit 1 }
       - if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: windows-screenshots
           path: tests/work/shots
+
+  windows-setup:
+    needs: fixtures
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: mock-internet
+          path: tests/work/remote
+      - name: Unzip the kit in Downloads, double-click SETUP-Windows.bat, START-HERE-Windows.bat, UNINSTALL-Windows.bat
+        shell: pwsh
+        run: tests/drive_windows.ps1
+      - if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: windows-setup-logs
+          path: tests/work/logs
 
   linux:
     needs: mac
@@ -169,16 +202,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: drive
           path: tests/work
       - run: tests/drive_test.sh linux
       - if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: linux-logs
           path: tests/work/logs

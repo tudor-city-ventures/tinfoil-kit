@@ -6,6 +6,8 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      --json prints every item's size, disabled ones too.
   sync [-y]          Download/update everything enabled in kit.json, verify every file
                      (SHA-256), then remove the old versions. Safe to interrupt and re-run.
+                     --essentials: only the programs, the map, the most important books and the AI
+                     this computer runs plus the smallest. SETUP's first run gets these first.
   verify [--quick]   Re-check every downloaded file against its recorded SHA-256.
                      --fix deletes the bad ones so the next sync replaces them.
   status             What's installed, when it was last updated, free space.
@@ -19,6 +21,9 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      not (or -). --json adds this computer's free space and what the kit needs.
   place DEST         Put the kit at DEST (a TinfoilKit folder at the top of a drive or in the home
                      folder), ready to set up there. Prints its folder. SETUP.command uses it.
+  fit [--ask]        Which AI model this computer runs, given its memory, and the switched-on ones
+                     too big for it. --ask (SETUP.command) asks whether to download those anyway;
+                     --skip switches them off, --restore back on. --json for scripts and agents.
   share [on|off|new-code]
                      Let phones and laptops on your home network use the kit, once they type its
                      access code. Shows the address, the code and a QR code.
@@ -824,10 +829,22 @@ def find_binary(base: Path, name: Optional[str]) -> Optional[Path]:
     return None
 
 
-def build_plan(root: Path, cfg: Dict[str, Any], state: Dict[str, Any], only: List[str]) -> List[Item]:
+def essential(item: Item, fit: Dict[str, Any]) -> bool:
+    """What the kit can't do without: the programs, the map, the most important books, and the AI model this computer
+    runs plus the smallest one. SETUP's first run downloads and checks these first, so the kit works hours sooner."""
+    if item.section == "models":
+        return item.id in (fit["runs"], fit["smallest"])
+    return item.section in ("runtimes", "maps") or (item.section == "library" and item.priority <= 1)
+
+
+def build_plan(root: Path, cfg: Dict[str, Any], state: Dict[str, Any], only: List[str],
+               essentials: bool = False) -> List[Item]:
     items = items_from_config(cfg)
     if only:
         items = [i for i in items if any(o.lower() in i.key.lower() for o in only)]
+    if essentials:
+        fit = fit_report(root, cfg, state)
+        items = [i for i in items if essential(i, fit)]
     resolver = Resolver(root, cfg)
     active = [i for i in items if i.enabled]
     log(f"Checking {len(active)} items for updates...")
@@ -1120,30 +1137,58 @@ def inside(dest: Path, name: str) -> Path:
     return dest.joinpath(*parts)
 
 
+def link_target(dest: Path, link: Path, target: str) -> Optional[Path]:
+    """Where a link in an archive points, if that's inside the archive: links can't go on exFAT, so they're copied."""
+    if not target or target.startswith(("/", "\\")) or ":" in target:
+        return None
+    path = Path(os.path.normpath(link.parent / target.replace("\\", "/")))
+    return path if path != link and os.path.commonpath([dest, path]) == str(dest) else None
+
+
+def copy_links(links: List[Tuple[Path, Path]]) -> None:
+    """Make each link a copy of what it points at. Links to files go first, a link to a link once that's copied,
+    and links to folders last, so a copied folder has its links too."""
+    while links:
+        ready = [lt for lt in links if lt[1].is_file()] or [lt for lt in links if lt[1].is_dir()]
+        if not ready:
+            return    # the rest point at nothing in the archive
+        for link, target in ready:
+            link.parent.mkdir(parents=True, exist_ok=True)
+            if target.is_file():
+                shutil.copy(target, link)
+            elif target not in link.parents:    # a link to a folder it's in would copy itself forever
+                shutil.copytree(target, link, dirs_exist_ok=True)
+        links = [lt for lt in links if lt not in ready]
+
+
 def unzip_py(archive: Path, dest: Path) -> None:
-    """unzip in Python, for Windows and Linux PCs without unzip. Files and folders only: the zips the kit
-    downloads have no links (they're for Windows, or the Mac's pmtiles)."""
+    """unzip in Python, for Windows and Linux PCs without unzip."""
+    links = []
     with zipfile.ZipFile(archive) as z:
         for info in z.infolist():
             path = inside(dest, info.filename)
             mode = info.external_attr >> 16
             if stat.S_ISLNK(mode):
-                continue
-            if info.is_dir():
+                target = link_target(dest, path, z.read(info).decode("utf-8", "replace"))
+                if target:
+                    links.append((path, target))
+            elif info.is_dir():
                 path.mkdir(parents=True, exist_ok=True)
-                continue
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with z.open(info) as src, open(path, "wb") as out:
-                shutil.copyfileobj(src, out, 1 << 20)
-            if mode & 0o111:
-                with contextlib.suppress(OSError):
-                    path.chmod(0o755)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(info) as src, open(path, "wb") as out:
+                    shutil.copyfileobj(src, out, 1 << 20)
+                if mode & 0o111:
+                    with contextlib.suppress(OSError):
+                        path.chmod(0o755)
+    copy_links(links)
 
 
 def untar_py(archive: Path, dest: Path, compression: str) -> None:
     """tar in Python: Windows' tar can't always read bzip2, and a tar from Git for Windows takes C: for a
-    remote host. Files and folders only, as in the Photon database and the programs' archives. Read as a
-    stream, front to back, since the Photon database is tens of GB."""
+    remote host. Read as a stream, front to back, since the Photon database is tens of GB. Links become
+    copies (a Mac's or Linux PC's programs have some, set up from Windows onto a drive)."""
+    links = []
     with tarfile.open(archive, "r|" + compression) as tf:
         for m in tf:
             path = inside(dest, m.name)
@@ -1156,6 +1201,11 @@ def untar_py(archive: Path, dest: Path, compression: str) -> None:
                 if m.mode & 0o111:
                     with contextlib.suppress(OSError):
                         path.chmod(0o755)
+            elif m.issym() or m.islnk():
+                target = link_target(dest, path, m.linkname) if m.issym() else inside(dest, m.linkname)
+                if target:
+                    links.append((path, target))
+    copy_links(links)
 
 
 def extract_archive(archive: Path, name: str, target: Path) -> None:
@@ -1520,6 +1570,13 @@ def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
 # ----------------------------------------------------------------------------- housekeeping
 
 def prepare_folder(root: Path) -> None:
+    if sys.platform == "win32":
+        # A kit unzipped from a download is marked "from the internet", and Windows warns before it runs a marked
+        # script. Lift the mark from the kit's own scripts and tools (an exFAT drive can't hold it anyway).
+        for p in [*root.glob("*.bat"), *(root / "tools").glob("*")]:
+            with contextlib.suppress(OSError):
+                os.remove(f"{p}:Zone.Identifier")
+        return
     if sys.platform != "darwin":
         return
     # A kit downloaded as a ZIP is marked "from the internet", and macOS won't open marked scripts until
@@ -1812,6 +1869,11 @@ KEEP = {".git", ".kit", "bin", "installers", "library", "logs", "maps", "models"
 NEEDED = ("kit", "kit.json", "SETUP.command", "START-HERE.command", "UNINSTALL.command", "tools/kit.py", "tools/launch.sh",
           "tools/portal.html", "tools/share.py")
 MISSING = object()
+# A release is a tarball the maintainer built and signed on their own computer (.github/release.sh), so taking over
+# the kit's GitHub account isn't enough to put code on every drive. tools/release-signers holds the keys a drive
+# accepts, and each release brings the next copy of it: a new key arrives signed by the old one.
+RELEASE_NAMESPACE = "tinfoilkit-release"
+REPORT = "https://github.com/tudor-city-ventures/tinfoilkit/security"
 
 
 def item_key(x: Any) -> Any:
@@ -1875,6 +1937,108 @@ def merge_kit_json(root: Path, theirs_text: str) -> Tuple[str, str]:
                   "kit.json is the new version's.")
 
 
+# Ed25519 (RFC 8032) and OpenSSH's signature format (PROTOCOL.sshsig), checking only: Python has no Ed25519 of its
+# own, and ssh-keygen isn't on every Windows and Linux computer. The tests check the same signatures with ssh-keygen.
+ED_P = 2**255 - 19
+ED_L = 2**252 + 27742317777372353535851937790883648493
+ED_D = -121665 * pow(121666, ED_P - 2, ED_P) % ED_P
+
+
+def ed_add(a: Tuple[int, ...], b: Tuple[int, ...]) -> Tuple[int, ...]:
+    """Add two points in extended coordinates (x, y, z, t)."""
+    p, q = (a[1] - a[0]) * (b[1] - b[0]) % ED_P, (a[1] + a[0]) * (b[1] + b[0]) % ED_P
+    r, s = 2 * a[3] * b[3] * ED_D % ED_P, 2 * a[2] * b[2] % ED_P
+    e, f, g, h = q - p, s - r, s + r, q + p
+    return e * f % ED_P, g * h % ED_P, f * g % ED_P, e * h % ED_P
+
+
+def ed_mul(n: int, a: Tuple[int, ...]) -> Tuple[int, ...]:
+    out = (0, 1, 1, 0)
+    while n:
+        if n & 1:
+            out = ed_add(out, a)
+        a, n = ed_add(a, a), n >> 1
+    return out
+
+
+def ed_point(b: bytes) -> Optional[Tuple[int, ...]]:
+    """Decode a point, or None if these 32 bytes aren't one."""
+    y = int.from_bytes(b, "little")
+    sign, y = y >> 255, y & ((1 << 255) - 1)
+    if len(b) != 32 or y >= ED_P:
+        return None
+    x2 = (y * y - 1) * pow(ED_D * y * y + 1, ED_P - 2, ED_P) % ED_P
+    x = pow(x2, (ED_P + 3) // 8, ED_P)
+    if (x * x - x2) % ED_P:
+        x = x * pow(2, (ED_P - 1) // 4, ED_P) % ED_P
+    if (x * x - x2) % ED_P or (x == 0 and sign):
+        return None
+    if x & 1 != sign:
+        x = ED_P - x
+    return x, y, 1, x * y % ED_P
+
+
+ED_B = ed_point((4 * pow(5, ED_P - 2, ED_P) % ED_P).to_bytes(32, "little"))
+
+
+def ed25519_ok(key: bytes, msg: bytes, sig: bytes) -> bool:
+    a, r, s = ed_point(key), ed_point(sig[:32]), int.from_bytes(sig[32:], "little")
+    if a is None or r is None or len(sig) != 64 or s >= ED_L:
+        return False
+    k = int.from_bytes(hashlib.sha512(sig[:32] + key + msg).digest(), "little") % ED_L
+    x1, y1, z1, _ = ed_mul(s, ED_B)
+    x2, y2, z2, _ = ed_add(r, ed_mul(k, a))
+    return (x1 * z2 - x2 * z1) % ED_P == 0 and (y1 * z2 - y2 * z1) % ED_P == 0
+
+
+def ssh_strings(b: bytes) -> List[bytes]:
+    """Split SSH wire format into its length-prefixed strings."""
+    out = []
+    while b:
+        n = int.from_bytes(b[:4], "big")
+        if len(b) < 4 + n:
+            raise ValueError("truncated")
+        out.append(b[4:4 + n])
+        b = b[4 + n:]
+    return out
+
+
+def release_keys(signers: Path) -> List[bytes]:
+    """The Ed25519 keys tools/release-signers lists for the kit's releases (ssh-keygen's allowed-signers format)."""
+    try:
+        text = signers.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    keys = []
+    for m in re.finditer(rf"(?m)^{RELEASE_NAMESPACE}\s(?:.*?\s)?ssh-ed25519\s+([A-Za-z0-9+/]+=*)", text):
+        with contextlib.suppress(ValueError):
+            kind, key = ssh_strings(base64.b64decode(m.group(1)))
+            if kind == b"ssh-ed25519" and len(key) == 32:
+                keys.append(key)
+    return keys
+
+
+def verify_release(root: Path, data: bytes, sig: bytes) -> None:
+    """Refuse a release unless one of this copy's keys signed it, the way ssh-keygen -Y sign does."""
+    keys = release_keys(root / "tools" / "release-signers")
+    if not keys:
+        raise ValueError("this copy of the kit has no release key to check it with (tools/release-signers). "
+                         "Download the kit again from tinfoilkit.com")
+    try:
+        lines = sig.decode("ascii").split()
+        blob = base64.b64decode("".join(lines[lines.index("SIGNATURE-----") + 1:lines.index("-----END")]), validate=True)
+        key_blob, namespace, reserved, alg, sig_blob = ssh_strings(blob[10:]) if blob[:10] == b"SSHSIG\0\0\0\1" else []
+        (kind, key), (sig_kind, raw) = ssh_strings(key_blob), ssh_strings(sig_blob)
+    except ValueError:
+        raise ValueError(f"its signature file is damaged. Please report it at {REPORT}") from None
+    if not (key in keys and kind == sig_kind == b"ssh-ed25519" and namespace == RELEASE_NAMESPACE.encode()
+            and alg in (b"sha256", b"sha512")
+            and ed25519_ok(key, b"SSHSIG" + b"".join(len(x).to_bytes(4, "big") + x for x in (
+                namespace, reserved, alg, hashlib.new(alg.decode(), data).digest())), raw)):
+        raise ValueError("it isn't signed with the kit's release key. Someone other than the kit's maintainer may have "
+                         f"published it: don't install it by hand, and please report it at {REPORT}")
+
+
 def unpack_release(data: bytes, dest: Path) -> None:
     """Unpack a GitHub release archive into dest without trusting it: plain files and folders only, all inside
     its one top folder, and nothing for the kit's own folders of downloads (KEEP)."""
@@ -1908,6 +2072,8 @@ def check_release(new: Path) -> None:
     missing = [rel for rel in NEEDED if not (new / rel).is_file()]
     if missing:
         raise ValueError(f"the release is missing {', '.join(missing)}")
+    if not release_keys(new / "tools" / "release-signers"):
+        raise ValueError("it has no release key (tools/release-signers), so the kit could never update again")
     try:
         compile((new / "tools" / "kit.py").read_text(encoding="utf-8"), "tools/kit.py", "exec")
     except SyntaxError as e:
@@ -1943,7 +2109,7 @@ def cmd_plan(root: Path, args: argparse.Namespace) -> None:
     cfg, state = load_config(root), load_state(root)
     if args.json:
         return plan_json(root, cfg, args.only)
-    items = build_plan(root, cfg, state, args.only)
+    items = build_plan(root, cfg, state, args.only, args.essentials)
     print_plan(root, items, state, cfg)
     if offline(items):
         sys.exit(1)
@@ -1980,7 +2146,8 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
     with Lock(root), keep_awake():
         prepare_folder(root)
         cfg, state = load_config(root), load_state(root)
-        items = build_plan(root, cfg, state, args.only)
+        items = build_plan(root, cfg, state, args.only, args.essentials)
+        part = args.only or args.essentials
         print_plan(root, items, state, cfg)
         if offline(items):
             sys.exit(1)
@@ -1989,7 +2156,7 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
         if todo and not args.yes and sys.stdin.isatty():
             if input(f"\nDownload {len(todo)} item(s) now? [Y/n] ").strip().lower() not in ("", "y", "yes"):
                 return
-        if not args.only:
+        if not part:
             sweep_partials(root, state, items)
         failures, done_bytes, start = [], 0, time.time()
         try:
@@ -2006,7 +2173,7 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
             log("\nStopped. Everything finished so far is saved; run ./kit sync again to resume.")
             sys.exit(130)
         errors = [i for i in items if i.enabled and i.status == "error"]
-        if not failures and not errors and not args.only:
+        if not failures and not errors and not part:
             state["last_sync"] = now_iso()
         save_state(root, state)
         write_inventory(root, state)
@@ -2123,6 +2290,172 @@ def cmd_estimate(root: Path, args: argparse.Namespace) -> None:
     print(estimate_gb(root, load_config(root)))
 
 
+# ----------------------------------------------------------------------------- the AI models this computer can run
+
+def memory_bytes() -> int:
+    """This computer's memory, or 0 if it can't tell. KIT_MEMORY_MB stands in for it, as in tools/launch.sh."""
+    if os.environ.get("KIT_MEMORY_MB", "").isdigit():
+        return int(os.environ["KIT_MEMORY_MB"]) * 1048576
+    try:
+        if sys.platform == "darwin":
+            return int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout)
+        if sys.platform == "win32":
+            import ctypes
+
+            class Status(ctypes.Structure):
+                _fields_ = [("size", ctypes.c_ulong), ("load", ctypes.c_ulong)] + [(n, ctypes.c_ulonglong) for n in
+                            ("total", "avail", "page", "page_avail", "virtual", "virtual_avail", "extended")]
+            s = Status()
+            s.size = ctypes.sizeof(Status)
+            return s.total if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(s)) else 0
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (OSError, ValueError, AttributeError):
+        return 0
+
+
+def model_sizes(root: Path, cfg: Dict[str, Any]) -> Dict[str, int]:
+    """Each model's download size, from the kit builder's list (site/sources.json), else the "~N GB" in its note."""
+    try:
+        listed = {s["id"]: int(s.get("bytes") or 0)
+                  for s in json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        listed = {}
+    sizes = {}
+    for m in cfg.get("models", []):
+        noted = re.search(r"~(\d+(?:\.\d+)?) ?GB", m.get("note", ""))
+        sizes[m["id"]] = listed.get(m["id"]) or (int(float(noted.group(1)) * GB) if noted else 0)
+    return sizes
+
+
+def fits(size: int, memory: int) -> bool:
+    """A model may take 60% of the memory, leaving the rest for everything else (tools/launch.sh's rule too)."""
+    return not memory or not size or size <= memory * 0.6
+
+
+def memory_for(size: int) -> int:
+    """The smallest usual amount of memory, in GB, that runs a model of this size."""
+    need = size / 0.6 / 2**30
+    return next((g for g in (8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 512) if g >= need), math.ceil(need))
+
+
+def fit_report(root: Path, cfg: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+    """Which model the AI starts with on this computer (tools/launch.sh picks the same way: the default model if it
+    fits, else the biggest that does, else the smallest), the switched-on models it can't run that aren't downloaded
+    yet, and the ones switched off for that on a computer with less memory that this one runs."""
+    memory, sizes = memory_bytes(), model_sizes(root, cfg)
+    default = cfg["settings"].get("default_model")
+    models = [{"id": m["id"], "bytes": sizes[m["id"]], "fits": fits(sizes[m["id"]], memory),
+               "needs_memory_gb": memory_for(sizes[m["id"]]) if sizes[m["id"]] else None,
+               "enabled": m.get("enabled", True)} for m in cfg.get("models", [])]
+    on = [m for m in models if m["enabled"]]
+    smallest = min(on, key=lambda m: m["bytes"] or math.inf, default=None)
+    runs = (next((m for m in on if m["id"] == default and m["fits"]), None)
+            or max((m for m in on if m["fits"]), key=lambda m: m["bytes"], default=None) or smallest)
+    return {"memory_bytes": memory, "runs": runs and runs["id"], "smallest": smallest and smallest["id"],
+            "models": models,
+            "too_big": [m["id"] for m in on if not m["fits"] and m is not runs and f"models/{m['id']}" not in state["items"]],
+            "fits_now": [m["id"] for m in models if not m["enabled"] and m["fits"]
+                         and m["id"] in state.get("models_off_for_memory", [])]}
+
+
+def switch_models(root: Path, ids: List[str], on: bool) -> None:
+    """Switch models on or off in kit.json, changing only their "enabled" so the file keeps its layout."""
+    path = root / "kit.json"
+    text = path.read_text(encoding="utf-8")
+    cfg = json.loads(text)
+    for m in cfg["models"]:
+        if m.get("id") in ids and on:
+            m.pop("enabled", None)
+        elif m.get("id") in ids:
+            m["enabled"] = False
+    start = re.search(r'"models"\s*:\s*\[', text)
+    for ident in ids:
+        hit = re.compile(r'\{[^{}]*"id"\s*:\s*' + re.escape(json.dumps(ident)) + r'[^{}]*\}').search(text, start.end()) \
+            if start else None
+        if not hit:
+            continue
+        obj = new = hit.group(0)
+        if on:
+            new = re.sub(r',\s*"enabled"\s*:\s*false\b|"enabled"\s*:\s*false\s*,\s*', "", obj, count=1)
+        elif re.search(r'"enabled"\s*:\s*true\b', obj):
+            new = re.sub(r'"enabled"\s*:\s*true\b', '"enabled": false', obj, count=1)
+        else:
+            sep = re.search(r',(\s*)"', obj)
+            gap = sep.group(1) if sep else " "
+            note = re.search(r'"note"\s*:', obj)
+            if note:
+                new = f'{obj[:note.start()]}"enabled": false,{gap}{obj[note.start():]}'
+            else:
+                body = obj[:-1].rstrip()
+                new = f'{body},{gap}"enabled": false{obj[len(body):]}'
+        text = text[:hit.start()] + new + text[hit.end():]
+    if json.loads(text) != cfg:    # a layout this doesn't know: write it plainly
+        text = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
+    tmp = path.with_name("kit.json.partial")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def names(ids: List[str]) -> str:
+    return ids[0] if len(ids) == 1 else ", ".join(ids[:-1]) + " and " + ids[-1]
+
+
+def cmd_fit(root: Path, args: argparse.Namespace) -> None:
+    """--ask reads the answers from stdin even when it isn't a terminal, so SETUP's tests can answer."""
+    cfg, state = load_config(root), load_state(root)
+    fit = fit_report(root, cfg, state)
+    if args.json:
+        print(json.dumps(fit, indent=2))
+        return
+    if not fit["runs"]:
+        log("No AI model is switched on in kit.json.")
+        return
+    memory, this = fit["memory_bytes"], THIS[0].upper() + THIS[1:]
+    if not memory:
+        log(f"\nThe kit can't tell how much memory {THIS} has. Its AI will be {fit['runs']} if that fits.")
+        return
+
+    def answer(question: str, default: bool) -> bool:
+        print(f"\n{question} {'[Y/n]' if default else '[y/N]'} ", end="", flush=True)
+        said = sys.stdin.readline().strip().lower()
+        return default if not said else said in ("y", "yes")
+
+    def downloads(ids: List[str]) -> str:
+        return fmt_size(sum(m["bytes"] for m in fit["models"] if m["id"] in ids)) + " of downloads"
+
+    gb = f"{this} has {round(memory / 2**30)} GB of memory"
+    back = fit["fits_now"]
+    if back:
+        log(f"\n{gb}. It can run {names(back)}, skipped before on a computer with less memory ({downloads(back)}).")
+        if args.restore or (args.ask and answer("Download them now?", True)):
+            switch_models(root, back, on=True)
+            state["models_off_for_memory"] = sorted(set(state.get("models_off_for_memory", [])) - set(back))
+            save_state(root, state)
+            log("Switched them back on.")
+            fit = fit_report(root, load_config(root), state)
+        elif not args.ask:
+            log("To get them: ./kit fit --restore")
+        log(f"Its AI will be {fit['runs']}.")
+    else:
+        log(f"\n{gb}, so its AI will be {fit['runs']}.")
+    if not next(m for m in fit["models"] if m["id"] == fit["runs"])["fits"]:
+        log("That's the smallest, and it still needs most of the memory: close other apps before asking it something.")
+    big = fit["too_big"]
+    if not big:
+        return
+    log(f"It can't run {names(big)}: {'it needs' if len(big) == 1 else 'they need'} "
+        f"{min(m['needs_memory_gb'] for m in fit['models'] if m['id'] in big)} GB of memory or more ({downloads(big)}).")
+    if not on_this_computer(root):
+        log("A computer with more memory could, with this drive plugged in.")
+    if args.skip or (args.ask and not answer("Download them anyway?", False)):
+        switch_models(root, big, on=False)
+        state["models_off_for_memory"] = sorted(set(state.get("models_off_for_memory", [])) | set(big))
+        save_state(root, state)
+        log("Skipped them. On a computer with more memory, SETUP offers them again.")
+    elif not args.ask:
+        log("To skip them: ./kit fit --skip")
+
+
 def cmd_drives(root: Path, args: argparse.Namespace) -> None:
     drives = list_drives()
     if not args.json:
@@ -2214,7 +2547,8 @@ def free_port() -> int:
 
 def start_server(procs: List[subprocess.Popen], log: Path, cmd: List[Any], cwd: Optional[Path] = None) -> None:
     with open(log, "w") as f:    # the server keeps its own handle on the log
-        procs.append(subprocess.Popen([str(c) for c in cmd], cwd=cwd, stdout=f, stderr=subprocess.STDOUT))
+        procs.append(subprocess.Popen([str(c) for c in cmd], cwd=cwd, stdin=subprocess.DEVNULL, stdout=f,
+                                      stderr=subprocess.STDOUT))
 
 
 def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.Popen], logs_dir: Path) -> None:
@@ -2305,7 +2639,10 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
     check("library server installed", bool(kiwix), str(kiwix or "run ./kit sync"))
     check("AI server installed", bool(llama), str(llama or "run ./kit sync"))
     check("library files present", bool(zims), f"{len(zims)} .zim files")
-    check("models present", bool(models), ", ".join(m.name for m in models))
+    if any(m.get("enabled", True) for m in cfg.get("models", [])):
+        check("models present", bool(models), ", ".join(m.name for m in models))
+    else:
+        log("  SKIP  models: kit.json switches them all off, so the kit runs without the AI")
     procs: List[subprocess.Popen] = []
     logs_dir = root / "logs"
     logs_dir.mkdir(exist_ok=True)
@@ -2492,11 +2829,11 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
     with Lock(root):
         state = load_state(root)
         log("Checking GitHub for a newer version of the kit...")
-        release = kit_github("releases/latest", "tag_name", "tarball_url")
+        release = kit_github("releases/latest", "tag_name")
         if release is None:
             log("No version of the kit is published yet, so this one stays.")
             return
-        tag, url = release["tag_name"], release["tarball_url"]
+        tag = release["tag_name"]
         if tag == state.get("kit_version") and not args.force:
             log(f"This is the newest version ({tag}).")
             return
@@ -2512,16 +2849,29 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
             if status == "ahead":
                 log(f"This copy of the kit is newer than its latest release ({tag}), so it stays.")
                 return
+        name = f"tinfoilkit-{tag}.tar.gz"
+        assets = {a.get("name"): a.get("browser_download_url") for a in release.get("assets") or [] if isinstance(a, dict)}
         stage = root / ".kit" / "update"
         shutil.rmtree(stage, ignore_errors=True)
         try:
-            unpack_release(http_get(url, timeout=600), stage)
+            if not (isinstance(assets.get(name), str) and isinstance(assets.get(name + ".sig"), str)):
+                raise ValueError(f"it isn't signed (the release has no {name} and {name}.sig)")
+            data = http_get(assets[name], timeout=600)
+            verify_release(root, data, http_get(assets[name + ".sig"]))
+            unpack_release(data, stage)
             check_release(stage)
             text, note = merge_kit_json(root, (stage / "kit.json").read_text(encoding="utf-8"))
             (stage / "kit.json").write_text(text, encoding="utf-8")
         except Exception as e:     # whatever goes wrong before the first file moves, the kit stays as it was
             shutil.rmtree(stage, ignore_errors=True)
             die(f"couldn't install version {tag}, so this one stays as it was: {e}")
+        news = [line.rstrip() for line in str(release.get("body") or "").splitlines() if line.strip()][:12]
+        log(f"Version {tag} of the kit is ready, signed by its maintainer." +
+            ("\nWhat's new:\n" + "\n".join("  " + line for line in news) if news else ""))
+        if not args.yes and sys.stdin.isatty() and input("Install it now? [Y/n] ").strip().lower() not in ("", "y", "yes"):
+            shutil.rmtree(stage, ignore_errors=True)
+            log(f"This version stays. Run SETUP again when you want {tag}.")
+            return
         try:
             state["kit_files"] = install_release(root, stage, state.get("kit_files", []))
         except OSError as e:
@@ -2530,9 +2880,6 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
         save_state(root, state)
         shutil.rmtree(stage, ignore_errors=True)
     log(f"Installed version {tag}. {note}")
-    news = [line.rstrip() for line in str(release.get("body") or "").splitlines() if line.strip()][:12]
-    if news:
-        log("What's new:\n" + "\n".join("  " + line for line in news))
     sys.exit(3)
 
 
@@ -2548,10 +2895,13 @@ def main() -> None:
     p = sub.add_parser("plan", help="preview what sync would do")
     p.add_argument("--only", nargs="*", default=[], help="limit to items whose section/id contains these words")
     p.add_argument("--json", action="store_true", help="print every item's size as JSON, disabled ones too")
+    p.add_argument("--essentials", action="store_true", help="only what the kit can't do without")
     p = sub.add_parser("sync", help="download and update everything")
     p.add_argument("-y", "--yes", action="store_true", help="don't ask for confirmation")
     p.add_argument("--force", action="store_true", help="ignore the free space the kit keeps (keep_free_gb)")
     p.add_argument("--only", nargs="*", default=[], help="limit to items whose section/id contains these words")
+    p.add_argument("--essentials", action="store_true", help="only the programs, the map, the most important books "
+                   "and the AI this computer runs plus the smallest (SETUP's first run gets these first)")
     p = sub.add_parser("verify", help="re-check files against their checksums")
     p.add_argument("--quick", action="store_true", help="check sizes only (fast)")
     p.add_argument("--fix", action="store_true", help="delete corrupt files so the next sync replaces them")
@@ -2562,11 +2912,17 @@ def main() -> None:
     p.add_argument("--model", help="model folder name to test (default: the smallest)")
     p = sub.add_parser("update", help="install the newest version of the kit's own code, keeping kit.json changes")
     p.add_argument("--force", action="store_true", help="reinstall even if this is the newest version")
+    p.add_argument("-y", "--yes", action="store_true", help="don't ask before installing")
     sub.add_parser("estimate", help="about how many GB this kit.json needs (no internet needed)")
     p = sub.add_parser("drives", help="the plugged-in drives the kit could go on")
     p.add_argument("--json", action="store_true", help="with this computer's free space and what the kit needs")
     p = sub.add_parser("place", help="put the kit at DEST, a TinfoilKit folder on a drive or in the home folder")
     p.add_argument("dest")
+    p = sub.add_parser("fit", help="which AI model this computer runs, and the ones too big for its memory")
+    p.add_argument("--ask", action="store_true", help="ask whether to download the models it can't run (SETUP)")
+    p.add_argument("--skip", action="store_true", help="switch off the models it can't run, in kit.json")
+    p.add_argument("--restore", action="store_true", help="switch back on the ones skipped for a smaller computer")
+    p.add_argument("--json", action="store_true", help="print it all as JSON")
     p = sub.add_parser("share", help="let phones and laptops on your home network use the kit, with an access code")
     p.add_argument("action", nargs="?", choices=("on", "off", "new-code"))
     p.add_argument("--code", help="the access code to use (6 to 64 letters or digits) instead of a random one")
@@ -2579,7 +2935,8 @@ def main() -> None:
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
-                "drives": cmd_drives, "place": cmd_place, "share": cmd_share, "autostart": cmd_autostart}
+                "drives": cmd_drives, "place": cmd_place, "fit": cmd_fit, "share": cmd_share,
+                "autostart": cmd_autostart}
     if args.cmd not in commands:
         ap.print_help()
         return
