@@ -3455,13 +3455,15 @@ def runtime_binary(root: Path, product: str, name: str) -> Optional[Path]:
     return (find_binary(cur, name) if cur else None) or find_binary(root / rel, name)
 
 
-def wait_http(url: str, timeout: float) -> bool:
+def wait_http(url: str, timeout: float, server: Optional[subprocess.Popen] = None) -> bool:
     end = time.time() + timeout
     while time.time() < end:
         try:
             http_get(url, timeout=5)
             return True
         except HttpError:
+            if server and server.poll() is not None:
+                return False    # it quit
             time.sleep(1)
     return False
 
@@ -3594,25 +3596,33 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
     logs_dir.mkdir(exist_ok=True)
     try:
         if kiwix and zims:
-            kport = free_port()
+            kport, lib = free_port(), "127.0.0.1"
             start_server(procs, logs_dir / "test-kiwix.log",
-                         [kiwix, "--port", kport, "--address", "127.0.0.1", "--customIndex", portal, *zims])
-            up = wait_http(f"http://127.0.0.1:{kport}/", 60)
+                         [kiwix, "--port", kport, "--address", lib, "--customIndex", portal, *zims])
+            up = wait_http(f"http://{lib}:{kport}/", 60, procs[-1])
+            if not up and "not available on this system" in (logs_dir / "test-kiwix.log").read_text(errors="replace"):
+                # A second IPv4 address on the loopback hides 127.0.0.1 from kiwix-serve: see the launcher, which then
+                # runs it on ::1 and forwards 127.0.0.1 there
+                log("  (this computer's library server won't use 127.0.0.1, so it's tested on ::1, as the kit runs it)")
+                lib = "[::1]"
+                start_server(procs, logs_dir / "test-kiwix.log",
+                             [kiwix, "--port", kport, "--address", "::1", "--customIndex", portal, *zims])
+                up = wait_http(f"http://{lib}:{kport}/", 60, procs[-1])
             check("library server starts", up)
             if up:
-                page = http_get(f"http://127.0.0.1:{kport}/").decode(errors="replace")
+                page = http_get(f"http://{lib}:{kport}/").decode(errors="replace")
                 check("portal page served", "Tinfoil Kit" in page and "{{" not in page[:200])
                 if maps_settings(cfg)["enabled"]:
                     mi = re.search(r"window\.KIT_MAPS = (\{.*?\});</script>", page, flags=re.S)
                     avail = bool(mi) and '"available": true' in mi.group(1)
                     check("map page built", avail, "" if avail else (json.loads(mi.group(1)).get("reason", "") if mi else "missing"))
-                cat = http_get(f"http://127.0.0.1:{kport}/catalog/v2/entries?count=-1").decode(errors="replace")
+                cat = http_get(f"http://{lib}:{kport}/catalog/v2/entries?count=-1").decode(errors="replace")
                 check("all books listed", cat.count("<entry>") >= len(zims), f"{cat.count('<entry>')} books")
                 books = re.findall(r'<link type="text/html" href="[^"]*/content/([^"]+)"', cat)
                 hits = 0
                 for book in books[:5]:
                     try:
-                        xml = http_get(f"http://127.0.0.1:{kport}/search?content={urllib.parse.quote(book)}"
+                        xml = http_get(f"http://{lib}:{kport}/search?content={urllib.parse.quote(book)}"
                                        f"&pattern=water&format=xml&pageLength=3").decode(errors="replace")
                         hits += xml.count("<item>")
                     except HttpError:

@@ -1394,6 +1394,71 @@ server.serve_forever()
     check("launcher: another program on the library's port: it moves to the next free one",
           f"using port {port}, so the library uses" in out and "Library:  ready" in out and f":{port}/" not in out, out)
 
+    # A library server that won't use 127.0.0.1, as kiwix-serve 3.8 says when the loopback has a second IPv4 address (it
+    # keeps only the last one of each interface): the launcher starts it on ::1 and forwards 127.0.0.1 to it, so the
+    # library answers at 127.0.0.1, where the page and every server's CORS rule expect it.
+    refusing = work / "refusing-kiwix-serve"
+    refusing.write_text(f"""#!{sys.executable}
+import http.server, socket, sys
+a = sys.argv[1:]
+if "--port" not in a:
+    sys.exit(0)
+port, address = int(a[a.index("--port") + 1]), a[a.index("--address") + 1]
+if address != "::1":
+    sys.exit("ERROR: IP address is not available on this system: " + address)
+class Page(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = b"<title>Tinfoil Kit</title>" + b"x" * 200000
+        self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+    def log_message(self, *a):
+        pass
+class Server(http.server.ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+Server(("::1", port), Page).serve_forever()
+""")
+    refusing.chmod(0o755)
+    try:
+        with socket.socket(socket.AF_INET6) as s:
+            s.bind(("::1", 0))
+        ipv6 = True
+    except OSError:
+        ipv6 = False
+    if not ipv6:
+        print("  SKIP  launcher: a library server that won't use 127.0.0.1 (this computer has no IPv6 to try ::1 on)")
+    else:
+        lport = free_port()
+        (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": lport, "ai_port": rport}}))
+        p = subprocess.Popen(["bash", str(lk / "tools" / "launch.sh"), "--no-browser"], stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT, text=True, stdin=subprocess.DEVNULL,
+                             env={**os.environ, "KIT_KIWIX_TOOLS_BIN": str(refusing)})
+        lines = []
+        threading.Thread(target=lambda: [lines.append(x) for x in p.stdout], daemon=True).start()
+        end = time.time() + 60
+        while time.time() < end and not any("Keep this window open" in x for x in lines):
+            time.sleep(0.2)
+        try:
+            pages = [kp.http_get(f"http://127.0.0.1:{lport}/") for _ in range(3)]
+        except kp.HttpError as e:
+            pages = [str(e).encode()]
+        out = "".join(lines)
+        check("launcher: a library server that won't use 127.0.0.1 listens on ::1, and the library answers at 127.0.0.1",
+              "forwards 127.0.0.1" in out and "Library:  ready" in out and f"Open:     http://127.0.0.1:{lport}/" in out
+              and all(pg.startswith(b"<title>Tinfoil Kit</title>") and len(pg) == 200026 for pg in pages), out)
+        p.terminate()
+        try:
+            p.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            p.kill()
+        time.sleep(0.5)
+        with socket.socket() as s:
+            stopped = s.connect_ex(("127.0.0.1", lport)) != 0
+        check("launcher: closing it stops the library's forwarder too", stopped)
+        (noai / "library").mkdir(exist_ok=True)
+        (noai / "library" / "book.zim").touch()
+        rc, out = kit("test", root=noai, env={**env, "KIT_KIWIX_TOOLS_BIN": str(refusing)})
+        check("test: a library server that won't use 127.0.0.1 is tested on ::1, where the launcher runs it",
+              "PASS  library server starts" in out and "tested on ::1" in out, out)
+
     # Building the directions network: memory for it sized to the computer, and built again on disk if it runs out.
     m = dict(kp.MAPS_DEFAULTS)
     heaps = []

@@ -54,7 +54,7 @@ Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build 
 
 ### Using it (offline)
 
-`Open Tinfoil Kit.command` (`tools/launch.sh`; `Open Tinfoil Kit for Windows.bat` on Windows) starts these servers on your computer and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the computer's memory. Every server listens only on 127.0.0.1, so nothing else on the network can reach them. Sharing, off by default, adds one more on the network.
+`Open Tinfoil Kit.command` (`tools/launch.sh`; `Open Tinfoil Kit for Windows.bat` on Windows) starts these servers on your computer and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the computer's memory. Every server listens only on 127.0.0.1, so nothing else on the network can reach them. (When the computer's loopback has a second address, kiwix-serve can't see 127.0.0.1: the library then listens on ::1, the other loopback address, and the launcher forwards 127.0.0.1 to it.) Sharing, off by default, adds one more on the network.
 
 | Part | Program | Port | What it does |
 | --- | --- | --- | --- |

@@ -100,7 +100,7 @@ get() { # http://127.0.0.1:PORT/PATH
 up() { get "$1" >/dev/null; }
 # Is anything listening on this port, ours or not?
 taken() { get "http://127.0.0.1:$1/" >/dev/null; [ $? -ne 7 ]; }
-our_library() { get "http://127.0.0.1:$1/" | grep -q "Tinfoil Kit"; }
+our_library() { get "http://${2:-127.0.0.1}:$1/" | grep -q "Tinfoil Kit"; }   # port [address]
 our_ai() { get "http://127.0.0.1:$1/v1/models" | grep -q '"data"'; }
 # Another program can hold a port (Jupyter takes 8888, many developer tools 8080): use the next free one.
 free_port() { local p="$1"; while taken "$p" && [ "$p" -lt $(( $1 + 9 )) ]; do p=$(( p + 1 )); done; printf '%s' "$p"; }
@@ -155,6 +155,16 @@ fi
 # it asks for the access code, then passes requests on.
 HOST=127.0.0.1
 
+# Python, for the library's go-between below and for sharing: the one SETUP got for a Mac without one, or else
+# python3 (as ./kit does). Until Apple's developer tools are installed, a Mac's /usr/bin/python3 only offers to
+# install them.
+PY="$HOME/Library/Application Support/TinfoilKit/python/bin/python3"
+if [ ! -x "$PY" ]; then
+  PY="$(command -v python3)"
+  [ "$PY" = /usr/bin/python3 ] && [ "$(uname -s)" = Darwin ] && ! xcode-select -p >/dev/null 2>&1 && PY=""
+fi
+[ -n "$PY" ] && ! "$PY" -c "" >/dev/null 2>&1 && PY=""
+
 PIDS=()
 cleanup() {
   [ ${#PIDS[@]} -gt 0 ] && kill "${PIDS[@]}" 2>/dev/null
@@ -164,7 +174,81 @@ trap cleanup EXIT
 trap 'exit 0' INT TERM HUP
 
 # --- library
-LIB_PID=""
+# kiwix-serve checks the address it's given against this computer's network interfaces, but keeps only the last IPv4
+# address of each: with a second one on the loopback, 127.0.0.1 "is not available on this system". It skips
+# link-local IPv6 addresses, so it does find ::1. Then the library listens there, and this go-between listens on
+# 127.0.0.1, where the page and every server's CORS rule expect the library, and passes each connection on. It stops
+# when the library does.
+FORWARD='
+import os, socket, sys, threading, time
+port, library = int(sys.argv[1]), int(sys.argv[2])
+
+def pipe(src, dst):
+    try:
+        while True:
+            data = src.recv(65536)
+            if not data:
+                break
+            dst.sendall(data)
+    except OSError:
+        pass
+    try:
+        dst.shutdown(socket.SHUT_WR)
+    except OSError:
+        pass
+
+def relay(client):
+    try:
+        server = socket.create_connection(("::1", port))
+    except OSError:
+        client.close()
+        return
+    back = threading.Thread(target=pipe, args=(server, client), daemon=True)
+    back.start()
+    pipe(client, server)
+    back.join()
+    client.close()
+    server.close()
+
+def watch():
+    while True:
+        time.sleep(2)
+        try:
+            os.kill(library, 0)
+        except OSError:
+            os._exit(0)
+
+listener = socket.create_server(("127.0.0.1", port))
+threading.Thread(target=watch, daemon=True).start()
+while True:
+    try:
+        client = listener.accept()[0]
+    except OSError:
+        time.sleep(0.1)
+        continue
+    threading.Thread(target=relay, args=(client,), daemon=True).start()
+'
+LIB_PID=""; LIB_HOST=""; LIB_AT="$HOST"
+start_library() { # address
+  LIB_HOST="$1"
+  "$KIWIX" "${KARGS[@]}" --address "$1" "${ZIMS[@]}" >> "$KIT/logs/kiwix-serve.log" 2>&1 &
+  LIB_PID=$!; PIDS+=($!)
+}
+# kiwix-serve quit: if it was over 127.0.0.1, start it on ::1. Without Python for the go-between, the library alone
+# works, at [::1]: the page's Ask and Map tabs expect it at 127.0.0.1.
+library_on_ipv6() {
+  [ "$LIB_HOST" = "$HOST" ] && grep -q "not available on this system" "$KIT/logs/kiwix-serve.log" || return 1
+  start_library ::1
+  if [ -n "$PY" ]; then
+    "$PY" -c "$FORWARD" "$LIB_PORT" "$LIB_PID" >> "$KIT/logs/kiwix-serve.log" 2>&1 &
+    PIDS+=($!)
+    say "  The library server won't use $HOST on this computer, so it listens on ::1 and the kit forwards $HOST to it."
+  else
+    LIB_AT="[::1]"
+    say "  ! The library server won't use $HOST on this computer, so it listens on ::1. Ask and the map can't reach it"
+    say "    there without Python (on a Mac, double-click SETUP.command while online: it gets it)."
+  fi
+}
 if our_library "$LIB_PORT"; then
   say "  Library already running on port $LIB_PORT."
 elif [ -n "$KIWIX" ] && [ ${#ZIMS[@]} -gt 0 ]; then
@@ -175,10 +259,10 @@ elif [ -n "$KIWIX" ] && [ ${#ZIMS[@]} -gt 0 ]; then
   # (kit code updated, no sync since) shows up after the next sync, which rebuilds the page.
   PORTAL="$KIT/.kit/portal.html"
   [ -f "$PORTAL" ] || PORTAL="$KIT/tools/portal.html"
-  KARGS=(--port "$LIB_PORT" --address "$HOST" --customIndex "$PORTAL" --threads 4)
+  KARGS=(--port "$LIB_PORT" --customIndex "$PORTAL" --threads 4)
   "$KIWIX" --help 2>&1 | grep -q -- --skipInvalid && KARGS+=(--skipInvalid)
-  "$KIWIX" "${KARGS[@]}" "${ZIMS[@]}" > "$KIT/logs/kiwix-serve.log" 2>&1 &
-  LIB_PID=$!; PIDS+=($!)
+  : > "$KIT/logs/kiwix-serve.log"
+  start_library "$HOST"
   say "  Starting library (${#ZIMS[@]} books)..."
 fi
 
@@ -245,15 +329,8 @@ fi
 # --- sharing on the home network
 GATE_PID=""; SHARE_OK=0
 our_gate() { get "http://127.0.0.1:$1/" | grep -q "Tinfoil Kit"; }
-# The gate runs on the Python SETUP got for a Mac without one, or else python3 (as ./kit does). Until Apple's
-# developer tools are installed, a Mac's /usr/bin/python3 only offers to install them.
-PY="$HOME/Library/Application Support/TinfoilKit/python/bin/python3"
-if [ ! -x "$PY" ]; then
-  PY="$(command -v python3)"
-  [ "$PY" = /usr/bin/python3 ] && [ "$(uname -s)" = Darwin ] && ! xcode-select -p >/dev/null 2>&1 && PY=""
-fi
 if [ "$SHARE" = 1 ]; then
-  if [ -z "$PY" ] || ! "$PY" -c "" >/dev/null 2>&1; then
+  if [ -z "$PY" ]; then
     say "  ! Sharing needs Python. On a Mac, double-click SETUP.command: it gets it. On Linux: install the python3 package."
   elif our_gate "$SHARE_PORT"; then
     say "  Sharing already on, on port $SHARE_PORT."; SHARE_OK=1
@@ -283,8 +360,9 @@ fi
 # Wait for each server to answer, unless this window didn't start it or it has already quit.
 LIB_OK=0
 for _ in $(seq 1 60); do
-  our_library "$LIB_PORT" && { LIB_OK=1; break; }
-  { [ -n "$LIB_PID" ] && kill -0 "$LIB_PID" 2>/dev/null; } || break
+  our_library "$LIB_PORT" "$LIB_AT" && { LIB_OK=1; break; }
+  [ -n "$LIB_PID" ] || break
+  kill -0 "$LIB_PID" 2>/dev/null || library_on_ipv6 || break
   sleep 1
 done
 AI_OK=0
@@ -301,9 +379,13 @@ if [ -n "$GATE_PID" ]; then
   done
 fi
 
-URL="http://127.0.0.1:$LIB_PORT/?model=$MODEL&ai=$AI_PORT"
+URL="http://$LIB_AT:$LIB_PORT/?model=$MODEL&ai=$AI_PORT"
 say ""
-if [ "$LIB_OK" = 1 ]; then say "  Library:  ready"; else say "  Library:  NOT running (see logs/kiwix-serve.log)"; fi
+if [ "$LIB_OK" = 1 ]; then say "  Library:  ready"
+else
+  why="$(grep ERROR "$KIT/logs/kiwix-serve.log" 2>/dev/null | tail -1)"
+  say "  Library:  NOT running${why:+: ${why#*ERROR: }} (see logs/kiwix-serve.log)"
+fi
 if [ "$AI_OK" = 1 ]; then say "  AI:       ready (the first answer takes longer while the model loads)"
 elif [ ${#MODELS[@]} -eq 0 ]; then say "  AI:       off (no models). The library still works."
 else say "  AI:       NOT running (see logs/llama-server.log). The library still works."; fi

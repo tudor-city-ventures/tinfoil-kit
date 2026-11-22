@@ -5,8 +5,9 @@
 #                               the kit as Download ZIP leaves it, run its SETUP against the mock internet and
 #                               pick the drive (the try-it kit), run SETUP again from the drive for the rest (it
 #                               builds a small real map there: Andorra's), double-click Open Tinfoil Kit, check
-#                               the library, the AI and the map, check the page in WebKit, open the kit with the
-#                               app, eject. Leaves tests/work/drive.vhd. Then set the kit up on
+#                               the library, the AI and the map, check the page in WebKit, open it again with a
+#                               second address on the loopback (kiwix-serve then won't use 127.0.0.1), open the
+#                               kit with the app, eject. Leaves tests/work/drive.vhd. Then set the kit up on
 #                               this Mac (~/TinfoilKit) from the app, as a home server (SETUP --home-server), check
 #                               that the Mac started it and that it's shared behind the access code, and remove
 #                               it with UNINSTALL.
@@ -180,6 +181,18 @@ mac() {
   KIT_BROWSER=webkit KIT_LIBRARY_PORT=8888 KIT_AI_PORT=8080 KIT_TEST_SHOTS="$SHOTS/mac" \
     python3 "$TESTS/ui_test.py" > "$L/mac_ui.log" 2>&1 || fail "the page in WebKit (logs/mac_ui.log)"
   grep -E "^(FAIL|\(video only)" "$L/mac_ui.log"; tail -1 "$L/mac_ui.log"
+
+  step "a second address on this Mac's loopback: kiwix-serve keeps only the last one, so it says 127.0.0.1 \"is not"
+  echo "available on this system\". Double-click Open Tinfoil Kit.command: the library listens on ::1, and the"
+  echo "launcher forwards 127.0.0.1 to it, on the kit's own Python"
+  stop_kit
+  sudo ifconfig lo0 alias 127.0.0.2 up
+  open "$kit/Open Tinfoil Kit.command"
+  python3 "$TESTS/drive.py" check 8888 8080 || { fail "the kit with its library on ::1"; kit_logs "$kit" kiwix-serve.log; }
+  grep -q "not available on this system: 127.0.0.1" "$kit/logs/kiwix-serve.log" ||
+    fail "kiwix-serve took 127.0.0.1 anyway, so this didn't test the way around it"
+  stop_kit
+  sudo ifconfig lo0 -alias 127.0.0.2
 
   step "the app: it finds the kit on the drive and starts it, and quitting it stops the kit"
   stop_kit
