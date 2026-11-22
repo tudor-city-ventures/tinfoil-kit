@@ -74,9 +74,10 @@ The AI can be wrong. Treat it like a well-read friend, not a doctor: check the s
   This works even when the AI is off, for simply worded questions.
 
 Coverage: street-level map, addresses and directions for where you live (the US state, country or part of a big
-country you told SETUP), plus a low-detail world map. Address search covers your whole country, or, where nobody
-publishes it for the country alone (much of Europe), the whole continent. To change it, run SETUP again and type
-another place, or run `./kit region PLACE` and then `./kit sync`.
+country you told SETUP) and any places nearby you added, plus a low-detail world map. Address search covers your
+whole country, or, where nobody publishes it for the country alone (much of Europe), the whole continent. To change
+it, run SETUP again and type another place, or run `./kit region PLACE` (several with commas, where you live first,
+like `./kit region "New York, New Jersey"`) and then `./kit sync`.
 
 **For actually driving, use your phone.** Download offline maps on it now: Organic Maps (free, fully offline,
 spoken directions) or offline areas in Google Maps or Apple Maps. A phone has GPS; this laptop doesn't.
@@ -146,6 +147,8 @@ what's new in the kit's own list (`app/kit.json`).
    - **Linux**: open a terminal in `TinfoilKit/app` and run `bash SETUP.command`. It needs curl.
 3. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works
    too). That sets the maps' area, directions, address search and home, and offers Wikipedia in your language.
+   Then it asks for places nearby to put on the map too, like the state next door: type one at a time, and press
+   Return when that's all.
    Then it asks how much of Wikipedia: all of it (127 GB in English, with pictures), or just the best 50,000
    articles (7 GB with pictures, 3 GB as text).
 4. SETUP says which AI model this computer can run, and asks before downloading any that are too big for it. Then

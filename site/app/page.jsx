@@ -1,4 +1,4 @@
-import Builder, { CopySetup, Groups, PlaceSelect, Preset, SetupText, SizeSelect, Total, WikiSelect } from '@/components/builder';
+import Builder, { CopySetup, Groups, Nearby, NearbySelect, PlaceSelect, Preset, SetupText, SizeSelect, Total, WikiSelect } from '@/components/builder';
 import { CopyButton, Toast } from '@/components/copy';
 import Demo from '@/components/demo';
 import Download, { DownloadLink, SetupLink } from '@/components/download';
@@ -165,6 +165,11 @@ export default function Home() {
                 <PlaceSelect />
               </div>
               <div className="field">
+                <label htmlFor="nearby">Places nearby</label>
+                <NearbySelect />
+              </div>
+              <Nearby />
+              <div className="field">
                 <label htmlFor="wikiLang">Wikipedia in</label>
                 <WikiSelect />
               </div>
@@ -172,7 +177,7 @@ export default function Home() {
                 <label htmlFor="wikiSize">How much of Wikipedia</label>
                 <SizeSelect />
               </div>
-              <p className="hint" id="placeNote" aria-live="polite">Sets your map, and offers Wikipedia in your language, in the size you want.</p>
+              <p className="hint" id="placeNote">The map has street maps and directions for where you live and any places nearby you add, and a simple map of everywhere else. Wikipedia comes in your language, in the size you want.</p>
             </div>
             <div className="presets" role="group" aria-label="Preset">
               <Preset value="essentials">Essentials</Preset>
@@ -305,6 +310,12 @@ export default function Home() {
                   </table>
                   <p>The installer says which one your laptop runs, and offers to skip the ones too big for it, which saves about 50&nbsp;GB on a 16 or 24&nbsp;GB laptop. To see your memory, open About This Mac, or Settings &gt; System &gt; About on Windows. A Windows or Linux PC without a good graphics card should use Gemma 4 E4B.</p>
                 </div>
+              </div>
+            </details>
+            <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
+              <summary itemProp="name">What do the maps cover?</summary>
+              <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
+                <p itemProp="text">Where you live, in street detail, with driving and walking directions and address search: a US state, a country, or part of a big one. Add places nearby, like the state next door, and they get street maps and directions too. The rest of the world is a simple map. You pick the places in the kit builder above or when you set it up, and can change them any time.</p>
               </div>
             </details>
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">

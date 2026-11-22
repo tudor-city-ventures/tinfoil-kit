@@ -30,7 +30,7 @@ One or two questions at a time. For each, say what it's for and roughly how big 
 
 1. Their computer: a Mac with Apple Silicon, or a Windows or Linux PC on x64 (Intel Macs and ARM PCs can't run it), its memory and free space.
 2. Where it lives: the drive, this computer, or a home server (see the tinfoil-home-server skill).
-3. Where they live, for the map (`--region`), Wikipedia's languages (`--wikipedia`), and how much of Wikipedia (`--wikipedia-size`): all of it (127 GB in English) or just the best 50,000 articles (7 GB, or 2.7 GB as text).
+3. Where they live, for the map (`--region`), and any places nearby they want on it too, Wikipedia's languages (`--wikipedia`), and how much of Wikipedia (`--wikipedia-size`): all of it (127 GB in English) or just the best 50,000 articles (7 GB, or 2.7 GB as text).
 4. The AI: the one their computer runs (the default), none (`--no-ai`), or exact models (`--models`).
 5. The library, group by group. The huge collections are off unless added (`--add`).
 6. All of it, or just the essentials (`--essentials`) when space is short.
@@ -52,7 +52,7 @@ If the kit's code is already there, it's `bash TinfoilKit/app/SETUP.command OPTI
 
 | Option | What it does |
 | --- | --- |
-| `--region PLACE` | Where they live: "Texas", "Ontario", "Germany: Bayern", or an id from `./kit region --find WORDS`. Quote names with spaces |
+| `--region PLACES` | Where they live: "Texas", "Ontario", "Germany: Bayern", or an id from `./kit region --find WORDS`. Quote names with spaces. Places nearby for the map go after it as ids, with commas: `us/new-york,us/new-jersey` |
 | `--wikipedia CODES` | Wikipedia's languages: `de`, or `de,en` |
 | `--wikipedia-size SIZE` | How much of Wikipedia: `all` (the default), `all-text`, `top` (the best 50,000 articles), `top-text` or `top-intros` (their opening paragraphs). With `--essentials`, add `--add wikipedia` for anything bigger than `top-text` |
 | `--drive PATH` | The drive: /Volumes/NAME on a Mac, E: on Windows, /media/USER/NAME on Linux. The kit goes in a TinfoilKit folder at its top |

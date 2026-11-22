@@ -99,25 +99,38 @@ function wikiCard(regions, code, size, like) {
   };
 }
 
-function mapsCard(kit, place, like) {
-  const addr = !place.photon ? 'no address search, since nobody publishes it there yet'
-    : 'address search for all of ' + (place.addresses || place.name) + (place.addresses_wide ? ', since nobody publishes it for ' + place.name + ' alone' : '');
+// "A", "A and B", "A, B and C", as the kit's program says them.
+function listNames(names) {
+  return names.length < 3 ? names.join(' and ') : names.slice(0, -1).join(', ') + ' and ' + names.at(-1);
+}
+
+// The places' map, as ./kit region sets it: street detail and directions for each, and the first place's address
+// search, which covers the others in its database (a country's, or a whole region of the world's).
+function mapsCard(kit, places, like) {
+  const [first] = places;
+  const dir = (first.photon || '').slice(0, (first.photon || '').lastIndexOf('/') + 1);
+  const missed = places.slice(1).filter((p) => p.photon !== first.photon && !(first.addresses_wide && p.photon?.startsWith(dir)));
+  const addr = !first.photon ? 'no address search, since nobody publishes it there yet'
+    : 'address search for all of ' + (first.addresses || first.name) + (first.addresses_wide ? ', since nobody publishes it for ' + first.name + ' alone' : '')
+      + (missed.length ? ' (not ' + listNames(missed.map((p) => p.name)) + ')' : '');
   const card = {
     id: like.id, group: like.group, presets: like.presets, title: like.title, estimated: like.estimated, bytes: like.bytes,
-    why: 'Street maps and driving or walking directions for ' + place.name + ', with ' + addr + '.',
+    why: 'Street maps and driving or walking directions for ' + listNames(places.map((p) => p.name)) + ', with ' + addr + '.',
   };
-  if (place.id !== kit.maps.region) {   // the builder's own sizes are for kit.json's place
-    card.bytes = Math.round(0.1e9 + Object.values(place.mb).reduce((t, mb) => t + mb, 0) * 1e6);
+  if (places.map((p) => p.id).join() !== [].concat(kit.maps.region).join()) {   // the builder's own sizes are for kit.json's place
+    // each place's street detail and roads, with one world overview (1 GB of each place's tiles), and one address search
+    const mb = places.reduce((t, p, i) => t + (i ? Math.max(0, (p.mb.tiles || 0) - 1000) : p.mb.tiles || 0) + (p.mb.roads || 0), 0);
+    card.bytes = Math.round(0.1e9 + (mb + (first.mb.addresses || 0)) * 1e6);
     card.estimated = true;
   }
   return card;
 }
 
-// The cards: the place's map, and Wikipedia in the languages and size picked.
-function cardsFor({ data, place, wiki, size }) {
+// The cards: the places' map, and Wikipedia in the languages and size picked.
+function cardsFor({ data, place, nearby, wiki, size }) {
   if (!data) return [];
   if (!place) return data.base;
-  return data.base.flatMap((s) => (s.id === 'maps' ? [mapsCard(data.kit, place, s)]
+  return data.base.flatMap((s) => (s.id === 'maps' ? [mapsCard(data.kit, [place, ...nearby], s)]
     : WIKI.test(s.id) ? wiki.map((c) => wikiCard(data.regions, c, size, s)) : [s]));
 }
 
@@ -139,24 +152,31 @@ function reducer(state, a) {
   switch (a.type) {
     case 'loaded': {
       const data = { base: a.sources.sources, kit: a.kit, regions: a.regions };
-      const home = a.regions.regions.find((r) => r.id === a.kit.maps.region) || null;
+      const places = [].concat(a.kit.maps.region).map((id) => a.regions.regions.find((r) => r.id === id)).filter(Boolean);
+      const home = places[0] || null;
       const wiki = home ? languageChoices(a.regions, home)[0] : state.wiki;
-      return withPreset({ ...state, data, place: home, wiki }, state.preset || 'recommended');
+      return withPreset({ ...state, data, place: home, nearby: places.slice(1), wiki }, state.preset || 'recommended');
     }
     case 'failed': return { ...state, failed: true };
     case 'preset': return withPreset({ ...state, from: a.preset }, a.preset);
     case 'pick': return { ...state, preset: null, picked: { ...state.picked, [a.id]: a.on } };
     case 'more': return { ...state, open: { ...state.open, [a.group]: !state.open[a.group] } };
-    case 'place': return withWiki({ ...state, chosen: true, place: a.place }, languageChoices(state.data.regions, a.place)[0]);
+    case 'place': {
+      const nearby = state.nearby.filter((r) => r !== a.place);
+      return withWiki({ ...state, chosen: true, place: a.place, nearby }, languageChoices(state.data.regions, a.place)[0]);
+    }
+    case 'nearby': return { ...state, chosen: true, nearby: a.on ? [...state.nearby, a.place] : state.nearby.filter((r) => r !== a.place) };
     case 'wiki': return withWiki({ ...state, chosen: true }, a.wiki);
     case 'size': return { ...withWiki(state, state.wiki, a.size), preset: null };
     default: throw new Error(a.type);
   }
 }
 
-// chosen: the person picked where they live (until then the AI asks). from: the preset their picks started from.
+// chosen: the person picked where they live (until then the AI asks). nearby: places they added to the map. from: the
+// preset their picks started from.
 const START = {
-  data: null, failed: false, place: null, wiki: ['en'], size: 'all', picked: {}, preset: 'recommended', from: 'recommended', chosen: false, open: {},
+  data: null, failed: false, place: null, nearby: [], wiki: ['en'], size: 'all', picked: {}, preset: 'recommended', from: 'recommended',
+  chosen: false, open: {},
 };
 const Kit = createContext(null);
 
@@ -171,8 +191,8 @@ export default function Builder({ children }) {
     );
     return () => { live = false; };
   }, []);
-  const { data, place, wiki, size } = state;
-  const cards = useMemo(() => cardsFor({ data, place, wiki, size }), [data, place, wiki, size]);
+  const { data, place, nearby, wiki, size } = state;
+  const cards = useMemo(() => cardsFor({ data, place, nearby, wiki, size }), [data, place, nearby, wiki, size]);
   return <Kit value={{ state, cards, dispatch, setupText, showSetup }}>{children}</Kit>;
 }
 
@@ -205,6 +225,73 @@ export function PlaceSelect() {
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// The places near where you live: map areas that touch its, or nearly. Not the country it's part of or the parts of it
+// (Geofabrik keeps a country's parts in its folder), and no groups of US states for a state, or states for a group.
+function placesNear(regions, place) {
+  const [w, s, e, n] = place.bbox;
+  const folder = (r) => r.pbf.replace('-latest.osm.pbf', '/');
+  const usArea = (r) => r.group === 'United States' && !r.id.includes('/');
+  return regions.filter((r) => {
+    const [rw, rs, re, rn] = r.bbox;
+    const touches = rw <= e + 0.25 && re >= w - 0.25 && rs <= n + 0.25 && rn >= s - 0.25;
+    const family = r.pbf.startsWith(folder(place)) || place.pbf.startsWith(folder(r))
+      || (r.group === 'United States' && place.group === 'United States' && usArea(r) !== usArea(place));
+    return r !== place && touches && !family;
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Places nearby for the map: the ones near where you live first, then every place. Each one picked shows below
+// (Nearby), where it can go again.
+export function NearbySelect() {
+  const { state, dispatch } = use(Kit);
+  const regions = state.data?.regions;
+  const groups = useMemo(() => (regions ? placeGroups(regions.regions) : []), [regions]);
+  const near = useMemo(() => (regions && state.place ? placesNear(regions.regions, state.place) : []), [regions, state.place]);
+  const taken = [state.place, ...state.nearby];
+  function add(id) {
+    dispatch({ type: 'nearby', on: true, place: regions.regions.find((r) => r.id === id) });
+  }
+  const item = (r, key) => <SelectItem key={key + r.id} value={key + r.id} disabled={taken.includes(r)}>{r.name}</SelectItem>;
+  return (
+    <Select value="" onValueChange={(v) => add(v.replace(/^near:/, ''))} disabled={!regions}>
+      <SelectTrigger id="nearby" aria-describedby="placeNote"><SelectValue placeholder={regions ? 'Add a state or country' : 'Loading places…'} /></SelectTrigger>
+      <SelectContent>
+        {near.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>{'Near ' + state.place.name}</SelectLabel>
+            {near.map((r) => item(r, 'near:'))}
+          </SelectGroup>
+        )}
+        {groups.map(([group, places]) => (
+          <SelectGroup key={group}>
+            <SelectLabel>{group}</SelectLabel>
+            {places.map((r) => item(r, ''))}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+export function Nearby() {
+  const { state, dispatch } = use(Kit);
+  if (!state.nearby.length) return null;
+  function remove(r) {
+    dispatch({ type: 'nearby', on: false, place: r });
+    document.getElementById('nearby')?.focus();
+  }
+  return (
+    <ul className="nearby" aria-label="Places nearby on your map">
+      {state.nearby.map((r) => (
+        <li key={r.id}>
+          {r.name}
+          <button type="button" aria-label={'Remove ' + r.name} onClick={() => remove(r)}>×</button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -308,7 +395,8 @@ function setupOptions(state, cards) {
   const add = ids(rest.filter((s) => !inBase(s) && on(s)));
   if (wiki.some(inBase) && !langs.length) skip.unshift('wikipedia');
   if (!wiki.some(inBase) && langs.length) add.unshift('wikipedia');
-  const opts = state.chosen ? ['--region ' + state.place.id, '--wikipedia ' + (langs.length ? langs : state.wiki).join(',')] : [];
+  const region = [state.place, ...state.nearby].map((r) => r.id).join(',');
+  const opts = state.chosen ? ['--region ' + region, '--wikipedia ' + (langs.length ? langs : state.wiki).join(',')] : [];
   if (base === 'essentials') opts.push('--essentials');
   // Wikipedia's size, when it isn't the preset's. Just the essentials bring the best articles' text until the size
   // picked is in, so another size comes with them only when Wikipedia is added.
@@ -328,7 +416,9 @@ function setupPrompt(state, cards) {
   const gbs = Math.round(cards.filter((s) => state.picked[s.id]).reduce((t, s) => t + (s.bytes || 0), 0) / 1e9);
   const r = state.chosen && state.place;
   return INSTALL_PROMPT + `\n\nI already picked what goes in with the kit builder on tinfoilkit.com. It comes to about ${gbs} GB`
-    + (r ? `. I live in ${r.name}, and want Wikipedia in ${langName(state.data.regions, state.wiki)}, `
+    + (r ? `. I live in ${r.name}`
+         + (state.nearby.length ? `, with ${listNames(state.nearby.map((p) => p.name))} on my map too` : '')
+         + `, and want Wikipedia in ${langName(state.data.regions, state.wiki)}, `
          + SIZES.find((s) => s[0] === state.size)[2].toLowerCase() : '')
     + (opts.length ? `. In the setup command, that's:\n${opts.join(' ')}\nUse those options as they are. ` : ', the recommended kit. ')
     + "Tell me if it won't fit, and ask me only about the rest.";

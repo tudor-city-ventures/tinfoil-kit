@@ -326,7 +326,33 @@ with sync_playwright() as p:
             check("the builder: two places called Georgia, the country under Europe", in_us == 1
                   and "for Georgia" in page.locator(".card", has_text="Offline maps").locator(".why").inner_text()
                   and page.inner_text("#wikiLang").startswith("Georgian"), us_georgia)
+            # Places nearby (Travis: "Weird I can only select my state and not other states nearby"): the ones near where
+            # you live first; each goes on the map card, in SETUP's options after where you live, and in the prompt
+            choose(page, "#place", "Germany: Bayern")
+            page.click("#nearby")
+            first = page.locator("[role=listbox] [role=group]").first
+            near = [first.locator("[data-slot=select-label]").text_content(), first.get_by_role("option").all_inner_texts()]
+            page.keyboard.press("Escape")
+            check("places nearby: the places near where you live come first, not the country it's part of",
+                  near[0] == "Near Germany: Bayern" and {"Austria", "Switzerland", "Czech Republic"} <= set(near[1])
+                  and "Germany" not in near[1], str(near))
+            maps_card = page.locator(".card", has_text="Offline maps")
+            one_place = maps_card.locator(".size").inner_text()
+            choose(page, "#nearby", "Austria", group="Near Germany: Bayern")
+            maps_why, line = maps_card.locator(".why").inner_text(), options()
+            prompt = page.evaluate("navigator.clipboard.readText()")
+            check("a place nearby: on the map card (with what its address search covers), in SETUP's options and the prompt",
+                  [t.split("\n")[0] for t in page.locator(".nearby li").all_inner_texts()] == ["Austria"]
+                  and "for Germany: Bayern and Austria, with address search for all of Germany (not Austria)." in maps_why
+                  and maps_card.locator(".size").inner_text() != one_place
+                  and line.startswith("--region bayern,austria --wikipedia de")
+                  and "I live in Germany: Bayern, with Austria on my map too, and want Wikipedia in German" in prompt, maps_why + " " + line)
             page.locator(".where").screenshot(path=os.path.join(SHOTS, "site_place_picker.png"))
+            page.click(".nearby button[aria-label='Remove Austria']")
+            focus = page.evaluate("document.activeElement.id")
+            line = options()
+            check("a place nearby comes off again, and the keyboard goes back to Places nearby", page.locator(".nearby li").count() == 0
+                  and line.startswith("--region bayern --wikipedia de") and focus == "nearby", f"{line} (focus: {focus})")
         # Read as: the human page is the default; AI agent shows the markdown with no images or icons, and the pick sticks
         def wide_enough(label):
             w = page.evaluate("document.documentElement.scrollWidth")

@@ -105,8 +105,12 @@ html:not(.js) .fig{display:none}
 .presets button:last-child{border-right:0}
 .presets button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
 .where{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;border:var(--rule);padding:18px 20px;background:var(--paper2)}
-.where .field{display:flex;flex-direction:column;gap:6px;flex:2 1 300px;min-width:0}
-.where .field+.field{flex:1 1 220px}
+.where .field{display:flex;flex-direction:column;gap:6px;flex:1 1 calc(50% - 10px);min-width:0}
+.nearby{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0 0 0 calc(50% + 10px);list-style:none}
+.nearby li{display:inline-flex;align-items:center;gap:2px;min-height:36px;padding:0 0 0 12px;border:1px solid var(--ink);border-radius:4px;background:var(--paper);font:500 15px var(--sans)}
+.nearby button{display:grid;place-items:center;width:36px;height:34px;border:0;border-radius:4px;background:transparent;color:var(--ink);font:500 20px/1 var(--sans);cursor:pointer}
+.nearby button:hover{color:var(--signal-text)}
+@media (max-width:600px){.where .field{flex-basis:100%}.nearby{padding-left:0}}
 .where label{font:600 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--olive)}
 .where .hint{flex-basis:100%;font-size:15px;line-height:1.45;color:var(--ink2)}
 .group{display:flex;flex-direction:column;gap:12px}

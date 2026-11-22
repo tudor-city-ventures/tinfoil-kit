@@ -31,6 +31,7 @@ The ids are in "What goes in" at https://tinfoilkit.com/llms.txt, and in data/ki
 | Get just the essentials, or everything again | `./kit essentials on`, `./kit essentials off` |
 | Go from the try-it kit to everything picked | `./kit starter off` |
 | Change where they live, and Wikipedia's languages | `./kit region "Germany: Bayern" --wikipedia de,en` |
+| Put places nearby on the map too, after where they live | `./kit region "New York, New Jersey"` |
 | Find a place's id | `./kit region --find georgia` |
 | See the Wikipedia languages offered for a place | `./kit region bayern --languages` |
 | Take less of Wikipedia, or more: all, all-text, top (the best 50,000 articles), top-text or top-intros | `./kit region --wikipedia-size top-text` |
