@@ -2819,7 +2819,8 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
     if pm and tiles.exists():
         port = free_port()
         start_server(procs, logs_dir / "test-tiles.log",
-                     [pm, "serve", tiles.parent, "--port", port, "--interface", "127.0.0.1", "--cors", "http://127.0.0.1:8888"])
+                     [pm, "serve", tiles.parent, "--port", port, "--interface", "127.0.0.1", "--cors", "http://127.0.0.1:8888",
+                      "--public-url", f"http://127.0.0.1:{port}"])  # without it, /basemap.json is a 501
         up = wait_http(f"http://127.0.0.1:{port}/basemap.json", 30)
         ok = False
         if up:
