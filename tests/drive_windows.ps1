@@ -127,6 +127,12 @@ foreach ($f in "START-HERE-Windows.bat", "SETUP-Windows.bat", "UNINSTALL-Windows
   if (Get-Item -LiteralPath "$kit\$f" -Stream Zone.Identifier -ErrorAction SilentlyContinue) { Fail "$f is still marked as from the internet" }
 }
 Test-Kit $kit "this PC"
+Step "SETUP-Windows.bat again in ~\TinfoilKit: an update"
+# Answers: keep where it's for, download, don't open it, close.
+Invoke-Setup $kit "setup-windows-update.log" @("", "y", "n", "")
+foreach ($said in "TINFOIL KIT UPDATE", "To change that", "Step 3 of 3: start everything offline") {
+  if (-not (Select-String -Quiet -SimpleMatch -Path "$logs\setup-windows-update.log" -Pattern $said)) { Fail "the update didn't say `"$said`"" }
+}
 Step "./kit fit: Windows says how much memory this PC has"
 $fit = python "$kit\tools\kit.py" --root $kit fit
 $fit

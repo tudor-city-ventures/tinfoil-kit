@@ -18,7 +18,9 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-# A Windows console can't print every character a tiny test model makes up.
+from make_tiny_model import ANSWER
+
+# A Windows console can't print every character (a mangled answer, a book's title).
 sys.stdout.reconfigure(errors="backslashreplace")
 fails = 0
 
@@ -45,6 +47,17 @@ def wait_for(url, seconds):
     return ""
 
 
+HELLO = {"model": "Tiny", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 100}
+
+
+def answer(body):
+    """The answer in a chat completion, or what came instead. The test model always gives ANSWER."""
+    try:
+        return json.loads(body)["choices"][0]["message"]["content"]
+    except (ValueError, KeyError, IndexError, TypeError):
+        return body[:300]
+
+
 def check_kit(lib, ai):
     base = f"http://127.0.0.1:{lib}"
     check("library page", "Tinfoil Kit" in wait_for(base + "/", 120), base)    # containers install packages first
@@ -57,11 +70,10 @@ def check_kit(lib, ai):
     props = wait_for(f"http://127.0.0.1:{ai}/props", 5)
     check("AI chat's page gets the kit's safety rules", "wild plant" in props, props[:200])
     try:
-        out = json.loads(fetch(f"http://127.0.0.1:{ai}/v1/chat/completions", {
-            "model": "Tiny", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 8}, timeout=180))
-        check("AI answers", bool(out.get("choices")), str(out)[:200])
-    except (OSError, ValueError) as e:
-        check("AI answers", False, str(e))
+        said = answer(fetch(f"http://127.0.0.1:{ai}/v1/chat/completions", HELLO, timeout=180))
+        check("AI answers, every character intact", said == ANSWER, "" if said == ANSWER else ascii(said)[:300])
+    except OSError as e:
+        check("AI answers, every character intact", False, str(e))
 
 
 def ask(method, url, body=None, headers=None, timeout=10):
@@ -108,10 +120,11 @@ def check_share(address, code, lib, ai):
             break
         time.sleep(1)
     check("the AI, through the gate", "Tiny" in models, models[:200])
-    status, out, _ = ask("POST", address + "/ai/v1/chat/completions", json.dumps({
-        "model": "Tiny", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 8}),
-        {**signed, "Content-Type": "application/json"}, timeout=180)
-    check("the AI answers, through the gate", status == 200 and '"choices"' in out, f"{status} {out[:200]}")
+    status, out, _ = ask("POST", address + "/ai/v1/chat/completions", json.dumps(HELLO),
+                         {**signed, "Content-Type": "application/json"}, timeout=180)
+    said = answer(out)
+    check("the AI answers through the gate, every character intact", status == 200 and said == ANSWER,
+          "" if said == ANSWER else f"{status} {ascii(said)[:300]}")
     status, svg, _ = ask("GET", address + "/_kit/qr.svg", headers=signed)
     check("the QR code", status == 200 and svg.startswith("<svg"), str(status))
     status, _, _ = ask("GET", address + "/", headers={**signed, "Host": "evil.example.com"})

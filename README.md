@@ -101,7 +101,7 @@ The repo is the kit, so `site/` (the website), `tests/` and `docs/` come along, 
 - A modern laptop or desktop: a Mac with Apple Silicon, or a Windows or Linux PC. Built around 32 GB of memory; the small model runs on 8-16 GB.
 - Room for the kit: the first sync downloads about 300 GB. On the computer's own disk it leaves 50 GB free. An external SSD lets you grab it and go.
 
-A nightly test sets the kit up on a Mac and on Windows, from a download onto the computer and onto an exFAT drive, and starts the Mac's drive on Windows and Linux.
+A nightly test sets the kit up on a Mac and on Windows, from a download onto the computer and onto an exFAT drive, and starts the Mac's drive on Windows and Linux. On Windows it also builds and serves a small real map.
 
 ## Set up
 
