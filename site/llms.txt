@@ -195,6 +195,14 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 - Programs: llama.cpp (MIT), kiwix-serve and the Kiwix app (GPL-3.0), Eclipse Temurin Java (GPL-2.0 with Classpath Exception), go-pmtiles (BSD-3-Clause), GraphHopper and Photon (Apache 2.0), MapLibre GL JS (BSD-3-Clause).
 - Setup and updates talk only to GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus anything added to kit.json. Using the kit sends nothing over the internet: no account, no telemetry.
 
+## Security
+
+- `./kit update` installs new kit code only if the maintainer's release key signed it, checked against tools/release-signers in the copy already there. The key never touches GitHub.
+- Every download comes straight from its publisher over HTTPS, and is checked against the publisher's checksum wherever one is posted (the map tiles and fonts have none). Nothing is hosted or mirrored by this project.
+- The servers listen on 127.0.0.1. Sharing is off until the person turns it on; then a gate, on port 8000 by default, asks for an 8-digit code. It's plain HTTP, so share on the person's own Wi-Fi or hotspot, not a public network.
+- To check a release before running it, download tinfoilkit-TAG.tar.gz and its .sig from the release, then run `ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz`.
+- Security problems go to https://github.com/tudor-city-ventures/tinfoilkit/security/advisories/new, never a public issue.
+
 ## Rules
 
 - Start programs and models only through the kit's own commands. Don't run downloaded files to see what they do.
