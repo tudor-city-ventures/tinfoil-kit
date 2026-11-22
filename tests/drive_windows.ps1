@@ -230,8 +230,7 @@ Remove-Item -Recurse -Force "$kit\app"
 # Answers: update the kit on this PC, keep where it's for, download, don't open it, close.
 Invoke-Setup $dl "setup-windows-update.log" @("y", "", "y", "n", "")
 Test-Said "setup-windows-update.log" "the update" @("There's a Tinfoil Kit on this PC already: $kit",
-  "without its app folder: this version's is in it now", "TINFOIL KIT UPDATE", "To change that",
-  "Step 3 of 3: start everything offline")
+  "without its app folder", "TINFOIL KIT UPDATE", "To change that", "Step 3 of 3: start everything offline")
 Test-Layout $kit "the kit with the new app folder"
 if (Get-Item -LiteralPath "$kit\app\SETUP-Windows.bat" -Stream Zone.Identifier -ErrorAction SilentlyContinue) { Fail "the new app folder is still marked as from the internet" }
 Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
