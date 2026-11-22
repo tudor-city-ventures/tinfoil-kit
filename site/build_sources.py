@@ -24,14 +24,18 @@ COPY = {
     "mdwiki_en_all_maxi": ("WikiMed", "A medical encyclopedia: conditions, drugs, procedures."),
     "zimgit-medicine_en": ("Field medicine books", "First aid and medicine for when help is far away."),
     "irp.fas.org_en_military-medicine": ("Military medicine", "Trauma care manuals from the US military."),
+    "medlineplus.gov_en_all": ("MedlinePlus", "Plain-language guides to illnesses, tests and medicines, from the US National Library of Medicine."),
+    "wwwnc.cdc.gov_en_all": ("CDC Travelers' Health", "The CDC's guide to diseases, vaccines and safe food and water."),
     "zimgit-post-disaster_en": ("Post-disaster guides", "Shelter, sanitation and recovery after a disaster."),
     "zimgit-water_en": ("Water treatment", "How to find, filter and disinfect drinking water."),
     "zimgit-food-preparation_en": ("Food preparation", "Storing, preserving and cooking food without power."),
     "zimgit-knots_en": ("Knots", "Illustrated knots for rope, tarps and rescue."),
     "ready.gov_en_all": ("Ready.gov", "FEMA's guides for every kind of emergency."),
     "urban-prepper_en_all": ("Urban Prepper", "Getting through an emergency in a city."),
+    "lrnselfreliance_en_all": ("Learning Self-Reliance", "Videos on homesteading, beekeeping and getting ready for emergencies."),
     "ifixit_en_all": ("iFixit", "Step-by-step repair guides for phones, appliances, cars and tools."),
     "appropedia_en_all_maxi": ("Appropedia", "Off-grid and low-tech solutions: solar, water, building."),
+    "cd3wdproject.org_en_all": ("CD3WD", "Over 900 practical manuals on farming, water, health and building, from aid groups."),
     "energypedia_en_all_nopic": ("Energypedia", "Solar panels, batteries and small power systems."),
     "armypubs_en_all": ("US Army publications", "Field manuals on survival, first aid, navigation and more."),
     "wikipedia_en_all_maxi": ("Wikipedia, with images", "All of English Wikipedia. The reference for nearly any question."),
@@ -62,9 +66,9 @@ COPY = {
 }
 
 GROUPS = [
-    ("Medical", r"med|mdwiki"),
-    ("Preparedness", r"ready|prepper|post-disaster|water|food|knots|army|outdoors"),
-    ("Repair and skills", r"ifixit|appropedia|energypedia|diy|gardening|cooking|electronics|ham\.|mechanics|bicycles|sustainab"),
+    ("Medical", r"med|mdwiki|cdc\."),
+    ("Preparedness", r"ready|prepper|reliance|post-disaster|water|food|knots|army|outdoors"),
+    ("Repair and skills", r"ifixit|appropedia|cd3wd|energypedia|diy|gardening|cooking|electronics|ham\.|mechanics|bicycles|sustainab"),
     ("Books and courses", r"gutenberg|survivor|khan|libretexts|wikiversity|wikibooks"),
     ("Reference", r"."),
 ]
