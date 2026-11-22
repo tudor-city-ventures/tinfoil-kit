@@ -67,7 +67,7 @@ Written before the first Claude Code thread. The Status section above is current
 
 ## 2. What the kit is
 
-- **For:** technical people and non-technical preppers. Version 1 supports Apple Silicon Macs only and is designed around 32 GB of memory; smaller Macs can use the small model. Windows and Linux are fallbacks: the nightly drive test starts the kit on both from a drive a Mac set up, with test data.
+- **For:** technical people and non-technical preppers, on any modern laptop (Travis, 2026-11-21): Apple Silicon Macs, and Windows and Linux PCs (x64). Designed around 32 GB of memory; smaller laptops get a smaller model. Setup and the whole kit run on all three, and a kit on an exFAT drive starts on any of them. The Mac is the most tested (a real Mac before each release); Windows and Linux are tested in CI only.
 - **On the drive:** AI models, the library, maps, the programs that serve them (llama.cpp, kiwix-serve, pmtiles, Photon, GraphHopper, Java), the launcher and the browser page.
 - **Using it:** double-click `START-HERE.command`. A browser opens http://127.0.0.1:8888 with these tabs:
   - **Ask:** answers from the library, with numbered sources.
@@ -92,7 +92,8 @@ Written before the first Claude Code thread. The Status section above is current
 | `tools/portal.html` | The browser page. A single file; kiwix-serve serves it as its custom index |
 | `tools/share.py` | Sharing on the home network behind an access code, its QR code, and starting with the computer. Standard library only |
 | `START-HERE.command` | Double-click launcher for the Mac |
-| `START-HERE-Windows.bat` | Windows fallback. Must keep CRLF line endings |
+| `START-HERE-Windows.bat` | Double-click launcher for Windows, in cmd. CRLF line endings and plain ASCII, like every `.bat` |
+| `SETUP-Windows.bat`, `UNINSTALL-Windows.bat` | Setup and removal for Windows. SETUP first gets python.org's Python from nuget.org (pinned by version and SHA-256) into `%LOCALAPPDATA%\TinfoilKit`, outside the kit, and UNINSTALL removes it |
 | `SETUP.command` | Double-click setup and update. Asks where the kit goes the first time |
 | `UNINSTALL.command` | Double-click removal of the kit folder, after a typed `delete` |
 | `GUIDE.md` | Printable guide that lives in the kit folder |
@@ -289,9 +290,10 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
   - Windows: mount the same drive as a VHD, double-click `START-HERE-Windows.bat`, check the page in Edge. macOS marks its `._` files hidden on exFAT, and the .bat's `for` skips hidden files, so they do no harm there.
   - Linux: mount it as a desktop does (udisks2 options), start the kit on GitHub's Ubuntu (26.04 now), then in Ubuntu 24.04 and 22.04, Debian 12 and Fedora containers. 22.04 is the oldest the llama.cpp build runs on. Then make it a home server (`./kit share on`, `./kit autostart on`: systemd and lingering) and check it from the machine's network address the way a phone does (`drive.py share`), and that UNINSTALL removes the service.
   - Mac, second part: `SETUP.command --home-server` on this Mac; the LaunchAgent starts the kit, it's checked the same way, and UNINSTALL removes the agent.
+  - Windows setup (`drive_windows.ps1`; `only: windows-setup` runs just this, with no Mac minutes): `SETUP-Windows.bat` from a fresh Download ZIP (every file marked as from the internet), answered as a person would, onto this PC and then onto an exFAT VHD; `START-HERE-Windows.bat` from each; `./kit fit`; `UNINSTALL-Windows.bat --yes`, which must leave the rest of the drive alone. Then `./kit sync` builds a small real map (Andorra's roads from Geofabrik, with the real pmtiles, Java and GraphHopper for Windows, from a map build of pmtiles' own fixture tile at every zoom) and `START-HERE-Windows.bat` must serve its tiles and directions. Photon there is the e2e's stand-in: there's no small real address database.
   - Nightly and push runs start only when a file the test covers changed since the last green run (or the push before), so site edits never cost Mac minutes. Runs by hand always go.
   - Screenshots and logs are run artifacts. A run takes about 3 Mac minutes (about $0.25 with the other jobs while the repo is private; free once public).
-  - Not covered: maps, real models on a real GPU, and the first-run prompts a person clicks through (Open Anyway for `SETUP.command`, Terminal's removable-volume permission).
+  - Not covered: maps on the Mac and Linux (only the Windows setup job builds one), address search with a real database, real models on a real GPU, and the first-run prompts a person clicks through (Open Anyway for `SETUP.command`, Terminal's removable-volume permission).
 - **Website (`site_test.py`, every push):** serves `site/` with the production headers and drives the kit builder on desktop and phone sizes: presets, totals, no sideways scroll, fonts load from the site, nothing loads from other sites, both Copy paths, the kit.json download, and axe.
 - **`mock_remote.py`** fakes every download source. Flag files switch its behavior: `STATE_V2` ("3 months later"), `FLAKY` (a download breaks partway), `PHOTON_OLD_DUMP` (only an older database version is published). `/wifi-sign-in` answers like a hotel network's sign-in page.
 - **`tests/fakes/`:** a fake `java` (pretends to be GraphHopper's import and server, and Photon, by running the mocks) and a fake `pmtiles`.
