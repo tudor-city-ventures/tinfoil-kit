@@ -487,26 +487,36 @@ LOGIN = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer"><title>Tinfoil Kit</title><link rel="icon" href="data:,">
 <style>
-:root { --bg:#f6f5f2; --card:#fff; --ink:#1d1d1f; --mute:#6b6b70; --line:#e3e1dc; --accent:#1f5f8b; --on:#fff; --bad:#b3261e; }
-@media (prefers-color-scheme: dark) { :root { --bg:#161618; --card:#1f1f22; --ink:#ececef; --mute:#9a9aa2; --line:#2e2e33;
-  --accent:#7fb4dc; --on:#10202c; --bad:#ef9a9a; } }
+/* the website's look, like the kit's own page: paper, ink and signal orange */
+:root { --bg:#f3f0e6; --panel:#eae6d8; --ink:#1c1f1a; --ink2:#3a3e36; --olive:#4a5a2a; --signal:#d9531e; --bad:#9a3a10;
+  --line:#1c1f1a; --btn-line:#1c1f1a; color-scheme:light dark;
+  --sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+@media (prefers-color-scheme: dark) { :root { --bg:#1c1f1a; --panel:#262a23; --ink:#f3f0e6; --ink2:#cfcbbe; --olive:#a9b87a;
+  --signal:#e4672f; --bad:#e0884f; --line:#cfcbbe; --btn-line:#e4672f; } }
 * { box-sizing:border-box; }
-body { margin:0; min-height:100vh; display:grid; place-items:center; padding:1rem; background:var(--bg); color:var(--ink);
-  font:16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-main { width:100%; max-width:24rem; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1.4rem; }
-h1 { font-size:1.2rem; margin:0 0 .4rem; } p { margin:.4rem 0 1rem; color:var(--mute); }
-label { display:block; font-weight:600; margin-bottom:.3rem; }
-input { width:100%; font:inherit; font-size:1.3rem; letter-spacing:.1em; color:var(--ink); background:var(--bg);
-  border:1px solid var(--line); border-radius:10px; padding:.6rem .8rem; }
-button { width:100%; margin-top:.8rem; font:inherit; padding:.7rem; border:0; border-radius:10px; background:var(--accent);
-  color:var(--on); cursor:pointer; }
+body { margin:0; min-height:100vh; display:grid; place-items:center; padding:16px; background:var(--bg); color:var(--ink);
+  font:16px/1.5 var(--sans); -webkit-font-smoothing:antialiased; }
+main { width:100%; max-width:26rem; border:2px solid var(--line); }
+h1 { margin:0; padding:12px 20px; border-bottom:2px solid var(--line); background:var(--panel);
+  font:600 16px var(--mono); letter-spacing:.04em; text-transform:uppercase; }
+form { padding:20px; }
+p { margin:0 0 18px; color:var(--ink2); }
+label { display:block; margin-bottom:6px; font:600 13px var(--mono); letter-spacing:.06em; text-transform:uppercase;
+  color:var(--olive); }
+input { width:100%; min-height:52px; padding:0 14px; font:500 22px var(--mono); letter-spacing:.12em; color:var(--ink);
+  background:var(--bg); border:2px solid var(--line); border-radius:4px; }
+button { width:100%; min-height:52px; margin-top:14px; font:600 17px var(--sans); color:#1c1f1a; background:#e4672f;
+  border:2px solid var(--btn-line); border-radius:4px; cursor:pointer; }
+button:hover { background:#ea7038; }
+:focus-visible { outline:3px solid var(--signal); outline-offset:2px; }
 .err { color:var(--bad); font-weight:600; }
 </style></head>
 <body><main>
 <h1>Tinfoil Kit</h1>
+<form method="post" action="/_kit/login">
 <p>This kit is shared on your home network. Enter the access code shown on the computer it runs on.</p>
 @@ERROR@@
-<form method="post" action="/_kit/login">
 <label for="code">Access code</label>
 <input id="code" name="code" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" required autofocus>
 <input type="hidden" name="next" value="@@NEXT@@">

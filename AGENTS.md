@@ -18,7 +18,7 @@ The repo root is the kit itself, so cloning it onto a drive or into `~/TinfoilKi
 | `tools/launch.sh` | Offline launcher, starts every server |
 | `mac/` | The Mac app, the website's Mac download: `TinfoilKit.m` (its windows, Cocoa, one file) and `app.sh` (its file work) around a copy of the kit. It moves itself to Applications, opens SETUP in Terminal the first time and the kit after that. `build.sh` builds it; `.github/release.sh` signs and notarizes it on Travis's Mac (`release.sh mac` sets that up once) |
 | `tools/share.py` | Sharing on the home network (off by default): the gate on port 8000 that asks for the access code and passes requests to the servers, its QR code, and starting the kit with the computer (systemd user service, LaunchAgent, Windows' Startup folder). `SETUP.command --home-server` (`SETUP-Windows.bat --home-server`) turns both on |
-| `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests. |
+| `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests. It looks like the website (paper, ink, signal orange), in the computer's own fonts |
 | `package.json`, `eslint.config.mjs` | Developer tools, never on a drive: `npm ci --ignore-scripts` installs Prettier and ESLint for the kit page (`npm run format`, `npm run lint`, `npm run fix`) and axe-core for the tests' accessibility checks. Releases leave them out (`.gitattributes`), a kit copied from a checkout leaves `node_modules` behind (`DEV_BUILDS` in kit.py), and nothing the kit runs calls npm |
 | `GUIDE.md` | Printable guide that lives in the kit folder |
 | `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
