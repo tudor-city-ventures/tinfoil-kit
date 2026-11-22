@@ -10,6 +10,7 @@ import os
 import re
 import socketserver
 import sys
+import time
 from email.utils import formatdate
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -126,35 +127,56 @@ class H(BaseHTTPRequestHandler):
     def send_file(self, p: Path, head=False):
         if not p.is_file():
             return self.send_error(404)
-        data = p.read_bytes()
-        rng = self.headers.get("Range")
+        total = p.stat().st_size
+        start, end, rng = 0, total - 1, self.headers.get("Range")
+        if rng and (R / "NO_PARTS").exists() and rng != "bytes=0-0":    # a server that sends only whole files, but says how big
+            rng = None
         if rng and not head:
             m = re.match(r"bytes=(\d+)-(\d*)", rng)
             start = int(m.group(1))
-            end = min(int(m.group(2) or len(data) - 1), len(data) - 1)
-            if start >= len(data):
+            end = min(int(m.group(2) or total - 1), total - 1)
+            if start >= total:
                 self.send_response(416)
-                self.send_header("Content-Range", f"bytes */{len(data)}")
+                self.send_header("Content-Range", f"bytes */{total}")
                 self.end_headers()
                 return
-            self.send_response(206)
-            self.send_header("Content-Range", f"bytes {start}-{end}/{len(data)}")
-            self.send_header("Content-Length", str(end + 1 - start))
-            self.end_headers()
-            self.wfile.write(data[start:end + 1])
-            return
-        # a flaky connection: the first model download drops halfway
-        if p.name.endswith(".gguf") and not head and (R / "FLAKY").exists():
+        length = end + 1 - start
+        if not head:
+            with open(R / "served.log", "a") as log:    # which bytes of which file went out, for the tests to look at
+                log.write(f"{p.name} {start} {start + length}\n")
+        # a flaky connection: the first model download drops halfway (not just asking how big it is)
+        flaky = p.name.endswith(".gguf") and not head and length > 1 and (R / "FLAKY").exists()
+        if flaky:
             (R / "FLAKY").unlink()
-            self.send_response(200)
-            self.send_header("Content-Length", str(len(data)))
-            self.send_header("Accept-Ranges", "bytes")
-            self.end_headers()
-            self.wfile.write(data[: len(data) // 2])
-            self.wfile.flush()
-            self.close_connection = True
+        self.send_response(206 if rng and not head else 200)
+        if rng and not head:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{total}")
+        else:
+            self.send_header("Last-Modified", formatdate(p.stat().st_mtime, usegmt=True))
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(length))
+        self.send_header("Accept-Ranges", "bytes")
+        self.end_headers()
+        if head:
             return
-        self.send_bytes(data, head=head, mtime=p.stat().st_mtime)
+        slow = (R / "SLOW").exists()    # a slow connection, to stop a download partway
+        todo = length // 2 if flaky else length
+        try:
+            with open(p, "rb") as f:
+                f.seek(start)
+                while todo > 0:
+                    chunk = f.read(min(todo, 4096 if slow else 1 << 20))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    todo -= len(chunk)
+                    if slow:
+                        self.wfile.flush()
+                        time.sleep(0.25)
+        except (BrokenPipeError, ConnectionResetError):    # the downloader stopped reading: it had what it wanted
+            flaky = True
+        if flaky:
+            self.close_connection = True
 
     def do_HEAD(self):
         self.route(head=True)

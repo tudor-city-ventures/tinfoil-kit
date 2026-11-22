@@ -49,8 +49,8 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      Either one sets "picked" in kit.json, so SETUP doesn't ask again.
                      Without options, says what's on, its size, and the time to download it.
 
-Only needs python3 (3.9+) and curl, both standard on macOS. aria2c is used if installed
-(brew install aria2) for faster multi-connection downloads.
+Only needs python3 (3.9+) and curl, both standard on macOS. A big file comes over several
+connections at once, which is often several times faster than one.
 """
 from __future__ import annotations
 
@@ -77,6 +77,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import unicodedata
 import urllib.parse
@@ -1213,22 +1214,317 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
 
 # ----------------------------------------------------------------------------- downloading
 
+# A big file comes over several connections at once, each fetching its own part of it. Servers and long routes cap
+# what one connection gets, so that's often several times faster.
+CONNECTIONS = 8
+PART_MIN = int(os.environ.get("KIT_PART_MIN") or 16 * 1024 * 1024)    # the smallest part one connection fetches
+SPLIT_MIN = 2 * PART_MIN    # anything smaller comes in one piece
+PART_MAX = 512 * 1024 * 1024
+TAIL_MIN = PART_MIN // 4    # near the end, the least an idle connection takes from another's part
+
+
+def parts_record(partial: Path) -> Path:
+    """Where a download in parts notes which parts of the file have arrived, until it's whole."""
+    return partial.with_name(partial.name + ".parts")
+
+
 def drop_partial(partial: Path) -> None:
-    """Delete an unfinished download, along with aria2c's record of which parts of it had arrived."""
-    partial.unlink(missing_ok=True)
-    partial.with_name(partial.name + ".aria2").unlink(missing_ok=True)
+    """Delete an unfinished download, along with any record of which parts of it had arrived (ours, or aria2c's)."""
+    for suffix in ("", ".parts", ".parts.tmp", ".aria2"):
+        partial.with_name(partial.name + suffix).unlink(missing_ok=True)
+
+
+def disk_error(partial: Path) -> RuntimeError:
+    try:
+        free = f" ({fmt_size(shutil.disk_usage(partial.parent).free)} free)"
+    except OSError:
+        free = ""
+    return RuntimeError(f"couldn't save {partial.name}{free}. Is the disk full, or was the drive unplugged?")
+
+
+def exact_size(url: str) -> Optional[int]:
+    """A file's exact size, from asking for its first byte: 0 when the server answers but won't send parts of the
+    file, None when it can't be reached."""
+    cmd = ["curl", "-sSL", "--fail", "--connect-timeout", "20", "--max-time", "60", "--max-filesize", "100000",
+           "-A", USER_AGENT, "-r", "0-0", "-D", "-", "-o", os.devnull]
+    for k, v in _auth_headers(url).items():
+        cmd += ["-H", f"{k}: {v}"]
+    p = subprocess.run(cmd + [url], capture_output=True)
+    if p.returncode == 63:    # it began sending the whole file
+        return 0
+    blocks = [b for b in re.split(r"\r?\n\r?\n", p.stdout.decode("latin-1").strip()) if b.strip()]
+    if p.returncode or not blocks:
+        return None
+    m = re.search(r"(?im)^content-range:\s*bytes 0-0/(\d+)", blocks[-1])
+    return int(m.group(1)) if m and re.match(r"HTTP/\S+ 206", blocks[-1]) else 0
+
+
+class _Part:
+    """A stretch of a file that one connection fetches: pos is the next byte it needs, end the one after its last."""
+    __slots__ = ("pos", "end")
+
+    def __init__(self, pos: int, end: int):
+        self.pos, self.end = pos, end
+
+
+def download_parts(url: str, partial: Path, total: int, connections: int) -> Optional[int]:
+    """Download url into partial over several connections, each fetching its own part of the file. What arrives is
+    kept, with a record of which parts it was (<file>.parts), so a download that stops carries on from there, on the
+    next try or the next sync. Returns how many bytes are still missing (0 once it's whole), or None when the server
+    won't send parts."""
+    record = parts_record(partial)
+    tmp = record.with_name(record.name + ".tmp")
+    have = partial.stat().st_size if partial.exists() else 0
+    done: Optional[List[List[int]]] = [[0, have]]    # what one connection got, from the start
+    if record.exists():
+        try:
+            rec = json.loads(record.read_text())
+            done = [[int(a), min(int(b), have)] for a, b in rec["done"]] if rec["size"] == total else None
+        except (OSError, ValueError, KeyError, TypeError):
+            done = []
+    if done is None or have > total:    # of a file that has changed since
+        drop_partial(partial)
+        done, have = [], 0
+    missing, at = [], 0
+    for a, b in sorted(r for r in done if r[0] < r[1]):
+        if a > at:
+            missing.append((at, a))
+        at = max(at, b)
+    if at < total:
+        missing.append((at, total))
+    # Parts go out in order, so the file grows from the start: exFAT and NTFS fill a gap with zeros before writing past it.
+    size = min(max(total // (connections * 4), PART_MIN), PART_MAX)
+    todo = [_Part(s, min(s + size, b)) for a, b in missing for s in range(a, b, size)]
+    if not todo:
+        record.unlink(missing_ok=True)
+        return 0
+
+    active: List[_Part] = []
+    procs: List[subprocess.Popen] = []
+    lock, halt = threading.Lock(), threading.Event()
+    st: Dict[str, Any] = {"fresh": 0, "ranges": True, "disk": None}
+    chunk = min(1024 * 1024, PART_MIN)
+
+    def left() -> int:
+        with lock:
+            return sum(p.end - p.pos for p in todo + active)
+
+    def save() -> None:
+        """Note which parts have arrived. What it notes is on the disk first, so the record never claims too much."""
+        with lock:
+            gaps = sorted((p.pos, p.end) for p in todo + active if p.pos < p.end)
+        os.fsync(fh.fileno())
+        got, at = [], 0
+        for a, b in gaps:
+            if a > at:
+                got.append([at, a])
+            at = max(at, b)
+        if at < total:
+            got.append([at, total])
+        with open(tmp, "w") as f:
+            json.dump({"size": total, "done": got}, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, record)
+
+    def next_part() -> Optional[_Part]:
+        with lock:
+            if halt.is_set():
+                return None
+            if todo:
+                part = todo.pop(0)
+            else:    # near the end: take the second half of the part with the most left
+                big = max(active, key=lambda q: q.end - q.pos, default=None)
+                if big is None or big.end - big.pos < 2 * TAIL_MIN:
+                    return None
+                part = _Part(big.pos + (big.end - big.pos) // 2, big.end)
+                big.end = part.pos
+            active.append(part)
+            return part
+
+    def fetch_part(part: _Part) -> int:
+        """Fetch what's left of part over one connection, and return curl's exit code."""
+        cmd = ["curl", "-sL", "--fail", "--connect-timeout", "30", "--speed-limit", "1024", "--speed-time", "60",
+               "-A", USER_AGENT, "-H", f"Range: bytes={part.pos}-{part.end - 1}"]
+        if part.pos:
+            cmd += ["-C", str(part.pos)]    # then curl fails (exit 33) unless the server sends the file from there
+        for k, v in _auth_headers(url).items():
+            cmd += ["-H", f"{k}: {v}"]
+        p = subprocess.Popen(cmd + [url], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        with lock:
+            procs.append(p)
+        try:
+            while not halt.is_set() and part.pos < part.end:
+                data = p.stdout.read(min(chunk, part.end - part.pos))
+                if not data:
+                    break
+                with lock:
+                    view = memoryview(data)[:max(0, part.end - part.pos)]    # (its end moves when another takes half)
+                    try:
+                        fh.seek(part.pos)
+                        while view:
+                            n = fh.write(view)
+                            if not n:
+                                raise OSError("nothing written")
+                            part.pos += n
+                            st["fresh"] += n
+                            view = view[n:]
+                    except OSError as e:
+                        st["disk"] = e
+                        halt.set()
+        finally:
+            if p.poll() is None:
+                p.kill()
+            p.wait()
+            p.stdout.close()
+            with lock:
+                procs.remove(p)
+        return p.returncode
+
+    def worker() -> None:
+        part, fails = None, 0
+        while True:
+            if part is None or part.pos >= part.end:
+                if part is not None:
+                    with lock:
+                        active.remove(part)
+                part = next_part()
+                if part is None:
+                    return
+            before = part.pos
+            rc = fetch_part(part)
+            if halt.is_set():
+                return
+            if rc == 33:    # it sent something other than the part asked for
+                st["ranges"] = False
+                halt.set()
+                return
+            if part.pos < part.end:
+                fails = 0 if part.pos > before else fails + 1
+                if fails == 5:    # hand the part to the others, if any are still going
+                    with lock:
+                        active.remove(part)
+                        todo.append(part)
+                        todo.sort(key=lambda q: q.pos)
+                    return
+                if halt.wait(2 ** fails):
+                    return
+
+    partial.parent.mkdir(parents=True, exist_ok=True)
+    with open(partial, "ab"):
+        pass
+    fh = open(partial, "r+b", buffering=0)
+    threads = [threading.Thread(target=worker, daemon=True) for _ in range(connections)]
+    tty, t0, width = sys.stderr.isatty(), time.time(), 0
+    try:
+        try:
+            save()    # before anything arrives out of order: the file's length can't say what's missing then
+        except OSError as e:
+            raise disk_error(partial) from e
+        for t in threads:
+            t.start()
+        saved = shown = t0
+        speeds = [(t0, 0)]
+        while any(t.is_alive() for t in threads):
+            time.sleep(0.5)
+            now = time.time()
+            if now - saved >= 5:
+                with contextlib.suppress(OSError):    # a record that's behind only means fetching a part again
+                    save()
+                saved = now
+            if now - shown >= (1 if tty else 60):
+                speeds.append((now, st["fresh"]))
+                while len(speeds) > 2 and now - speeds[1][0] >= 20:
+                    speeds.pop(0)
+                rate = (speeds[-1][1] - speeds[0][1]) / max(now - speeds[0][0], 0.001)
+                gone = left()
+                msg = f"    {fmt_size(total - gone)} of {fmt_size(total)}"
+                if rate > 0 and gone:
+                    msg += f", {fmt_size(rate)}/s, {fmt_time(gone / rate)} left"
+                if tty:
+                    print("\r" + msg.ljust(width), end="", file=sys.stderr, flush=True)
+                    width = max(width, len(msg))
+                else:
+                    log(msg)
+                shown = now
+    finally:
+        halt.set()    # after Ctrl-C too: stop every connection, and keep what arrived
+        with lock:
+            for p in procs:
+                with contextlib.suppress(OSError):
+                    p.kill()
+        for t in threads:
+            if t.ident is not None:
+                t.join()
+        SPEED["bytes"] += st["fresh"]
+        SPEED["seconds"] += time.time() - t0
+        if tty and width:
+            print("\r" + " " * width + "\r", end="", file=sys.stderr, flush=True)
+        gone = left()
+        with contextlib.suppress(OSError):
+            if gone:
+                save()
+            else:
+                os.fsync(fh.fileno())    # the whole file is on the disk before its record goes
+                record.unlink(missing_ok=True)
+                tmp.unlink(missing_ok=True)
+        fh.close()
+    if st["disk"]:
+        raise disk_error(partial) from st["disk"]
+    return gone if st["ranges"] else None
+
+
+def keep_prefix(partial: Path) -> None:
+    """Turn a download in parts into one a single connection can carry on: keep what arrived from the start without
+    a gap, and drop the record."""
+    record = parts_record(partial)
+    try:
+        done = json.loads(record.read_text())["done"]
+        keep = int(done[0][1]) if done and done[0][0] == 0 else 0
+    except (OSError, ValueError, KeyError, TypeError, IndexError):
+        keep = 0
+    if partial.exists() and partial.stat().st_size > keep:
+        with open(partial, "r+b") as f:
+            f.truncate(keep)
+    record.unlink(missing_ok=True)
 
 
 def download(url: str, partial: Path, size: Optional[int], downloader: str) -> None:
     partial.parent.mkdir(parents=True, exist_ok=True)
+    record, aria = parts_record(partial), partial.with_name(partial.name + ".aria2")
     if size and partial.exists() and partial.stat().st_size > size:
         drop_partial(partial)
-    # aria2c fills a file in several places at once, so one it was stopped on can be full length with gaps in it.
-    # Its record (<file>.aria2) is there until the download is whole.
-    if (size and partial.exists() and partial.stat().st_size == size
-            and not partial.with_name(partial.name + ".aria2").exists()):
+    # A download fetched in several places at once (ours, or aria2c's) can be full length with gaps in it. Its record
+    # (<file>.parts, <file>.aria2) is there until the download is whole.
+    if size and partial.exists() and partial.stat().st_size == size and not record.exists() and not aria.exists():
         return
-    use_aria = downloader == "aria2c" or (downloader == "auto" and shutil.which("aria2c"))
+    use_aria = downloader == "aria2c" or (downloader == "auto" and aria.exists() and bool(shutil.which("aria2c")))
+    if aria.exists() and not use_aria:
+        drop_partial(partial)    # aria2c's, with gaps only it knows
+    if downloader == "auto" and not use_aria and (record.exists() or (size or SPLIT_MIN) >= SPLIT_MIN):
+        tries, best = 0, None
+        while True:
+            total = exact_size(url)
+            if total is None and record.exists():    # not reachable just now: try again, keeping what arrived
+                where = "can't reach the server"
+            elif not total or total < SPLIT_MIN or (size and not 0 <= size - total < 1024):
+                break    # in one piece: a small file, a server that won't send parts, or not the file we were told of
+            else:    # (Kiwix lists sizes rounded up to a whole KiB)
+                left = download_parts(url, partial, total, CONNECTIONS)
+                if left == 0:
+                    return
+                if left is None:
+                    break    # it won't send parts after all
+                if best is None or left < best:
+                    tries, best = 0, left
+                where = f"{fmt_size(total - left)} of {fmt_size(total)}"
+            tries += 1
+            if tries == 5:
+                raise RuntimeError(f"download failed after 5 attempts: {url}")
+            log(f"    download interrupted ({where}); retrying ({tries}/5)...")
+            time.sleep(10)
+    if record.exists():
+        keep_prefix(partial)
     for attempt in range(1, 6):
         before = partial.stat().st_size if partial.exists() else 0
         status, t0 = "", time.time()
@@ -1263,16 +1559,14 @@ def download(url: str, partial: Path, size: Optional[int], downloader: str) -> N
                 return
             continue
         if (use_aria and rc == 9) or (not use_aria and rc == 23):    # retrying won't help
-            try:
-                free = f" ({fmt_size(shutil.disk_usage(partial.parent).free)} free)"
-            except OSError:
-                free = ""
-            raise RuntimeError(f"couldn't save {partial.name}{free}. Is the disk full, or was the drive unplugged?")
-        if not use_aria and (rc == 33 or status == "416"):   # can't resume this partial file: start over
+            raise disk_error(partial)
+        restart = not use_aria and (rc == 33 or status == "416")    # it can't carry on this partial file: start over
+        if restart:
             drop_partial(partial)
         log(f"    download interrupted (exit {rc}, {fmt_size(got)} of {fmt_size(size)}); "
             f"retrying ({attempt}/5)...")
-        time.sleep(10 if got > before else 30)
+        if not restart:
+            time.sleep(10 if got > before else 30)
     raise RuntimeError(f"download failed after 5 attempts: {url}")
 
 

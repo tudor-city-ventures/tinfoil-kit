@@ -166,8 +166,6 @@ everything it downloaded only after you type `delete`. The files don't go to the
 the drive is touched. It also removes the Python SETUP got, on Windows or on a Mac that didn't have one.
 To remove the Mac app too, drag it from Applications to the Trash.
 
-Optional, on a Mac: `brew install aria2` makes downloads faster.
-
 ## Power
 
 Running a big model uses a lot of battery: expect a couple of hours of active use on a laptop battery.

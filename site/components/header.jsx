@@ -32,6 +32,7 @@ export default function Header() {
           <a href="#inside" data-for="human">What's inside</a>
           <a href="#builder" data-for="human">Build your kit</a>
           <a href="#prompts" data-for="human">Set up with AI</a>
+          <a href="#trust" data-for="human">Is it safe?</a>
           <a href="#faq" data-for="human">Questions</a>
           <a href="/llms.txt" data-for="agent">llms.txt</a>
           <a href="https://github.com/tudor-city-ventures/tinfoil-kit" data-for="agent">GitHub</a>
