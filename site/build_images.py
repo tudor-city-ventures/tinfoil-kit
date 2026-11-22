@@ -14,7 +14,7 @@ from playwright.sync_api import sync_playwright
 SITE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SITE)
 INK, INK2, PAPER, SIGNAL = "#1C1F1A", "#3A3E36", "#F3F0E6", "#D9531E"
-HEADLINE = "The world's knowledge,<br>ready when the<br>internet isn't."
+HEADLINE = "The world's knowledge,<br>available when<br>the internet isn't."
 
 
 def data_uri(path, mime):

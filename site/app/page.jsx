@@ -21,13 +21,13 @@ import { AUDIT_PROMPT, INSTALL_PROMPT, OWN_PROMPT } from "@/components/prompts";
 import { APP, Footer, JsonLd, LICENSES, pageMetadata, Question, REPO, SITE } from "@/components/site";
 
 // My AI installs it: the home page. Your AI asks what you want and gives you one command, since the downloads are
-// coming soon. Plain words up top (AI, never LLM, GGUF or ZIM); Under the hood names the parts for technical readers.
+// coming soon. Plain words (AI, never LLM, GGUF or ZIM): llms.txt and the README name the parts for technical readers.
 const DESCRIPTION =
-  "A free, open-source copy of the world's knowledge for when the internet is down for days or weeks: Wikipedia, medical and survival guides, repair manuals, maps and a local offline AI that answers from them.";
+  "A free, open-source copy of the world's knowledge for when the internet is down for days or weeks: Wikipedia, medical and survival guides, repair manuals, maps and a local offline AI that helps you search through them.";
 
 export const metadata = pageMetadata({
   path: "/",
-  title: "Tinfoil Kit: the world's knowledge, ready when the internet isn't",
+  title: "Tinfoil Kit: the world's knowledge, available when the internet isn't",
   description: DESCRIPTION,
 });
 
@@ -127,30 +127,8 @@ const SECTIONS = [
   ["#how", "How it works"],
   ["#demo", "Try it"],
   ["#builder", "Build your kit"],
-  ["#stack", "Under the hood"],
   ["#trust", "Is it safe?"],
   ["#faq", "Questions"],
-];
-
-// What Open Tinfoil Kit starts (README's How it works has the same table)
-const SERVERS = [
-  [
-    "AI",
-    "llama-server (llama.cpp)",
-    "port 8080",
-    "Serves the LLM, one model at a time. AI chat is its built-in chat page.",
-  ],
-  ["Library", "kiwix-serve", "port 8888", "Serves the ZIM files with full-text search, and the kit page."],
-  ["Map", "pmtiles", "port 8090", "Serves vector tiles: street detail for your region, and a low-zoom world."],
-  ["Addresses", "Photon", "port 2322", "Geocoding: addresses, places, and the nearest hospital or pharmacy."],
-  ["Directions", "GraphHopper", "port 8989", "Driving and walking routes, on a road graph built from OpenStreetMap."],
-  ["Notes and pins", "the kit's program", "port 8095", "Keeps the household notes the AI reads, and the map's pins."],
-  [
-    "Sharing",
-    "the kit's program",
-    "port 8000",
-    "Off by default. One gate for the devices at home, behind an 8-digit code.",
-  ],
 ];
 
 // On the drive: what the kit holds, named in the hero so nobody has to guess (the builder lists every source)
@@ -160,7 +138,7 @@ const DRIVE = [
   ["Survival", "FEMA's guides and US Army field manuals: water, food, shelter, navigation."],
   ["Repair", "iFixit, plus how-tos for the house, the car, solar panels and radios."],
   ["Maps", "Your area's streets, directions and nearest hospital, and a map of the world."],
-  ["AI", "Answers in plain words from everything above, and shows the pages it used."],
+  ["AI", "Ask in plain words, and it searches everything above for you."],
 ];
 
 // What it's for: what people need to know in a long outage, and the books that answer it. Medical lines look things
@@ -207,11 +185,11 @@ export default function Home() {
         <section className="wrap hero">
           <div className="hero-copy">
             <p className="kicker">Free&nbsp;· Open source</p>
-            <h1>The world's knowledge, ready when the internet isn't.</h1>
+            <h1>The world's knowledge, available when the internet isn't.</h1>
             <p className="lede">
               Tinfoil Kit saves all of Wikipedia, medical and survival guides, repair manuals and maps to a drive you
-              own, with a local offline AI that answers from them. When the internet is down for days or weeks, it all
-              still works.
+              own, with a local offline AI that helps you search through them. If the internet is down for days or
+              weeks, it all still works.
             </p>
             <Download>
               <a className="star" href={REPO}>
@@ -256,8 +234,8 @@ export default function Home() {
               ))}
             </ul>
             <p className="uses-foot">
-              Ask in plain words, and the AI answers from these books and shows the pages it used. Or skip the AI:
-              Search finds the right passages in seconds, on very little power.
+              Ask in plain words, and the AI helps you find the answer in these books. Or skip the AI: Search finds the
+              right passages in seconds, on very little power.
             </p>
           </div>
         </section>
@@ -417,87 +395,13 @@ export default function Home() {
             </div>
           </div>
         </section>
-        <section id="stack" className="wrap section">
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            <p className="kicker">Under the hood</p>
-            <h2>What runs on your computer.</h2>
-            <p style={{ fontSize: "18px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "760px" }}>
-              Open Tinfoil Kit starts these servers from the kit's folder, each on 127.0.0.1, and opens the kit page in
-              your browser. No Docker, no runtime to install, no admin password: one Go program, standard library only,
-              downloads, checks and runs it all, with curl for every download.
-            </p>
-          </div>
-          <ul className="cards" aria-label="The servers">
-            {SERVERS.map(([part, program, port, what]) => (
-              <li key={part}>
-                <b>{part}</b>
-                <code>
-                  {program} · {port}
-                </code>
-                <span>{what}</span>
-              </li>
-            ))}
-          </ul>
-          <ul className="cards">
-            <li>
-              <b>Ask: answers with sources, or search</b>
-              <span>
-                Ask the AI: the LLM turns your question into short searches, kiwix-serve runs them over every ZIM, and
-                the LLM answers from the top articles with numbered citations. Map questions go to three tools instead:
-                search places, find nearby, get directions. Search skips the LLM: the question&apos;s own words over the
-                same full-text indexes, the best passages ranked in the page, in seconds and with no GPU. The LLM can
-                then answer from those passages, with no second search.
-              </span>
-            </li>
-            <li>
-              <b>Models: 4-bit GGUF, all with vision</b>
-              <span>
-                From Hugging Face: Inkling 2 Mini by default (a mixture of experts, about 3.4B of its 26B parameters
-                active per token), Qwen3.8 27B, and Gemma 4 26B-A4B, 12B and E4B. A model may take 60% of memory, and{" "}
-                <code>./kit fit</code> picks the one this computer runs.
-              </span>
-            </li>
-            <li>
-              <b>Library: Kiwix ZIM files</b>
-              <span>
-                Straight from Kiwix: Wikipedia in any language, all of it or the best 50,000 articles, with or without
-                pictures, plus WikiMed, iFixit, Stack Exchange, LibreTexts, US Army manuals and more.{" "}
-                <code>./kit search</code> finds any other ZIM.
-              </span>
-            </li>
-            <li>
-              <b>Maps: PMTiles, Photon, GraphHopper</b>
-              <span>
-                Protomaps' daily OpenStreetMap build, cut to your region and drawn by MapLibre GL; Photon's address
-                database; and a road graph built from Geofabrik's extract on the first sync. Photon and GraphHopper run
-                on a Java 21 inside the kit.
-              </span>
-            </li>
-            <li>
-              <b>One folder, three systems</b>
-              <span>
-                The kit carries every program for macOS on Apple silicon and for Windows and Linux on x64, so an exFAT
-                drive starts on any of them. On Windows and Linux the LLM runs on the GPU through Vulkan. Both are
-                experimental for now.
-              </span>
-            </li>
-            <li>
-              <b>Updates that keep what you have</b>
-              <span>
-                <code>./kit sync</code> asks each publisher for the newest edition, downloads only what changed over
-                eight connections per file, resumes, checks checksums, and keeps the old version until the new one
-                checks out. A new release replaces only the app folder.
-              </span>
-            </li>
-          </ul>
-        </section>
         <section id="trust" className="oss">
           <div className="wrap">
             <div style={{ flex: "1 1 520px", display: "flex", flexDirection: "column", gap: "16px" }}>
               <p className="kicker" style={{ color: "#E0884F" }}>
                 Don't trust, verify
               </p>
-              <h2>Don't trust us? Good. Have your AI audit the code.</h2>
+              <h2>Don't trust us? No problem. Have your AI audit the code.</h2>
               <p>
                 Before you install anything, paste this into ChatGPT, Claude or any AI chat. It reads the code and tells
                 you what the kit does, without running it.
@@ -582,9 +486,9 @@ tools/tinfoilkit/build.sh verify SHA256SUMS`}
           <div className="faq" itemScope itemType="https://schema.org/FAQPage">
             <Question q="What is Tinfoil Kit?">
               Tinfoil Kit is a free, open-source copy of the world's knowledge for when the internet is down for days or
-              weeks. It puts all of Wikipedia, medical and survival guides, repair manuals, maps with directions and a
-              local offline AI that answers from them on an external drive or your laptop. You set it up while you're
-              online, and after that it all works with no internet.
+              weeks. It puts all of Wikipedia, medical and survival guides, repair manuals and maps with directions on
+              an external drive or your laptop, with a local offline AI that helps you search through them. You set it
+              up while you're online, and after that it all works with no internet.
             </Question>
             <Question q="Where's the download?">
               Coming soon. A Mac download has to be signed by Apple, or macOS makes you dig through System Settings to
@@ -718,9 +622,9 @@ tools/tinfoilkit/build.sh verify SHA256SUMS`}
               that works on any computer.
             </Question>
             <Question q="Can I trust the AI's answers?">
-              Check it, like you'd check a well-read friend. Each answer shows the pages it came from, so you can read
-              them yourself. For anything medical, use it to look things up in WikiMed and the Army's medical manuals.
-              It isn't a doctor: read the source, and get trained help when you can.
+              Check it, like you'd check a well-read friend. Each answer links to its sources, so you can read them
+              yourself. For anything medical, use it to look things up in WikiMed and the Army's medical manuals. It
+              isn't a doctor: read the source, and get trained help when you can.
             </Question>
             <Question q="Can my family use it from their phones?">
               Yes. Turn on sharing, and phones and laptops on your Wi-Fi or hotspot can open it: they scan its QR code

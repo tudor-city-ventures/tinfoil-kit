@@ -13,7 +13,7 @@ export const APP = { "@type": "SoftwareApplication", "@id": `${SITE}/#app`, name
 const PREVIEW = {
   title: "Tinfoil Kit",
   description:
-    "The world's knowledge, ready when the internet isn't. Wikipedia, medical and survival guides, maps and a local offline AI, on one drive or your laptop. Free and open source.",
+    "The world's knowledge, available when the internet isn't. Wikipedia, medical and survival guides, maps and a local offline AI, on one drive or your laptop. Free and open source.",
 };
 
 // A page's own address, title and summary, for search engines and AI answer engines, and its link preview. Addresses
@@ -37,7 +37,7 @@ export function pageMetadata({ path, title, description, preview = PREVIEW }) {
           url: `${SITE}/og.png`,
           width: 1200,
           height: 630,
-          alt: "Tinfoil Kit. The world's knowledge, ready when the internet isn't. Beside it, the logo: a globe wearing a tinfoil hat.",
+          alt: "Tinfoil Kit. The world's knowledge, available when the internet isn't. Beside it, the logo: a globe wearing a tinfoil hat.",
         },
       ],
     },

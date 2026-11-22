@@ -363,7 +363,7 @@ nav.links {
 html:not(.js) .fig {
   display: none;
 }
-/* On the drive: what the kit holds, in a strip across the hero. Where the copy and the figure stack, it comes first. */
+/* On the drive: what the kit holds, in a strip across the hero, under the copy and the figure */
 .manifest {
   flex: 1 1 100%;
   min-width: 0;
@@ -416,14 +416,6 @@ html:not(.js) .fig {
   font-size: 15px;
   line-height: 1.45;
   color: var(--ink2);
-}
-@media (max-width: 1199px) {
-  .manifest {
-    order: 1;
-  }
-  .hero .fig {
-    order: 2;
-  }
 }
 @media (max-width: 999px) {
   .manifest ul {
@@ -731,8 +723,13 @@ html:not(.js) .fig {
 }
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 16px;
+}
+.cards span {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink2);
 }
 .card {
   border: var(--rule);
@@ -1302,35 +1299,6 @@ code {
 }
 .dl .dl-ai {
   align-self: flex-start;
-}
-/* Under the hood: the servers, and what each part is made of */
-.cards {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-  gap: 16px;
-}
-.cards li {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 18px 20px;
-  border: var(--rule);
-  background: var(--paper);
-}
-.cards b {
-  font-size: 18px;
-}
-.cards li > code {
-  font: 500 14px/1.5 var(--mono);
-  color: var(--olive);
-}
-.cards span {
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--ink2);
 }
 pre.code {
   flex: 1 1 100%;

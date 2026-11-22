@@ -86,9 +86,9 @@ OR = """([first, second]) => { const r = s => document.querySelector(s).getBound
 # The two versions of the site, each a page of its own: their AI sets it up, or an AI reads it
 PAGES = {"": "My AI installs it", "agents": "I'm an AI"}
 VERSIONS = "[...document.querySelectorAll('nav.versions a')].map(a => [a.getAttribute('href'), a.textContent, a.getAttribute('aria-current')])"
-# The home page says AI in plain words until Under the hood, which names the parts for technical readers
+# The home page says AI in plain words: llms.txt and the README name the parts for technical readers
 JARGON = re.compile(r"\bLLMs?\b|\bGGUF\b|\bZIM\b|PMTiles|llama-server|SHA256SUMS")
-PLAIN = "[...document.querySelectorAll('.hero, #uses, #how, #demo, #builder, #faq')].map(e => e.innerText).join(' ')"
+PLAIN = "[...document.querySelectorAll('.hero, #uses, #how, #demo, #builder, #faq, #built-on')].map(e => e.innerText).join(' ')"
 
 # Never 2 TB: the drive's size isn't the point
 copy = glob.glob(os.path.join(SITE, "app", "**", "*.jsx"), recursive=True) + glob.glob(
@@ -223,7 +223,7 @@ with sync_playwright() as p:
             )
 
         # My AI installs it: the home page. Set up with your AI leads, the download is coming soon, the kit builder
-        # makes the prompt, and Under the hood names the parts
+        # makes the prompt
         page.goto(URL)
         page.wait_for_selector(HYDRATED)
         page.wait_for_selector(".card")
@@ -262,9 +262,10 @@ with sync_playwright() as p:
         versions(f"{name} home page", "")
         check(
             f"{name}: the home page's headline and subheader",
-            page.text_content(".hero h1") == "The world's knowledge, ready when the internet isn't."
+            page.text_content(".hero h1") == "The world's knowledge, available when the internet isn't."
             and page.text_content(".hero .lede").startswith("Tinfoil Kit saves all of Wikipedia")
-            and "local offline AI" in page.text_content(".hero .lede"),
+            and "local offline AI that helps you search through them. If the internet"
+            in page.text_content(".hero .lede"),
             page.text_content(".hero .lede"),
         )
         star, where = page.locator(".ctas .star"), page.evaluate(STAR)
@@ -306,10 +307,8 @@ with sync_playwright() as p:
                 page.is_visible("nav.links a[href='#faq']") and not page.is_visible("#menu"),
             )
         said = JARGON.findall(page.evaluate(PLAIN))
-        check(f"{name}: the home page says AI, in plain words, until Under the hood", not said, ", ".join(said))
-        text = page.inner_text("#stack") + page.inner_text("#trust")
-        named = [w for w in ("LLM", "llama.cpp", "GGUF", "ZIM", "PMTiles", "SHA256SUMS", "127.0.0.1") if w not in text]
-        check(f"{name}: Under the hood names the parts, for technical readers", not named, ", ".join(named))
+        check(f"{name}: the home page says AI, in plain words", not said, ", ".join(said))
+        check(f"{name}: no section lists what runs on your computer", page.locator("#stack").count() == 0)
         totals = {}
         for preset in ("essentials", "everything", "no-ai", "recommended"):
             page.click(f"[data-preset={preset}]")
@@ -330,19 +329,17 @@ with sync_playwright() as p:
             models == 0 and totals["no-ai"] < totals["recommended"],
             f"{models} models, {totals}",
         )
-        # the hero names what the kit holds: below the buttons, and on phones before the animation
+        # the hero names what the kit holds: below the buttons and the animation
         drive = page.locator(".manifest b").all_text_contents()
         where = page.evaluate(
             "(() => { const r = s => document.querySelector(s).getBoundingClientRect();"
-            " return [r('.cta-note').bottom <= r('.manifest').top, r('.manifest').bottom <= r('.fig').top] })()"
+            " return [r('.cta-note').bottom <= r('.manifest').top, r('.fig').bottom <= r('.manifest').top] })()"
         )
         check(
-            f"{name}: the hero lists what's on the drive, under the buttons"
-            + (", before the animation" if name == "phone" else ""),
+            f"{name}: the hero lists what's on the drive, under the buttons and the animation",
             drive == ["Wikipedia", "Medicine", "Survival", "Repair", "Maps", "AI"]
             and page.get_attribute(".manifest-head a", "href") == "#builder"
-            and where[0]
-            and (where[1] or name == "desktop"),
+            and all(where),
             f"{drive}, {where}",
         )
         uses = page.locator("#uses .uses h3").all_text_contents()
