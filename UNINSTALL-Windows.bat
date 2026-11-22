@@ -9,7 +9,10 @@ cd /d "%TEMP%"
 "%TEMP%\tinfoilkit-uninstall.bat" --from-temp "%~dp0." %1
 
 :start
+rem The kit's folder: the one above the app folder this was in (in a git checkout, this folder itself).
+set "APP=%~f2"
 set "KIT=%~f2"
+for %%d in ("%~f2") do if /i "%%~nxd"=="app" for %%p in ("%~f2\..") do set "KIT=%%~fp"
 set "YES=" & if /i "%~3"=="--yes" set "YES=1"
 title Remove Tinfoil Kit
 echo(
@@ -21,8 +24,8 @@ if "%KIT:~3%"=="" (
   goto finish1
 )
 set "OK=1"
-if not exist "%KIT%\kit" set "OK="
-if not exist "%KIT%\tools\kit.py" set "OK="
+if not exist "%APP%\kit" set "OK="
+if not exist "%APP%\tools\kit.py" set "OK="
 if /i "%KIT%"=="%USERPROFILE%" set "OK="
 if not defined OK (
   echo This folder ^(!KIT!^) doesn't look like a Tinfoil Kit, so nothing was deleted.
@@ -54,15 +57,17 @@ echo Kept. Nothing was deleted.
 goto finish0
 
 :delete
-rem Stop the kit if it's running, so nothing holds its files open: its programs run from its bin folder, sharing runs
-rem its tools\share.py, and the Open Tinfoil Kit window that started them goes too.
-set "TK_BIN=%KIT%\bin\"
-set "TK_GATE=%KIT%\tools\share.py"
-set "TK_START=%KIT%\Open Tinfoil Kit for Windows.bat"
+rem Stop the kit if it's running, so nothing holds its files open: its programs run from its downloads\bin folder
+rem (bin, before the three folders), sharing runs its tools\share.py, and the Open Tinfoil Kit window that started
+rem them goes too.
+set "TK_BIN=%KIT%\downloads\bin\"
+if not exist "%KIT%\downloads\" set "TK_BIN=%KIT%\bin\"
+set "TK_GATE=%APP%\tools\share.py"
+set "TK_START=%APP%\Open Tinfoil Kit for Windows.bat"
 powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:TK_BIN, $k) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and $c.IndexOf($env:TK_GATE, $k) -ge 0) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'Stopping the kit, which is running...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 rem And Windows no longer starts it as you sign in (kit.cmd autostart on), if this is the kit it starts.
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Tinfoil Kit.cmd"
-if exist "%STARTUP%" findstr /i /c:"%KIT%\Open Tinfoil Kit for Windows.bat" "%STARTUP%" >nul && del "%STARTUP%"
+if exist "%STARTUP%" findstr /i /c:"%APP%\Open Tinfoil Kit for Windows.bat" "%STARTUP%" >nul && del "%STARTUP%"
 echo Deleting... (a few hundred GB can take a minute)
 rd /s /q "%KIT%" 2>nul
 if exist "%KIT%\" (

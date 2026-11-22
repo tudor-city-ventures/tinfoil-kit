@@ -23,6 +23,8 @@ rem against the checksum below, and keeps it in %LOCALAPPDATA%\TinfoilKit, outsi
 rem move. UNINSTALL-Windows.bat removes it. KIT_PYTHON_URL: get the same file from there instead (tests).
 rem cmd reads this file a line at a time while it runs, and kit update can replace it, so each line that hands
 rem over to a new copy of SETUP also ends this one.
+rem The kit's folder holds three: app (this script and the rest of the code, as released), downloads (what sync gets)
+rem and data (the person's own: their kit.json, logs and .kit). In a git checkout the code is at the top instead.
 setlocal EnableExtensions EnableDelayedExpansion
 set "ME=%~f0"
 call :options %*
@@ -41,7 +43,11 @@ if /i not "!CMDLN:/c =!"=="!CMDLN!" goto begin
 "%TEMP%\TinfoilKit-SETUP.cmd" "%ME%" %*
 :begin
 cd /d "%~dp0"
+set "APP=%CD%"
 set "KIT=%CD%"
+for %%d in ("%CD%") do if /i "%%~nxd"=="app" for %%p in ("%CD%\..") do set "KIT=%%~fp"
+rem (out of app, so nothing holds it open while kit update replaces it)
+cd /d "%KIT%"
 set "NAME=TinfoilKit"
 set "PYV=3.14.10"
 set "PYSHA=f54ba67c9951c3d773ea47d2bb095150c037c399f0423a968bcda22809241784"
@@ -54,18 +60,22 @@ set "SYS=%SystemRoot%\System32"
 set "OUT=%TEMP%\tinfoilkit-setup-%RANDOM%.txt"
 set "TRIES=0"
 title Tinfoil Kit setup
-rem UPDATE: set up before, so this run is an update
-set "UPDATE="
-if exist ".kit\state.json" findstr /c:"\"last_sync\"" ".kit\state.json" >nul 2>&1 && set "UPDATE=1"
 rem Steps are counted across the times this script starts itself again (after moving or updating the kit).
 if not "%~1"=="--placed" if not "%~1"=="--updated" (set "KIT_STEP=0" & set "KIT_STEPS=3")
 
-if not exist "%KIT%\tools\kit.py" (
+if not exist "%APP%\tools\kit.py" (
   echo(
   echo This is only part of Tinfoil Kit. If you opened the ZIP file, extract it first: right-click it, choose
   echo Extract All, then double-click SETUP-Windows.bat in the folder that makes.
   call :finish 1
 )
+rem Code that isn't in an app folder: a download with it all in one folder, or a kit from before the three folders,
+rem where kit update just put this copy. kit layout moves it all into them, this file too, so the same line goes on
+rem in app's copy. (In a git checkout it moves only what was downloaded and the person's own files.)
+if "!APP!"=="!KIT!" (call :python || call :finish 1) & (if exist "%KIT%\bin\" call :stop_kit) & ("%PY%" "%APP%\tools\kit.py" --root "%KIT%" layout || call :finish 1) & if exist "%KIT%\app\SETUP-Windows.bat" call "%KIT%\app\SETUP-Windows.bat" %* & exit
+rem UPDATE: set up before, so this run is an update
+set "UPDATE="
+if exist "%KIT%\data\.kit\state.json" findstr /c:"\"last_sync\"" "%KIT%\data\.kit\state.json" >nul 2>&1 && set "UPDATE=1"
 if "%~1"=="--updated" goto download
 if "%~1"=="--placed" goto placed
 
@@ -80,7 +90,8 @@ if defined UPDATE (
   echo The first time takes a few hours. Later runs only download what changed.
 )
 call :python || call :finish 1
-if exist ".kit\" (
+rem (kit place makes the downloads folder, so a download that hasn't been put in its place has none)
+if exist "%KIT%\downloads\" (
   if not defined UPDATE (
     set "KIT_STEPS=2"
     call :goes_on && set "KIT_STEPS=3"
@@ -106,7 +117,7 @@ call :writable || call :finish 1
 echo(
 set "UPDATE_ARGS="
 if defined KIT_YES set "UPDATE_ARGS=--yes"
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" update !UPDATE_ARGS! & if errorlevel 3 call "%KIT%\SETUP-Windows.bat" --updated & exit
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" update !UPDATE_ARGS! & if errorlevel 3 call "%APP%\SETUP-Windows.bat" --updated & exit
 
 :download
 call :python || call :finish 1
@@ -122,7 +133,7 @@ if defined KIT_GIVEN (
 rem After kit update, so a kit from before this question gets it
 if not defined KIT_REGION_ASKED call :pick_region
 set "ONLY=all"
-findstr /r /c:"\"essentials_only\": *true" kit.json >nul 2>&1 && set "ONLY=essentials"
+findstr /r /c:"\"essentials_only\": *true" "%KIT%\data\kit.json" >nul 2>&1 && set "ONLY=essentials"
 rem The first time, SETUP gets the try-it kit (kit starter): a few GB, checked, then the kit opens to be tried. The
 rem rest comes when SETUP runs again (that's saying it's ready), or right after the try-it kit with --all,
 rem --essentials or --home-server. After that, SETUP updates what's there. TRY: the first run, or one on a try-it
@@ -130,7 +141,7 @@ rem kit. REST: with TRY, the rest comes in this run. LATER: the rest, on a run a
 rem goes in.
 set "TRY=" & set "REST=" & set "LATER="
 if not defined UPDATE set "TRY=1"
-findstr /r /c:"\"starter_only\": *true" kit.json >nul 2>&1 && set "TRY=1"
+findstr /r /c:"\"starter_only\": *true" "%KIT%\data\kit.json" >nul 2>&1 && set "TRY=1"
 if defined UPDATE set "REST=1"
 call :goes_on && set "REST=1"
 if defined TRY if defined UPDATE set "LATER=1"
@@ -145,7 +156,7 @@ if defined UPDATE if not defined TRY call :how_much_now
 if not defined TRY goto update_all
 if defined UPDATE goto the_rest
 
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" estimate > "%OUT%" 2>nul
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" estimate > "%OUT%" 2>nul
 set "SMALL=0"
 for /f "usebackq delims=" %%g in ("%OUT%") do set "SMALL=%%g"
 call :gb SMALL
@@ -207,12 +218,12 @@ if "%TESTED%"=="0" (
     call :home_server
     echo Run SETUP again later to get the rest.
   ) else (
-    echo You can use the kit now: double-click Open Tinfoil Kit for Windows.bat. Double-click SETUP again later to get the rest.
+    echo You can use the kit now: in its app folder, double-click Open Tinfoil Kit for Windows.bat. Double-click SETUP again later to get the rest.
   )
   call :finish 1
 )
 echo(
-echo Some checks failed. The messages above say which; logs are in the logs folder.
+echo Some checks failed. The messages above say which; logs are in the kit's data\logs folder.
 if not "%RC%"=="0" call :problems
 echo Running SETUP again often fixes a download that was cut off.
 call :finish 1
@@ -223,21 +234,21 @@ echo(
 echo All set. Tinfoil Kit is !WHERE!, in !KIT!
 rem (a home server starts by itself: home_server says so)
 if not defined KIT_HOME_SERVER if "!WHERE!"=="on this PC" (
-  echo In an outage: in File Explorer, open that folder and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
+  echo In an outage: in File Explorer, open the kit's app folder and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
 ) else (
-  echo In an outage: plug in the drive, open its !KIT:~3! folder and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
+  echo In an outage: plug in the drive, open !KIT:~3!\app and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
 )
 echo(
-echo Also in that folder:
+echo Also in the app folder:
 echo   GUIDE.md               a short guide. Print it and keep it handy.
 echo   SETUP-Windows.bat      double-click it again whenever you want the newest AI models, books and maps (needs internet).
 echo   UNINSTALL-Windows.bat  removes the kit and everything it downloaded.
-start "" explorer.exe "%KIT%"
+start "" explorer.exe "%APP%"
 if defined KIT_HOME_SERVER (call :home_server & call :finish 0)
 if defined KIT_SHARE call :share_home
 rem (nobody may be there to use it)
 if defined KIT_YES call :finish 0
-call :ask "Open the kit now?" && (del "%OUT%" 2>nul & call "%KIT%\Open Tinfoil Kit for Windows.bat" & exit 0)
+call :ask "Open the kit now?" && (del "%OUT%" 2>nul & call "%APP%\Open Tinfoil Kit for Windows.bat" & exit 0)
 call :finish 0
 
 rem The try-it kit works: how big the rest is, how long it takes at the speed just measured, and how to get it. Then
@@ -248,7 +259,7 @@ echo(
 echo The try-it kit works. It's !WHERE!, in !KIT!
 echo Turn off Wi-Fi and try it: ask the AI something, look something up, find your street on the map.
 set "REMAIN=0" & set "TOOK="
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" estimate --rest > "%OUT%" 2>nul
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" estimate --rest > "%OUT%" 2>nul
 for /f "usebackq tokens=1,2 delims=	" %%a in ("%OUT%") do (set "REMAIN=%%a" & set "TOOK=%%b")
 call :gb REMAIN
 set "SAY=The rest of the kit"
@@ -260,17 +271,17 @@ echo !SAY!. You can use the kit while it downloads.
 set "THEN=it asks what you want in the kit, then gets that"
 call :chosen && set "THEN=it gets it"
 if defined KIT_YES (
-  echo When you're ready for it: "!KIT!\SETUP-Windows.bat" --yes
+  echo When you're ready for it: "!APP!\SETUP-Windows.bat" --yes
 ) else (
-  echo When you're ready, double-click SETUP-Windows.bat again: !THEN!.
+  echo When you're ready, open the kit's app folder and double-click SETUP-Windows.bat again: !THEN!.
 )
 if defined KIT_SHARE call :share_home
 if not defined KIT_YES goto try_it_ask
 rem (in a window of its own, so a command an AI runs doesn't wait for it)
-start "Tinfoil Kit" "%KIT%\Open Tinfoil Kit for Windows.bat"
+start "Tinfoil Kit" "%APP%\Open Tinfoil Kit for Windows.bat"
 call :finish 0
 :try_it_ask
-call :ask "Open the kit now?" && (del "%OUT%" 2>nul & call "%KIT%\Open Tinfoil Kit for Windows.bat" & exit 0)
+call :ask "Open the kit now?" && (del "%OUT%" 2>nul & call "%APP%\Open Tinfoil Kit for Windows.bat" & exit 0)
 call :finish 0
 
 rem Phones and laptops on the home network open the kit with its access code, and it starts as you sign in.
@@ -387,7 +398,7 @@ set "PLACE="
 set /p "PLACE=!Q!"
 if defined PLACE set "PLACE=!PLACE:"=!"
 if not defined PLACE goto :eof
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" region --find "!PLACE!" > "%OUT%" 2>nul
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" region --find "!PLACE!" > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
@@ -420,7 +431,7 @@ goto region_ask
 :region_languages
 set "WIKI=!KIT_WIKIPEDIA!"
 if defined WIKI goto region_set
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" region --languages "!RID!" > "%OUT%" 2>nul
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" region --languages "!RID!" > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
@@ -467,7 +478,7 @@ if defined KIT_NO_AI exit /b 0
 if defined KIT_MODELS exit /b 0
 if defined KIT_SKIP exit /b 0
 if defined KIT_ADD exit /b 0
-findstr /r /c:"\"picked\": *true" kit.json >nul 2>&1 && exit /b 0
+findstr /r /c:"\"picked\": *true" "%KIT%\data\kit.json" >nul 2>&1 && exit /b 0
 exit /b 1
 
 rem Whether the first run goes on to the rest of the kit right after the kit to try, instead of stopping there.
@@ -502,14 +513,15 @@ rem only what's new downloads, rather than setting up a second kit. --this-compu
 :other_kit
 if defined KIT_PLACE goto :eof
 set "OTHER_KIT=" & set "OTHER_AT=" & set "OTHER_GB=" & set "OTHER_WHEN="
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" kits > "%OUT%" 2>nul
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" kits > "%OUT%" 2>nul
 for /f "usebackq tokens=1-4 delims=	" %%a in ("%OUT%") do if not defined OTHER_KIT (
   set "OTHER_KIT=%%a" & set "OTHER_AT=%%b" & set "OTHER_GB=%%c" & set "OTHER_WHEN=%%d"
 )
 if not defined OTHER_KIT goto :eof
 rem (the home folder's name may not survive the trip through a file: cmd reads it in another code page)
 if "!OTHER_AT!"=="this PC" set "OTHER_KIT=%USERPROFILE%\%NAME%"
-if not exist "!OTHER_KIT!\SETUP-Windows.bat" goto :eof
+call :setup_in "!OTHER_KIT!"
+if not exist "!THERE!" goto :eof
 set "WHEN="
 if not "!OTHER_WHEN!"=="-" set "WHEN=, last updated !OTHER_WHEN!"
 echo(
@@ -519,7 +531,7 @@ call :ask "Update it?" && goto other_kit_update
 echo Then this sets up another kit.
 goto :eof
 :other_kit_update
-del "%OUT%" 2>nul & cd /d "!OTHER_KIT!" & call "!OTHER_KIT!\SETUP-Windows.bat" & exit
+del "%OUT%" 2>nul & cd /d "!OTHER_KIT!" & call "!THERE!" & exit
 
 :place
 call :step "where should the kit go?"
@@ -554,7 +566,7 @@ goto put_kit
 
 :which_drive
 set "N=0"
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
 for /f "usebackq tokens=1-5 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
   set "D!N!=%%a" & set "F!N!=%%b" & set "W!N!=%%d" & set "L!N!=%%e"
@@ -602,7 +614,7 @@ rem The copy there records how much of the kit it gets in its kit.json
 set "KIT_ESSENTIALS=off"
 if "!ONLY!"=="essentials" set "KIT_ESSENTIALS=on"
 rem kit place says what it did, or why it can't, and prints the kit's new folder
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" place "%DEST%" > "%OUT%" || call :finish 1
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" place "%DEST%" > "%OUT%" || call :finish 1
 set "NEW="
 for /f "usebackq delims=" %%l in ("%OUT%") do set "NEW=%%l"
 if not defined NEW call :finish 1
@@ -610,7 +622,8 @@ if /i "!NEW!"=="!KIT!" (
   call :kit essentials !KIT_ESSENTIALS! >nul
   goto :eof
 )
-cd /d "!NEW!" & call "!NEW!\SETUP-Windows.bat" --placed "!KIT!" & exit
+call :setup_in "!NEW!"
+cd /d "!NEW!" & call "!THERE!" --placed "!KIT!" & exit
 
 rem Where --this-computer or --drive puts the kit (with --yes and neither, this PC), in DEST, and the folder it goes
 rem in, in VOL: --drive E: or E:\ is E:\TinfoilKit, and a PATH that ends in TinfoilKit is the kit's folder itself.
@@ -637,7 +650,7 @@ if not exist "!VOL!\" (
   exit /b 1
 )
 set "WHY=-" & set "FMT="
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
 for /f "usebackq tokens=1-5 delims=	" %%a in ("%OUT%") do (
   set "P=%%a"
   if "!P:~-1!"=="\" set "P=!P:~0,-1!"
@@ -744,9 +757,10 @@ exit /b 0
 rem Remove the download the kit was copied from: only a fresh one, never a git checkout, a drive or the user folder.
 :remove_download
 set "OLD=%~1"
+set "OLD_APP=%OLD%\app"
 if exist "%OLD%\.git\" goto :eof
-if not exist "%OLD%\tools\kit.py" goto :eof
-if not exist "%OLD%\SETUP-Windows.bat" goto :eof
+if not exist "%OLD_APP%\tools\kit.py" goto :eof
+if not exist "%OLD_APP%\SETUP-Windows.bat" goto :eof
 if "%OLD:~3%"=="" goto :eof
 if /i "%OLD%"=="%USERPROFILE%" goto :eof
 if /i "%OLD%"=="%KIT%" goto :eof
@@ -760,8 +774,15 @@ goto :eof
 
 rem ---------------------------------------------------------------------------- helpers
 
+rem The SETUP of the kit in this folder, in THERE: in its app folder, or at its top (a checkout, or a kit from before
+rem the app folder, which that SETUP moves into one).
+:setup_in
+set "THERE=%~1\app\SETUP-Windows.bat"
+if not exist "!THERE!" set "THERE=%~1\SETUP-Windows.bat"
+goto :eof
+
 :kit
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" %*
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" %*
 exit /b %errorlevel%
 
 rem How the kit fits at a place (kit space): FULL and ESS say whether all of it and just the essentials fit with
@@ -770,7 +791,7 @@ rem disk, NEED and NEED_ESS GB for all of it and the essentials, and LEAVE GB wo
 rem (FREE_GB and so on), with LEFT_GB and LEFT_ESS_GB free after them, and NOTE on what fits.
 :space
 set "FULL=fits" & set "ESS=fits" & set "FREE=0" & set "TOTAL=0" & set "NEED=0" & set "NEED_ESS=0" & set "LEAVE=0"
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" space "%~1" > "%OUT%" 2>nul
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" space "%~1" > "%OUT%" 2>nul
 for /f "usebackq tokens=1-7 delims=	" %%a in ("%OUT%") do (
   set "FULL=%%a" & set "ESS=%%b" & set "FREE=%%c" & set "TOTAL=%%d" & set "NEED=%%e" & set "NEED_ESS=%%f" & set "LEAVE=%%g"
 )
@@ -801,7 +822,7 @@ goto :eof
 
 rem Python for the kit's tools: python.org's build, checked against PYSHA. Needs Windows 10 1803+ (curl, tar).
 :python
-if exist "%PY%" goto :eof
+if exist "%PY%" exit /b 0
 if not exist "%SYS%\curl.exe" goto old_windows
 if not exist "%SYS%\tar.exe" goto old_windows
 echo(
@@ -845,7 +866,7 @@ rem "on this PC" or "on the drive NAME", in WHERE
 set "WHERE=on this PC"
 if /i "%KIT:~0,2%"=="%USERPROFILE:~0,2%" goto :eof
 set "WHERE=on the drive %KIT:~0,2%"
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
 for /f "usebackq tokens=1,5 delims=	" %%a in ("%OUT%") do (
   set "P=%%a"
   if /i "!P:~0,2!"=="%KIT:~0,2%" set "WHERE=on the drive %%b"
@@ -862,18 +883,20 @@ goto :eof
 del "%KIT%\.kit-write-test" 2>nul
 goto :eof
 
-rem The kit's programs hold their files open, and Windows won't replace an open file: stop them before updating. They
-rem run from its bin folder, and sharing runs its tools\share.py; the Open Tinfoil Kit window that started them goes too.
+rem The kit's programs hold their files open, and Windows won't replace or move an open file: stop them first. They run
+rem from its downloads\bin folder (bin, before the three folders), and sharing runs its tools\share.py; the Open
+rem Tinfoil Kit window that started them goes too.
 :stop_kit
-set "TK_BIN=%KIT%\bin\"
-set "TK_GATE=%KIT%\tools\share.py"
-set "TK_START=%KIT%\Open Tinfoil Kit for Windows.bat"
+set "TK_BIN=%KIT%\downloads\bin\"
+if not exist "%KIT%\downloads\" set "TK_BIN=%KIT%\bin\"
+set "TK_GATE=%APP%\tools\share.py"
+set "TK_START=%APP%\Open Tinfoil Kit for Windows.bat"
 powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:TK_BIN, $k) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and $c.IndexOf($env:TK_GATE, $k) -ge 0) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'The kit is running. Stopping it, so its files can be updated...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 goto :eof
 
 rem The list of what failed, from the newest sync log: the sync's own copy has scrolled far up by now.
 :problems
-"%PY%" -c "import glob; f = sorted(glob.glob('logs/sync-*.log'))[-1:]; t = open(f[0], encoding='utf-8', errors='replace').read().split('===== sync started')[-1] if f else ''; p = t.split('Problems', 1)[1].split('Re-run', 1)[0] if 'Problems' in t else ''; print(chr(10).join(l for l in p.splitlines() if l.startswith('  - ')))"
+"%PY%" -c "import glob; f = sorted(glob.glob('data/logs/sync-*.log'))[-1:]; t = open(f[0], encoding='utf-8', errors='replace').read().split('===== sync started')[-1] if f else ''; p = t.split('Problems', 1)[1].split('Re-run', 1)[0] if 'Problems' in t else ''; print(chr(10).join(l for l in p.splitlines() if l.startswith('  - ')))"
 goto :eof
 
 rem With --yes the questions take their defaults, and one that has none stops SETUP rather than wait for an answer.

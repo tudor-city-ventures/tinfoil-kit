@@ -11,5 +11,10 @@ if not defined PY (
   exit /b 1
 )
 set "PYTHONUTF8=1"
+rem The kit's folder: the one above this app folder, or this one in a git checkout.
+for %%d in ("%~dp0.") do (
+  set "KIT=%%~fd"
+  if /i "%%~nxd"=="app" for %%p in ("%%~fd\..") do set "KIT=%%~fp"
+)
 rem One line, so cmd reads nothing more from this file once kit update has replaced it.
-"%PY%" "%~dp0tools\kit.py" --root "%~dp0." %* & exit /b
+"%PY%" "%~dp0tools\kit.py" --root "%KIT%\." %* & exit /b

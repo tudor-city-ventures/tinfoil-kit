@@ -2,19 +2,30 @@
 rem Double-click me (Windows) to start Tinfoil Kit: the library, the AI and the map, then the kit's page in a
 rem browser. No internet needed. Close this window to stop everything. tools\launch.sh does the same on a Mac or Linux.
 rem   --share       also serve phones and laptops on the home network, behind the access code (this time only;
-rem                 kit.cmd share on turns it on for good: kit.json's share_on_network)
+rem                 kit.cmd share on turns it on for good: data\kit.json's share_on_network)
 rem   --no-browser  don't open the browser (how Windows starts the kit as you sign in, after kit.cmd autostart on)
 setlocal EnableExtensions EnableDelayedExpansion
+rem The kit's folder holds three: app (this and the rest of the code), downloads (what sync gets) and data (the
+rem person's own: their kit.json, logs and .kit). In a git checkout the code is at the top instead.
 cd /d "%~dp0"
+set "APP=%CD%"
 set "KIT=%CD%"
+for %%d in ("%CD%") do if /i "%%~nxd"=="app" for %%p in ("%CD%\..") do set "KIT=%%~fp"
+set "DL=%KIT%\downloads"
+set "DATA=%KIT%\data"
+rem (a kit from before the three folders, which its next SETUP moves into them, still starts)
+if not exist "%DL%\" if exist "%KIT%\bin\" (set "DL=%KIT%" & set "DATA=%KIT%")
+rem (kit.py makes the person's kit.json from app's the first time it runs)
+set "KJ=%DATA%\kit.json"
+if not exist "%KJ%" set "KJ=%APP%\kit.json"
 set "SHARE=" & set "NO_BROWSER="
 for %%a in (%*) do (
   if /i "%%~a"=="--share" set "SHARE=1"
   if /i "%%~a"=="--no-browser" set "NO_BROWSER=1"
 )
 title Tinfoil Kit
-if not exist "%KIT%\logs\" mkdir "%KIT%\logs"
-if not exist "%KIT%\.kit\" mkdir "%KIT%\.kit"
+if not exist "%DATA%\logs\" mkdir "%DATA%\logs"
+if not exist "%DATA%\.kit\" mkdir "%DATA%\.kit"
 call :setting LIB_PORT library_port 8888
 call :setting AI_PORT ai_port 8080
 call :setting CTX context_size 16384
@@ -35,24 +46,24 @@ set "CURL=%SystemRoot%\System32\curl.exe"
 if not exist "%CURL%" set "CURL="
 
 rem A Mac leaves "._name" files beside books and models on exFAT drives. The servers could take them for books or models.
-del /q /a "%KIT%\library\._*" 2>nul
-for /d %%d in ("%KIT%\models\*") do del /q /a "%%d\._*" 2>nul
+del /q /a "%DL%\library\._*" 2>nul
+for /d %%d in ("%DL%\models\*") do del /q /a "%%d\._*" 2>nul
 set "ZIMS=" & set "BOOKS=0"
-for %%f in ("%KIT%\library\*.zim") do (
+for %%f in ("%DL%\library\*.zim") do (
   set "ZIMS=!ZIMS! "%%~ff""
   set /a "BOOKS+=1"
 )
 call :pick_model
-if defined MODEL if not exist "%KIT%\models\%MODEL%\*.gguf" set "MODEL="
-if not defined MODEL for /d %%d in ("%KIT%\models\*") do if not defined MODEL if exist "%%d\*.gguf" set "MODEL=%%~nxd"
+if defined MODEL if not exist "%DL%\models\%MODEL%\*.gguf" set "MODEL="
+if not defined MODEL for /d %%d in ("%DL%\models\*") do if not defined MODEL if exist "%%d\*.gguf" set "MODEL=%%~nxd"
 
 echo(
 echo   TINFOIL KIT
 echo   ===========
-if not defined KIWIX echo   - Library server not found ^(bin\kiwix-tools-windows-x64^). Run SETUP-Windows.bat while online.
-if not defined LLAMA echo   - AI server not found ^(bin\llama.cpp-windows-x64^). Run SETUP-Windows.bat while online.
-if !BOOKS!==0 echo   - No library files in library. Run SETUP-Windows.bat while online.
-if not defined MODEL echo   No AI models in models, so the AI stays off. If kit.json lists some, run SETUP-Windows.bat while online.
+if not defined KIWIX echo   - Library server not found ^(downloads\bin\kiwix-tools-windows-x64^). Run SETUP-Windows.bat while online.
+if not defined LLAMA echo   - AI server not found ^(downloads\bin\llama.cpp-windows-x64^). Run SETUP-Windows.bat while online.
+if !BOOKS!==0 echo   - No books in downloads\library. Run SETUP-Windows.bat while online.
+if not defined MODEL echo   No AI models in downloads\models, so the AI stays off. If data\kit.json lists some, run SETUP-Windows.bat while online.
 if defined TOO_BIG echo   This computer has !GB! GB of memory, too little for !TOO_BIG!. Starting with !MODEL!.
 
 rem --- library
@@ -65,7 +76,7 @@ call :ours "http://127.0.0.1:%AI_PORT%/v1/models" "\"data\"" && (
 ) || if defined LLAMA if defined MODEL call :start_ai
 rem --- maps: tiles, address search, directions
 set "MAPS="
-if exist "%KIT%\maps\" call :start_maps
+if exist "%DL%\maps\" call :start_maps
 rem --- sharing on the home network: tools\share.py asks for the access code, then hands requests to the servers
 set "GATE=" & set "SHARE_OK=0"
 if defined SHARE call :start_share
@@ -85,13 +96,13 @@ if defined GATE if not defined CURL set "SHARE_OK=1"
 
 set "URL=http://127.0.0.1:%LIB_PORT%/?model=%MODEL%&ai=%AI_PORT%"
 echo(
-if !LIB_OK!==1 (echo   Library:  ready) else (echo   Library:  NOT running ^(see logs\kiwix-serve.log^))
+if !LIB_OK!==1 (echo   Library:  ready) else (echo   Library:  NOT running ^(see data\logs\kiwix-serve.log^))
 if !AI_OK!==1 (
   echo   AI:       ready ^(the first answer takes longer while the model loads^)
 ) else if not defined MODEL (
   echo   AI:       off ^(no models^). The library still works.
 ) else (
-  echo   AI:       NOT running ^(see logs\llama-server.log^). The library still works.
+  echo   AI:       NOT running ^(see data\logs\llama-server.log^). The library still works.
 )
 echo(
 echo   Open:     !URL!
@@ -99,10 +110,10 @@ echo   AI chat:  http://127.0.0.1:!AI_PORT!/
 if defined MAPS echo   Maps:     on the Map tab of the page above
 echo(
 if !SHARE_OK!==1 (
-  "!PY!" "!KIT!\tools\share.py" banner --root "!KIT!\." --port !SHARE_PORT!
+  "!PY!" "!APP!\tools\share.py" banner --root "!KIT!\." --port !SHARE_PORT!
   echo(
 ) else if defined GATE (
-  echo   Sharing:  NOT running ^(see logs\share.log^)
+  echo   Sharing:  NOT running ^(see data\logs\share.log^)
   echo(
 )
 echo   Keep this window open. Close it to stop everything.
@@ -119,12 +130,12 @@ rem start /b: the servers share this window, so closing it stops them all.
 
 :start_library
 call :free_port LIB_PORT "the library"
-set "PORTAL=%KIT%\.kit\portal.html"
+set "PORTAL=%DATA%\.kit\portal.html"
 rem The page ./kit sync builds has the map inside; the bare template has none.
-if not exist "%PORTAL%" set "PORTAL=%KIT%\tools\portal.html"
+if not exist "%PORTAL%" set "PORTAL=%APP%\tools\portal.html"
 set "SKIP="
 "%KIWIX%" --help 2>&1 | findstr /c:"skipInvalid" >nul && set "SKIP=--skipInvalid"
-start "" /b "%KIWIX%" --port %LIB_PORT% --address 127.0.0.1 --customIndex "%PORTAL%" --threads 4 %SKIP% %ZIMS% > "%KIT%\logs\kiwix-serve.log" 2>&1
+start "" /b "%KIWIX%" --port %LIB_PORT% --address 127.0.0.1 --customIndex "%PORTAL%" --threads 4 %SKIP% %ZIMS% > "%DATA%\logs\kiwix-serve.log" 2>&1
 echo   Starting library (%BOOKS% books)...
 goto :eof
 
@@ -135,30 +146,30 @@ call :free_port AI_PORT "the AI"
   echo(
   echo [!MODEL!]
   echo load-on-startup = true
-) > "%KIT%\.kit\presets.ini"
+) > "%DATA%\.kit\presets.ini"
 rem AI chat is llama-server's own page, so it gets the Ask tab's safety rules as its default system message.
 rem An environment variable, not a flag: a llama-server too old to know it ignores it instead of refusing to start.
-if exist "%KIT%\tools\ai-chat.json" set "LLAMA_ARG_UI_CONFIG_FILE=%KIT%\tools\ai-chat.json"
+if exist "%APP%\tools\ai-chat.json" set "LLAMA_ARG_UI_CONFIG_FILE=%APP%\tools\ai-chat.json"
 rem Browsers accept exactly one allowed origin: the kit's page.
-start "" /b "%LLAMA%" --models-dir "%KIT%\models" --models-preset "%KIT%\.kit\presets.ini" --models-max 1 -c %CTX% --host 127.0.0.1 --port %AI_PORT% --cors-origins http://127.0.0.1:%LIB_PORT% > "%KIT%\logs\llama-server.log" 2>&1
+start "" /b "%LLAMA%" --models-dir "%DL%\models" --models-preset "%DATA%\.kit\presets.ini" --models-max 1 -c %CTX% --host 127.0.0.1 --port %AI_PORT% --cors-origins http://127.0.0.1:%LIB_PORT% > "%DATA%\logs\llama-server.log" 2>&1
 echo   Starting AI (loading !MODEL!)...
 goto :eof
 
 :start_maps
 set "CORS=http://127.0.0.1:%LIB_PORT%"
 set "PHOTON_JAR=" & set "GH_JAR="
-for %%f in ("%KIT%\bin\photon\photon-*.jar") do set "PHOTON_JAR=%%~ff"
-for %%f in ("%KIT%\bin\graphhopper\graphhopper-web-*.jar") do set "GH_JAR=%%~ff"
-if defined PMTILES if exist "%KIT%\maps\tiles\basemap.pmtiles" call :up "http://127.0.0.1:%TILES_PORT%/basemap.json" || (
-  start "" /b "%PMTILES%" serve "%KIT%\maps\tiles" --port %TILES_PORT% --interface 127.0.0.1 --cors "%CORS%" --public-url "http://127.0.0.1:%TILES_PORT%" > "%KIT%\logs\tiles.log" 2>&1
+for %%f in ("%DL%\bin\photon\photon-*.jar") do set "PHOTON_JAR=%%~ff"
+for %%f in ("%DL%\bin\graphhopper\graphhopper-web-*.jar") do set "GH_JAR=%%~ff"
+if defined PMTILES if exist "%DL%\maps\tiles\basemap.pmtiles" call :up "http://127.0.0.1:%TILES_PORT%/basemap.json" || (
+  start "" /b "%PMTILES%" serve "%DL%\maps\tiles" --port %TILES_PORT% --interface 127.0.0.1 --cors "%CORS%" --public-url "http://127.0.0.1:%TILES_PORT%" > "%DATA%\logs\tiles.log" 2>&1
   set "MAPS=!MAPS! map"
 )
-if defined JAVA if defined PHOTON_JAR if exist "%KIT%\maps\geocoder\photon_data\" call :up "http://127.0.0.1:%GEO_PORT%/status" || (
-  start "" /b "%JAVA%" -Xmx%GEO_HEAP% -jar "%PHOTON_JAR%" serve -data-dir "%KIT%\maps\geocoder" -listen-ip 127.0.0.1 -listen-port %GEO_PORT% -cors-origin "%CORS%" > "%KIT%\logs\geocoder.log" 2>&1
+if defined JAVA if defined PHOTON_JAR if exist "%DL%\maps\geocoder\photon_data\" call :up "http://127.0.0.1:%GEO_PORT%/status" || (
+  start "" /b "%JAVA%" -Xmx%GEO_HEAP% -jar "%PHOTON_JAR%" serve -data-dir "%DL%\maps\geocoder" -listen-ip 127.0.0.1 -listen-port %GEO_PORT% -cors-origin "%CORS%" > "%DATA%\logs\geocoder.log" 2>&1
   set "MAPS=!MAPS! address-search"
 )
-if defined JAVA if defined GH_JAR if exist "%KIT%\maps\routing\graph-cache\properties" call :up "http://127.0.0.1:%ROUTE_PORT%/health" || (
-  start "" /b /d "%KIT%\maps\routing" "%JAVA%" -Xmx%ROUTE_HEAP% "-Ddw.server.application_connectors[0].bind_host=127.0.0.1" "-Ddw.server.application_connectors[0].port=%ROUTE_PORT%" -jar "%GH_JAR%" server gh-serve.yml > "%KIT%\logs\routing.log" 2>&1
+if defined JAVA if defined GH_JAR if exist "%DL%\maps\routing\graph-cache\properties" call :up "http://127.0.0.1:%ROUTE_PORT%/health" || (
+  start "" /b /d "%DL%\maps\routing" "%JAVA%" -Xmx%ROUTE_HEAP% "-Ddw.server.application_connectors[0].bind_host=127.0.0.1" "-Ddw.server.application_connectors[0].port=%ROUTE_PORT%" -jar "%GH_JAR%" server gh-serve.yml > "%DATA%\logs\routing.log" 2>&1
   set "MAPS=!MAPS! directions"
 )
 if defined MAPS echo   Starting maps:!MAPS! (address search and directions take up to a minute)...
@@ -177,11 +188,11 @@ call :ours "http://127.0.0.1:%SHARE_PORT%/" "Tinfoil Kit" && (
 )
 set "WANT=%SHARE_PORT%"
 call :free_port SHARE_PORT sharing
-if not "%SHARE_PORT%"=="%WANT%" echo   For an address that stays the same, set share_port in kit.json to a free port.
+if not "%SHARE_PORT%"=="%WANT%" echo   For an address that stays the same, set share_port in data\kit.json to a free port.
 set "MAP_PORTS="
-if exist "%KIT%\maps\" set "MAP_PORTS=--tiles %TILES_PORT% --geocoder %GEO_PORT% --routing %ROUTE_PORT%"
+if exist "%DL%\maps\" set "MAP_PORTS=--tiles %TILES_PORT% --geocoder %GEO_PORT% --routing %ROUTE_PORT%"
 set "PYTHONUTF8=1"
-start "" /b "%PY%" "%KIT%\tools\share.py" serve --root "%KIT%\." --port %SHARE_PORT% --library %LIB_PORT% --ai %AI_PORT% %MAP_PORTS% > "%KIT%\logs\share.log" 2>&1
+start "" /b "%PY%" "%APP%\tools\share.py" serve --root "%KIT%\." --port %SHARE_PORT% --library %LIB_PORT% --ai %AI_PORT% %MAP_PORTS% > "%DATA%\logs\share.log" 2>&1
 set "GATE=1"
 echo   Starting sharing on the home network...
 echo   If Windows asks whether Python may use the network, allow it, or phones and laptops can't reach the kit.
@@ -192,7 +203,7 @@ rem ----------------------------------------------------------------------------
 rem A simple "key": value from kit.json, without needing Python.
 :setting
 set "%~1=%~3"
-for /f "usebackq tokens=1,* delims=:" %%a in (`findstr /c:"\"%~2\"" "%KIT%\kit.json" 2^>nul`) do (
+for /f "usebackq tokens=1,* delims=:" %%a in (`findstr /c:"\"%~2\"" "%KJ%" 2^>nul`) do (
   set "V=%%b"
   set "V=!V:"=!"
   set "V=!V:,=!"
@@ -204,7 +215,7 @@ goto :eof
 rem A program's .exe for Windows: the current version first, then any older one kept as a fallback.
 :find
 set "%~1="
-set "B=%KIT%\bin\%~2-windows-x64"
+set "B=%DL%\bin\%~2-windows-x64"
 if not exist "%B%\" goto :eof
 set "CUR="
 if exist "%B%\CURRENT" for /f "usebackq delims=" %%v in ("%B%\CURRENT") do set "CUR=%%v"
@@ -222,14 +233,14 @@ if not defined MEM_MB for /f %%m in ('powershell -NoProfile -Command "[int64]((G
 if not defined MEM_MB set "MEM_MB=0"
 set /a "ROOM=MEM_MB*6/10, GB=MEM_MB/1024"
 set "HAVE="
-if defined MODEL if exist "%KIT%\models\%MODEL%\*.gguf" set "HAVE=1"
+if defined MODEL if exist "%DL%\models\%MODEL%\*.gguf" set "HAVE=1"
 if defined HAVE (
   if !ROOM!==0 goto :eof
-  call :model_mb "%KIT%\models\%MODEL%" WANT
+  call :model_mb "%DL%\models\%MODEL%" WANT
   if !WANT! leq !ROOM! goto :eof
 )
 set "FIT=" & set "FIT_MB=0" & set "SMALL=" & set "SMALL_MB=0"
-for /d %%d in ("%KIT%\models\*") do (
+for /d %%d in ("%DL%\models\*") do (
   call :model_mb "%%~fd" MB
   if !MB! gtr 0 (
     set "OK="
