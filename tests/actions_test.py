@@ -4,7 +4,7 @@
 Write tokens only where WRITES allows them, actions pinned to full commit SHAs from GitHub (plus Scorecard),
 no outsider-triggered events that run with a write token, no ${{ }} pasted into shell or script code, GitHub's
 own runners only, and no git credentials left behind. Also that sizes.yml's commit job lets a weekly refresh change
-only sizes and checked download names in tools/regions.json. Usage: python3 tests/actions_test.py
+only sizes and checked download names in tools/regions.json, and pins.yml's only program versions and checksums. Usage: python3 tests/actions_test.py
 """
 import re
 import sys
@@ -182,6 +182,36 @@ def regions_check():
     return len(cases), errs
 
 
+def pins_check():
+    """Runs pins.yml's check on tools/pins.json with one change each: new builds pass, nothing else does."""
+    import copy, json, subprocess, tempfile, textwrap
+    root = WORKFLOWS.parent.parent
+    code = textwrap.dedent((WORKFLOWS / "pins.yml").read_text().split("tools/pins.json kit.json <<'PY'\n", 1)[1]
+                           .split("\n          PY\n", 1)[0])
+    committed = root / "tools" / "pins.json"
+    base = {"_readme": json.loads(committed.read_text(encoding="utf-8"))["_readme"],
+            "llama.cpp-macos-arm64": {"version": "b1", "sha256": "a" * 64}, "basemaps-assets": {"version": "f" * 40}}
+    cases = [("a new build", lambda d: d["llama.cpp-macos-arm64"].update(version="b2", sha256="b" * 64), True),
+             ("a changed note", lambda d: d["_readme"].append("run this"), False),
+             ("a program the kit doesn't download", lambda d: d.update(other={"version": "1", "sha256": "a" * 64}), False),
+             ("a command in a version", lambda d: d["llama.cpp-macos-arm64"].update(version="b2; sh"), False),
+             ("a checksum that isn't one", lambda d: d["llama.cpp-macos-arm64"].update(sha256="x" * 64), False),
+             ("another field", lambda d: d["llama.cpp-macos-arm64"].update(url="https://x/y"), False),
+             ("no pins at all", lambda d: [d.pop(k) for k in ("llama.cpp-macos-arm64", "basemaps-assets")], False)]
+    errs = []
+    with tempfile.TemporaryDirectory() as t:
+        new = Path(t) / "pins.json"
+        for what, change, want in cases:
+            d = copy.deepcopy(base)
+            change(d)
+            new.write_text(json.dumps(d), encoding="utf-8")
+            got = subprocess.run([sys.executable, "-I", "-c", code, str(new), str(committed), str(root / "kit.json")],
+                                 capture_output=True).returncode == 0
+            if got != want:
+                errs.append(f"pins.yml {'refuses' if want else 'accepts'} {what} in pins.json")
+    return len(cases), errs
+
+
 def main():
     passed, failed = 0, 0
     for f in sorted(WORKFLOWS.glob("*.y*ml")):
@@ -195,10 +225,10 @@ def main():
         else:
             print(f"FAIL: the checks miss {what}")
             failed += 1
-    n, errs = regions_check()
-    for e in errs:
-        print(f"FAIL: {e}")
-    passed, failed = passed + n - len(errs), failed + len(errs)
+    for n, errs in (regions_check(), pins_check()):
+        for e in errs:
+            print(f"FAIL: {e}")
+        passed, failed = passed + n - len(errs), failed + len(errs)
     print(f"{failed} FAILED, {passed} passed" if failed else f"ALL {passed} PASSED")
     return 1 if failed else 0
 

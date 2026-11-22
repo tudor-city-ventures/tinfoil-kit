@@ -367,6 +367,13 @@ pathlib.Path(str(out) + ".aria2").unlink()
     kp = sys.modules["kitpy"] = importlib.util.module_from_spec(spec)    # dataclasses look the module up
     spec.loader.exec_module(kp)
 
+    # pins.yml's commit job holds a new tools/pins.json to the committed note and to the programs it knows
+    check("tools/pins.json carries kit.py's note",
+          json.loads((TESTS.parent / "tools" / "pins.json").read_text())["_readme"] == kp.PINS_README)
+    viewer = [m["id"] for m in kp.maps_items({"maps": {"enabled": True}}) if m["type"] in kp.PINNED_TYPES]
+    check("pins.yml knows every map viewer program kit.py pins",
+          viewer and all(f'"{i}"' in (TESTS.parent / ".github" / "workflows" / "pins.yml").read_text() for i in viewer), viewer)
+
     def ssh_str(b):
         return len(b).to_bytes(4, "big") + b
 

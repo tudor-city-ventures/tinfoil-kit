@@ -42,20 +42,23 @@ jobs:
         with:
           name: pins
           path: ${{ runner.temp }}/pins
-      - name: commit the new pins, if every entry is a version and a SHA-256
+      - name: commit the new pins, if they only change versions and SHA-256s of programs the kit downloads
         env:
           NEW: ${{ runner.temp }}/pins/pins.json
         run: |
-          python3 -I - "$NEW" <<'PY'
+          python3 -I - "$NEW" tools/pins.json kit.json <<'PY'
           import json, re, sys
-          pins = json.load(open(sys.argv[1]))
-          readme = pins.pop("_readme", [])
+          new, old, kit = (json.load(open(p)) for p in sys.argv[1:4])
+          # kit.json's programs, and the map viewer's three that kit.py lists itself
+          known = {e.get("id") for s in ("runtimes", "extras") for e in kit.get(s, [])}
+          known |= {"maplibre-gl", "protomaps-basemaps", "basemaps-assets"}
           word = re.compile(r"[\w.+-]{1,64}")
-          ok = type(readme) is list and all(type(line) is str for line in readme) and pins and all(
-              word.fullmatch(k) and type(v) is dict and set(v) <= {"version", "sha256"}
+          ok = new.pop("_readme", None) == old.get("_readme") and new and all(
+              k in known and type(v) is dict and set(v) <= {"version", "sha256"}
               and type(v.get("version")) is str and word.fullmatch(v["version"])
-              and re.fullmatch(r"[0-9a-f]{64}", str(v.get("sha256", "0" * 64))) for k, v in pins.items())
-          sys.exit(0 if ok else "The new pins.json doesn't look right, so it isn't committed. Run ./kit pins by hand.")
+              and re.fullmatch(r"[0-9a-f]{64}", str(v.get("sha256", "0" * 64))) for k, v in new.items())
+          sys.exit(0 if ok else "The new pins.json changes its note, names a program the kit doesn't download, or has an "
+                   "entry that isn't a version and a SHA-256, so it isn't committed. Run ./kit pins by hand and read its diff.")
           PY
           cp "$NEW" tools/pins.json
           git diff --quiet tools/ && { echo "no change"; exit 0; }
