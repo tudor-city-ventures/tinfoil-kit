@@ -1,6 +1,7 @@
 """Drive the real portal map in headless Chrome: real MapLibre + Protomaps style + embedded fonts/icons,
 against mock tile / address / routing servers and a mock tool-calling AI."""
 import os
+import re
 import sys
 from playwright.sync_api import sync_playwright
 
@@ -98,6 +99,64 @@ with sync_playwright() as p:
     page.reload()
     page.wait_for_function("document.getElementById('homeLabel').textContent.length > 0", timeout=10000)
     check("home remembered after reload", page.inner_text("#homeLabel").startswith("Map point"), page.inner_text("#homeLabel"))
+
+    # coordinates, then a pin with a note
+    page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    page.click("nav a[data-tab=map]")
+    page.wait_for_function("window.__kitMap && window.__kitMap.loaded()", timeout=60000)
+    page.fill("#placeQ", "40°45'N 73°59'W")
+    page.press("#placeQ", "Enter")
+    page.wait_for_selector(".maplibregl-popup", timeout=10000)
+    pop = page.inner_text(".maplibregl-popup")
+    check("coordinates search", "40.75000, -73.98333" in pop and "40°45′0″N 73°59′0″W" in pop, pop.replace("\n", " | "))
+    page.click(".maplibregl-popup button[data-act=copy]")
+    page.wait_for_timeout(300)
+    clip = page.evaluate("navigator.clipboard.readText()")
+    check("copy coordinates", clip == "40.75000, -73.98333", clip)
+    page.click(".maplibregl-popup-close-button")
+    page.wait_for_function("!window.__kitMap.isMoving()", timeout=10000)
+    box = page.locator("#mapCanvas").bounding_box()
+    page.mouse.click(box["x"] + box["width"] / 2 + 160, box["y"] + box["height"] / 2 + 90)
+    page.wait_for_selector(".maplibregl-popup", timeout=5000)
+    pop = page.inner_text(".maplibregl-popup")
+    check("clicking the map shows its coordinates", pop.startswith("Map point") and bool(re.search(r"\d+\.\d{5}, -\d+\.\d{5}", pop)),
+          pop.replace("\n", " | "))
+    page.click(".maplibregl-popup button[data-act=pin]")
+    page.fill(".pin-form input", "Meeting place")
+    page.fill(".pin-form textarea", "Behind the school gym\nBring water")
+    page.click(".pin-form button[type=submit]")
+    page.wait_for_selector(".maplibregl-popup .pin-note", timeout=5000)
+    check("pin saved with its note", page.inner_text(".maplibregl-popup").startswith("Meeting place") and
+          page.locator(".maplibregl-marker[data-pin]").count() == 1 and "Meeting place" in page.inner_text("#pinList"), page.inner_text("#pinList"))
+    page.wait_for_timeout(1200)
+    check("pin label drawn", page.evaluate("window.__kitMap.querySourceFeatures('pins').length") >= 1)
+    page.screenshot(path=os.path.join(SHOTS, "shot_map_pin.png"))
+    page.click(".maplibregl-popup-close-button")
+    page.click(".maplibregl-marker[data-pin]")
+    page.wait_for_selector(".maplibregl-popup .pin-note", timeout=5000)
+    check("clicking a pin opens it", page.inner_text(".maplibregl-popup").startswith("Meeting place"))
+    page.reload()
+    page.wait_for_function("window.__kitMap && window.__kitMap.loaded() && document.querySelectorAll('.maplibregl-marker[data-pin]').length == 1",
+                           timeout=60000)
+    check("pin kept after reload", "Meeting place" in page.inner_text("#pinList"))
+    page.fill("#placeQ", "meeting")
+    page.wait_for_selector("#placeResults button[data-i]", timeout=10000)
+    first = page.inner_text("#placeResults button[data-i]")
+    check("search finds the pin first", first.startswith("Meeting place") and "Pin: Behind the school gym" in first, first.replace("\n", " | "))
+    page.press("#placeQ", "Escape")
+    page.fill("#dirTo", "our meeting place")
+    page.click("#dirGo")
+    page.wait_for_function("document.getElementById('dirSteps').children.length > 0", timeout=10000)
+    check("directions to a pin by name", "to Meeting place" in page.inner_text("#dirSummary"), page.inner_text("#dirSummary"))
+    page.click("#pinList button[data-id]")
+    page.click(".maplibregl-popup button[data-act=edit]")
+    page.fill(".pin-form input", "Family meeting place")
+    page.press(".pin-form input", "Enter")
+    page.wait_for_selector(".maplibregl-popup .pin-note", timeout=5000)
+    check("edit renames the pin", "Family meeting place" in page.inner_text("#pinList"), page.inner_text("#pinList"))
+    page.click(".maplibregl-popup button[data-act=del]")
+    page.click(".maplibregl-popup button[data-act=yes]")
+    check("delete removes the pin", page.locator(".maplibregl-marker[data-pin]").count() == 0 and page.inner_text("#pinList") == "")
     page.evaluate("localStorage.clear()")
 
     errors = [e for e in errors if "favicon" not in e]
@@ -139,6 +198,7 @@ with sync_playwright() as p:
     p3 = b.new_page(viewport={"width": 1280, "height": 860})
     e3, w3 = [], []
     watch(p3, e3, w3)
+    p3.add_init_script("localStorage.setItem('kit.pins', JSON.stringify([{id: 'a1', name: 'Meeting place', note: '', lat: 40.7306, lon: -73.9866}]))")
     p3.goto(BASE + "/?model=Tiny&ai=18999")
     p3.wait_for_function("document.getElementById('aiStatus').textContent.includes('off') && "
                          "document.getElementById('mapStatus').textContent.includes('Directions: ready')", timeout=30000)
@@ -151,6 +211,10 @@ with sync_playwright() as p:
     p3.click("#askBtn")
     p3.wait_for_function("document.getElementById('answer').textContent.includes('Driving to')", timeout=30000)
     check("directions without AI", "Turn left onto Heron Road" in p3.inner_text("#answer"), p3.inner_text("#answer")[:140].replace("\n", " "))
+    p3.fill("#q", "directions to the meeting place")
+    p3.click("#askBtn")
+    p3.wait_for_function("document.getElementById('answer').textContent.includes('Driving to')", timeout=30000)
+    check("Ask finds a pin by name", "Driving to Meeting place" in p3.inner_text("#answer"), p3.inner_text("#answer")[:140].replace("\n", " "))
     p3.fill("#q", "where is Zzyzx Nowhere Road?")         # map-looking, nothing on the map -> library instead
     p3.click("#askBtn")
     p3.wait_for_function("!document.getElementById('progress').textContent.startsWith('Looking')", timeout=60000)
