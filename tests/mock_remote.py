@@ -12,7 +12,7 @@ import sys
 from email.utils import formatdate
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse, unquote
+from urllib.parse import parse_qs, urlparse, unquote
 
 R = Path(os.environ.get("KIT_TEST_WORK", Path(__file__).parent / "work")) / "remote"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 19000
@@ -47,6 +47,27 @@ def catalog() -> bytes:
   </entry>""")
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n'
             + "\n".join(entries) + "\n</feed>\n").encode()
+
+
+def gh_releases(repo: str):
+    """The releases GitHub lists for each program's repo, newest first; None for a repo it doesn't know."""
+    if repo == "ggml-org/llama.cpp":
+        return json.loads(releases())
+    if repo == "protomaps/go-pmtiles":    # the drive test adds the real Windows build
+        return [{"tag_name": "v1.31.2", "draft": False, "prerelease": False, "assets": [
+            {"name": a.name, "size": a.stat().st_size, "browser_download_url": f"{BASE}/gh2/{a.name}"}
+            for a in sorted((R / "gh2").glob("go-pmtiles_1.31.2_*"))]}]
+    if repo == "komoot/photon":
+        a, a2 = R / "gh2" / "photon-1.3.0.jar", R / "gh2" / "photon-1.2.1.jar"
+        return [
+            {"tag_name": "2.0.0-beta", "draft": False, "prerelease": True, "assets": [
+                {"name": "photon-2.0.0-beta.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"}]},
+            {"tag_name": "1.3.0", "draft": False, "prerelease": False, "assets": [
+                {"name": "original-photon-1.3.0.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"},
+                {"name": a.name, "size": a.stat().st_size, "digest": "sha256:" + sha(a), "browser_download_url": f"{BASE}/gh2/{a.name}"}]},
+            {"tag_name": "1.2.1", "draft": False, "prerelease": False, "assets": [
+                {"name": a2.name, "size": a2.stat().st_size, "digest": "sha256:" + sha(a2), "browser_download_url": f"{BASE}/gh2/{a2.name}"}]}]
+    return None
 
 
 def releases() -> bytes:
@@ -93,18 +114,19 @@ class H(BaseHTTPRequestHandler):
         data = p.read_bytes()
         rng = self.headers.get("Range")
         if rng and not head:
-            m = re.match(r"bytes=(\d+)-", rng)
+            m = re.match(r"bytes=(\d+)-(\d*)", rng)
             start = int(m.group(1))
+            end = min(int(m.group(2) or len(data) - 1), len(data) - 1)
             if start >= len(data):
                 self.send_response(416)
                 self.send_header("Content-Range", f"bytes */{len(data)}")
                 self.end_headers()
                 return
             self.send_response(206)
-            self.send_header("Content-Range", f"bytes {start}-{len(data) - 1}/{len(data)}")
-            self.send_header("Content-Length", str(len(data) - start))
+            self.send_header("Content-Range", f"bytes {start}-{end}/{len(data)}")
+            self.send_header("Content-Length", str(end + 1 - start))
             self.end_headers()
-            self.wfile.write(data[start:])
+            self.wfile.write(data[start:end + 1])
             return
         # a flaky connection: the first model download drops halfway
         if p.name.endswith(".gguf") and not head and (R / "FLAKY").exists():
@@ -157,24 +179,13 @@ class H(BaseHTTPRequestHandler):
         if path.startswith("/repos/tudor-city-ventures/tinfoilkit/compare/"):    # "BASE...HEAD": answered only if a test wrote one
             p = R / "kit" / "compare" / path.split("/compare/", 1)[1]
             return self.send_bytes(p.read_bytes(), "application/json", head) if p.is_file() else self.send_error(404)
-        if path == "/repos/ggml-org/llama.cpp/releases":
-            return self.send_bytes(releases(), "application/json", head)
-        if path == "/repos/protomaps/go-pmtiles/releases":
-            a = R / "gh2" / "go-pmtiles_1.31.2_Linux_x86_64.tar.gz"
-            return self.send_bytes(json.dumps([{"tag_name": "v1.31.2", "draft": False, "prerelease": False, "assets": [
-                {"name": a.name, "size": a.stat().st_size, "browser_download_url": f"{BASE}/gh2/{a.name}"}]}]).encode(), "application/json", head)
-        if path == "/repos/komoot/photon/releases":
-            a = R / "gh2" / "photon-1.3.0.jar"
-            a2 = R / "gh2" / "photon-1.2.1.jar"
-            older = [{"tag_name": "1.2.1", "draft": False, "prerelease": False, "assets": [
-                {"name": a2.name, "size": a2.stat().st_size, "digest": "sha256:" + sha(a2), "browser_download_url": f"{BASE}/gh2/{a2.name}"}]}]
-            return self.send_bytes(json.dumps([
-                {"tag_name": "2.0.0-beta", "draft": False, "prerelease": True, "assets": [
-                    {"name": "photon-2.0.0-beta.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"}]},
-                {"tag_name": "1.3.0", "draft": False, "prerelease": False, "assets": [
-                    {"name": "original-photon-1.3.0.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"},
-                    {"name": a.name, "size": a.stat().st_size, "digest": "sha256:" + sha(a), "browser_download_url": f"{BASE}/gh2/{a.name}"}]}] + older).encode(),
-                "application/json", head)
+        m = re.match(r"^/repos/([^/]+/[^/]+)/releases(?:/tags/(.+))?$", path)
+        if m and gh_releases(m.group(1)) is not None:
+            rels = gh_releases(m.group(1))
+            if m.group(2):    # one release, by its tag (a pinned build)
+                rel = next((r for r in rels if r["tag_name"] == unquote(m.group(2))), None)
+                return self.send_bytes(json.dumps(rel).encode(), "application/json", head) if rel else self.send_error(404)
+            return self.send_bytes(json.dumps(rels).encode(), "application/json", head)
         if path == "/repos/protomaps/basemaps-assets/commits/main":
             return self.send_bytes(json.dumps({"sha": (R / "gh2" / "basemaps-assets.sha").read_text().strip()}).encode(), "application/json", head)
         m = re.match(r"^/ghweb/protomaps/basemaps-assets/archive/([0-9a-f]+)\.tar\.gz$", path)
@@ -182,11 +193,24 @@ class H(BaseHTTPRequestHandler):
             return self.send_file(R / "gh2" / f"basemaps-assets-{m.group(1)}.tar.gz", head)
         if path.startswith("/gh2/"):
             return self.send_file(R / "gh2" / path[5:], head)
-        if path == "/adoptium/v3/assets/latest/21/hotspot":
-            a = R / "adoptium" / "OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz"
+        if path == "/adoptium/v3/assets/latest/21/hotspot":    # Linux's fake, or the real Windows one the drive test adds
+            os_ = parse_qs(u.query).get("os", ["linux"])[0]
+            a = next(iter(sorted((R / "adoptium").glob(f"OpenJDK21U-jre_x64_{os_}_*"))), None)
+            if not a:
+                return self.send_bytes(b"[]", "application/json", head)
             return self.send_bytes(json.dumps([{"release_name": "jdk-21.0.9+10", "version": {"semver": "21.0.9+10"}, "binary": {
                 "image_type": "jre", "package": {"name": a.name, "link": f"{BASE}/adoptium/file/{a.name}", "size": a.stat().st_size,
                                                  "checksum": sha(a)}}}]).encode(), "application/json", head)
+        m = re.match(r"^/adoptium/v3/assets/version/([^/?]+)$", path)
+        if m:    # a pinned Java: the releases matching that version, each with its builds
+            name = "jdk-" + unquote(m.group(1))
+            a = R / "adoptium" / "OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz"
+            rels = [{"release_name": "jdk-21.0.9+10", "binaries": [
+                {"image_type": "jdk", "os": "linux", "architecture": "x64", "package": {"name": "wrong.tar.gz", "link": f"{BASE}/nope"}},
+                {"image_type": "jre", "os": "linux", "architecture": "x64", "package": {
+                    "name": a.name, "link": f"{BASE}/adoptium/file/{a.name}", "size": a.stat().st_size if a.exists() else 0,
+                    "checksum": sha(a) if a.exists() else None}}]}]
+            return self.send_bytes(json.dumps([r for r in rels if r["release_name"] == name]).encode(), "application/json", head)
         if path.startswith("/adoptium/file/"):
             return self.send_file(R / "adoptium" / path.split("/")[-1], head)
         if path.startswith("/maven/"):
@@ -211,6 +235,8 @@ class H(BaseHTTPRequestHandler):
                 {"key": "20261115.layerstats.parquet", "size": 10}] +
                 ([{"key": "20270201.pmtiles", "size": 132000000000, "version": "4.16.0", "uploaded": "2027-02-02"}] if v2() else [])
                 ).encode(), "application/json", head)
+        if re.match(r"^/protomaps/\d+\.pmtiles$", path):    # a whole map build: only the drive test has one
+            return self.send_file(R / "protomaps" / "build.pmtiles", head)
         if path.startswith("/geofabrik/"):
             return self.send_file(R / "geofabrik" / path.split("/")[-1], head)
         if path == "/photon/":
@@ -240,6 +266,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_file(R / "gh" / path[4:], head)
         if path.startswith("/nuget/"):    # the Python SETUP-Windows.bat gets
             return self.send_file(R / "nuget" / path.split("/")[-1], head)
+        if path.startswith("/pbs/"):    # the Python SETUP.command gets for a Mac without one
+            return self.send_file(R / "pbs" / path.split("/")[-1], head)
         m = re.match(r"^/api/models/([^/]+/[^/]+)(/tree/[^/]+)?$", path)
         if m:
             repo = m.group(1)

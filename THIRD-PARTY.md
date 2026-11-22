@@ -40,6 +40,7 @@ The files come from ggml-org's and Unsloth's Hugging Face repos, which repackage
 | Photon | Apache 2.0 |
 | MapLibre GL JS | BSD-3-Clause |
 | Python, which SETUP-Windows.bat gets from nuget.org for the kit's tools on Windows (it stays outside the kit) | PSF License |
+| Python for a Mac without one: python-build-standalone's build, which SETUP.command gets from its GitHub releases (it stays outside the kit, in `~/Library/Application Support/TinfoilKit`) | PSF License; it includes OpenSSL, SQLite and other libraries, each under its own license (python-build-standalone lists them) |
 | Ollama (optional, off by default) | MIT |
 
 ## In this repo

@@ -75,8 +75,8 @@ jobs:
             if (pr.head.repo && pr.head.repo.full_name.toLowerCase() === `${owner}/${repo}`.toLowerCase()) {
               return core.info('Skipped: branch in this repo');
             }
-            // What decides how CI runs, who reviews, what a release holds and which key signs it.
-            const guarded = /^(\.github\/(workflows\/|CODEOWNERS$|dependabot\.yml$|release\.sh$)|\.gitattributes$|tools\/release-signers$)/;
+            // What decides how CI runs, who reviews, what a release holds, which program builds it installs and which key signs it.
+            const guarded = /^(\.github\/(workflows\/|CODEOWNERS$|dependabot\.yml$|release\.sh$)|\.gitattributes$|tools\/(release-signers|pins\.json)$)/;
             const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 });
             if (files.length < pr.changed_files) {
               return core.setFailed(`GitHub lists ${files.length} of this pull request's ${pr.changed_files} files, so it can't be checked.`);

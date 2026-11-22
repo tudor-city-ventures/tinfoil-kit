@@ -50,8 +50,9 @@ step "verify";  ./kit verify | tail -1
 finder_files() { for m in models/*/; do printf junk > "${m}._junk.gguf"; done; printf junk > library/._junk.zim; }
 finder_files_left() { for f in library/._* models/*/._*; do [ -e "$f" ] && { echo "FAIL: $1 left $f"; return; }; done; }
 finder_files
-# SETUP.command = plan, sync (a no-op now), test. Answers: start download yes, open the kit no, close.
-step "setup (sync again, then test)"; printf 'y\nn\n\n' | timeout 600 bash SETUP.command > "$L/setup.log" 2>&1; echo "exit $?"
+# SETUP.command = plan, sync (a no-op now), test. Answers: keep where the maps are for, start download yes, open the
+# kit no, close.
+step "setup (sync again, then test)"; printf '\ny\nn\n\n' | timeout 600 bash SETUP.command > "$L/setup.log" 2>&1; echo "exit $?"
 grep -E "PASS|FAIL|up to date|All set" "$L/setup.log" | tail -12
 finder_files_left "./kit test"; finder_files
 step "search";  ./kit search test | head -2

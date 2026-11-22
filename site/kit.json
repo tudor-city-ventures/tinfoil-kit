@@ -192,23 +192,16 @@
 
   "maps": {
     "enabled": true,
-    "label": "US Northeast",
-    "home": {"lat": 40.7128, "lon": -74.006, "zoom": 10, "label": "New York, NY"},
-    "detail_bbox": [-80.6, 38.8, -66.8, 47.6],
+    "region": "us-northeast",
     "detail_maxzoom": 15,
     "world_maxzoom": 7,
-    "routing_osm_pbf": "https://download.geofabrik.de/north-america/us-northeast-latest.osm.pbf",
     "routing_profiles": ["car", "foot"],
-    "geocoder_country": "us",
-    "units": "imperial",
     "tiles_port": 8090,
     "geocoder_port": 2322,
     "routing_port": 8989,
     "_notes": [
-      "detail_bbox is [west, south, east, north] in degrees: streets are shown inside it, a world overview elsewhere.",
-      "routing_osm_pbf: road data for directions, from download.geofabrik.de (pick a region that covers your trips).",
-      "geocoder_country: two-letter country code for the address search database (US: about 10-40 GB; if no US-only database is published, the North America one is used).",
-      "Set home to where you live: it's where 'nearest' searches and directions start by default.",
+      "region is where you live, one of the places in tools/regions.json. It sets the street-detail area, the road data for directions, the address search, home, units and map labels. SETUP asks for it; ./kit region PLACE changes it, and ./kit region --find WORDS lists places.",
+      "To set an area by hand instead, add any of these here, and each wins over the region's: label, home ({lat, lon, zoom, label}), detail_bbox ([west, south, east, north] in degrees: streets inside it, a world overview elsewhere), routing_osm_pbf (an extract from download.geofabrik.de), geocoder_country (two-letter country code for the address search), units (metric or imperial) and lang (map labels and address search language).",
       "Memory for the map servers can be set with geocoder_heap (default 3g) and routing_heap (2g); building the directions network during sync uses routing_import_heap (auto: 12g, or 60% of the computer's memory if that's less)."
     ]
   },

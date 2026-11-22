@@ -124,7 +124,7 @@ set "PHOTON_JAR=" & set "GH_JAR="
 for %%f in ("%KIT%\bin\photon\photon-*.jar") do set "PHOTON_JAR=%%~ff"
 for %%f in ("%KIT%\bin\graphhopper\graphhopper-web-*.jar") do set "GH_JAR=%%~ff"
 if defined PMTILES if exist "%KIT%\maps\tiles\basemap.pmtiles" call :up "http://127.0.0.1:%TILES_PORT%/basemap.json" || (
-  start "" /b "%PMTILES%" serve "%KIT%\maps\tiles" --port %TILES_PORT% --interface 127.0.0.1 --cors "%CORS%" > "%KIT%\logs\tiles.log" 2>&1
+  start "" /b "%PMTILES%" serve "%KIT%\maps\tiles" --port %TILES_PORT% --interface 127.0.0.1 --cors "%CORS%" --public-url "http://127.0.0.1:%TILES_PORT%" > "%KIT%\logs\tiles.log" 2>&1
   set "MAPS=!MAPS! map"
 )
 if defined JAVA if defined PHOTON_JAR if exist "%KIT%\maps\geocoder\photon_data\" call :up "http://127.0.0.1:%GEO_PORT%/status" || (

@@ -32,7 +32,9 @@ sha=$(git rev-parse HEAD)
 [ "$sha" = "$(git rev-parse origin/main)" ] || die "check out main as it is on GitHub first: git checkout main && git pull"
 ! git rev-parse -q --verify "refs/tags/$TAG" > /dev/null || die "$TAG already exists"
 ci=$(gh run list --commit "$sha" --workflow check.yml --json conclusion --jq '.[0].conclusion')
-[ "$ci" = success ] || die "the quick gate (check.yml) hasn't passed on this commit (${ci:-no run yet})"
+[ "$ci" = success ] || die "the quick gate (check.yml) hasn't passed on this commit (${ci:-no run yet}). A commit a workflow made starts no checks: run check on main (Actions > check > Run workflow), then try again"
+python3 -c 'import json, sys; sys.exit(len(json.load(open("tools/pins.json"))) < 2)' ||
+  die "tools/pins.json pins no programs: run the pin program builds workflow, then a real-Mac sync and test"
 prev=$(git describe --tags --abbrev=0 2> /dev/null || true)
 
 out=$(mktemp -d)

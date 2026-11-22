@@ -1,0 +1,7 @@
+{
+ "_readme": [
+  "The exact build of each program this version of the kit installs, and its SHA-256. ./kit pins writes it,",
+  "and every release carries it, signed with the rest. To take each program's newest build instead, set",
+  "\"pin_programs\": false in kit.json's settings."
+ ]
+}

@@ -40,7 +40,8 @@ Nothing here needs the internet, an account, or an install.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
 - **Share with family** (Mac, Linux): start with `bash START-HERE.command --share`. It shows an address, an access code and a QR
   code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. No internet
-  needed: a router with power, or a phone's hotspot, is enough. Nobody without the code gets in. To share every time
+  needed, only a Wi-Fi network: your router on a battery backup, a small battery-powered travel router, or a phone's
+  hotspot (an iPhone's may not turn on without cell service). Nobody without the code gets in. To share every time
   the kit starts, run `./kit share on` once in the kit folder. If macOS asks whether to accept incoming connections,
   click **Allow**.
 
@@ -59,8 +60,9 @@ The AI can be wrong. Treat it like a well-read friend, not a doctor: check the s
   This works even when the AI is off, for simply worded questions.
 
 Coverage: street-level map, addresses and directions for where you live (the US state, country or part of a big
-country you told SETUP), plus a low-detail world map. Address search covers your whole country. To change it, run
-SETUP again and type another place, or run `./kit region PLACE` and then `./kit sync`.
+country you told SETUP), plus a low-detail world map. Address search covers your whole country, or, where nobody
+publishes it for the country alone (much of Europe), the whole continent. To change it, run SETUP again and type
+another place, or run `./kit region PLACE` and then `./kit sync`.
 
 **For actually driving, use your phone.** Download offline maps on it now: Organic Maps (free, fully offline,
 spoken directions) or offline areas in Google Maps or Apple Maps. A phone has GPS; this laptop doesn't.
@@ -81,7 +83,8 @@ or Linux, open a terminal in the kit folder (Mac: drag the `TinfoilKit` folder o
 
 Either way it is safe to stop (Ctrl-C or close the window) and re-run; it picks up where it left off, and the kit
 keeps working with what it has meanwhile. A normal update gets the
-newest version of the kit itself, new library editions, the latest AI engine, any re-released models and fresh map data (rebuilding the
+newest version of the kit itself and the programs it was released with (the AI engine and the rest), new library
+editions, any re-released models and fresh map data (rebuilding the
 directions network takes 10 to 40 minutes). Wikipedia is the exception: at 115 GB, it keeps the edition it has
 until that one is a year old. Then pull the plug on Wi-Fi and open the kit once for real.
 
@@ -114,13 +117,16 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
 2. Start SETUP in the unzipped folder:
    - **Mac**: double-click **`SETUP.command`**. macOS says it can't check it for malware: click **Done**, open
      **System Settings > Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
-     If it asks to install the Command Line Tools, click **Install**; SETUP waits, then carries on.
+     On a Mac without Python, it first gets one for the kit's tools (about 25 MB, once).
    - **Windows**: double-click **`SETUP-Windows.bat`**. If Windows says it protected your PC, click **More info**,
      then **Run anyway**. First it gets Python, which the kit's tools run on (about 15 MB, once).
    - **Linux**: open a terminal in the folder and run `bash SETUP.command`. It needs python3 and curl.
 3. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works
    too). That sets the maps' area, directions, address search and home, and offers Wikipedia in your language.
-4. SETUP asks where the kit should go, and moves it there for you:
+4. SETUP says which AI model this computer can run, and asks before downloading any that are too big for it. Then
+   it asks where the kit should go, says how much room each place has, and moves the kit there for you. If all of
+   it won't fit, or would leave less than about 10% of the computer's disk (5% of a drive) free, it says so and
+   offers just the essentials: the AI, the medical, preparedness and repair books, and the map.
    - **An external drive**: keep it somewhere safe and plug it in when you need it, into any Mac, Windows PC or
      Linux PC. It goes in a `TinfoilKit` folder on the drive. The drive should be **exFAT**, which all three can use.
      Many new drives come as exFAT. FAT32 won't work (files over 4 GB don't fit), and SETUP shows how to erase the
@@ -129,10 +135,12 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
      files on a removable volume, say yes.
    - **This computer**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder and leaves 50 GB
      free for the computer. On a Mac it stays out of Time Machine backups.
-5. It downloads everything (about 280 to 330 GB the first time, a few hours; maps are 5 to 30 GB of that), then
-   starts each part offline to check it answers. Leave the laptop plugged in; it stays awake while this runs. If
-   you stop it, start SETUP in the kit's folder again and it picks up where it left off. If it ends with "some
-   downloads didn't finish", the kit already works with what it has: run SETUP again later for the rest.
+5. It downloads the essentials first (about 30 to 50 GB) and starts each part offline to check it answers: from
+   then on, the kit works. Then it gets everything else (about 280 to 330 GB in all, a few hours; maps are 5 to
+   30 GB of that) and checks again. Leave the laptop plugged in; it stays awake while this runs. If you stop it,
+   start SETUP in the kit's folder again and it picks up where it left off. If it ends with "some downloads
+   didn't finish", the kit already works with what it has: run SETUP again later for the rest. With just the
+   essentials, a later SETUP offers the rest once there's room. `./kit essentials off` asks for it any time.
 6. Turn off Wi-Fi and start the kit (see the top of this page).
 
 ## Removing it
@@ -140,7 +148,7 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
 Double-click `UNINSTALL.command` in the kit folder (`UNINSTALL-Windows.bat` on Windows; on Linux,
 `bash UNINSTALL.command`). It shows what it will delete and how much space that frees, and deletes the kit and
 everything it downloaded only after you type `delete`. The files don't go to the Trash. On a drive, nothing else on
-the drive is touched. On Windows it also removes the Python SETUP got.
+the drive is touched. It also removes the Python SETUP got, on Windows or on a Mac that didn't have one.
 
 Optional, on a Mac: `brew install aria2` makes downloads faster.
 

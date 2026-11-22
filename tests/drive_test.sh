@@ -57,7 +57,8 @@ share_check() { # KIT
 }
 
 mac() {
-  local img="$W/drive.img" vol=/Volumes/TINFOIL disk kit src mock f
+  local img="$W/drive.img" vol=/Volumes/TINFOIL disk kit src mock f much
+  local py="$HOME/Library/Application Support/TinfoilKit"    # the Python SETUP gets for a Mac without one
   python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
   mock=$!
 
@@ -67,13 +68,16 @@ mac() {
   disk=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount "$img" | awk 'NR == 1 {print $1}')
   diskutil eraseDisk ExFAT TINFOIL GPT "$disk" || { fail "erase $disk"; kill "$mock"; return; }
 
-  step "SETUP.command in the unzipped download: pick the drive; it moves the kit there and sets it up"
+  step "SETUP.command in the unzipped download, as on a Mac without Python: it gets the kit's own (the real"
+  echo "build, from the mock internet); pick the drive; it moves the kit there and sets it up"
   src="$W/Downloads/tinfoilkit-main" kit="$vol/TinfoilKit"
+  rm -rf "$py"
   download_kit "$src"
   n="$(drive_number "$src" TINFOIL)"
   echo "SETUP lists TINFOIL as drive ${n:-(not at all)}"
   # Answers: keep where it's for, an external drive, TINFOIL, start downloading, don't open the kit, close.
-  setup "$src" setup.log "\n1\n${n:-1}\ny\nn\n\n"
+  KIT_OWN_PYTHON=1 setup "$src" setup.log "\n1\n${n:-1}\ny\nn\n\n"
+  "$py/python/bin/python3" --version || fail "SETUP didn't get the kit's own Python"
   [ -d "$kit/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
   echo "$(find "$kit" -name '._*' | wc -l | tr -d ' ') ._ files on the drive"
@@ -105,9 +109,10 @@ mac() {
   kit="$HOME/TinfoilKit" agent="$HOME/Library/LaunchAgents/com.tinfoilkit.kit.plist"
   rm -rf "$kit"
   download_kit "$src"
-  # Answers: keep where it's for, this Mac, yes even if the disk is short of room (SETUP asks then), download, close.
-  room=""; [ "$(df -Pk "$HOME" | awk 'NR == 2 {print int($4 * 1024 / 1e9)}')" -lt 51 ] && room="y\n"
-  setup "$src" setup-mac.log "\n2\n${room}y\n\n" --home-server
+  # Answers: keep where it's for, this Mac, all of it even if that leaves less free than SETUP likes (it asks then),
+  # download, close.
+  much=""; [ "$("$src/kit" space "$kit" | cut -f1)" = tight ] && much="2\n"
+  setup "$src" setup-mac.log "\n2\n${much}y\n\n" --home-server
   [ -d "$kit/models" ] || fail "the kit isn't set up in $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
   tmutil isexcluded "$kit" | grep -q Excluded || fail "Time Machine would back up $kit"
@@ -123,6 +128,7 @@ mac() {
   tail -4 "$L/uninstall-mac.log"
   [ -e "$kit" ] && fail "$kit is still there after UNINSTALL"
   [ -e "$agent" ] && fail "UNINSTALL left the LaunchAgent, which would start a kit that's gone"
+  [ -e "$py" ] && fail "UNINSTALL left the kit's own Python in $py"
   sleep 2
   curl -s -o /dev/null -m 3 http://127.0.0.1:8888/ && fail "the kit is still running after UNINSTALL"
   stop_kit

@@ -12,6 +12,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -51,7 +52,8 @@ for rel, size in (("zim/testmed_en_all_maxi_2026-01.zim", 70_000), ("zim/testsur
     (R / rel).parent.mkdir(parents=True, exist_ok=True)
     (R / rel).write_bytes(os.urandom(size))
 shutil.copy(R / "hf/tiny/Tiny-Q8_0.gguf", R / "hf/tiny_v2/Tiny-Q8_0.gguf")
-for rel in ("gh/llama-b99990-bin-ubuntu-x64.tar.gz", "gh2/photon-1.3.0.jar", "gh2/photon-1.2.1.jar"):   # only looked up, never unpacked
+for rel in ("gh/llama-b99990-bin-ubuntu-x64.tar.gz", "gh2/photon-1.3.0.jar", "gh2/photon-1.2.1.jar",   # only looked up, never unpacked
+            "adoptium/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz", "photon/north-america/usa/photon-db-usa-1.3-latest.tar.bz2"):
     (R / rel).parent.mkdir(parents=True, exist_ok=True)
     (R / rel).write_bytes(os.urandom(1000))
 (R / "FLAKY").touch()   # the first model download drops halfway, so sync has to resume it
@@ -202,12 +204,60 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # here is a beta, and a beta is taken only when there's nothing else.
     rt = work / "runtimes"
     shutil.copytree(TESTS.parent / "tools", rt / "tools")
-    (rt / "kit.json").write_text(json.dumps({"runtimes": [
+    programs = [
         {"id": "llama.cpp-linux-x64", "type": "github", "repo": "ggml-org/llama.cpp", "asset": "llama-*-bin-ubuntu-x64.tar.gz"},
-        {"id": "photon", "type": "github", "repo": "komoot/photon", "asset": "photon-[0-9]*.jar"}]}))
+        {"id": "photon", "type": "github", "repo": "komoot/photon", "asset": "photon-[0-9]*.jar"},
+        {"id": "java-linux-x64", "type": "adoptium", "os": "linux", "arch": "x64"}]
+    (rt / "kit.json").write_text(json.dumps({"settings": {"pin_programs": False}, "runtimes": programs}))
     rc, out = kit("plan", root=rt)
     check("plan: llama.cpp's nightly build, and Photon's full release rather than its newer beta",
-          rc == 0 and "b99990" in out and "1.3.0" in out and "2.0.0-beta" not in out, out)
+          rc == 0 and "b99990" in out and "1.3.0" in out and "2.0.0-beta" not in out and "jdk-21.0.9+10" in out, out)
+
+    # A release names each program's build and its checksum (tools/pins.json): sync takes that build rather than
+    # a newer one, and refuses a file that changed after it was pinned.
+    def pin(**pins):
+        (rt / "tools" / "pins.json").write_text(json.dumps({"_readme": ["test"], **pins}))
+    llama, photon_old = sha(R / "gh/llama-b99990-bin-ubuntu-x64.tar.gz"), sha(R / "gh2/photon-1.2.1.jar")
+    java = sha(R / "adoptium/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz")
+    (rt / "kit.json").write_text(json.dumps({"runtimes": programs}))
+    pin(photon={"version": "1.2.1", "sha256": photon_old}, **{"llama.cpp-linux-x64": {"version": "b99990", "sha256": llama},
+                                                               "java-linux-x64": {"version": "jdk-21.0.9+10", "sha256": java}})
+    rc, out = kit("plan", root=rt)
+    check("pins: plan takes the pinned builds, not Photon's newest release", rc == 0 and "b99990" in out
+          and "1.2.1" in out and "1.3.0" not in out and "jdk-21.0.9+10" in out and "error" not in out, out)
+    pin(photon={"version": "1.2.1", "sha256": "0" * 64})
+    rc, out = kit("plan", root=rt)
+    check("pins: a file that changed after it was pinned is refused",
+          "changed after this version of the kit pinned it" in out and "1.3.0" not in out, out)
+    pin(**{"llama.cpp-linux-x64": {"version": "b12345", "sha256": llama}})
+    rc, out = kit("plan", root=rt)
+    check("pins: a pinned build its publisher took down says so", "no longer publishes b12345" in out, out)
+    (rt / "kit.json").write_text(json.dumps({"settings": {"pin_programs": False}, "runtimes": programs}))
+    rc, out = kit("plan", root=rt)
+    check("pins: \"pin_programs\": false takes the newest builds", rc == 0 and "b99990" in out and "1.3.0" in out, out)
+    # Photon opens only address databases made for its own version: when none is published for the pinned one,
+    # the kit takes the Photon release that opens the newest database.
+    (rt / "kit.json").write_text(json.dumps({"runtimes": programs, "maps": {"enabled": True}}))
+    pin(photon={"version": "2.0.0-beta", "sha256": "0" * 64})
+    rc, out = kit("plan", root=rt)
+    check("pins: a pinned Photon with no address database gives way to the release that opens the newest one",
+          re.search(r"photon\s.*1\.3\.0", out) and "2.0.0-beta" not in out and re.search(r"geocoder\s.*1\.3/", out), out)
+
+    # ./kit pins, before a release: the newest builds and their checksums
+    (rt / "kit.json").write_text(json.dumps({"runtimes": programs}))
+    pin(photon={"version": "1.2.1", "sha256": photon_old})
+    rc, out = kit("pins", root=rt)
+    pins = json.loads((rt / "tools" / "pins.json").read_text())
+    check("./kit pins: the newest build of each program, with its publisher's SHA-256", rc == 0
+          and pins.get("llama.cpp-linux-x64") == {"version": "b99990", "sha256": llama}
+          and pins.get("photon") == {"version": "1.3.0", "sha256": sha(R / "gh2/photon-1.3.0.jar")}
+          and pins.get("java-linux-x64") == {"version": "jdk-21.0.9+10", "sha256": java}
+          and "photon: 1.2.1 -> 1.3.0" in out and "llama.cpp-linux-x64: not pinned -> b99990" in out, out)
+    pin(photon={"version": "1.3.0", "sha256": "0" * 64})
+    rc, out = kit("pins", root=rt)
+    check("./kit pins: a file replaced under the same version keeps its old pin, and the run fails", rc != 0
+          and json.loads((rt / "tools" / "pins.json").read_text())["photon"]["sha256"] == "0" * 64
+          and "replaced a file it had already published" in out, out)
 
     (drive / ".kit" / "state.json").unlink()
     rc, out = kit("sync", "-y")
@@ -540,13 +590,28 @@ pathlib.Path(str(out) + ".aria2").unlink()
     check("kit update: leaves a git checkout to git", rc == 0 and "git pull" in out, out)
 
     # SETUP.command's choices, with a stand-in ./kit that exits as told. Its update rewrites SETUP.command in
-    # place, the hard case for bash, which reads a script as it goes.
+    # place, the hard case for bash, which reads a script as it goes. Its space says what SPACE does (all of it, the
+    # essentials, GB free, GB in all, GB all of it needs, GB the essentials need, GB worth leaving free), or for a
+    # drive what SPACE_DRIVE does. Calls with --essentials go in calls.log as plan-essentials and sync-essentials.
+    def space(*v):
+        return "\t".join(map(str, v))
+    roomy = space("fits", "fits", 900, 1000, 400, 100, 50)
     stand_in = """#!/bin/bash
 case "$1" in drives|place|region) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
-echo "kit $1" >> calls.log
+c="$1"; case " $* " in *" --essentials "*) c="$1-essentials";; esac
+[ "$1" = essentials ] && c="essentials-$2"
+[ "$1" = space ] || echo "kit $c" >> calls.log
 case "$1" in
-  estimate) echo "${ESTIMATE:-1}";;
-  update) [ "$UPDATE" = 3 ] && sed 's/: download\. Here/: download (new version). Here/' SETUP.command > new && cat new > SETUP.command
+  space) case "$2" in "${KIT_DRIVES:-/nowhere}"/*) echo "${SPACE_DRIVE:-$SPACE}";; *) echo "$SPACE";; esac;;
+  essentials) python3 - "$2" <<'PY'
+import json, sys
+c = json.load(open("kit.json"))
+c.setdefault("settings", {})["essentials_only"] = True if sys.argv[1] == "on" else None
+c["settings"] = {k: v for k, v in c["settings"].items() if v is not None}
+json.dump(c, open("kit.json", "w"), indent=1)
+PY
+              ;;
+  update) [ "$UPDATE" = 3 ] && sed 's/Step [$]KIT_STEP of/Step $KIT_STEP (new version) of/' SETUP.command > new && cat new > SETUP.command
           exit $UPDATE;;
   plan) exit $PLAN;;
   sync) mkdir -p logs; echo "===== sync started =====" >> logs/sync-2026-01-01.log
@@ -579,39 +644,60 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         (folder / "home.log").write_text("")
         p = subprocess.run(["bash", str(folder / "SETUP.command"), *args], input=answers, capture_output=True, text=True, timeout=60,
                            env={**os.environ, "PLAN": str(plan), "SYNC": str(sync), "TEST": str(test), "UPDATE": str(update),
-                                **env_extra})
+                                "SPACE": roomy, **env_extra})
         return p.returncode, p.stdout, (folder / "calls.log").read_text().split()[1::2]
 
+    first = ["update", "fit", "plan-essentials", "sync-essentials", "test", "sync", "test"]
     rc, out, calls = run_setup()
-    check("SETUP: all good", rc == 0 and "All set" in out and calls == ["update", "plan", "sync", "test"]
-          and "Step 1 of 3: the kit is on" in out and "where should the kit go" not in out, out)
+    check("SETUP: all good: the essentials first, checked, then the rest", rc == 0 and "All set" in out and calls == first
+          and "Step 1 of 3: the kit is on" in out and "Step 2 of 3: the essentials" in out and "The essentials work" in out
+          and "Step 3 of 3: everything else (about 400 GB)" in out and "where should the kit go" not in out, out)
     (setup / ".kit" / "state.json").write_text('{"items": {}, "last_sync": "2026-01-01T00:00:00"}')
+    update_calls = ["update", "fit", "plan", "sync", "test"]
+
+    def essentials_only():
+        c = json.loads((TESTS.parent / "kit.json").read_text())
+        c["settings"]["essentials_only"] = True
+        (setup / "kit.json").write_text(json.dumps(c, indent=1))
     rc, out, calls = run_setup()
     check("SETUP: set up before: says it's an update, and how to update next time",
-          rc == 0 and "TINFOIL KIT UPDATE" in out and "TINFOIL KIT SETUP" not in out
-          and "whenever you want the newest AI models" in out and calls == ["update", "plan", "sync", "test"], out)
+          rc == 0 and "TINFOIL KIT UPDATE" in out and "TINFOIL KIT SETUP" not in out and "Step 3 of 3: start everything" in out
+          and "whenever you want the newest AI models" in out and calls == update_calls, out)
+    essentials_only()
+    rc, out, calls = run_setup(answers="\ny\ny\nn\n\n")
+    check("SETUP: an update of just the essentials, now that the rest fits: offers it, and a yes gets it",
+          rc == 0 and "now there's room for the rest (about 400 GB more)" in out
+          and calls == ["update", "fit", "essentials-off", "plan", "sync", "test"], out)
+    essentials_only()
+    rc, out, calls = run_setup(answers="\n\ny\nn\n\n")
+    check("SETUP: an update of just the essentials: just Return keeps it that way",
+          rc == 0 and "room for the rest" in out and calls == update_calls and "essentials_only" in (setup / "kit.json").read_text(), out)
+    rc, out, calls = run_setup(SPACE=space("no", "fits", 300, 1000, 400, 100, 50))
+    check("SETUP: an update of just the essentials, and the rest still doesn't fit: doesn't offer it",
+          rc == 0 and "room for the rest" not in out and calls == update_calls, out)
+    shutil.copy(TESTS.parent / "kit.json", setup)
     (setup / ".kit" / "state.json").unlink()
     rc, out, calls = run_setup(update=3)
     check("SETUP: after updating the kit it starts over on the new SETUP, once",
-          rc == 0 and "Step 2 of 3: download (new version)" in out and out.count("TINFOIL KIT SETUP") == 1
-          and out.count("Maps are for") == 1
-          and calls == ["update", "plan", "sync", "test"], out)
+          rc == 0 and "Step 2 (new version) of 3: the essentials" in out and out.count("TINFOIL KIT SETUP") == 1
+          and out.count("Maps are for") == 1 and calls == first, out)
     rc, out, calls = run_setup(update=1)
-    check("SETUP: the kit's own update failed: carries on", rc == 0 and "All set" in out and calls == ["update", "plan", "sync", "test"], out)
+    check("SETUP: the kit's own update failed: carries on", rc == 0 and "All set" in out and calls == first, out)
     rc, out, calls = run_setup(sync=1)
     check("SETUP: some downloads failed but the kit works: says so and lists them",
           rc == 1 and "didn't finish" in out and "models/Big: download failed" in out and "All set" not in out, out)
     rc, out, calls = run_setup(sync=1, test=1)
-    check("SETUP: checks failed", rc == 1 and "Some checks failed" in out and "models/Big" in out, out)
+    check("SETUP: checks failed: stops after the essentials", rc == 1 and "Some checks failed" in out and "models/Big" in out
+          and calls == first[:5], out)
     rc, out, calls = run_setup(sync=130)
-    check("SETUP: Ctrl-C during the download", rc == 130 and "Stopped" in out and calls == ["update", "plan", "sync"], out)
+    check("SETUP: Ctrl-C during the download", rc == 130 and "Stopped" in out and calls == first[:4], out)
     rc, out, calls = run_setup(plan=1)
-    check("SETUP: offline: stops before asking to download", rc == 1 and calls == ["update", "plan"] and "Start downloading" not in out, out)
+    check("SETUP: offline: stops before asking to download", rc == 1 and calls == first[:3] and "Start downloading" not in out, out)
     home = ["share on", "autostart on", "share"]
     check("SETUP: a normal setup doesn't share the kit or start it with the computer", (setup / "home.log").read_text() == "")
     rc, out, calls = run_setup(args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: shares the kit, starts it with the computer, shows the address, and doesn't open it",
-          rc == 0 and calls[:4] == ["update", "plan", "sync", "test"] and (setup / "home.log").read_text().splitlines() == home
+          rc == 0 and calls[:len(first)] == first and (setup / "home.log").read_text().splitlines() == home
           and "Home server" in out and "Open the kit now" not in out and "double-click START-HERE" not in out, out)
     rc, out, calls = run_setup(update=3, args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: still a home server after the kit updates itself and starts over",
@@ -628,17 +714,66 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_de_all_"], out)
     shutil.copy(TESTS.parent / "kit.json", setup)
 
+    # A Mac without Python: SETUP gets the kit's own (a stand-in archive here), checked against its SHA-256.
+    mac = work / "mac"
+    for d, xcode in (("bin", 2), ("dev", 0)):    # dev: a Mac with Apple's developer tools
+        (mac / d).mkdir(parents=True)
+        for name, body in {"uname": 'case "$1" in -m) echo arm64;; *) echo Darwin;; esac',
+                           "xcode-select": f"exit {xcode}", "open": "exit 0"}.items():
+            (mac / d / name).write_text(f"#!/bin/sh\n{body}\n")
+            (mac / d / name).chmod(0o755)
+    (mac / "src" / "python" / "bin").mkdir(parents=True)
+    (mac / "src" / "python" / "bin" / "python3").write_text('#!/bin/sh\necho "own python $*"\n')
+    (mac / "src" / "python" / "bin" / "python3").chmod(0o755)
+    tgz = mac / "python.tar.gz"
+    with tarfile.open(tgz, "w:gz") as t:
+        t.add(mac / "src" / "python", arcname="python")
+    sha = hashlib.sha256(tgz.read_bytes()).hexdigest()
+    py_home = mac / "home" / "Library" / "Application Support" / "TinfoilKit"
+    on_mac = {"PATH": f"{mac / 'bin'}:{os.environ['PATH']}", "HOME": str(mac / "home"), "KIT_OWN_PYTHON": "1",
+              "KIT_MAC_PYTHON_URL": tgz.as_uri(), "KIT_MAC_PYTHON_SHA256": sha}
+    rc, out, calls = run_setup(plan=1, answers="", **on_mac)
+    check("SETUP on a Mac without Python: gets the kit's own, checks it, and carries on",
+          rc == 1 and "First, the kit gets the Python" in out and "this Mac" in out and calls == first[:3]
+          and (py_home / "python" / "bin" / "python3").exists() and (py_home / "python" / ".kit-sha256").read_text().strip() == sha
+          and not (py_home / "python.partial").exists() and not (py_home / "python.tar.gz").exists(), out)
+    rc, out, calls = run_setup(plan=1, answers="", **on_mac)
+    check("SETUP on a Mac: the kit's Python is there: no download", calls == first[:3] and "Python" not in out, out)
+    (py_home / "python" / ".kit-sha256").write_text("an older build\n")
+    rc, out, calls = run_setup(plan=1, answers="", **{**on_mac, "KIT_MAC_PYTHON_URL": (mac / "nothing.tar.gz").as_uri()})
+    check("SETUP on a Mac: a newer Python that can't be had: keeps the one it has",
+          calls == first[:3] and "Couldn't download it" in out and "keeps using the Python it has" in out
+          and (py_home / "python" / "bin" / "python3").exists(), out)
+    rc, out, calls = run_setup(plan=1, answers="", **on_mac)
+    check("SETUP on a Mac: a newer Python: replaces the old one",
+          calls == first[:3] and "a newer Python" in out and (py_home / "python" / ".kit-sha256").read_text().strip() == sha, out)
+    shutil.rmtree(py_home)
+    rc, out, calls = run_setup(plan=1, answers="", **{**on_mac, "KIT_MAC_PYTHON_SHA256": "0" * 64})
+    check("SETUP on a Mac: a download that doesn't match its checksum isn't used, and SETUP stops",
+          rc == 1 and "checksum doesn't match" in out and calls == [] and not (py_home / "python").exists(), out)
+    real_kit = TESTS.parent / "kit"
+    shutil.copytree(mac / "src" / "python", py_home / "python")
+    p = subprocess.run([str(real_kit), "--help"], capture_output=True, text=True, env={**os.environ, "HOME": str(mac / "home")})
+    check("./kit runs on the kit's own Python when SETUP got one",
+          p.stdout.strip() == f"own python {TESTS.parent / 'tools' / 'kit.py'} --root {TESTS.parent} --help", p.stdout + p.stderr)
+    shutil.rmtree(py_home)
+    if shutil.which("python3", path="/usr/bin:/bin") == "/usr/bin/python3":
+        p = subprocess.run([str(real_kit), "--help"], capture_output=True, text=True,
+                           env={**os.environ, "HOME": str(mac / "home"), "PATH": f"{mac / 'bin'}:/usr/bin:/bin"})
+        check("./kit on a Mac without Apple's developer tools or the kit's Python: says to double-click SETUP",
+              p.returncode == 1 and "Double-click SETUP.command" in p.stdout, p.stdout + p.stderr)
+        p = subprocess.run([str(real_kit), "--help"], capture_output=True, text=True,
+                           env={**os.environ, "HOME": str(mac / "home"), "PATH": f"{mac / 'dev'}:/usr/bin:/bin"})
+        check("./kit on a Mac with Apple's developer tools: runs on its python3", p.returncode == 0 and "usage" in p.stdout,
+              p.stdout + p.stderr)
+    else:
+        print("skip  ./kit on a Mac's /usr/bin/python3 (no /usr/bin/python3 here)")
+
     # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
     # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.
-    roomy = work / "roomy"
-    roomy.mkdir()
-    (roomy / "df").write_text("#!/bin/sh\necho 'Filesystem 1024-blocks Used Available Capacity Mounted on'\n"
-                              "echo 'disk 2000000000 1000000000 1000000000 50% /'\n")
-    (roomy / "df").chmod(0o755)
-
     def first_run(answers, drives=(), git=False, home_kit=None, where="\n", **env_extra):
-        """SETUP's first run, on a computer whose disk has 1 TB free (a stand-in df). where: the answers to "Where do
-        you live?" (Return keeps the kit's place)."""
+        """SETUP's first run. ./kit space says what SPACE (this computer) and SPACE_DRIVE (drives) say. where: the
+        answers to "Where do you live?" (Return keeps the kit's place)."""
         place = work / "place"
         shutil.rmtree(place, ignore_errors=True)
         home, vols = place / "home", place / "Volumes"
@@ -655,33 +790,55 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         (dl / "calls.log").write_text("")
         p = subprocess.run(["bash", str(dl / "SETUP.command")], input=where + answers, capture_output=True, text=True, timeout=60,
                            env={**os.environ, "HOME": str(home), "KIT_DRIVES": str(env_extra.pop("KIT_DRIVES", vols)),
-                                "PATH": f"{roomy}:{os.environ['PATH']}",
-                                "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0", **env_extra})
+                                "SPACE": roomy, "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0", **env_extra})
         return p.returncode, p.stdout + p.stderr, dl, home, vols    # ./kit place says what it did on stderr
 
-    def placed_ok(where):
+    def placed_ok(where, essentials=False):
+        """Set up at where: the essentials first, then the rest, or with just the essentials only those."""
         log = where / "calls.log"
+        tail = ["update", "plan-essentials", "sync", "test"] if essentials else first[:1] + first[2:]
         return ((where / "SETUP.command").exists() and (where / "kit").exists() and (where / "tools/kit.py").exists()
-                and (where / ".kit").is_dir() and log.exists() and log.read_text().split()[1::2][-4:] == ["update", "plan", "sync", "test"])
+                and (where / ".kit").is_dir() and log.exists() and log.read_text().split()[1::2][-len(tail):] == tail
+                and ('"essentials_only": true' in (where / "kit.json").read_text()) == essentials)
 
     rc, out, dl, home, vols = first_run("2\ny\nn\n\n")
-    check("SETUP first run: this computer: the kit moves to TinfoilKit in the home folder and sets up there",
-          rc == 0 and "where should the kit go" in out and "needs about 1 GB" in out and placed_ok(home / "TinfoilKit")
-          and not dl.exists() and "Moved the kit to this computer" in out and out.count("TINFOIL KIT SETUP") == 1
-          and "All set" in out, out)
+    check("SETUP first run: this computer: says what fits, moves the kit to TinfoilKit in the home folder, sets up there",
+          rc == 0 and "Step 2 of 4: where should the kit go?" in out and "All of the kit is about 400 GB" in out
+          and "Just the essentials (the AI" in out and "Its disk has 900 GB free of 1.0 TB: room for all of it" in out
+          and placed_ok(home / "TinfoilKit") and not dl.exists() and "Moved the kit to this computer" in out
+          and out.count("TINFOIL KIT SETUP") == 1 and "Step 4 of 4: everything else" in out and "All set" in out
+          and (home / "TinfoilKit" / "calls.log").read_text().split()[1::2][:2] == ["fit", "essentials-off"], out)
     rc, out, _, _, _ = first_run("1\n1\ny\nn\n\n", drives=["SAMSUNG T7"])
-    check("SETUP first run: a drive: lists it, the kit moves to TinfoilKit at its top and sets up there",
-          rc == 0 and "1  SAMSUNG T7 (" in out and "Look again" in out and placed_ok(vols / "SAMSUNG T7" / "TinfoilKit")
-          and "Moved the kit to the drive SAMSUNG T7" in out and "All set" in out, out)
+    check("SETUP first run: a drive: lists it with what fits, the kit moves to TinfoilKit at its top and sets up there",
+          rc == 0 and "1  SAMSUNG T7 (" in out and "900 GB free of 1.0 TB): room for all of it" in out and "Look again" in out
+          and placed_ok(vols / "SAMSUNG T7" / "TinfoilKit") and "Moved the kit to the drive SAMSUNG T7" in out and "All set" in out, out)
     rc, out, _, home, _ = first_run("1\n2\ny\nn\n\n")
     check("SETUP first run: no drive plugged in: says so, and offers this computer instead",
           rc == 0 and "No external drive is plugged in" in out and placed_ok(home / "TinfoilKit"), out)
-    rc, out, _, home, _ = first_run("2\ny\ny\nn\n\n", ESTIMATE="999999")
-    check("SETUP first run: too little room on this computer: says so, and goes ahead when told to",
-          rc == 0 and "too little for all of it" in out and "leaves 50 GB free" in out and placed_ok(home / "TinfoilKit"), out)
-    rc, out, dl, home, _ = first_run("2\nn\n1\n2\ny\ny\nn\n\n", ESTIMATE="999999")
-    check("SETUP first run: too little room: a no goes to the drives instead", rc == 0 and "No external drive" in out
-          and placed_ok(home / "TinfoilKit"), out)
+    small = space("no", "fits", 300, 1000, 400, 100, 100)
+    rc, out, _, home, _ = first_run("2\n1\ny\nn\n\n", SPACE=small)
+    check("SETUP first run: all of it won't fit on this computer: offers just the essentials, and gets only those",
+          rc == 0 and "room for the essentials, not all of it" in out and "it needs about 400 GB plus some to spare, and 300 GB is free" in out
+          and placed_ok(home / "TinfoilKit", essentials=True) and "You chose just the essentials" in out and "All set" in out, out)
+    rc, out, _, home, _ = first_run("2\n2\n2\n1\ny\nn\n\n", SPACE=small)
+    check("SETUP first run: all of it won't fit: somewhere else goes to the drives", rc == 0 and "No external drive" in out
+          and placed_ok(home / "TinfoilKit", essentials=True), out)
+    rc, out, _, home, _ = first_run("2\n2\ny\nn\n\n", SPACE=space("tight", "fits", 450, 1000, 400, 100, 100))
+    check("SETUP first run: all of it fits, but leaves too little free: warns, and goes ahead when told to",
+          rc == 0 and "room for all of it, but that leaves only 50 GB free" in out
+          and "Better to leave at least 100 GB, so this computer keeps running well" in out and placed_ok(home / "TinfoilKit"), out)
+    rc, out, _, home, _ = first_run("2\n1\ny\nn\n\n", SPACE=space("no", "tight", 150, 1000, 400, 100, 100))
+    check("SETUP first run: only the essentials fit, leaving too little free: warns, and goes ahead when told to",
+          rc == 0 and "Only the essentials fit on this computer, and they leave only 50 GB free" in out
+          and placed_ok(home / "TinfoilKit", essentials=True), out)
+    rc, out, dl, home, _ = first_run("2\n", SPACE=space("no", "no", 50, 1000, 400, 100, 100))
+    check("SETUP first run: not even the essentials fit: says so, and asks for somewhere else",
+          rc == 1 and "not enough room, even for the essentials" in out and "There isn't room on this computer" in out
+          and "No external drive" in out and dl.exists() and not (home / "TinfoilKit").exists(), out)
+    rc, out, _, home, _ = first_run("1\n1\n3\ny\nn\n\n", drives=["STICK"], SPACE_DRIVE=space("no", "no", 20, 64, 400, 100, 10))
+    check("SETUP first run: a drive too small even for the essentials: says so, and this computer is still an option",
+          rc == 0 and "STICK (" in out and "20 GB free of 64 GB): not enough room, even for the essentials" in out
+          and "There isn't room on STICK" in out and placed_ok(home / "TinfoilKit"), out)
     rc, out, dl, home, _ = first_run("2\ny\nn\n\n", git=True)
     check("SETUP first run: a git checkout on this computer stays where it is",
           rc == 0 and placed_ok(dl) and not (home / "TinfoilKit").exists(), out)
@@ -703,11 +860,11 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("SETUP first run: asks where you live first, says when it can't tell, and sets the maps and Wikipedia",
           rc == 0 and "Step 1 of 4: where do you live?" in out and 'No place called "Atlantis"' in out
           and '"USA" matches' in out and "Maps: Texas" in out and "Step 2 of 4: where should the kit go" in out
-          and "Step 3 of 4: download" in out and "Step 4 of 4:" in out and placed_ok(home / "TinfoilKit")
+          and "Step 3 of 4: the essentials" in out and "Step 4 of 4: everything else" in out and placed_ok(home / "TinfoilKit")
           and placed_cfg(home / "TinfoilKit") == ("us/texas", ["wikipedia_en_all_maxi"]), out)
     rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Georgia\n1\n2\n")
     check("SETUP first run: a name two places share: asks which, then which language",
-          rc == 0 and "Which one?" in out and "Georgia (United States)" in out and "Georgia (Asia)" in out
+          rc == 0 and "Which one?" in out and "Georgia (United States)" in out and "Georgia (Europe)" in out
           and "Which language should Wikipedia be in?" in out
           and placed_cfg(home / "TinfoilKit") == ("us/georgia", ["wikipedia_es_all_maxi"]), out)
     rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Texas\n1\n", home_kit="kit")
@@ -720,12 +877,12 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         drv = Path(tempfile.mkdtemp(prefix="kit drives ", dir=shm))
         try:
             (drv / "USB DRIVE").mkdir()
-            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", KIT_DRIVES=drv, ESTIMATE="0")
+            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", KIT_DRIVES=drv)
             check("SETUP first run: a drive that's another disk: the kit is copied over, and the download removed",
                   rc == 0 and placed_ok(drv / "USB DRIVE" / "TinfoilKit") and not dl.exists() and "Moved the kit" in out
                   and not (drv / "USB DRIVE" / "TinfoilKit.partial").exists(), out)
             shutil.rmtree(drv / "USB DRIVE" / "TinfoilKit")
-            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", git=True, KIT_DRIVES=drv, ESTIMATE="0")
+            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", git=True, KIT_DRIVES=drv)
             check("SETUP first run: a git checkout is copied to the drive, .git and all, and stays where it was",
                   rc == 0 and placed_ok(drv / "USB DRIVE" / "TinfoilKit") and (drv / "USB DRIVE" / "TinfoilKit" / ".git").is_dir()
                   and dl.exists() and "Use that copy from now on" in out, out)
@@ -755,15 +912,20 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     kit_log = work / "uninstall-kit.log"
     kit_log.write_text("")
+    own_python = work / "Library" / "Application Support" / "TinfoilKit"    # what SETUP gets for a Mac without Python
+    (own_python / "python" / "bin").mkdir(parents=True)
+    (own_python / "python" / "bin" / "python3").write_text("#!/bin/sh\n")
     rc, out, gone = uninstall(answers="\n\n")
     check("UNINSTALL: says what it deletes, and just Return keeps everything",
           rc == 0 and "This deletes Tinfoil Kit" in out and "can't be undone" in out and "Kept" in out
+          and "Also the Python it downloaded" in out and own_python.exists()
           and (gone / "models/Tiny/Tiny.gguf").exists() and kit_log.read_text() == "", out)
     rc, out, gone = uninstall(answers="yes\n\n")
     check("UNINSTALL: anything but delete keeps it", rc == 0 and "Kept" in out and (gone / "library/book.zim").exists(), out)
     rc, out, gone = uninstall(answers="delete\n\n")
-    check("UNINSTALL: typing delete removes the kit and its downloads, and nothing beside it",
-          rc == 0 and not gone.exists() and (gone.parent / "keep.txt").exists() and "Tinfoil Kit is gone" in out, out)
+    check("UNINSTALL: typing delete removes the kit, its downloads and its Python, and nothing beside it",
+          rc == 0 and not gone.exists() and (gone.parent / "keep.txt").exists() and "Tinfoil Kit is gone" in out
+          and not own_python.exists(), out)
     check("UNINSTALL: a home server's kit stops starting with the computer first", kit_log.read_text() == "autostart off\n",
           kit_log.read_text())
     rc, out, gone = uninstall(answers="delete\n\n", kit_files=False)
@@ -1065,6 +1227,137 @@ server.serve_forever()
         check("extracting without unzip installed", (target / "prog-1/bin/prog.exe").exists())
     finally:
         os.environ["PATH"] = path
+
+    # Where you live: ./kit region and the list of places in tools/regions.json (the real one)
+    rk = work / "region kit"
+    shutil.copytree(TESTS.parent / "tools", rk / "tools")
+    shutil.copy(TESTS.parent / "kit.json", rk / "kit.json")
+
+    def rk_cfg():
+        c = json.loads((rk / "kit.json").read_text())
+        return c["maps"], [z for z in c["library"] if z["zim"].startswith("wikipedia_")]
+
+    def ids(out):
+        return [line.split("\t")[0] for line in out.splitlines() if "\t" in line]
+
+    rc, out = kit("region", root=rk)
+    check("region: says where the maps are for and Wikipedia's language", rc == 0 and "Maps are for US Northeast" in out
+          and "Wikipedia is in English" in out, out)
+    rc, out = kit("region", "--find", "georgia", root=rk)
+    check("region --find: a name two places share lists both", rc == 0 and ids(out) == ["us/georgia", "georgia"], out)
+    rc, out = kit("region", "--find", "UK", root=rk)
+    check("region --find: what people call a country", rc == 0 and ids(out)[:1] == ["united-kingdom"], out)
+    rc, out = kit("region", "--find", "Munich", root=rk)
+    check("region --find: a big town finds its place", rc == 0 and ids(out) == ["bayern"], out)
+    rc, out = kit("region", "--find", root=rk)
+    check("region --find with nothing lists every place", rc == 0 and len(ids(out)) == len(kp.regions()["regions"]) > 200)
+    rc, out = kit("region", "Washington", root=rk)
+    check("region: a name two places share asks which", rc == 1 and "could be" in out and "us/district-of-columbia" in out
+          and "us/washington" in out, out)
+    rc, out = kit("region", "georgia", root=rk)
+    check("region: an id is that place (SETUP passes ids)", rc == 0 and rk_cfg()[0]["region"] == "georgia", out)
+    rc, out = kit("region", "Atlantis", root=rk)
+    check("region: a place it doesn't know", rc == 1 and 'No place matches "Atlantis"' in out, out)
+    rc, out = kit("region", "--languages", "Bavaria", root=rk)
+    check("region --languages: the place's own first, then English", rc == 0 and out.startswith("de\t")
+          and any(line.startswith("en\t") for line in out.splitlines()), out)
+    rc, out = kit("region", "--languages", "Malawi", root=rk)
+    check("region --languages: a small Wikipedia comes only with English",
+          rc == 0 and [line.split("\t")[0] for line in out.splitlines()] == ["en", "ny,en"], out)
+    was = rk_cfg()[1]
+    rc, out = kit("region", "Bavaria", "--wikipedia", "de,en", root=rk)
+    maps, wiki = rk_cfg()
+    lib = json.loads((rk / "kit.json").read_text())["library"]
+    check("region: sets the maps and swaps Wikipedia in place, keeping its settings",
+          rc == 0 and "Maps: Germany: Bayern" in out and "Address search: all of Germany." in out and maps["region"] == "bayern"
+          and [z["zim"] for z in wiki] == ["wikipedia_de_all_maxi", "wikipedia_en_all_maxi"]
+          and lib.index(wiki[0]) == [z["zim"] for z in json.loads((TESTS.parent / "kit.json").read_text())["library"]].index(was[0]["zim"])
+          and all({k: v for k, v in z.items() if k not in ("zim", "note")} == {k: v for k, v in was[0].items() if k not in ("zim", "note")}
+                  for z in wiki), out)
+    both_gb = int(kit("estimate", root=rk)[1].strip())
+    rc, out = kit("region", "--wikipedia", "de", "Bavaria", root=rk)
+    de_gb = int(kit("estimate", root=rk)[1].strip())
+    check("region: the estimate follows Wikipedia's languages", rc == 0 and de_gb < both_gb - 100, (both_gb, de_gb))
+    rc, out = kit("region", "Texas", root=rk)
+    check("region: without --wikipedia, Wikipedia stays as it is",
+          rc == 0 and rk_cfg()[0]["region"] == "us/texas" and [z["zim"] for z in rk_cfg()[1]] == ["wikipedia_de_all_maxi"], out)
+    rc, out = kit("region", "Texas", "--wikipedia", "xx", root=rk)
+    check("region: a language Wikipedia doesn't come in", rc == 1 and "doesn't come in 'xx'" in out
+          and rk_cfg()[0]["region"] == "us/texas", out)
+    wide = next(r for r in kp.regions()["regions"] if r.get("addresses_wide"))
+    rc, out = kit("region", wide["id"], root=rk)
+    check("region: a place with only a continent's address search says so, and how big it is",
+          rc == 0 and f"Address search: all of {wide['addresses']}" in out and "Just the essentials leave it out" in out, out)
+    kp_cfg = json.loads((rk / "kit.json").read_text())
+    geo = next(i for i in kp.items_from_config(kp_cfg) if i.id == "geocoder")
+    without = kp.estimate_gb(rk, kp_cfg, True)
+    wide["addresses_wide"] = False
+    with_it = kp.estimate_gb(rk, kp_cfg, True)
+    wide["addresses_wide"] = True
+    check("region: just the essentials leave out a continent's address search",
+          geo.cfg["wide"] and not kp.essential(geo, {"runs": "", "smallest": ""})
+          and abs(with_it - without - wide["mb"]["addresses"] / 1000) <= 1, (with_it, without, wide["mb"]))
+
+    # the maps settings a place gives, and what kit.json can still change by hand
+    m = kp.maps_settings({"maps": {"enabled": True, "region": "us/texas"}})
+    check("maps_settings: a place's map, directions, address search and home",
+          m["label"] == "Texas" and m["routing_osm_pbf"].endswith("/north-america/us/texas/texas-latest.osm.pbf")
+          and m["geocoder_country"] == "us" and not m["geocoder_wide"] and m["home"]["label"] == "Houston, TX"
+          and m["units"] == "imperial" and m["lang"] == "en", m)
+    m = kp.maps_settings({"maps": {"enabled": True, "region": "us/texas", "detail_maxzoom": 14,
+                                   "home": {"label": "Mine", "lat": 1, "lon": 2}}})
+    check("maps_settings: kit.json's own keys win", m["detail_maxzoom"] == 14 and m["home"]["label"] == "Mine"
+          and m["home"]["zoom"] == 10 and m["label"] == "Texas", m)
+    m = kp.maps_settings({"maps": {"enabled": True, "region": wide["id"], "geocoder_country": "de"}})
+    check("maps_settings: an address search set by hand isn't a continent's", m["geocoder_country"] == "de" and not m["geocoder_wide"])
+    check("maps_settings: a place the kit doesn't know", "region_error" in kp.maps_settings({"maps": {"region": "atlantis"}}))
+    bare = next(r for r in kp.regions()["regions"] if "photon" not in r)
+    check("maps: no address search item where nobody publishes one",
+          not [i for i in kp.maps_items({"maps": {"enabled": True, "region": bare["id"]}}) if i["id"] == "geocoder"], bare["id"])
+    check("find_regions: a state's name", [r["id"] for r in kp.find_regions("New York")][:1] == ["us/new-york"])
+    check("regions: every place's road data is a Geofabrik extract, with a home inside its box",
+          all(kp.region_maps(r)["routing_osm_pbf"].startswith(kp.GEOFABRIK) and r["bbox"][0] <= r["home"]["lon"] <= r["bbox"][2]
+              and r["bbox"][1] <= r["home"]["lat"] <= r["bbox"][3] and all(c in kp.regions()["languages"] for c in r["langs"])
+              for r in kp.regions()["regions"]))
+
+    # a Wikipedia in the old language goes once the new one is in
+    wr = work / "wiki swap"
+    (wr / "zim").mkdir(parents=True)
+    (wr / "zim" / "wikipedia_en_all_maxi_2026-01.zim").write_bytes(b"en")
+    st = {"items": {"library/wikipedia_en_all_maxi": {"dest": "zim", "files": {"wikipedia_en_all_maxi_2026-01.zim": {}}},
+                    "library/testmed_en_all_maxi": {"dest": "zim", "files": {}}}}
+    items = kp.items_from_config({"settings": {}, "library": [{"zim": "wikipedia_de_all_maxi"}, {"zim": "testmed_en_all_maxi"}]})
+    kp.drop_replaced_wikipedias(wr, st, items)
+    check("Wikipedia swap: the old one stays until the new one is in", "library/wikipedia_en_all_maxi" in st["items"]
+          and (wr / "zim" / "wikipedia_en_all_maxi_2026-01.zim").exists())
+    st["items"]["library/wikipedia_de_all_maxi"] = {"dest": "zim", "files": {"wikipedia_de_all_maxi_2026-01.zim": {}}}
+    kp.drop_replaced_wikipedias(wr, st, items)
+    check("Wikipedia swap: then the old one goes, and nothing else", "library/wikipedia_en_all_maxi" not in st["items"]
+          and not (wr / "zim" / "wikipedia_en_all_maxi_2026-01.zim").exists() and "library/testmed_en_all_maxi" in st["items"])
+
+    # Geofabrik's -latest can point at a file that isn't up yet: then the day before's
+    saved_head, asked = kp.http_head, []
+
+    def fake_head(url, *a, **k):
+        asked.append(url)
+        if url.endswith("-latest.osm.pbf") or len(asked) < 3:
+            raise kp.HttpError(url, "curl: (22) The requested URL returned error: 404", 404)
+        return {"content-length": "5"}
+    try:
+        kp.http_head = fake_head
+        url, h = kp.geofabrik_head("https://download.geofabrik.de/europe/romania/romania-latest.osm.pbf")
+        day = (kp.dt.date.today() - kp.dt.timedelta(days=2)).strftime("%y%m%d")
+        check("Geofabrik: a missing latest file falls back to the newest dated one",
+              url == f"https://download.geofabrik.de/europe/romania/romania-{day}.osm.pbf" and h["content-length"] == "5", asked)
+        asked.clear()
+        kp.http_head = lambda url, *a, **k: (_ for _ in ()).throw(kp.HttpError(url, "404", 404))
+        try:
+            kp.geofabrik_head("https://download.geofabrik.de/x/y-latest.osm.pbf")
+            check("Geofabrik: no file at all is an error", False)
+        except kp.HttpError:
+            check("Geofabrik: no file at all is an error", True)
+    finally:
+        kp.http_head = saved_head
 finally:
     mock.terminate()
     shutil.rmtree(work, ignore_errors=True)

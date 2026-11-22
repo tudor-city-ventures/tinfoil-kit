@@ -2,8 +2,9 @@
 # Double-click me (macOS) to set up Tinfoil Kit, and again whenever you want the newest models, books and maps.
 # Linux: bash SETUP.command
 # A home server, a computer that stays on (no screen needed): bash SETUP.command --home-server
-# The first time, it asks whether the kit goes on an external drive or on this Mac, and moves it there.
-# Then it's ./kit update, ./kit sync and ./kit test, with checks and plain-English prompts for first-timers.
+# The first time, it asks whether the kit goes on an external drive or on this Mac, says how much fits there, and
+# moves it there. Then it's ./kit update, ./kit sync and ./kit test (the first time, the essentials come first), with
+# checks and plain-English prompts for first-timers.
 # The whole script is one { } block, so bash reads all of it before running any: ./kit update can replace this
 # file, and the first run moves it.
 {
@@ -15,17 +16,26 @@ KIT="$(pwd)"
 NAME=TinfoilKit    # the kit's folder: at the top of a drive, or in the home folder
 MAC=0; [ "$(uname -s)" = Darwin ] && MAC=1
 THIS="this computer"; [ $MAC = 1 ] && THIS="this Mac"
-ROOM=50            # GB the computer's own disk keeps free (kit.json: keep_free_gb_this_computer)
+FIRST=1; grep -q '"last_sync"' .kit/state.json 2>/dev/null && FIRST=0    # 0: set up before, so this run is an update
+# Steps are counted across the times this script starts itself again (after moving or updating the kit).
+case "${1:-}" in --placed|--updated) ;; *) KIT_STEP=0; KIT_STEPS=3; export KIT_STEP KIT_STEPS ;; esac
+# A Mac without Python gets this build of it (python-build-standalone, checked against its SHA-256), kept in the
+# home folder's Library rather than in the kit: its files include symlinks, which a drive's exFAT can't hold.
+# Changing these two gets Macs the new build at their next SETUP.
+PY_URL="${KIT_MAC_PYTHON_URL:-https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.13.14%2B20260718-aarch64-apple-darwin-install_only_stripped.tar.gz}"
+PY_SHA256="${KIT_MAC_PYTHON_SHA256:-06469835e1b0f73bcdb6c498a1d60ce579cc43a980754490a6f1e30062f43850}"
+PY_HOME="$HOME/Library/Application Support/TinfoilKit"
 
 say() { printf '\n%s\n' "$*"; }
 ask() { printf '\n%s [Y/n] ' "$1"; read -r a; case "$a" in ""|y|Y|yes|Yes) return 0;; esac; return 1; }
+ask_no() { printf '\n%s [y/N] ' "$1"; read -r a; case "$a" in y|Y|yes|Yes) return 0;; esac; return 1; }
+step() { KIT_STEP=$((KIT_STEP + 1)); export KIT_STEP; say "Step $KIT_STEP of $KIT_STEPS: $*"; }
 # A number from 1 to $2, in $pick. Stops if the window has nothing more to read, rather than asking forever.
 choose() { while :; do printf '\n%s ' "$1"; read -r pick || exit 1
              case "$pick" in ""|*[!0-9]*) ;; *) [ "$pick" -ge 1 ] && [ "$pick" -le "$2" ] && return 0 ;; esac
              echo "Type a number from 1 to $2, then press Return."; done; }
 finish() { printf '\a\nPress Return to close this window.'; read -r _; exit "${1:-0}"; }
 gb() { awk -v g="$1" 'BEGIN { if (g >= 1000) printf "%.1f TB", g / 1000; else printf "%d GB", g }'; }
-free_gb() { df -Pk "$1" 2>/dev/null | awk 'NR == 2 {print int($4 * 1024 / 1e9)}'; }
 dev_of() { stat -c %d "$1" 2>/dev/null || stat -f %d "$1" 2>/dev/null; }    # Linux, then macOS
 same_disk() { [ "$(dev_of "$1")" = "$(dev_of "$2")" ]; }
 on_this_mac() { same_disk "$KIT" "$HOME"; }
@@ -48,8 +58,8 @@ problems() {
                         on && /^  - / {buf = buf $0 "\n"} /^Re-run/ {on = 0} END {printf "%s", buf}' "$log"
 }
 
-# The kit's tools run on python3 and curl. A Mac has curl, and python3 comes with Apple's free Command Line Tools:
-# wait for that install instead of making the person find SETUP and start it again.
+# The kit's tools run on python3 (3.9 or newer) and curl. A Mac has curl, but until Apple's developer tools (several
+# GB) are installed its python3 only offers to install them: without them, SETUP gets a Python for the kit instead.
 need_python() {
   if [ $MAC = 0 ]; then
     python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' >/dev/null 2>&1 && command -v curl >/dev/null && return
@@ -58,17 +68,91 @@ need_python() {
     echo "  Fedora:                sudo dnf install python3 curl"
     finish 1
   fi
-  python3 -c "" >/dev/null 2>&1 && return
-  say "First, the kit needs Apple's free Command Line Tools. A window will ask to install them: click Install."
-  echo "It takes about 5 to 15 minutes."
-  xcode-select --install >/dev/null 2>&1
-  until python3 -c "" >/dev/null 2>&1; do
-    printf '\nWhen the install has finished, press Return. '; read -r _ || exit 1
-  done
+  if [ -x "$PY_HOME/python/bin/python3" ]; then
+    [ "$(cat "$PY_HOME/python/.kit-sha256" 2>/dev/null)" = "$PY_SHA256" ] && return
+    say "First, a newer Python for the kit's tools (about 25 MB)."
+    get_python || echo "The kit keeps using the Python it has."
+    return
+  fi
+  if [ -z "${KIT_OWN_PYTHON:-}" ] && { [ "$(command -v python3)" != /usr/bin/python3 ] || xcode-select -p >/dev/null 2>&1; } &&
+     python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' >/dev/null 2>&1; then
+    return
+  fi
+  say "First, the kit gets the Python its tools run on (about 25 MB)."
+  get_python || finish 1
+}
+# Downloads PY_URL, checks it and unpacks it into $PY_HOME/python. Says why not and returns 1 if it can't.
+get_python() {
+  local tgz="$PY_HOME/python.tar.gz" new="$PY_HOME/python.partial"
+  rm -rf "$new" && mkdir -p "$new" || { say "Can't save anything in $PY_HOME."; return 1; }
+  if ! curl -fL --retry 3 --progress-bar -o "$tgz" "$PY_URL"; then
+    say "Couldn't download it. Check that $THIS is online (on hotel or cafe Wi-Fi, open any web page and sign in first), then double-click SETUP again."
+  elif [ "$( (shasum -a 256 "$tgz" 2>/dev/null || sha256sum "$tgz") | awk '{print $1}')" != "$PY_SHA256" ]; then
+    say "That download isn't the file it should be (its checksum doesn't match), so it wasn't used. Try again later."
+  elif ! tar -xzf "$tgz" -C "$new" || ! "$new/python/bin/python3" -c "" >/dev/null 2>&1; then
+    say "Couldn't unpack it. Double-click SETUP again."
+  else
+    echo "$PY_SHA256" > "$new/python/.kit-sha256"
+    rm -rf "$PY_HOME/python" "$tgz" && mv "$new/python" "$PY_HOME/python" && rm -rf "$new" && return 0
+  fi
+  rm -rf "$new" "$tgz"
+  return 1
 }
 
-# Lists the drives (./kit drives: folder, format, GB free, why it won't do or -, and name) and sets VOL to the one
-# picked. Returns 1 when the person would rather use this Mac.
+# How the kit fits at a place (./kit space): FULL and ESS say whether all of it and just the essentials fit with room
+# to spare ("fits"), only by leaving less than that ("tight"), or not at all ("no"). Then GB free, GB in all, GB all
+# of it and the essentials need, and GB worth leaving free.
+space() {
+  IFS=$'\t' read -r FULL ESS FREE TOTAL NEED NEED_ESS LEAVE < <(./kit space "$1" 2>/dev/null)
+  [ -n "$FULL" ] || { FULL=fits; ESS=fits; FREE=0; TOTAL=0; NEED=0; NEED_ESS=0; LEAVE=0; }
+}
+room_note() {
+  case "$FULL/$ESS" in
+    fits/*) echo "room for all of it" ;;
+    tight/*) echo "room for all of it, but that leaves only $(gb $((FREE - NEED))) free" ;;
+    */fits|*/tight) echo "room for the essentials, not all of it" ;;
+    *) echo "not enough room, even for the essentials" ;;
+  esac
+}
+
+# After space(): how much of the kit goes to the place it looked at ($1 names it). Sets ONLY to all or essentials,
+# or returns 1 to choose somewhere else.
+how_much() {
+  local spare why=""
+  spare="$(gb "$LEAVE")"
+  [ "$1" = "$THIS" ] && why=", so $THIS keeps running well"
+  case "$FULL/$ESS" in
+    fits/*) ONLY=all; return 0 ;;
+    tight/*)
+      say "All of it fits on $1, but leaves only $(gb $((FREE - NEED))) free. Better to leave at least $spare$why."
+      echo "  1  Just the essentials (about $(gb "$NEED_ESS"))"
+      echo "  2  All of it anyway (about $(gb "$NEED"))"
+      echo "  3  Somewhere else"
+      choose "Type 1, 2 or 3, then press Return:" 3
+      case "$pick" in 1) ONLY=essentials ;; 2) ONLY=all ;; *) return 1 ;; esac ;;
+    */fits)
+      say "All of it won't fit on $1: it needs about $(gb "$NEED") plus some to spare, and $(gb "$FREE") is free."
+      echo "  1  Just the essentials (about $(gb "$NEED_ESS")). SETUP offers the rest later, once it fits."
+      echo "  2  Somewhere else"
+      choose "Type 1 or 2, then press Return:" 2
+      [ "$pick" = 1 ] || return 1
+      ONLY=essentials ;;
+    */tight)
+      say "Only the essentials fit on $1, and they leave only $(gb $((FREE - NEED_ESS))) free. Better to leave at least $spare$why."
+      echo "  1  Just the essentials anyway (about $(gb "$NEED_ESS"))"
+      echo "  2  Somewhere else"
+      choose "Type 1 or 2, then press Return:" 2
+      [ "$pick" = 1 ] || return 1
+      ONLY=essentials ;;
+    *)
+      say "There isn't room on $1, even for the essentials: they need about $(gb "$NEED_ESS") plus some to spare, and $(gb "$FREE") is free."
+      echo "Make room there, or choose somewhere else."
+      return 1 ;;
+  esac
+}
+
+# Lists the drives (./kit drives: folder, format, GB free, why it won't do or -, and name) with what fits on each,
+# and sets VOL to the one picked and ONLY to how much goes there. Returns 1 when the person would rather use this Mac.
 pick_drive() {
   local paths fmts frees whys p f g w n i
   while :; do
@@ -88,7 +172,11 @@ pick_drive() {
     fi
     for ((i = 0; i < n; i++)); do
       if [ "${whys[$i]}" != "-" ]; then printf "  %d  %s (won't work: %s)\n" $((i + 1)) "${paths[$i]##*/}" "${fmts[$i]}"
-      else printf "  %d  %s (%s, %s free)\n" $((i + 1)) "${paths[$i]##*/}" "${fmts[$i]}" "$(gb "${frees[$i]}")"; fi
+      else
+        space "${paths[$i]}/$NAME"
+        printf "  %d  %s (%s, %s free of %s): %s\n" $((i + 1)) "${paths[$i]##*/}" "${fmts[$i]}" "$(gb "$FREE")" \
+               "$(gb "$TOTAL")" "$(room_note)"
+      fi
     done
     echo "  $((n + 1))  Look again (just plugged one in?)"
     echo "  $((n + 2))  Put the kit on $THIS instead"
@@ -108,11 +196,8 @@ pick_drive() {
       printf '\nWhen the drive is ready, press Return to look again. '; read -r _ || exit 1
       continue
     fi
-    if [ "${frees[$i]}" -lt "$NEED" ]; then
-      say "${VOL##*/} has $(gb "${frees[$i]}") free, and the kit needs about $NEED GB."
-      echo "The most important things download first, and what doesn't fit is skipped. A bigger drive holds it all."
-      ask "Use ${VOL##*/} anyway?" || continue
-    fi
+    space "$VOL/$NAME"
+    how_much "${VOL##*/}" || continue
     return 0
   done
 }
@@ -124,8 +209,9 @@ pick_drive() {
 pick_region() {
   local now place n i id name c l g ids names codes labels sizes wiki
   now="$(./kit region 2>/dev/null)" || return 0
+  export KIT_REGION_ASKED=1
   if [ "$1" = first ]; then
-    say "Step 1 of 4: where do you live?"
+    step "where do you live?"
     echo "The maps show your area in street detail, with directions and address search, and Wikipedia comes in your language."
     echo "Right now: $now"
     printf '\nType your US state or your country (like Texas, Ontario or Germany), or press Return to keep that: '
@@ -134,7 +220,7 @@ pick_region() {
     printf 'To change that, type where you live (a US state or a country), or press Return to keep it: '
   fi
   while :; do
-    read -r place || exit 1
+    read -r place || return 0     # (nothing more to read: the next question stops it)
     [ -z "$place" ] && return 0
     ids=(); names=()
     while IFS=$'\t' read -r id name g; do ids+=("$id"); names+=("$name ($g)"); done < <(./kit region --find "$place" 2>/dev/null)
@@ -176,40 +262,38 @@ pick_region() {
 # the copy there runs the rest of the setup.
 put_kit() {
   local new
+  export KIT_ESSENTIALS=off; [ "$ONLY" = essentials ] && KIT_ESSENTIALS=on    # the copy there says so in its kit.json
   new="$(./kit place "$1")" || finish 1
-  [ "$new" = "$KIT" ] && return
+  [ "$new" = "$KIT" ] && { ./kit essentials "$KIT_ESSENTIALS" >/dev/null; return; }
   cd "$new" || exit 1
   exec bash "$new/SETUP.command" --placed
 }
 
 # First run only: ask where the kit should live, then carry on from there.
 place() {
-  local home_free
-  NEED="$(./kit estimate 2>/dev/null)"
-  case "$NEED" in ""|*[!0-9]*) NEED=300 ;; esac
-  home_free="$(free_gb "$HOME")"; home_free="${home_free:-0}"
-  say "Step 2 of 4: where should the kit go?"
-  echo "Your kit needs about $NEED GB."
+  step "where should the kit go?"
+  ./kit fit --ask    # which AI model this computer runs, and whether to get the ones too big for it
+  export KIT_FIT_ASKED=1
+  space "$HOME/$NAME"
+  say "All of the kit is about $(gb "$NEED"). Just the essentials (the AI, the medical, preparedness and repair"
+  echo "books, and the map) are about $(gb "$NEED_ESS")."
   echo
   echo "  1  An external drive"
   echo "     Keep it somewhere safe and plug it in when you need it: into any Mac, or a Windows or Linux PC."
   if [ $MAC = 1 ]; then echo "  2  This Mac"; else echo "  2  This computer"; fi
-  if [ "$home_free" -ge $((NEED + ROOM)) ]; then echo "     Nothing to plug in. Its disk has $(gb "$home_free") free."
-  else echo "     Nothing to plug in, but its disk has only $(gb "$home_free") free, too little for all of it."; fi
+  echo "     Nothing to plug in. Its disk has $(gb "$FREE") free of $(gb "$TOTAL"): $(room_note)."
   choose "Type 1 or 2, then press Return:" 2
   while :; do
     if [ "$pick" = 1 ] && pick_drive; then
       put_kit "$VOL/$NAME"
       return
     fi
-    pick=2
-    if [ "$home_free" -lt $((NEED + ROOM)) ]; then
-      say "$(gb "$home_free") is free on $THIS. The kit needs about $NEED GB, and leaves $ROOM GB free so $THIS keeps working."
-      echo "The most important things download first, and what doesn't fit is skipped."
-      ask "Put the kit on $THIS anyway?" || { pick=1; continue; }
+    space "$HOME/$NAME"
+    if how_much "$THIS"; then
+      put_kit "$HOME/$NAME"
+      return
     fi
-    put_kit "$HOME/$NAME"
-    return
+    pick=1
   done
 }
 
@@ -268,7 +352,7 @@ home_server() {
 # --updated: the previous copy of this script did the checks and installed this one.
 if [ "${1:-}" != "--updated" ]; then
   if [ "${1:-}" != "--placed" ]; then
-    if grep -q '"last_sync"' .kit/state.json 2>/dev/null; then    # set up before: this run is an update
+    if [ $FIRST = 0 ]; then
       say "TINFOIL KIT UPDATE"
       echo "This gets the newest AI models, books and maps, including any added to the kit since you last ran it."
       echo "It downloads only what changed. If it's cut off, the kit keeps working with what it has."
@@ -278,26 +362,37 @@ if [ "${1:-}" != "--updated" ]; then
       echo "The first time takes a few hours. Later runs only download what changed."
     fi
     need_python
-    if [ -d .kit ]; then
-      say "Step 1 of 3: the kit is $(where_kit), in $KIT"
-    else
-      export KIT_FIRST_RUN=1    # four steps, not three
-      pick_region first
-      place
-    fi
-  elif [ -n "${KIT_REGION:-}" ]; then
-    ./kit region "$KIT_REGION" ${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"} >/dev/null 2>&1
+    if [ -d .kit ]; then step "the kit is $(where_kit), in $KIT"; else KIT_STEPS=4; pick_region first; place; fi
+  else
+    [ -n "${KIT_ESSENTIALS:-}" ] && ./kit essentials "$KIT_ESSENTIALS" >/dev/null
+    # a kit that was here already gets the answer to "where do you live?" too
+    [ -n "${KIT_REGION:-}" ] && ./kit region "$KIT_REGION" ${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"} >/dev/null 2>&1
   fi
   checks
   echo
   ./kit update
   [ $? -eq 3 ] && exec bash "$KIT/SETUP.command" --updated
 fi
-STEPS=3
-if [ "${KIT_FIRST_RUN:-}" = 1 ]; then STEPS=4; else pick_region; fi
+[ -n "${KIT_REGION_ASKED:-}" ] || pick_region    # (after ./kit update, so a kit from before this question gets it)
 
-say "Step $((STEPS - 1)) of $STEPS: download. Here's what will change:"
-./kit plan || finish 1
+[ -n "${KIT_FIT_ASKED:-}" ] || ./kit fit --ask    # an update can bring models too big for this computer
+ONLY=all; grep -q '"essentials_only": *true' kit.json 2>/dev/null && ONLY=essentials
+if [ $FIRST = 0 ] && [ $ONLY = essentials ]; then
+  space "$KIT"
+  if [ "$FULL" = fits ]; then
+    say "This kit has just the essentials, and now there's room for the rest (about $(gb "$NEED") more)."
+    ask_no "Get the rest too?" && { ./kit essentials off >/dev/null; ONLY=all; }
+  fi
+fi
+
+# The first time, the essentials come first and get checked, so the kit works hours before the rest is in.
+if [ $FIRST = 1 ]; then
+  step "the essentials. Here's what comes first:"
+  ./kit plan --essentials || finish 1
+else
+  step "download. Here's what will change:"
+  ./kit plan || finish 1
+fi
 say "Each item comes from its publisher under its own license, listed in THIRD-PARTY.md. Downloading means you accept them."
 echo "Big downloads take hours. Keep $THIS plugged in with the lid open: it won't go to sleep while this runs."
 echo "You can stop any time (press Control-C, or close this window) and double-click SETUP later to carry on."
@@ -307,18 +402,35 @@ ask "Start downloading?" || finish
 # background so that Ctrl-C reaches the sync, which saves its progress, and this script carries on.
 awake=""
 if command -v caffeinate >/dev/null 2>&1; then caffeinate -i -w $$ & awake=$!; fi
-./kit sync --yes
-rc=$?
-if [ $rc -eq 130 ]; then
-  say "Stopped. Everything downloaded so far is kept. Double-click SETUP again to carry on where it left off."
-  finish 130
-fi
 
-say "Step $STEPS of $STEPS: start everything offline and check that it answers."
-./kit test
-tested=$?
+# ./kit sync with these options, then start everything offline and check that it answers. Sets rc and tested.
+get() {
+  ./kit sync --yes "$@"
+  rc=$?
+  if [ $rc -eq 130 ]; then
+    say "Stopped. Everything downloaded so far is kept. Double-click SETUP again to carry on where it left off."
+    finish 130
+  fi
+  if [ $FIRST = 1 ]; then say "Now a check that it all starts offline and answers."
+  else step "start everything offline and check that it answers."; fi
+  ./kit test
+  tested=$?
+  [ $tested -eq 130 ] && { say "Stopped."; finish 130; }
+}
+if [ $FIRST = 0 ] || [ $ONLY = essentials ]; then
+  get    # (with just the essentials in kit.json, that's all it gets)
+  [ $FIRST = 1 ] && [ $tested -eq 0 ] &&
+    step "everything else: not now. You chose just the essentials. Once there's room, SETUP offers the rest."
+else
+  get --essentials
+  if [ $tested -eq 0 ]; then
+    say "The essentials work: from now on, if the internet goes down, the kit is ready."
+    space "$KIT"
+    step "everything else (about $(gb "$NEED")). It takes hours, and the kit works the whole time."
+    get
+  fi
+fi
 [ -n "$awake" ] && kill "$awake" 2>/dev/null
-[ $tested -eq 130 ] && { say "Stopped."; finish 130; }
 if [ $tested -eq 0 ] && [ $rc -eq 0 ]; then
   all_set
   [ "${KIT_HOME_SERVER:-}" = 1 ] && { home_server; finish; }

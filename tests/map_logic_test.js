@@ -20,6 +20,14 @@ const opts = { geoBase: "http://127.0.0.1:12322", routeBase: "http://127.0.0.1:1
   check("parseLatLon", JSON.stringify(Kit.parseLatLon("40.7428, -73.986")) === JSON.stringify({ lat: 40.7428, lon: -73.986, name: "40.7428, -73.986", address: "" }) &&
         Kit.parseLatLon("100 Main St") === null);
   check("haversine ~1 deg lat = 111 km", Math.abs(Kit.haversine({ lat: 40, lon: -74 }, { lat: 41, lon: -74 }) - 111195) < 200);
+  check("address search asks in the place's language, or in local names where Photon has none",
+        Kit.photonLang("de") === "de" && Kit.photonLang(undefined) === "en" && Kit.photonLang("nb") === "default");
+  const books = [{ id: "a", name: "mdwiki_en_all", language: "eng" }, { id: "b", name: "wikipedia_de_all_maxi", language: "deu" },
+    { id: "c", name: "gutenberg_en", language: "eng" }, { id: "d", name: "x", language: "fra" }];
+  check("library search: its Wikipedia's language first, then by number of books",
+        JSON.stringify(Kit.libraryLanguages(books)) === JSON.stringify(["deu", "eng", "fra"]) &&
+        JSON.stringify(Kit.libraryLanguages(books.filter(b => b.id !== "b"))) === JSON.stringify(["eng", "fra"]),
+        JSON.stringify(Kit.libraryLanguages(books)));
   check("categoryFor", Kit.categoryFor("hospital") === "hospital" && Kit.categoryFor("drug store") === "pharmacy" &&
         Kit.categoryFor("Gas Station") === "gas" && Kit.categoryFor("urgent care") === "urgent_care" && Kit.categoryFor("pizza") === null);
   const intents = {

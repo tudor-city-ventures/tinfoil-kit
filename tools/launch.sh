@@ -210,8 +210,10 @@ if [ "$NO_MAPS" = 0 ] && [ -d "$KIT/maps" ]; then
   JAVA="$(pick_bin java java)"
   PHOTON_JAR="$(newest "$KIT"/bin/photon/photon-*.jar)"
   GH_JAR="$(newest "$KIT"/bin/graphhopper/graphhopper-web-*.jar)"
+  # pmtiles answers /basemap.json, the TileJSON that says it is up, only when it has a --public-url
   if [ -n "$PMTILES" ] && [ -f "$KIT/maps/tiles/basemap.pmtiles" ] && ! up "http://127.0.0.1:$TILES_PORT/basemap.json"; then
-    "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors "$CORS" > "$KIT/logs/tiles.log" 2>&1 &
+    "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors "$CORS" \
+      --public-url "http://$HOST:$TILES_PORT" > "$KIT/logs/tiles.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED map"
   fi
   if [ -n "$JAVA" ] && [ -n "$PHOTON_JAR" ] && [ -d "$KIT/maps/geocoder/photon_data" ] && ! up "http://127.0.0.1:$GEO_PORT/status"; then
@@ -231,9 +233,16 @@ fi
 # --- sharing on the home network
 GATE_PID=""; SHARE_OK=0
 our_gate() { get "http://127.0.0.1:$1/" | grep -q "Tinfoil Kit"; }
+# The gate runs on the Python SETUP got for a Mac without one, or else python3 (as ./kit does). Until Apple's
+# developer tools are installed, a Mac's /usr/bin/python3 only offers to install them.
+PY="$HOME/Library/Application Support/TinfoilKit/python/bin/python3"
+if [ ! -x "$PY" ]; then
+  PY="$(command -v python3)"
+  [ "$PY" = /usr/bin/python3 ] && [ "$(uname -s)" = Darwin ] && ! xcode-select -p >/dev/null 2>&1 && PY=""
+fi
 if [ "$SHARE" = 1 ]; then
-  if ! python3 -c "" >/dev/null 2>&1; then
-    say "  ! Sharing needs python3. On a Mac: xcode-select --install. On Linux: install the python3 package."
+  if [ -z "$PY" ] || ! "$PY" -c "" >/dev/null 2>&1; then
+    say "  ! Sharing needs Python. On a Mac, double-click SETUP.command: it gets it. On Linux: install the python3 package."
   elif our_gate "$SHARE_PORT"; then
     say "  Sharing already on, on port $SHARE_PORT."; SHARE_OK=1
   else
@@ -245,7 +254,7 @@ if [ "$SHARE" = 1 ]; then
     fi
     GARGS=(--root "$KIT" --port "$SHARE_PORT" --library "$LIB_PORT" --ai "$AI_PORT")
     [ "$NO_MAPS" = 0 ] && GARGS+=(--tiles "$TILES_PORT" --geocoder "$GEO_PORT" --routing "$ROUTE_PORT")
-    python3 "$KIT/tools/share.py" serve "${GARGS[@]}" > "$KIT/logs/share.log" 2>&1 &
+    "$PY" "$KIT/tools/share.py" serve "${GARGS[@]}" > "$KIT/logs/share.log" 2>&1 &
     GATE_PID=$!; PIDS+=($!)
   fi
 fi
@@ -292,7 +301,7 @@ say "  AI chat:  http://127.0.0.1:$AI_PORT/"
 [ -n "$MAPS_STARTED" ] && say "  Maps:     on the Map tab of the page above"
 say ""
 if [ "$SHARE_OK" = 1 ]; then
-  python3 "$KIT/tools/share.py" banner --root "$KIT" --port "$SHARE_PORT"
+  "$PY" "$KIT/tools/share.py" banner --root "$KIT" --port "$SHARE_PORT"
   say ""
 elif [ -n "$GATE_PID" ]; then
   say "  Sharing:  NOT running (see logs/share.log)"; say ""
