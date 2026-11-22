@@ -49,10 +49,12 @@ from __future__ import annotations
 
 import argparse
 import base64
+import bz2
 import contextlib
 import datetime as dt
 import email.utils
 import fnmatch
+import gzip
 import hashlib
 import io
 import json
@@ -1416,10 +1418,12 @@ def unzip_py(archive: Path, dest: Path) -> None:
 
 def untar_py(archive: Path, dest: Path, compression: str) -> None:
     """tar in Python: Windows' tar can't always read bzip2, and a tar from Git for Windows takes C: for a
-    remote host. Read as a stream, front to back, since the Photon database is tens of GB. Links become
-    copies (a Mac's or Linux PC's programs have some, set up from Windows onto a drive)."""
+    remote host. Read as a stream, front to back, since the Photon database is tens of GB, through bz2's and
+    gzip's own readers: tarfile's "r|bz2" stops after the first part of a file pbzip2 or lbzip2 made, as
+    Photon's are. Links become copies (a Mac's or Linux PC's programs have some, set up from Windows onto a drive)."""
     links = []
-    with tarfile.open(archive, "r|" + compression) as tf:
+    with (bz2.open if compression == "bz2" else gzip.open)(archive, "rb") as raw, \
+            tarfile.open(fileobj=raw, mode="r|") as tf:
         for m in tf:
             path = inside(dest, m.name)
             if m.isdir():
@@ -1701,7 +1705,7 @@ def install_photon(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str,
     staging.mkdir(parents=True)
     log("    unpacking it (10-40 minutes)...")
     fast = shutil.which("pbzip2") or shutil.which("lbzip2")
-    ok = False
+    ok, why = False, ""
     if os.name == "nt":
         pass
     elif fast:
@@ -1718,7 +1722,7 @@ def install_photon(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str,
             untar_py(partial, staging, "bz2")
             ok = True
         except (OSError, EOFError, tarfile.TarError, RuntimeError) as e:
-            log(f"    {e}")
+            why = f": {e}"
     data = staging / "photon_data"
     if not data.is_dir():
         nested = [d for d in staging.glob("*/photon_data") if d.is_dir()]
@@ -1726,7 +1730,7 @@ def install_photon(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str,
             os.replace(nested[0], data)
     if not ok or not data.is_dir():
         shutil.rmtree(staging, ignore_errors=True)
-        raise RuntimeError("unpacking the address database failed")
+        raise RuntimeError("unpacking the address database failed" + (why or ("" if not ok else ": no photon_data folder in it")))
     trash = dest.with_name(dest.name + ".old")
     shutil.rmtree(trash, ignore_errors=True)
     if dest.exists():

@@ -6,6 +6,7 @@ Needs only python3 and curl, so it runs in the quick gate and in cloud sessions.
 usage: python3 tests/sync_test.py
 """
 import base64
+import bz2
 import contextlib
 import difflib
 import hashlib
@@ -1314,16 +1315,19 @@ server.serve_forever()
         info = zipfile.ZipInfo("prog-1/bin/tool")
         info.external_attr = 0o100755 << 16
         z.writestr(info, b"#!")
-    with tarfile.open(ex / "db.tar.bz2", "w:bz2") as tf:
+    tar = io.BytesIO()
+    with tarfile.open(fileobj=tar, mode="w") as tf:
         for name, data in (("photon_data/node_1/a.bin", b"x" * 5000), ("photon_data/b.txt", b"hi")):
             ti = tarfile.TarInfo(name)
             ti.size = len(data)
             tf.addfile(ti, io.BytesIO(data))
+    tar = tar.getvalue()    # in two compressed parts, as pbzip2 and lbzip2 make it: Photon's databases come that way
+    (ex / "db.tar.bz2").write_bytes(bz2.compress(tar[:3000]) + bz2.compress(tar[3000:]))
     kp.unzip_py(ex / "a.zip", ex / "z")
     check("unzip in Python: files land in place and programs stay runnable",
           (ex / "z/prog-1/bin/prog.exe").read_bytes() == b"MZ" and os.access(ex / "z/prog-1/bin/tool", os.X_OK))
     kp.untar_py(ex / "db.tar.bz2", ex / "t", "bz2")
-    check("untar in Python: a bzip2 database unpacks", (ex / "t/photon_data/node_1/a.bin").stat().st_size == 5000
+    check("untar in Python: a bzip2 database in several parts unpacks (pbzip2 makes those)", (ex / "t/photon_data/node_1/a.bin").stat().st_size == 5000
           and (ex / "t/photon_data/b.txt").read_bytes() == b"hi")
     for bad in ("../escape.txt", "/abs.txt", "C:/win.txt", "ok/../../escape.txt"):
         with zipfile.ZipFile(ex / "bad.zip", "w") as z:
