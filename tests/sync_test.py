@@ -112,6 +112,10 @@ try:
 
     rc, out = kit("plan")
     check("plan lists new items and broken entries", rc == 0 and out.count("NEW") == 4 and out.count("ERROR") == 2, out)
+    rc, out = kit("plan", "--essentials")
+    check("plan --essentials: the AI this computer runs and the most important books, nothing else",
+          rc == 0 and out.count("NEW") == 2 and "Tiny" in out and "testmed_en_all_maxi" in out and "Two" not in out
+          and "testsurvival" not in out and "ERROR" not in out, out)
 
     rc, out = kit("sync", "-y")
     check("sync exits 1 when entries are broken", rc == 1, f"exit {rc}")
@@ -131,6 +135,20 @@ try:
     write_cfg()
     rc, out = kit("sync", "-y")
     check("second sync has nothing to do", rc == 0 and "Everything is up to date." in out, out)
+
+    # SETUP's first run gets the essentials first, then the rest.
+    ess = work / "essentials"
+    shutil.copytree(TESTS.parent / "tools", ess / "tools")
+    (ess / "kit.json").write_text(json.dumps({"settings": cfg["settings"], "models": [cfg["models"][1]],
+                                              "library": cfg["library"][:2]}))
+    rc, out = kit("sync", "-y", "--essentials", root=ess)
+    ess_state = json.loads((ess / ".kit" / "state.json").read_text())
+    check("sync --essentials: gets only those, and doesn't count as a complete sync",
+          rc == 0 and (ess / "models/Two/Two-Q4_K_M.gguf").exists() and list((ess / "library").glob("testmed_*.zim"))
+          and not list((ess / "library").glob("testsurvival_*")) and "last_sync" not in ess_state, out)
+    rc, out = kit("sync", "-y", root=ess)
+    check("sync after the essentials: gets the rest", rc == 0 and list((ess / "library").glob("testsurvival_*.zim"))
+          and "last_sync" in json.loads((ess / ".kit" / "state.json").read_text()), out)
 
     rc, out = kit("verify")
     check("verify passes", rc == 0 and "All 5 files OK" in out, out)

@@ -6,6 +6,8 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      --json prints every item's size, disabled ones too.
   sync [-y]          Download/update everything enabled in kit.json, verify every file
                      (SHA-256), then remove the old versions. Safe to interrupt and re-run.
+                     --essentials: only the programs, the map, the most important books and the AI
+                     this computer runs plus the smallest. SETUP's first run gets these first.
   verify [--quick]   Re-check every downloaded file against its recorded SHA-256.
                      --fix deletes the bad ones so the next sync replaces them.
   status             What's installed, when it was last updated, free space.
@@ -827,10 +829,22 @@ def find_binary(base: Path, name: Optional[str]) -> Optional[Path]:
     return None
 
 
-def build_plan(root: Path, cfg: Dict[str, Any], state: Dict[str, Any], only: List[str]) -> List[Item]:
+def essential(item: Item, fit: Dict[str, Any]) -> bool:
+    """What the kit can't do without: the programs, the map, the most important books, and the AI model this computer
+    runs plus the smallest one. SETUP's first run downloads and checks these first, so the kit works hours sooner."""
+    if item.section == "models":
+        return item.id in (fit["runs"], fit["smallest"])
+    return item.section in ("runtimes", "maps") or (item.section == "library" and item.priority <= 1)
+
+
+def build_plan(root: Path, cfg: Dict[str, Any], state: Dict[str, Any], only: List[str],
+               essentials: bool = False) -> List[Item]:
     items = items_from_config(cfg)
     if only:
         items = [i for i in items if any(o.lower() in i.key.lower() for o in only)]
+    if essentials:
+        fit = fit_report(root, cfg, state)
+        items = [i for i in items if essential(i, fit)]
     resolver = Resolver(root, cfg)
     active = [i for i in items if i.enabled]
     log(f"Checking {len(active)} items for updates...")
@@ -1946,7 +1960,7 @@ def cmd_plan(root: Path, args: argparse.Namespace) -> None:
     cfg, state = load_config(root), load_state(root)
     if args.json:
         return plan_json(root, cfg, args.only)
-    items = build_plan(root, cfg, state, args.only)
+    items = build_plan(root, cfg, state, args.only, args.essentials)
     print_plan(root, items, state, cfg)
     if offline(items):
         sys.exit(1)
@@ -1983,7 +1997,8 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
     with Lock(root), keep_awake():
         prepare_folder(root)
         cfg, state = load_config(root), load_state(root)
-        items = build_plan(root, cfg, state, args.only)
+        items = build_plan(root, cfg, state, args.only, args.essentials)
+        part = args.only or args.essentials
         print_plan(root, items, state, cfg)
         if offline(items):
             sys.exit(1)
@@ -1992,7 +2007,7 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
         if todo and not args.yes and sys.stdin.isatty():
             if input(f"\nDownload {len(todo)} item(s) now? [Y/n] ").strip().lower() not in ("", "y", "yes"):
                 return
-        if not args.only:
+        if not part:
             sweep_partials(root, state, items)
         failures, done_bytes, start = [], 0, time.time()
         try:
@@ -2009,7 +2024,7 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
             log("\nStopped. Everything finished so far is saved; run ./kit sync again to resume.")
             sys.exit(130)
         errors = [i for i in items if i.enabled and i.status == "error"]
-        if not failures and not errors and not args.only:
+        if not failures and not errors and not part:
             state["last_sync"] = now_iso()
         save_state(root, state)
         write_inventory(root, state)
@@ -2711,10 +2726,13 @@ def main() -> None:
     p = sub.add_parser("plan", help="preview what sync would do")
     p.add_argument("--only", nargs="*", default=[], help="limit to items whose section/id contains these words")
     p.add_argument("--json", action="store_true", help="print every item's size as JSON, disabled ones too")
+    p.add_argument("--essentials", action="store_true", help="only what the kit can't do without")
     p = sub.add_parser("sync", help="download and update everything")
     p.add_argument("-y", "--yes", action="store_true", help="don't ask for confirmation")
     p.add_argument("--force", action="store_true", help="ignore the free space the kit keeps (keep_free_gb)")
     p.add_argument("--only", nargs="*", default=[], help="limit to items whose section/id contains these words")
+    p.add_argument("--essentials", action="store_true", help="only the programs, the map, the most important books "
+                   "and the AI this computer runs plus the smallest (SETUP's first run gets these first)")
     p = sub.add_parser("verify", help="re-check files against their checksums")
     p.add_argument("--quick", action="store_true", help="check sizes only (fast)")
     p.add_argument("--fix", action="store_true", help="delete corrupt files so the next sync replaces them")
