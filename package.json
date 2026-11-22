@@ -1,17 +1,18 @@
 {
   "name": "tinfoilkit-dev",
   "private": true,
-  "description": "Developer tools only: format and lint the kit's page, and the tests' accessibility checks. Nothing on a drive installs or runs them.",
+  "description": "Developer tools only: format and lint the kit's page, the website and the JavaScript tests, and the tests' accessibility checks. Nothing on a drive installs or runs them.",
   "scripts": {
-    "format": "prettier --write tools/portal.html",
-    "lint": "prettier --check tools/portal.html && eslint tools/portal.html",
-    "fix": "eslint --fix tools/portal.html && prettier --write tools/portal.html"
+    "format": "prettier --write tools/portal.html \"site/**/*.{js,jsx,mjs,css}\" \"tests/*.js\" \"*.mjs\"",
+    "lint": "prettier --check tools/portal.html \"site/**/*.{js,jsx,mjs,css}\" \"tests/*.js\" \"*.mjs\" && eslint .",
+    "fix": "eslint --fix . && prettier --write tools/portal.html \"site/**/*.{js,jsx,mjs,css}\" \"tests/*.js\" \"*.mjs\""
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "axe-core": "4.10.2",
     "eslint": "10.15.0",
     "eslint-plugin-html": "8.2.1",
+    "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.14.0",
     "prettier": "3.10.1"
   },

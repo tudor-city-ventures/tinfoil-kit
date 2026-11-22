@@ -34,7 +34,7 @@ Use the cheapest check that proves the change, and paste its output in the commi
 | Tier | Command | When |
 | --- | --- | --- |
 | Targeted | `node tests/map_logic_test.js tools/portal.html` (start the mocks as `tests/check.sh` does) | While iterating |
-| Page format and lint | `npm run lint`, after `npm ci --ignore-scripts` once (`npm run fix` repairs what it can) | Changes to `tools/portal.html`. The quick gate runs it when the tools are installed; CI always does |
+| Format and lint | `npm run lint`, after `npm ci --ignore-scripts` once (`npm run fix` repairs what it can) | Changes to `tools/portal.html`, `site/` or the JavaScript tests. The quick gate runs it when the tools are installed; CI always does |
 | Quick gate | `tests/check.sh` | Before every push. CI runs it on every push |
 | End to end | `tests/build_fixtures.sh` once, then `tests/run_all.sh` (Linux x86_64; needs GitHub and download.kiwix.org, which cloud sessions can't reach) | Changes to `tools/` or `kit.json`. CI runs it on those pushes |
 | Drive | The `drive test` workflow (`drive.yml`: Actions > drive test > Run workflow, or `run_workflow` at `main`). It sets the kit up on an exFAT disk on a Mac, with a small real map (Andorra), replaces its app folder with a new download's, and opens it with the Mac app, then starts it on Windows and Linux, and sets it up on Windows from a download (`only: windows-setup` runs just that, with no Mac minutes). Each machine's screen is filmed, and the run's page links the videos | Once the bulk of a change to `tools/`, `kit.json`, `mac/` or a launcher is done, and before calling it finished. Not on every push: Mac minutes cost money while the repo is private. It also runs nightly, only when a file it covers changed since its last green run (site edits never start it), and every Monday regardless, for new llama.cpp builds |
@@ -50,7 +50,7 @@ Visual changes to the page or the site come with screenshots.
 - Bash must run on macOS's bash 3.2: no `mapfile`, no `set -u` with empty arrays.
 - No symlinks anywhere: drives are exFAT.
 - A kit's `app/` holds only the released code, and can be deleted any time: new features keep the person's files in `data/` and their downloads in `downloads/`, never in `app/`. Never move or delete a folder that holds anything but the kit (`alone` in the program; UNINSTALL checks the same).
-- The kit page stays Prettier-formatted and ESLint-clean: `npm run fix` after editing it. Developer tools never reach a drive, and the kit never needs Node.
+- The kit page, the website and the JavaScript tests stay Prettier-formatted and ESLint-clean: `npm run fix` after editing them. Developer tools never reach a drive, and the kit never needs Node.
 - `.bat` and `.cmd` files keep CRLF line endings and plain ASCII.
 - Every remote endpoint stays overridable by a `KIT_*` env var (see `tests/env.sh`), so tests can point at mocks.
 - Every server listens on 127.0.0.1 only. The one way in from the network is the program's gate, behind the access code.

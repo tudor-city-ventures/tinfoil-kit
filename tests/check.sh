@@ -95,7 +95,7 @@ const m = { exports: {} };
 new Function("module", "exports", h.split("<script>")[1].split("</script>")[0])(m, m.exports);
 if (typeof m.exports.isMapQuestion !== "function") throw new Error("Kit not exported");'
 
-step "the kit page's formatting and lint (npm run lint)"
+step "formatting and lint: the kit page, the website and the JavaScript tests (npm run lint)"
 if [ -x node_modules/.bin/prettier ] && [ -x node_modules/.bin/eslint ]; then
   run npm run --silent lint
 else

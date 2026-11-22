@@ -683,7 +683,7 @@ function MapPanel({ cmd }) {
   }, []);
   useEffect(() => {
     if (cmd) go(HOME, HOSPITAL, "car");
-  }, [cmd]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cmd]);
 
   function go(f, t, m) {
     setTo(t.name);

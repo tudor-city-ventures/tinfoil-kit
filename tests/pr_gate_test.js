@@ -230,9 +230,9 @@ async function expect(name, opts, closed) {
     let boxes = false;
     for (const l of yml.split("\n")) {
       let m;
-      if (/^  - type: /.test(l)) boxes = /checkboxes/.test(l);
-      if ((m = l.match(/^      label: (.*)$/))) out.push(`### ${m[1]}`, "", boxes ? "" : "Something real", "");
-      else if (boxes && (m = l.match(/^        - label: (.*)$/))) out.push(`- [X] ${m[1]}`);
+      if (/^ {2}- type: /.test(l)) boxes = /checkboxes/.test(l);
+      if ((m = l.match(/^ {6}label: (.*)$/))) out.push(`### ${m[1]}`, "", boxes ? "" : "Something real", "");
+      else if (boxes && (m = l.match(/^ {8}- label: (.*)$/))) out.push(`- [X] ${m[1]}`);
     }
     return out.join("\n");
   }
