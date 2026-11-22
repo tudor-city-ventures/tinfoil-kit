@@ -4,16 +4,17 @@ Thanks for helping. One person maintains the kit, so the process keeps their tim
 
 ## How a change gets in
 
-1. **Open an issue first,** with one of the forms. Search the open and closed issues before you do.
-2. **Wait for the `accepted` label.** It means the maintainer wants the change and will review a pull request for it. Talk it through on the issue.
-3. **Open one pull request for it** that says `Closes #123` in its description.
-4. **Show it works.** Run the checks [AGENTS.md](../AGENTS.md#verify) lists for what you changed and paste the output. Changes to the page or the website come with screenshots.
+1. **Open an issue first,** with one of the forms. Search the open and closed issues before you do. "Something broke" and "Mistake on the website or in the guide" label it `bug`; "New feature or change" labels it `feature`.
+2. **Show a feature.** Put a screenshot, mockup, sketch or short screen recording of what someone would see in "What it looks like", and say in a few plain sentences, in your own words, what changes and why it matters when the internet is down. The maintainer reads every proposal: one padded with AI-written filler is closed, and so is one with no picture or video, until you edit one in.
+3. **Wait for the `accepted` label.** It means the maintainer wants the change and will review a pull request for it. Talk it through on the issue.
+4. **Open one pull request for it** that says `Closes #123` in its description. It takes the issue's label, `bug` or `feature`. A feature's description shows the change working, in screenshots or a short screen recording, or a check fails until it does.
+5. **Show it works.** Run the checks [AGENTS.md](../AGENTS.md#verify) lists for what you changed and paste the output. Changes to the page or the website come with screenshots.
 
-A bot closes issues filed without a form (with `gh` or the API, say) and pull requests that don't link an accepted issue. People who've had a pull request merged here skip both. Anyone without write access can have two pull requests open at a time. A pull request that changes the workflows, CODEOWNERS, Dependabot's settings, `.gitattributes`, the release key or how the Mac app is signed fails a check, and only the maintainer can merge it.
+A bot closes issues filed without a form (with `gh` or the API, say), feature proposals with no picture or video, and pull requests that don't link an accepted issue. People who've had a pull request merged here needn't use a form or link an accepted issue, but the rest applies. Anyone without write access can have two pull requests open at a time. A pull request that changes the workflows, CODEOWNERS, Dependabot's settings, `.gitattributes`, the release key or how the Mac app is signed fails a check, and only the maintainer can merge it.
 
 ## Good places to start
 
-- **Library sources.** Suggest one with the idea form, with its exact name from `./kit search WORDS`. AGENTS.md has [the steps](../AGENTS.md#adding-or-replacing-a-library-source).
+- **Library sources.** Suggest one with the feature form, with its exact name from `./kit search WORDS` and a screenshot of it. AGENTS.md has [the steps](../AGENTS.md#adding-or-replacing-a-library-source).
 - **Reports from real computers.** The tests run against mocks, so a bug report from a real Mac or PC, with the output, is the most useful thing you can send.
 - Issues labeled `good first issue`.
 

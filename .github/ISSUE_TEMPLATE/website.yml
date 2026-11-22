@@ -1,0 +1,47 @@
+name: Mistake on the website or in the guide
+description: Something wrong, unclear or out of date on tinfoilkit.com, in the guide or in the README
+labels: [bug, needs-triage]
+body:
+  - type: checkboxes
+    id: first
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched the open and closed issues, and this isn't one of them.
+          required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: A link to the page, or the guide's section.
+      placeholder: https://tinfoilkit.com/#faq
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What's wrong
+      description: What it says or does, and what it should.
+    validations:
+      required: true
+  - type: textarea
+    id: shot
+    attributes:
+      label: Screenshot
+      description: If it's something you see, a screenshot of it. Drag it into this box.
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      description: For something that looks or works wrong on the website.
+      placeholder: Safari on an iPhone 15
+  - type: dropdown
+    id: ai
+    attributes:
+      label: AI use
+      description: Did an AI tool write or find any of this?
+      options:
+        - "No"
+        - It helped me write this up, and I checked every detail
+    validations:
+      required: true

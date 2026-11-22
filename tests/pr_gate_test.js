@@ -24,6 +24,11 @@ const TEMPLATES = path.join(__dirname, "..", ".github", "ISSUE_TEMPLATE");
 
 const REPO = { owner: "tudor-city-ventures", repo: "tinfoil-kit" };
 const ACCEPTED = { labels: [{ name: "accepted" }] };
+const BUG = { labels: [{ name: "accepted" }, { name: "bug" }] };
+const FEATURE = { labels: [{ name: "feature" }, { name: "accepted" }] };
+// What GitHub writes when someone drags a picture or a video into a description
+const SCREENSHOT = "![the Map tab](https://github.com/user-attachments/assets/4e6b1c0a-8f1d-4c3e-9a51-2f7d0c9e1b23)";
+const VIDEO = "https://github.com/user-attachments/assets/9b0f3d2e-1c4a-4e8b-b7a6-5d2c1e0f9a87";
 
 async function run({ pr = {}, issues = {}, action = "opened", sender }) {
   const calls = [];
@@ -53,8 +58,15 @@ async function run({ pr = {}, issues = {}, action = "opened", sender }) {
     },
   };
   const context = { repo: REPO, payload: { action, pull_request: p, sender: sender || p.user } };
-  await gate(github, context, { info() {}, warning() {} });
-  return { closed: calls.includes("closed"), calls, comment: p.comment };
+  let failure = null;
+  await gate(github, context, {
+    info() {},
+    warning() {},
+    setFailed(m) {
+      failure = m;
+    },
+  });
+  return { closed: calls.includes("closed"), calls, comment: p.comment, failure };
 }
 
 let passed = 0,
@@ -130,6 +142,21 @@ async function expect(name, opts, closed) {
   );
   for (const a of ["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"])
     await expect(a, { pr: { author_association: a } }, false);
+  let t = await expect(
+    "a past contributor's feature",
+    { pr: { author_association: "CONTRIBUTOR", body: "Closes #12" }, issues: { 12: FEATURE } },
+    false,
+  );
+  check(
+    "a past contributor's feature is labeled, and needs pictures too",
+    t.calls.includes("label feature") && !!t.failure,
+  );
+  t = await expect(
+    "a maintainer's feature from a fork",
+    { pr: { author_association: "MEMBER", body: "Closes #12" }, issues: { 12: FEATURE } },
+    false,
+  );
+  check("a maintainer's pull request is left alone", !t.calls.length && !t.failure);
   await expect("first-time contributor", { pr: { author_association: "FIRST_TIME_CONTRIBUTOR" } }, true);
   await expect("fork was deleted", { pr: { head: { repo: null } } }, true);
 
@@ -140,6 +167,66 @@ async function expect(name, opts, closed) {
     { action: "reopened", pr: { body: "Closes #12" }, issues: { 12: ACCEPTED } },
     false,
   );
+  for (const action of ["edited", "synchronize"]) {
+    const r = await expect(`${action}, no issue linked`, { action }, false);
+    check(`${action}, no issue linked: no comment either`, !r.calls.includes("comment"));
+  }
+
+  // The accepted issue's kind, bug or feature, goes on the pull request, and a feature shows itself working.
+  let k = await expect("a bug fix", { pr: { body: "Closes #12" }, issues: { 12: BUG } }, false);
+  check("a bug fix is labeled bug, and passes", k.calls.includes("label bug") && !k.failure);
+  k = await expect(
+    "a feature with a screenshot",
+    { pr: { body: `Closes #12\n\n${SCREENSHOT}` }, issues: { 12: FEATURE } },
+    false,
+  );
+  check("a feature is labeled feature, and passes with a screenshot", k.calls.includes("label feature") && !k.failure);
+  k = await expect(
+    "a feature without pictures",
+    { pr: { body: "Closes #12\n\nIt adds a button." }, issues: { 12: FEATURE } },
+    false,
+  );
+  check(
+    "a feature without pictures stays open, labeled, and fails the check with a comment saying what to add",
+    k.calls.includes("label feature") && /screen recording/.test(k.failure) && /drag them in/.test(k.comment),
+  );
+  k = await expect(
+    "a feature edited, still without pictures",
+    { action: "edited", pr: { body: "Closes #12" }, issues: { 12: FEATURE } },
+    false,
+  );
+  check(
+    "an edit without pictures fails the check again, with no second comment",
+    !!k.failure && !k.calls.includes("comment"),
+  );
+  for (const [what, body] of [
+    ["a video uploaded to GitHub", `Closes #12\n\n${VIDEO}\n`],
+    ["an HTML image", 'Closes #12 <img width="600" alt="map" src="https://github.com/user-attachments/assets/1a2b">'],
+    ["a link to a video", "Closes #12, demo: https://www.loom.com/share/0123abcd"],
+    ["a YouTube link", "Closes #12\nhttps://youtu.be/dQw4w9WgXcQ"],
+    ["a link to an image file", "Closes #12, see https://example.org/shots/map.png"],
+  ]) {
+    k = await expect(`a feature with ${what}`, { pr: { body }, issues: { 12: FEATURE } }, false);
+    check(`a feature with ${what} passes`, !k.failure);
+  }
+  k = await expect(
+    "a feature whose only picture is in the template's comment",
+    { pr: { body: `Closes #12\n<!-- like this: ${SCREENSHOT} -->` }, issues: { 12: FEATURE } },
+    false,
+  );
+  check("a picture inside a comment doesn't count", !!k.failure);
+  k = await expect(
+    "already labeled",
+    { pr: { body: `Closes #12 ${SCREENSHOT}`, labels: [{ name: "feature" }] }, issues: { 12: FEATURE } },
+    false,
+  );
+  check("a label it already has isn't added again", !k.calls.some((c) => c.startsWith("label")));
+  k = await expect(
+    "an accepted issue of neither kind",
+    { pr: { body: "Closes #12" }, issues: { 12: ACCEPTED } },
+    false,
+  );
+  check("an accepted issue of neither kind adds no label and passes", !k.calls.length && !k.failure);
 
   // protected-files: outside pull requests that touch CI, reviews or release signing fail the check.
   async function files(names, pr = {}) {
@@ -198,9 +285,17 @@ async function expect(name, opts, closed) {
   check("more files than GitHub lists fails it", !!(await files(["README.md"], { changed_files: 3001 })));
 
   // forms: outside issues that didn't come through a form are closed.
-  async function issue(opts = {}) {
+  async function issue({ action = "opened", ...opts } = {}) {
     const calls = [];
-    const i = { number: 60, body: "", author_association: "NONE", user: { login: "drive-by", type: "User" }, ...opts };
+    const i = {
+      number: 60,
+      body: "",
+      state: "open",
+      labels: [],
+      author_association: "NONE",
+      user: { login: "drive-by", type: "User" },
+      ...opts,
+    };
     const github = {
       rest: {
         issues: {
@@ -208,12 +303,13 @@ async function expect(name, opts, closed) {
             calls.push("comment");
             i.comment = a.body;
           },
-          update: async (a) => calls.push(`${a.state} ${a.state_reason}`),
+          update: async (a) => calls.push(a.state_reason ? `${a.state} ${a.state_reason}` : a.state),
           addLabels: async (a) => calls.push(`label ${a.labels}`),
+          removeLabel: async (a) => calls.push(`unlabel ${a.name}`),
         },
       },
     };
-    await forms(github, { repo: REPO, payload: { action: "opened", issue: i } }, { info() {}, warning() {} });
+    await forms(github, { repo: REPO, payload: { action, issue: i } }, { info() {}, warning() {} });
     return { closed: calls.includes("closed not_planned"), calls, comment: i.comment };
   }
   async function expectIssue(name, opts, closed) {
@@ -225,24 +321,81 @@ async function expect(name, opts, closed) {
     return r;
   }
   // What GitHub writes for an issue sent with a form: a "### label" heading per field, ticked boxes under checkboxes.
-  function filled(yml) {
+  function filled(yml, answer = "Something real") {
     const out = [];
     let boxes = false;
     for (const l of yml.split("\n")) {
       let m;
       if (/^ {2}- type: /.test(l)) boxes = /checkboxes/.test(l);
-      if ((m = l.match(/^ {6}label: (.*)$/))) out.push(`### ${m[1]}`, "", boxes ? "" : "Something real", "");
+      if ((m = l.match(/^ {6}label: (.*)$/))) out.push(`### ${m[1]}`, "", boxes ? "" : answer, "");
       else if (boxes && (m = l.match(/^ {8}- label: (.*)$/))) out.push(`- [X] ${m[1]}`);
     }
     return out.join("\n");
   }
   const templates = fs.readdirSync(TEMPLATES).filter((f) => f.endsWith(".yml") && f !== "config.yml");
-  check("there are issue forms", templates.length >= 2);
+  check("there are issue forms", templates.length >= 3);
+  const created = new Set(
+    [
+      ...fs
+        .readFileSync(path.join(__dirname, "..", ".github", "workflows", "pr-gate.yml"), "utf8")
+        .matchAll(/gh label create (\S+)/g),
+    ].map((m) => m[1]),
+  );
+  for (const n of ["accepted", "auto-closed", "needs-triage", "needs-pictures", "bug", "feature"])
+    check(`the labels job makes the ${n} label`, created.has(n));
+  let features = 0;
   for (const f of templates) {
     const yml = fs.readFileSync(path.join(TEMPLATES, f), "utf8");
-    await expectIssue(`sent with ${f}`, { body: filled(yml) }, false);
-    check(`${f} labels new issues needs-triage`, /^labels: \[.*\bneeds-triage\b.*\]$/m.test(yml));
+    const labels = (yml.match(/^labels: \[(.*)\]$/m) || ["", ""])[1].split(",").map((l) => l.trim());
+    check(`${f} labels new issues needs-triage`, labels.includes("needs-triage"));
+    check(`${f} labels new issues bug or feature`, labels.filter((l) => l === "bug" || l === "feature").length === 1);
+    check(
+      `${f}'s labels all exist`,
+      labels.every((l) => created.has(l)),
+    );
+    await expectIssue(
+      `sent with ${f}, with a screenshot`,
+      { body: filled(yml, `Something real\n\n${SCREENSHOT}`) },
+      false,
+    );
+    // A feature proposal needs a picture or a video; the other forms don't.
+    const feature = labels.includes("feature");
+    features += feature;
+    check(`${f}: a feature asks for a picture`, !feature || /^ {6}label: What it looks like$/m.test(yml));
+    const r = await expectIssue(`sent with ${f}, with no picture`, { body: filled(yml) }, feature);
+    if (feature) {
+      check(
+        "a feature with no picture is labeled needs-pictures, and told how to reopen it",
+        r.calls.includes("label needs-pictures,auto-closed") &&
+          /What it looks like/.test(r.comment) &&
+          /reopens/.test(r.comment),
+      );
+      const closed = {
+        action: "edited",
+        state: "closed",
+        labels: [{ name: "needs-pictures" }, { name: "auto-closed" }],
+      };
+      let e = await issue({ ...closed, body: filled(yml, `Something real\n\n${SCREENSHOT}`) });
+      check(
+        "a picture edited in reopens it and takes the labels off",
+        e.calls.includes("open") &&
+          e.calls.includes("unlabel needs-pictures") &&
+          e.calls.includes("unlabel auto-closed"),
+      );
+      e = await issue({ ...closed, body: filled(yml) });
+      check("an edit with still no picture leaves it closed", !e.calls.length);
+      e = await issue({ ...closed, labels: [{ name: "auto-closed" }], body: filled(yml, SCREENSHOT) });
+      check("an issue closed for another reason stays closed when edited", !e.calls.length);
+      e = await issue({ ...closed, author_association: "OWNER", body: filled(yml, SCREENSHOT) });
+      check("the maintainer's edits change nothing", !e.calls.length);
+    }
   }
+  check("one form is for features", features === 1);
+  await expectIssue(
+    "labeled feature, with no picture",
+    { body: "### Before you start\n\n- [X] I searched\n\n### Idea\n\nA button", labels: [{ name: "feature" }] },
+    true,
+  );
   check(
     "blank issues are off",
     /^blank_issues_enabled: false$/m.test(fs.readFileSync(path.join(TEMPLATES, "config.yml"), "utf8")),
@@ -256,7 +409,28 @@ async function expect(name, opts, closed) {
   await expectIssue("from a first-time contributor", { author_association: "FIRST_TIME_CONTRIBUTOR" }, true);
   for (const a of ["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"])
     await expectIssue(`from ${a}`, { author_association: a }, false);
+  const feature = filled(fs.readFileSync(path.join(TEMPLATES, "feature.yml"), "utf8"));
+  await expectIssue(
+    "a past contributor's feature with no picture",
+    { author_association: "CONTRIBUTOR", body: feature },
+    true,
+  );
+  await expectIssue("the maintainer's feature with no picture", { author_association: "OWNER", body: feature }, false);
+  await expectIssue(
+    "not from a form, but with a feature's heading",
+    { body: "### What it looks like\n\nNothing yet" },
+    true,
+  );
+  check(
+    "an issue not from a form is closed for that, not for its pictures",
+    !(await issue({ body: "### What it looks like\n\nNothing yet" })).calls.includes(
+      "label needs-pictures,auto-closed",
+    ),
+  );
   await expectIssue("from one of the repo's apps", { user: { login: "dependabot[bot]", type: "Bot" } }, false);
+
+  const lists = [...yml.join("\n").matchAll(/const SHOWS = \[[\s\S]*?\];/g)].map((m) => m[0].replace(/^\s+/gm, ""));
+  check("the gate and forms jobs look for pictures the same way", lists.length === 2 && lists[0] === lists[1]);
 
   console.log(failed ? `${failed} FAILED, ${passed} passed` : `ALL ${passed} PASSED`);
   process.exit(failed ? 1 : 0);

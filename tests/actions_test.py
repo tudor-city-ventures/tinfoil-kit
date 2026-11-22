@@ -15,8 +15,8 @@ WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
 
 # The only jobs that get a write token, and what each may write. Anything else is read-only.
 WRITES = {
-    ("pr-gate.yml", "gate"): {"issues", "pull-requests"},  # closes outside PRs without an accepted issue
-    ("pr-gate.yml", "forms"): {"issues"},  # closes outside issues filed without a form
+    ("pr-gate.yml", "gate"): {"issues", "pull-requests"},  # closes outside PRs with no accepted issue, labels others
+    ("pr-gate.yml", "forms"): {"issues"},  # closes outside issues filed without a form, or features with no picture
     ("pr-gate.yml", "labels"): {"issues"},  # creates the gate's labels, run by hand
     ("sizes.yml", "commit"): {"contents"},  # commits builder sizes and places; runs no kit code
     ("pins.yml", "commit"): {"contents"},  # commits program pins; runs no kit code

@@ -1,5 +1,5 @@
 name: Something broke
-description: A problem with the kit on your computer. For the website or the guide, use "Idea or change".
+description: A problem with the kit on your computer. For the website or the guide, use "Mistake on the website or in the guide".
 labels: [bug, needs-triage]
 body:
   - type: checkboxes
@@ -55,6 +55,11 @@ body:
       render: shell
     validations:
       required: true
+  - type: textarea
+    id: shot
+    attributes:
+      label: Screenshot or video
+      description: If you can show it, a screenshot or a short screen recording. Drag it into this box.
   - type: dropdown
     id: ai
     attributes:

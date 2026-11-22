@@ -101,6 +101,7 @@ Until launch, the maintainer's agents commit straight to `main` in small increme
 If you can't push to this repo, you're working for an outside contributor: [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) applies, and the Workflow section above doesn't.
 
 - Open a pull request only for an open issue labeled `accepted`, and link it with `Closes #N`. Others are closed automatically.
+- A feature, in an issue or a pull request, shows what it does in a screenshot or a short screen recording, which the person you work for makes or checks. Keep its description to a few plain sentences: the maintainer closes padded, AI-sounding text.
 - The person you work for reads every issue and pull request before it's posted. Don't post on your own.
 - Issues go through a form at `/issues/new/choose`, sent from the browser. Ones made with `gh` or the API skip the form and are closed automatically.
 - Never add a `Signed-off-by` line. Only that person can sign off.

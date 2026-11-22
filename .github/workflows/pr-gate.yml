@@ -1,18 +1,20 @@
 name: contribution gate
 # Outside pull requests must link an open issue the maintainer labeled `accepted` (.github/CONTRIBUTING.md),
-# and can't change CI, this gate or release signing without the maintainer merging past a failed check.
-# Outside issues must come through a form. pull_request_target and issues run this file with a write token
-# on strangers' input, so it never checks out or runs anything, and reads them only through the API.
+# take its label, bug or feature, and show a feature working in pictures or a video; and they can't change CI,
+# this gate or release signing without the maintainer merging past a failed check. Outside issues must come
+# through a form, and a feature proposal needs a picture or video of what someone would see. pull_request_target
+# and issues run this file with a write token on strangers' input, so it never checks out or runs anything, and
+# reads them only through the API.
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, edited]
   issues:
-    types: [opened]
+    types: [opened, edited]
   workflow_dispatch: # run once by hand to create or update the labels below
 permissions: {}
 jobs:
   gate:
-    if: github.event_name == 'pull_request_target' && (github.event.action == 'opened' || github.event.action == 'reopened')
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -24,13 +26,26 @@ jobs:
             const pr = context.payload.pull_request;
             const { owner, repo } = context.repo;
             const full = `${owner}/${repo}`;
+            const opening = ['opened', 'reopened'].includes(context.payload.action);
+            // A picture or a video, not counting HTML comments (the template's). The forms job has the same list.
+            const SHOWS = [
+              /!\[[^\]]*\]\(\S+?\)/, // markdown for an image
+              /<(img|video)\b[^>]*\ssrc=/i, // HTML for an image or a video
+              /https:\/\/github\.com\/(user-attachments|[\w.-]+\/[\w.-]+)\/assets\//i, // one uploaded to GitHub
+              /https:\/\/(private-)?user-images\.githubusercontent\.com\//i, // the same, in GitHub's older links
+              /https?:\/\/\S+\.(png|jpe?g|gif|webp|mp4|mov|webm)\b/i, // a link to an image or video file
+              /https:\/\/(www\.)?(youtube\.com\/watch|youtu\.be\/|loom\.com\/share\/|vimeo\.com\/\d)/i, // a video site
+            ];
+            const shows = text => SHOWS.some(re => re.test(text.replace(/<!--[\s\S]*?-->/g, '')));
 
-            // Branches in this repo come from people with write access. Members, collaborators (including
-            // read-only ones the maintainer vouched for) and anyone with a merged commit skip the gate too.
+            // Branches in this repo come from people with write access, and members are the maintainers.
             const here = !!pr.head.repo && pr.head.repo.full_name.toLowerCase() === full.toLowerCase();
-            if (here || ['OWNER', 'MEMBER', 'COLLABORATOR', 'CONTRIBUTOR'].includes(pr.author_association)) {
+            if (here || ['OWNER', 'MEMBER'].includes(pr.author_association)) {
               return core.info(`Skipped: ${here ? 'branch in this repo' : pr.author_association}`);
             }
+            // Collaborators (including read-only ones the maintainer vouched for) and anyone with a merged commit
+            // needn't link an accepted issue, but what they link still labels theirs.
+            const trusted = ['COLLABORATOR', 'CONTRIBUTOR'].includes(pr.author_association);
             // Someone other than the author reopening it is a maintainer making the call.
             if (context.payload.action === 'reopened' && context.payload.sender.login !== pr.user.login) {
               return core.info(`Skipped: reopened by ${context.payload.sender.login}`);
@@ -44,12 +59,39 @@ jobs:
                               new RegExp(`github\\.com/${name}/issues/(\\d+)`, 'gi')]) {
               for (const m of text.matchAll(re)) numbers.add(Number(m[1]));
             }
+            let accepted = null;
             for (const n of [...numbers].slice(0, 10)) {
               const issue = await github.rest.issues.get({ owner, repo, issue_number: n }).then(r => r.data, () => null);
               if (issue && !issue.pull_request && issue.state === 'open' && issue.labels.some(l => l.name === 'accepted')) {
-                return core.info(`Allowed: links accepted issue #${n}`);
+                accepted = issue;
+                break;
               }
             }
+
+            if (accepted) {
+              core.info(`Allowed: links accepted issue #${accepted.number}`);
+              // Its kind, bug or feature, goes on the pull request too.
+              const kinds = accepted.labels.map(l => l.name).filter(n => n === 'bug' || n === 'feature');
+              const missing = kinds.filter(k => !(pr.labels || []).some(l => l.name === k));
+              if (missing.length) {
+                await github.rest.issues.addLabels({ owner, repo, issue_number: pr.number, labels: missing })
+                  .catch(e => core.warning(`Couldn't label it: ${e.message}`));
+              }
+              // A feature shows the change working, so the maintainer sees what it does without reading the code.
+              if (kinds.includes('feature') && !shows(pr.body || '')) {
+                if (opening) {
+                  await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body:
+                    "Thanks. This is a feature, so its description needs screenshots or a short screen recording of " +
+                    "the change working, which this one doesn't have yet. Edit the description and drag them in, " +
+                    "and this check passes." });
+                }
+                core.setFailed('A feature needs screenshots or a short screen recording of it working in the description.');
+              }
+              return;
+            }
+            if (trusted) return core.info(`No accepted issue linked, and that's fine: ${pr.author_association}`);
+            // Pushes and edits never close one: only opening it, or the author reopening it.
+            if (!opening) return core.info('No accepted issue linked, and this is an edit or a push: left as it is');
 
             await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body:
               "Thanks for this. Pull requests here need an open issue that the maintainer has labeled `accepted`, " +
@@ -90,7 +132,8 @@ jobs:
               'Only the maintainer can merge it, after reading those changes.');
   forms:
     # Bots and agents file issues through the API or `gh`, which skip the forms and the questions that make a
-    # report usable. GitHub can't require a form there, so this closes what came without one.
+    # report usable. GitHub can't require a form there, so this closes what came without one. It also closes a
+    # feature proposal with no picture or video of what someone would see, and reopens it once one is edited in.
     if: github.event_name == 'issues'
     runs-on: ubuntu-latest
     permissions:
@@ -101,13 +144,54 @@ jobs:
           script: |
             const issue = context.payload.issue;
             const { owner, repo } = context.repo;
-            // Members, collaborators, past contributors and the repo's own apps file issues however they like.
-            if (issue.user.type === 'Bot' || ['OWNER', 'MEMBER', 'COLLABORATOR', 'CONTRIBUTOR'].includes(issue.author_association)) {
+            const number = issue.number;
+            // A picture or a video: the same list as the gate job's.
+            const SHOWS = [
+              /!\[[^\]]*\]\(\S+?\)/, // markdown for an image
+              /<(img|video)\b[^>]*\ssrc=/i, // HTML for an image or a video
+              /https:\/\/github\.com\/(user-attachments|[\w.-]+\/[\w.-]+)\/assets\//i, // one uploaded to GitHub
+              /https:\/\/(private-)?user-images\.githubusercontent\.com\//i, // the same, in GitHub's older links
+              /https?:\/\/\S+\.(png|jpe?g|gif|webp|mp4|mov|webm)\b/i, // a link to an image or video file
+              /https:\/\/(www\.)?(youtube\.com\/watch|youtu\.be\/|loom\.com\/share\/|vimeo\.com\/\d)/i, // a video site
+            ];
+            const shows = text => SHOWS.some(re => re.test(text.replace(/<!--[\s\S]*?-->/g, '')));
+            // The maintainers and the repo's own apps file issues however they like.
+            if (issue.user.type === 'Bot' || ['OWNER', 'MEMBER'].includes(issue.author_association)) {
               return core.info(`Skipped: ${issue.user.type === 'Bot' ? 'an app' : issue.author_association}`);
             }
-            // Every form opens with "Before you start" boxes that must be ticked before it can be sent.
+            // Collaborators the maintainer vouched for and past contributors needn't use a form.
+            const trusted = ['COLLABORATOR', 'CONTRIBUTOR'].includes(issue.author_association);
             const body = issue.body || '';
-            if (/^### Before you start\s*$/m.test(body) && /^- \[x\] /im.test(body)) return core.info('Filed with a form');
+            const labeled = name => (issue.labels || []).some(l => l.name === name);
+
+            if (context.payload.action === 'edited') {
+              // A feature proposal closed for having no picture or video reopens once one is edited in.
+              if (issue.state === 'closed' && labeled('needs-pictures') && shows(body)) {
+                await github.rest.issues.update({ owner, repo, issue_number: number, state: 'open' });
+                for (const name of ['needs-pictures', 'auto-closed']) {
+                  await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name }).catch(() => {});
+                }
+                return core.info('Reopened: it shows the feature now');
+              }
+              return core.info('Edited: nothing to do');
+            }
+
+            // Every form opens with "Before you start" boxes that must be ticked before it can be sent.
+            const form = /^### Before you start\s*$/m.test(body) && /^- \[x\] /im.test(body);
+            if (form || trusted) {
+              // A feature proposal shows what someone would see: quicker to grasp than paragraphs.
+              const feature = /^### What it looks like\s*$/m.test(body) || labeled('feature');
+              if (!feature || shows(body)) return core.info(form ? 'Filed with a form' : `Skipped: ${issue.author_association}`);
+              await github.rest.issues.createComment({ owner, repo, issue_number: number, body:
+                "Thanks. A feature proposal here needs a picture or a short video of what someone would see: a " +
+                "screenshot, a mockup or a photo of a sketch, so the maintainer can see the idea quickly. This one " +
+                "has none, so it's closed for now. Edit the issue and drag one into \"What it looks like\", and it " +
+                "reopens by itself." });
+              await github.rest.issues.update({ owner, repo, issue_number: number, state: 'closed', state_reason: 'not_planned' });
+              await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: ['needs-pictures', 'auto-closed'] })
+                .catch(e => core.warning(`Couldn't label it: ${e.message}`));
+              return core.info('Closed: a feature with no picture or video');
+            }
 
             await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body:
               "Thanks. Issues here are filed with one of the forms, which ask for what it takes to act on them, and " +
@@ -129,3 +213,6 @@ jobs:
           gh label create accepted --force --color 0e8a16 --description "The maintainer wants this: a pull request for it is welcome"
           gh label create auto-closed --force --color ededed --description "Closed by the contribution gate: its comment says why"
           gh label create needs-triage --force --color fbca04 --description "New from a form: the maintainer hasn't looked yet"
+          gh label create bug --force --color d73a4a --description "Something doesn't work as it should"
+          gh label create feature --force --color 1d76db --description "Something new, or a change to what the kit or the website does"
+          gh label create needs-pictures --force --color c5def5 --description "A feature proposal closed until it shows a picture or video"

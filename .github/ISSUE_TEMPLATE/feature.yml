@@ -1,0 +1,64 @@
+name: New feature or change
+description: Something new the kit or the website should do, or a change to what it does, including a new book, map or AI model
+labels: [feature, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The maintainer reads every proposal, so make it quick to understand: a few plain sentences in your own words, and a picture or a short video of what someone would see. Proposals padded with AI-written filler are closed.
+  - type: checkboxes
+    id: first
+    attributes:
+      label: Before you start
+      description: If the maintainer wants it, they'll label this issue `accepted`. Wait for that before you open a pull request; others are closed automatically.
+      options:
+        - label: I searched the open and closed issues, and this isn't one of them.
+          required: true
+        - label: I read [CONTRIBUTING](https://github.com/tudor-city-ventures/tinfoil-kit/blob/main/.github/CONTRIBUTING.md).
+          required: true
+  - type: input
+    id: summary
+    attributes:
+      label: In one sentence
+      description: What someone using the kit could do that they can't today.
+      placeholder: Show the walking time to the nearest hospital on the Map tab.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: When the internet is down, what goes wrong without it? A real situation, in a few sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: looks
+    attributes:
+      label: What it looks like
+      description: A screenshot, mockup, sketch or short screen recording of what someone would see. Drag images or a video into this box; a photo of a sketch on paper is fine. For a new book, map or AI model, a screenshot of it and a link to it. A proposal without a picture or video is closed until one is edited in.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: For a library source, its exact name from `./kit search WORDS`, its size and its license. Links, and anything else that helps.
+  - type: dropdown
+    id: pr
+    attributes:
+      label: Will you send the pull request?
+      options:
+        - Yes, once it's accepted
+        - No, I'm suggesting it
+    validations:
+      required: true
+  - type: dropdown
+    id: ai
+    attributes:
+      label: AI use
+      description: Did an AI tool write any of this?
+      options:
+        - "No"
+        - Yes, and I checked and trimmed every word
+    validations:
+      required: true
