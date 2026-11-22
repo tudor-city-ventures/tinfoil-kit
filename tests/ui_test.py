@@ -53,11 +53,17 @@ def popup(page, sel, then):
 
 
 def chat(tab):
-    box = tab.locator("textarea").first
+    """llama-server's chat page: type a message with real keys (its editor ignores text set directly), send it."""
+    box = tab.locator("textarea:visible, [contenteditable=true]:visible").first
     box.wait_for(timeout=20000)
     pause(tab, 1.5)
-    box.press_sequentially("Hello! What can you help with?", delay=45)
-    box.press("Enter")
+    box.click()
+    tab.keyboard.type("Hello! What can you help with?", delay=45)
+    send = tab.get_by_role("button", name="Send")
+    if send.count():
+        send.first.click()
+    else:
+        tab.keyboard.press("Enter")
     tab.wait_for_timeout(9000)
 
 
