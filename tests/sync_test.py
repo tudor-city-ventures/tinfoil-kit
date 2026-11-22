@@ -229,9 +229,10 @@ pathlib.Path(str(out) + ".aria2").unlink()
     rc, out = kit("plan", root=rt)
     check("pins: a file that changed after it was pinned is refused",
           "changed after this version of the kit pinned it" in out and "1.3.0" not in out, out)
-    pin(**{"llama.cpp-linux-x64": {"version": "b12345", "sha256": llama}})
+    pin(**{"llama.cpp-linux-x64": {"version": "b12345", "sha256": llama}, "java-linux-x64": {"version": "jdk-21.0.1+12"}})
     rc, out = kit("plan", root=rt)
-    check("pins: a pinned build its publisher took down says so", "no longer publishes b12345" in out, out)
+    check("pins: a pinned build its publisher took down says so", "no longer publishes b12345" in out
+          and "no longer publishes Java jdk-21.0.1+12 for linux x64" in out, out)
     (rt / "kit.json").write_text(json.dumps({"settings": {"pin_programs": False}, "runtimes": programs}))
     rc, out = kit("plan", root=rt)
     check("pins: \"pin_programs\": false takes the newest builds", rc == 0 and "b99990" in out and "1.3.0" in out, out)
