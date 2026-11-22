@@ -311,7 +311,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
 
 ## 5. Agent-driven development setup (keep it slim)
 
-Inspired by the Do They Support It repo, but much smaller and written for people.
+Inspired by the DoTheySupportIt repo, but much smaller and written for people.
 
 - **`AGENTS.md`** is the one set of agent instructions; Codex and Cursor read it natively. **`CLAUDE.md`** contains a single line, `@AGENTS.md`, which Claude Code reads as an import. No symlinks, because people will copy this repo onto exFAT drives.
 - **Verification tiers** are in `AGENTS.md`: use the cheapest one that proves the change, and paste its output.
@@ -347,7 +347,7 @@ Inspired by the Do They Support It repo, but much smaller and written for people
   - Also available on 2026-11-21: tinfoilkit.org, tinfoilkit.dev, tinfoilkit.app, usetinfoil.com, tinfoilhq.com, tinfoil.computer, tinfoil.tools.
   - Taken: tinfoil.app, tinfoil.dev, tinfoil.org, gettinfoil.com.
 - **Hosting:** a new Vercel project in the tudor-city-ventures team. The site credits a company, and Vercel's free Hobby plan is for non-commercial use only. Don't touch other projects.
-- **Credit:** the footer says it's a side project from the team behind Do They Support It, with a link to dotheysupportit.com. Do They Support It is not the main brand.
+- **Credit:** the footer says it's a side project from the team behind DoTheySupportIt, with a link to dotheysupportit.com. DoTheySupportIt is not the main brand.
 - **Open source up front:** a very clear button to the GitHub repo, and the site talks prominently about being open source.
 - **Audience:** technical people and non-technical preppers.
 - **Platforms:** Apple Silicon Macs only for v1.
@@ -479,5 +479,5 @@ The policy and its reasons are in `.github/CONTRIBUTING.md`. In the repo's Setti
 4. He asked for maps "just like Google Maps" that work with the AI. That became v2: tiles, address search, directions, nearest places and map tools for the AI, tested with mocks and real MapLibre in headless Chrome.
 5. He asked what else he was missing; the result is a personal prep checklist, kept out of this repo.
 6. He decided to open-source it as Tinfoil Kit, with a marketing site on Vercel, and answered a round of questions to pin down the details (section 7).
-7. He wants agent-driven development like the Do They Support It repo, but slim and readable (section 5).
+7. He wants agent-driven development like the DoTheySupportIt repo, but slim and readable (section 5).
 8. He moved the work to a Claude Code project. This file is the handoff.
