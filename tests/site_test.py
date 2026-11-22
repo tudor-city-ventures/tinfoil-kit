@@ -413,6 +413,112 @@ with sync_playwright() as p:
     check("phone: the AI setup dialog fits the screen", box and box["x"] >= 0 and box["x"] + box["width"] <= 393, str(box))
     axe(pg, "AI setup on a phone")
     ctx.close()
+    # Travis: a demo of the kit page, faked, so it costs nothing to run: answers written ahead of time, a sample
+    # town's map, the library, notes and AI chat, all in the page
+    demo, errs = b.new_page(viewport={"width": 1440, "height": 900}), []
+    demo.on("pageerror", lambda e: errs.append(str(e)))
+    demo.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
+    demo.goto(URL + "#demo")
+    demo.wait_for_selector(".kd")
+    progress, chip = "#kd-ask .kd-progress", lambda panel, text: demo.locator(f"#kd-{panel} .kd-chip", has_text=text).click()
+    done = lambda s: demo.wait_for_selector(f"{progress}:text-is('Done in {s}s. Sources are listed below.')", timeout=20000)
+    cites = demo.eval_on_selector_all("#kd-ask .kd-answer .kd-cite", "a => [...new Set(a.map(e => e.getAttribute('href')))]")
+    check("demo: the kit page's tabs, opening on a finished answer that cites its four sources",
+          demo.locator(".kd [role=tab]").all_inner_texts() == ["Ask", "Map", "Library", "Notes", "AI chat"]
+          and demo.inner_text(progress).startswith("Done in") and cites == [f"#kd-src-{n}" for n in range(1, 5)]
+          and demo.locator("#kd-ask .kd-sources li").count() == 4, str(cites))
+    demo.locator("#kd-ask .kd-cite[href='#kd-src-3']").first.click()
+    lit = demo.get_attribute("#kd-src-3", "class") == "lit" and demo.evaluate("document.activeElement.id") == "kd-src-3"
+    demo.locator("#kd-src-1 .kd-link").click()
+    check("demo: a citation lights up its source, and a source says the kit would open it", lit
+          and demo.inner_text(".kd-toast").startswith("In the kit, this opens"), demo.inner_text(".kd-toast"))
+    chip("ask", "Treat a burn")
+    busy = demo.inner_text(progress)
+    done(11)
+    check("demo: a sample question searches, then streams its answer with its sources", busy.startswith("Working out")
+          and "cool running water" in demo.inner_text("#kd-ask .kd-answer") and demo.locator("#kd-ask .kd-sources li").count() == 3, busy)
+    chip("ask", "Fix a dripping faucet")
+    demo.click("#kd-ask button:text-is('Stop')")
+    check("demo: Stop stops it", demo.inner_text(progress) == "Stopped." and demo.is_enabled("#kd-ask button[type=submit]"))
+    demo.fill("#kd-q", "What's the capital of France?")
+    demo.click("#kd-ask button[type=submit]")
+    check("demo: a question it wasn't written for says so", "only knows the sample questions" in demo.inner_text(progress)
+          and not demo.is_visible("#kd-ask .kd-answer"))
+    demo.click("#kd-tab-notes")
+    demo.fill("#kd-notes-text", "If we're split up, we meet at the fire station.")
+    status = demo.inner_text("#kd-notes .kd-status")
+    demo.click("#kd-notes button:text-is('Ask where to meet')")
+    done(7)
+    meet = demo.inner_text("#kd-ask .kd-answer")
+    check("demo: Ask reads the notes, so changing where to meet changes the answer, and nothing is saved",
+          status.startswith("Only in this demo") and demo.get_attribute("#kd-tab-ask", "aria-selected") == "true"
+          and "fire station" in meet and "pinned" not in meet, meet[:200])
+    chip("ask", "Nearest hospital")
+    demo.click("#kd-ask button:text-is('Show on the map')")
+    steps, summary = demo.locator("#kd-map .kd-steps li").all_inner_texts(), demo.inner_text("#kd-map .kd-dirsum")
+    check("demo: Show on the map opens the route to the hospital, turn by turn",
+          demo.get_attribute("#kd-tab-map", "aria-selected") == "true" and "driving from Home to Riverside General Hospital" in summary
+          and steps[0].startswith("Continue onto Elm Street") and steps[-1] == "Arrive at destination", f"{summary}; {steps}")
+    demo.locator("#kd-map .kd-mcanvas").screenshot(path=os.path.join(SHOTS, "site_demo_map.png"))
+    demo.select_option("#kd-map select", "foot")
+    demo.click("#kd-map button:text-is('Go')")
+    walk = demo.inner_text("#kd-map .kd-dirsum")
+    demo.fill("#kd-map input[aria-label='To']", "Atlantis")
+    demo.click("#kd-map button:text-is('Go')")
+    nowhere = demo.inner_text("#kd-map .kd-dirsum")
+    check("demo: directions on foot, and for a place the town doesn't have", "walking" in walk and "Atlantis" in nowhere
+          and not demo.locator("#kd-map .kd-steps").count(), f"{walk}; {nowhere}")
+    chip("map", "Pharmacy")
+    near = demo.locator("#kd-map .kd-list[aria-label^='Nearest'] li").all_inner_texts()
+    check("demo: Nearest lists the closest first, and marks them on the map", len(near) == 2 and near[0].startswith("Corner Pharmacy")
+          and demo.locator("#kd-map .kd-mk").count() == 4, str(near))
+    demo.fill("#kd-map input[type=search]", "library")
+    found = demo.locator("#kd-map .kd-results button").all_inner_texts()
+    demo.keyboard.press("Enter")
+    popup = demo.inner_text("#kd-map .kd-pop")
+    demo.click("#kd-map .kd-pop button:text-is('Directions here')")
+    check("demo: the map's search finds a place, and its popup gives directions there", found and found[0].startswith("Main Street Library")
+          and "120 Main Street" in popup and "to Main Street Library" in demo.inner_text("#kd-map .kd-dirsum"), f"{found}; {popup}")
+    axe(demo, "demo's map")
+    demo.click("#kd-tab-library")
+    demo.fill("#kd-library input[type=search]", "water")
+    demo.click("#kd-library button[type=submit]")
+    said, hits = demo.inner_text("#kd-library .kd-progress"), demo.locator("#kd-library .kd-hits li").count()
+    check("demo: the library's search finds the sample pages with that word, and says they're samples", hits >= 3
+          and said.startswith(f"{hits} of this demo's sample pages") and demo.locator("#kd-library .kd-bookcard").count() == 16, said)
+    axe(demo, "demo's library")
+    demo.click("#kd-tab-chat")
+    chip("chat", "A note for the door")
+    demo.wait_for_selector("#kd-chat .kd-msg.ai:last-child:has-text('Back by')", timeout=20000)
+    demo.fill("#kd-chat textarea", "Tell me a joke")
+    demo.click("#kd-chat button:text-is('Send')")
+    check("demo: AI chat answers its examples, and says what it doesn't know", demo.locator("#kd-chat .kd-msg").count() == 4
+          and "only knows the examples above" in demo.inner_text("#kd-chat .kd-progress"))
+    demo.focus("#kd-tab-chat")
+    demo.keyboard.press("ArrowRight")
+    check("demo: arrow keys move between the tabs", demo.evaluate("document.activeElement.id") == "kd-tab-ask"
+          and demo.get_attribute("#kd-tab-ask", "aria-selected") == "true" and demo.is_hidden("#kd-chat"))
+    check("demo: no page errors", not errs, "; ".join(errs))
+    demo.close()
+    demo = b.new_page(viewport={"width": 390, "height": 844}, reduced_motion="reduce")
+    demo.goto(URL + "#demo")
+    demo.wait_for_selector(".kd")
+    chip("ask", "Treat a burn")
+    demo.wait_for_timeout(300)
+    check("reduced motion: the demo answers at once", demo.inner_text(progress) == "Done in 11s. Sources are listed below.", demo.inner_text(progress))
+    demo.click("#kd-tab-map")
+    edges = """(() => { const m = document.querySelector('#kd-map .kd-mcanvas').getBoundingClientRect();
+      return [...document.querySelectorAll('#kd-map .kd-mlabel')].filter(l => { const r = l.getBoundingClientRect();
+      return r.left < m.left || r.right > m.right; }).map(l => l.textContent); })()"""
+    above = demo.locator("#kd-map .kd-mcanvas").bounding_box()["y"] < demo.locator("#kd-map .kd-mside").bounding_box()["y"]
+    off = demo.evaluate(edges)
+    check("phone: the demo's map sits above its panel, with every name inside it", above and not off, str(off))
+    demo.locator(".kd").screenshot(path=os.path.join(SHOTS, "site_demo_phone_map.png"))
+    demo.set_viewport_size({"width": 320, "height": 640})
+    width = demo.evaluate("document.documentElement.scrollWidth")
+    check("320px phone: the demo's map fits, with no sideways scroll", width <= 320 and not demo.evaluate(edges), f"{width}px")
+    axe(demo, "demo's map on a phone")
+    demo.close()
     deep = b.new_page()        # a shared link opens the version it names
     deep.goto(URL + "?for=agent")
     deep.wait_for_selector("#agentDoc b", timeout=5000)

@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="768" viewBox="0 0 640 768" role="img" aria-labelledby="title desc">
+  <title id="title">How Tinfoil Kit works</title>
+  <desc id="desc">Online, whenever you update: SETUP gets the kit's own code from Tinfoil Kit releases, and AI models, books, maps and programs from their publishers, into the kit folder (app, downloads, data) on a drive or your computer. Offline, any time: Open Tinfoil Kit starts the servers (AI: llama-server; Library: kiwix-serve; Maps: pmtiles, Photon, GraphHopper; Notes and pins: the kit's program), and the kit page in your browser uses them. If sharing is on, phones and laptops at home use them too, with the access code.</desc>
+  <style>
+    .bg { fill: #f3f0e6 }
+    .panel { fill: #eae6d8; stroke: #1c1f1a; stroke-width: 2 }
+    .box { fill: #f3f0e6; stroke: #1c1f1a; stroke-width: 2 }
+    .go { fill: #e4672f; stroke: #1c1f1a; stroke-width: 2 }
+    .chip { fill: #eae6d8; stroke: #1c1f1a; stroke-width: 1.5 }
+    .shadow, .tip { fill: #1c1f1a }
+    .wire { fill: none; stroke: #1c1f1a; stroke-width: 2 }
+    .opt { stroke-dasharray: 6 4 }
+    .rule { stroke: #6b6f63; stroke-width: 1 }
+    text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; fill: #1c1f1a }
+    .k, .m, .c { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace }
+    .t { font-size: 15px; font-weight: 600 }
+    .n { font-size: 14px; font-weight: 600 }
+    .s, .m, .on { font-size: 13px }
+    .s, .m { fill: #3a3e36 }
+    .k { font-size: 12px; font-weight: 600; letter-spacing: .08em; fill: #4a5a2a }
+    .c { font-size: 13px; font-weight: 600 }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #1c1f1a }
+      .panel { fill: #262a23; stroke: #cfcbbe }
+      .box { fill: #1c1f1a; stroke: #cfcbbe }
+      .go { stroke: #e4672f }
+      .chip { fill: #262a23; stroke: #cfcbbe }
+      .shadow, .tip { fill: #cfcbbe }
+      .wire { stroke: #cfcbbe }
+      .rule { stroke: #8a8e80 }
+      text { fill: #f3f0e6 }
+      .s, .m { fill: #cfcbbe }
+      .k { fill: #a9b87a }
+    }
+    /* text on the orange boxes stays dark, as on the kit page's buttons */
+    text.on, text.on-t { fill: #1c1f1a }
+  </style>
+  <rect class="bg" width="640" height="768"/>
+
+  <!-- Online: SETUP fills the kit folder -->
+  <rect class="panel" x="16" y="16" width="608" height="216"/>
+  <text class="k" x="36" y="42">ONLINE, WHENEVER YOU UPDATE</text>
+  <rect class="box" x="36" y="58" width="276" height="60"/>
+  <text class="t" x="174" y="83" text-anchor="middle">Tinfoil Kit releases</text>
+  <text class="s" x="174" y="103" text-anchor="middle">the kit's own code</text>
+  <rect class="box" x="328" y="58" width="276" height="60"/>
+  <text class="t" x="466" y="83" text-anchor="middle">Publishers' downloads</text>
+  <text class="s" x="466" y="103" text-anchor="middle">AI models, books, maps, programs</text>
+  <path class="wire" d="M174 118v20h292v-20M320 138v12"/>
+  <path class="tip" d="M314 150h12l-6 8z"/>
+  <rect class="go" x="190" y="158" width="260" height="56" rx="4"/>
+  <text class="t on-t" x="320" y="181" text-anchor="middle">SETUP</text>
+  <text class="on" x="320" y="200" text-anchor="middle">update, download, check</text>
+
+  <!-- The kit folder -->
+  <path class="wire" d="M320 214v40"/>
+  <path class="tip" d="M314 254h12l-6 8z"/>
+  <rect class="shadow" x="136" y="268" width="380" height="92"/>
+  <rect class="box" x="130" y="262" width="380" height="92"/>
+  <text class="t" x="320" y="287" text-anchor="middle">Kit folder</text>
+  <text class="s" x="320" y="306" text-anchor="middle">on a drive or your computer</text>
+  <rect class="chip" x="189" y="318" width="64" height="24"/>
+  <text class="c" x="221" y="335" text-anchor="middle">app</text>
+  <rect class="chip" x="265" y="318" width="110" height="24"/>
+  <text class="c" x="320" y="335" text-anchor="middle">downloads</text>
+  <rect class="chip" x="387" y="318" width="64" height="24"/>
+  <text class="c" x="419" y="335" text-anchor="middle">data</text>
+
+  <!-- Offline: Open Tinfoil Kit starts the servers, and the kit page uses them -->
+  <rect class="panel" x="16" y="384" width="608" height="368"/>
+  <path class="wire" d="M320 360v60"/>
+  <path class="tip" d="M314 420h12l-6 8z"/>
+  <text class="k" x="36" y="410">OFFLINE, ANY TIME</text>
+  <rect class="go" x="190" y="428" width="260" height="56" rx="4"/>
+  <text class="t on-t" x="320" y="451" text-anchor="middle">Open Tinfoil Kit</text>
+  <text class="on" x="320" y="470" text-anchor="middle">starts the servers</text>
+  <path class="wire" d="M320 484v12"/>
+  <path class="tip" d="M314 496h12l-6 8z"/>
+  <rect class="box" x="110" y="504" width="420" height="136"/>
+  <text class="n" x="130" y="532">AI</text>
+  <text class="m" x="276" y="532">llama-server</text>
+  <path class="rule" d="M126 542h388"/>
+  <text class="n" x="130" y="562">Library</text>
+  <text class="m" x="276" y="562">kiwix-serve</text>
+  <path class="rule" d="M126 572h388"/>
+  <text class="n" x="130" y="592">Maps</text>
+  <text class="m" x="276" y="592">pmtiles, Photon, GraphHopper</text>
+  <path class="rule" d="M126 602h388"/>
+  <text class="n" x="130" y="622">Notes and pins</text>
+  <text class="m" x="276" y="622">the kit's program</text>
+  <path class="wire" d="M174 640v28"/>
+  <path class="tip" d="M168 668h12l-6 8z"/>
+  <rect class="box" x="36" y="676" width="276" height="56"/>
+  <text class="t" x="174" y="699" text-anchor="middle">Kit page in your browser</text>
+  <text class="s" x="174" y="718" text-anchor="middle">Ask, Map, Library, AI chat, Notes</text>
+
+  <!-- Sharing, off until it's turned on -->
+  <path class="wire opt" d="M466 640v28"/>
+  <path class="tip" d="M460 668h12l-6 8z"/>
+  <text class="k" x="478" y="662">SHARING, IF ON</text>
+  <rect class="box opt" x="328" y="676" width="276" height="56"/>
+  <text class="t" x="466" y="699" text-anchor="middle">Phones and laptops</text>
+  <text class="s" x="466" y="718" text-anchor="middle">at home, with the access code</text>
+</svg>

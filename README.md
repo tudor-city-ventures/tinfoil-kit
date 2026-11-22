@@ -10,39 +10,13 @@ An offline kit for when the internet goes down. One folder, on your computer or 
 
 Open the kit's app folder (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library, Map and Notes tabs. No internet, account or install needed.
 
-![The Ask tab](docs/screenshots/shot_ask.png)
+![The Ask tab: a question about making water safe with bleach, the AI's answer with numbered citations, and the three library articles it came from](docs/ask.png)
 
 ## How it works
 
 The whole kit is one folder, with three inside: `app` (the kit's code, as released), `downloads` (everything it downloads) and `data` (your settings, notes and pins, and the kit's records). A new version replaces `app` and leaves the other two as they are. Put the kit on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows. On a Mac the Tinfoil Kit app, the website's Mac download, opens them for you: SETUP in Terminal the first time, then the kit, in a window that stops it when you close it.
 
-```mermaid
-%%{init: {"flowchart": {"wrappingWidth": 300}}}%%
-flowchart TB
-  subgraph online["Online, whenever you update"]
-    direction TB
-    releases["Tinfoil Kit releases<br/>the kit's own code"] --> setup
-    publishers["Publishers' downloads<br/>AI models, books,<br/>maps, programs"] --> setup
-    setup["SETUP<br/>update, download, check"]
-  end
-  folder[("Kit folder: app, downloads, data<br/>on a drive or your computer")]
-  subgraph offline["Offline, any time"]
-    direction TB
-    start["Open Tinfoil Kit<br/>starts the servers"]
-    start --> ai["AI<br/>llama-server"]
-    start --> library["Library<br/>kiwix-serve"]
-    start --> maps["Maps<br/>pmtiles, Photon,<br/>GraphHopper"]
-    start --> notes["Notes and pins<br/>the kit's program"]
-    ai --> page
-    library --> page
-    maps --> page
-    notes --> page
-    page["Kit page in your browser<br/>Ask, Map, Library, AI chat, Notes"]
-    start -.-> gate["Sharing, if on<br/>access code"]
-    gate -.-> phones["Phones and laptops<br/>on your home network"]
-  end
-  online --> folder --> offline
-```
+![How it works: online, SETUP fills the kit folder (app, downloads, data) from Tinfoil Kit releases and the publishers' downloads. Offline, Open Tinfoil Kit starts the servers (AI, library, maps, notes and pins) for the kit page in your browser, and for phones and laptops at home when sharing is on](docs/how-it-works.svg)
 
 ### Setting up (online)
 
