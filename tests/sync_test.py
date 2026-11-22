@@ -3029,8 +3029,31 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         out,
     )
 
-    # Another program on the library's port (the mock internet, here): the library starts on the next one. The fake
-    # library quits soon after the launcher's first look, which ends the launcher, however slow the computer is.
+    # Another program on the library's port: the library starts on the next one. Both ports are below the range a
+    # computer picks the local end of an outgoing connection from (32768 and up on Linux, 49152 on a Mac): a port held
+    # by such an end looks free, since nothing answers there, but no server can start on it. The fake library quits
+    # soon after the launcher's first look, which ends the launcher, however slow the computer is.
+    class Other(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"another program")
+
+        def log_message(self, *a):
+            pass
+
+    for other_port in range(20000, 32000, 2):
+        try:
+            other = http.server.ThreadingHTTPServer(("127.0.0.1", other_port), Other)
+        except OSError:
+            continue
+        try:
+            with socket.socket() as s:
+                s.bind(("127.0.0.1", other_port + 1))
+            break
+        except OSError:
+            other.server_close()
+    threading.Thread(target=other.serve_forever, daemon=True).start()
     fake = work / "fake-kiwix-serve"
     fake.write_text(f"""#!{sys.executable}
 import http.server, sys, threading
@@ -3054,7 +3077,9 @@ server.serve_forever()
     (lk / "downloads" / "library").mkdir()
     (lk / "downloads" / "library" / "book.zim").touch()
     (lk / "data" / "kit.json").write_text(
-        json.dumps({"settings": {"default_model": "Big", "library_port": port, "ai_port": rport, "data_port": rport}})
+        json.dumps(
+            {"settings": {"default_model": "Big", "library_port": other_port, "ai_port": rport, "data_port": rport}}
+        )
     )
     p = subprocess.run(
         ["bash", str(launcher), "--no-browser"],
@@ -3067,9 +3092,13 @@ server.serve_forever()
     out = p.stdout + p.stderr
     check(
         "launcher: another program on the library's port: it moves to the next free one",
-        f"using port {port}, so the library uses" in out and "Library:  ready" in out and f":{port}/" not in out,
+        f"using port {other_port}, so the library uses" in out
+        and "Library:  ready" in out
+        and f":{other_port}/" not in out,
         out,
     )
+    other.shutdown()
+    other.server_close()
 
     # A library server that won't use 127.0.0.1, as kiwix-serve 3.8 says when the loopback has a second IPv4 address (it
     # keeps only the last one of each interface): the launcher starts it on ::1 and forwards 127.0.0.1 to it, so the
