@@ -92,6 +92,8 @@ When it's done, suggest they open the kit and print the essentials while they ha
 
 ## When it fails
 
+If curl stops with error 404 before SETUP starts, GitHub has no release of the kit to download right now (https://github.com/tudor-city-ventures/tinfoil-kit/releases): tell the person to try again later.
+
 With `--yes`, SETUP never asks: it stops and says why. Fix that and run the same command again.
 
 - Two places share the name: it lists their ids. Use one with `--region`.

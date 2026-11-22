@@ -14,7 +14,7 @@ Open the kit's app folder (on your computer, or on the drive it's on), double-cl
 
 ## How it works
 
-The whole kit is one folder, with three inside: `app` (the kit's code, as released), `downloads` (everything it downloads) and `data` (your settings, notes and pins, and the kit's records). A new version replaces `app` and leaves the other two as they are. Put the kit on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows. On a Mac the Tinfoil Kit app, the website's Mac download, opens them for you: SETUP in Terminal the first time, then the kit, in a window that stops it when you close it.
+The whole kit is one folder, with three inside: `app` (the kit's code, as released), `downloads` (everything it downloads) and `data` (your settings, notes and pins, and the kit's records). A new version replaces `app` and leaves the other two as they are. Put the kit on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows.
 
 ![How it works: online, SETUP fills the kit folder (app, downloads, data) from Tinfoil Kit releases and the publishers' downloads. Offline, Open Tinfoil Kit starts the servers (AI, library, maps, notes and pins) for the kit page in your browser, and for phones and laptops at home when sharing is on](docs/how-it-works.svg)
 
@@ -104,15 +104,21 @@ A nightly test sets the kit up on a Mac and on Windows, from a download onto the
 
 ## Set up
 
-Download the kit from [tinfoilkit.com](https://tinfoilkit.com). Its button picks your computer's file from the [latest release](https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest): `TinfoilKit-Mac.zip`, `TinfoilKit-Windows.zip`, or `TinfoilKit.tar.gz` for Linux. Then:
+Downloads you double-click are coming soon. For now, your AI sets it up: copy the prompt on [tinfoilkit.com](https://tinfoilkit.com) into ChatGPT, Claude or any AI chat. It asks what you want in the kit, then gives you one command to paste into Terminal (PowerShell on Windows). Or write the command yourself:
 
-- **Mac:** open the download (Safari unzips it by itself) and double-click **Tinfoil Kit**. Click **Open** when macOS asks about an app from the internet, let it move itself to Applications, then click **Set Up**: SETUP runs in a Terminal window.
-- **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat` in `TinfoilKit\app`. If Windows says it protected your PC, click **More info**, then **Run anyway**.
-- **Linux:** run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/app/SETUP.command` in a terminal. It needs curl.
+```sh
+# Mac or Linux, in Terminal
+mkdir -p ~/Downloads && cd ~/Downloads && curl -fsSL https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit.tar.gz | tar -xz && bash TinfoilKit/app/SETUP.command --region texas --drive /Volumes/Kit --yes
+```
 
-SETUP asks where you live and whether the kit goes on an external drive or on this computer, says how much room each has, moves it there, says how long the downloads take on your connection, then gets a small kit to try (about 10 GB), tests it and opens it. Run SETUP again when you're ready for the rest: it asks what goes in the kit, says how long that takes on your connection, gets it and tests again. Every answer can also be given up front, so one command sets it up without asking anything: `bash TinfoilKit/app/SETUP.command --region texas --this-computer --yes` (`.\TinfoilKit\app\SETUP-Windows.bat` with the same options on Windows) gets the kit to try, and `bash ~/TinfoilKit/app/SETUP.command --yes` the rest (with `--no-pause`, the first command goes straight on to it). `--help` lists the options, one for each setting of the website's kit builder: a preset (`--recommended`, `--essentials`, `--everything`), where you live, how much of Wikipedia, which AI models and books, a drive or this computer, sharing on the home network.
+```powershell
+# Windows, in PowerShell
+cd ~\Downloads; curl.exe -fsSL -o TinfoilKit.zip https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit-Windows.zip; tar -xf TinfoilKit.zip; Remove-Item TinfoilKit.zip; .\TinfoilKit\app\SETUP-Windows.bat --region texas --drive E: --yes
+```
 
-Or from a terminal on a Mac or Linux:
+It downloads the kit from the [latest release](https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest) and runs SETUP, which moves it to the drive (or `--this-computer`), says how long the downloads take on your connection, then gets a small kit to try (about 10 GB), tests it and opens it. When you're ready for the rest, run `bash /Volumes/Kit/TinfoilKit/app/SETUP.command --yes` (`E:\TinfoilKit\app\SETUP-Windows.bat --yes` on Windows): it says how long that takes, gets it and tests again. `--help` lists the options, one for each setting of the website's kit builder: a preset (`--recommended`, `--essentials`, `--everything`), where you live, how much of Wikipedia, which AI models and books, a drive or this computer, sharing on the home network. Without `--yes`, SETUP asks whatever the options didn't answer. [llms.txt](site/public/llms.txt) has them all, and what to check first.
+
+Or from a git checkout, on a Mac or Linux:
 
 ```sh
 git clone https://github.com/tudor-city-ventures/tinfoil-kit ~/TinfoilKit    # or /Volumes/<drive>/TinfoilKit
@@ -123,7 +129,7 @@ tools/tinfoilkit/build.sh    # the kit's own program, from its Go source (needs 
 ./kit test    # start every server offline and check it answers
 ```
 
-Then turn Wi-Fi off and open the Tinfoil Kit app, or double-click `Open Tinfoil Kit.command` in the kit's app folder (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the app folder.
+Then turn Wi-Fi off and double-click `Open Tinfoil Kit.command` in the kit's app folder (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the app folder.
 
 ## Update
 
@@ -153,7 +159,7 @@ The kit downloads programs and runs them on your computer, so here is what prote
 - **The repo.** Every GitHub Action is pinned to a commit and runs with a read-only token, except a few jobs that never run code from a pull request or a download. An outside pull request that touches the workflows, CODEOWNERS, the release key or the program pins fails a check that only the maintainer can merge past.
 - **What it can't protect against:** a bad file from a hacked publisher, if it's a book, model or map (its checksum comes from the same place as the file) or a program that was already bad when a release pinned it; someone with your unlocked computer or drive, since the kit isn't encrypted (use FileVault, BitLocker or an encrypted drive for that); and an AI answer that's wrong, so check its sources.
 
-To check a release before running it, download its `tinfoilkit-TAG.tar.gz` and `.sig` (the downloads the website links to are protected by HTTPS alone; the release's `SHA256SUMS`, signed the same way, lists them all) and run:
+To check a release before running it, download its `tinfoilkit-TAG.tar.gz` and `.sig` (the downloads the setup command gets are protected by HTTPS alone; the release's `SHA256SUMS`, signed the same way, lists them all) and run:
 
 ```sh
 ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release \

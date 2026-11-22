@@ -7,8 +7,10 @@
 #   .github/release.sh mac                 set up and try the Mac app's signing (once): it builds the app, Apple
 #                                          notarizes it, and a copy lands on the Desktop as if downloaded
 # Needs git, ssh-keygen, Go (brew install go) and GitHub's gh, signed in (brew install gh && gh auth login). The Mac
-# download, the Tinfoil Kit app, also needs Apple's command line tools, a Developer ID Application certificate in the
-# keychain and notarytool's password for it (docs/RELEASING.md, "Signing the Mac app").
+# app, the website's Mac download, goes in only when this Mac can sign and notarize it: that takes Apple's command line
+# tools, a Developer ID Application certificate in the keychain and notarytool's password for it (docs/RELEASING.md,
+# "Signing the Mac app"). Without it, the release leaves the app out, and people set the kit up with the command their
+# AI gives them (site/public/llms.txt), which works on a Mac without Apple's signature.
 set -eu
 cd "$(dirname "$0")/.."
 KEY="${KIT_RELEASE_KEY:-$HOME/.ssh/tinfoilkit-release}"
@@ -60,8 +62,12 @@ command -v gh > /dev/null || die "needs GitHub's gh: brew install gh && gh auth 
 command -v go > /dev/null || die "needs Go to build the kit's own program: brew install go"
 [ -e "$KEY" ] || die "no signing key at $KEY. Make one with: .github/release.sh key (or set KIT_RELEASE_KEY)"
 id="${KIT_MAC_SIGN:-$(mac_identity)}"
-[ -n "$id" ] && mac_notary ||
-  die "the Mac download is the Tinfoil Kit app, and this Mac can't sign and notarize it yet. Set that up once: .github/release.sh mac"
+if [ -n "$id" ] && mac_notary; then
+  app=1
+else
+  app=""
+  echo "This Mac can't sign and notarize the Mac app (.github/release.sh mac sets that up), so this release leaves it out."
+fi
 git fetch -q origin main --tags
 [ -z "$(git status --porcelain)" ] || die "commit or stash your changes first"
 sha=$(git rev-parse HEAD)
@@ -98,32 +104,35 @@ for f in "$out/programs"/tinfoilkit-*; do
 done
 gzip -n -9 < "$out/update.tar" > "$asset"
 ssh-keygen -Y sign -f "$KEY" -n "$NS" "$asset"
-# What the website's download buttons and llms.txt fetch (releases/latest/download/NAME): the same kit files from the
-# same tag, as the app folder of a folder called TinfoilKit (on a Mac, inside the app); the tar.gz is for Linux and the
-# command line. Not signed with the release key, since they're only a first install: ./kit update takes the signed
-# archive, which holds just the app folder's files. SHA256SUMS, which is signed, lists them all.
+# What the setup command in llms.txt fetches (releases/latest/download/NAME): the same kit files from the same tag, as
+# the app folder of a folder called TinfoilKit. The tar.gz is for a Mac and Linux, the zip for Windows, and the Mac app,
+# when there is one, holds them too. Not signed with the release key, since they're only a first install: ./kit update
+# takes the signed archive, which holds just the app folder's files. SHA256SUMS, which is signed, lists them all.
 tools/tinfoilkit/build.sh archive zip TinfoilKit/app "$TAG" > "$out/TinfoilKit-Windows.zip"
 tools/tinfoilkit/build.sh archive tar TinfoilKit/app "$TAG" > "$out/TinfoilKit.tar"
 gzip -n -9 < "$out/TinfoilKit.tar" > "$out/TinfoilKit.tar.gz"
-downloads=("$out/TinfoilKit-Mac.zip" "$out/TinfoilKit-Windows.zip" "$out/TinfoilKit.tar.gz")
+downloads=("$out/TinfoilKit.tar.gz" "$out/TinfoilKit-Windows.zip")
 # Drives on the last release check this one with that release's keys, so a key change needs both to accept it.
 for ref in "$TAG" $prev; do
   git show "$ref:tools/release-signers" > "$out/signers" 2> /dev/null || continue
   ssh-keygen -Y verify -f "$out/signers" -I "$NS" -n "$NS" -s "$asset.sig" < "$asset" > /dev/null \
     || die "the signature doesn't match a key in $ref's tools/release-signers"
 done
-# The Mac download is the app, notarized so it opens with a double-click: macOS sends a script from the internet to
-# System Settings first, which people miss.
-KIT_MAC_SIGN="$id" KIT_MAC_NOTARY="$NOTARY" mac/build.sh "$asset" "$out/mac" "${TAG#v}" || die "the Mac app didn't build (above is why)"
-mv "$out/mac/TinfoilKit-Mac.zip" "$out/TinfoilKit-Mac.zip"
-# The app's copy of the program carries Apple's signature as well. build.sh verify tells people it's the same program
-# apart from that: make sure it is.
-same=$("$out/programs/tinfoilkit-macos-arm64" compare "$out/programs/tinfoilkit-macos-arm64" \
-  "$out/mac/Tinfoil Kit.app/Contents/Resources/kit/tools/tinfoilkit-macos-arm64")
-[ "$same" = "the same apart from the code signature" ] || die "the Mac app's copy of the kit's own program: $same"
+# The Mac app, notarized so it opens with a double-click: macOS sends a script from a browser's download to System
+# Settings first, which people miss. (A script curl downloaded carries no such mark, so the setup command needs none.)
+if [ -n "$app" ]; then
+  KIT_MAC_SIGN="$id" KIT_MAC_NOTARY="$NOTARY" mac/build.sh "$asset" "$out/mac" "${TAG#v}" || die "the Mac app didn't build (above is why)"
+  mv "$out/mac/TinfoilKit-Mac.zip" "$out/TinfoilKit-Mac.zip"
+  # The app's copy of the program carries Apple's signature as well. build.sh verify tells people it's the same program
+  # apart from that: make sure it is.
+  same=$("$out/programs/tinfoilkit-macos-arm64" compare "$out/programs/tinfoilkit-macos-arm64" \
+    "$out/mac/Tinfoil Kit.app/Contents/Resources/kit/tools/tinfoilkit-macos-arm64")
+  [ "$same" = "the same apart from the code signature" ] || die "the Mac app's copy of the kit's own program: $same"
+  downloads+=("$out/TinfoilKit-Mac.zip")
+fi
 # The SHA-256 of every file this release publishes, and of the programs as built, signed like the update.
 (cd "$out/programs" && shasum -a 256 tinfoilkit-*) > "$out/SHA256SUMS"
-(cd "$out" && shasum -a 256 "$(basename "$asset")" TinfoilKit-Mac.zip TinfoilKit-Windows.zip TinfoilKit.tar.gz) >> "$out/SHA256SUMS"
+(cd "$out" && for f in "$asset" "${downloads[@]}"; do shasum -a 256 "$(basename "$f")"; done) >> "$out/SHA256SUMS"
 ssh-keygen -Y sign -f "$KEY" -n "$NS" "$out/SHA256SUMS"
 
 echo
@@ -132,8 +141,12 @@ echo "  $asset and .sig"
 echo "  tar SHA-256 $(shasum -a 256 < "$out/update.tar" | cut -d' ' -f1)"
 echo "  (rebuild it: tools/tinfoilkit/build.sh archive tar tinfoilkit-$TAG $TAG | shasum -a 256)"
 echo "  SHA256SUMS and .sig: the programs and every download"
-echo "  downloads for the website: TinfoilKit-Mac.zip (the app, signed by $id and notarized), TinfoilKit-Windows.zip,"
-echo "  TinfoilKit.tar.gz"
+echo "  downloads for the setup command: TinfoilKit.tar.gz (Mac, Linux), TinfoilKit-Windows.zip"
+if [ -n "$app" ]; then
+  echo "  and the website's Mac download: TinfoilKit-Mac.zip (the app, signed by $id and notarized)"
+else
+  echo "  no Mac app: the website's downloads stay \"coming soon\""
+fi
 echo "What's new:"
 sed 's/^/  /' "$NOTES"
 echo

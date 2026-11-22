@@ -1,20 +1,50 @@
-import { CopyButton } from "@/components/copy";
+import Builder, {
+  CopySetup,
+  Groups,
+  Nearby,
+  NearbySelect,
+  PlaceSelect,
+  Preset,
+  SetupText,
+  ShareBox,
+  SizeSelect,
+  Total,
+  WhereSelect,
+  WikiSelect,
+} from "@/components/builder";
+import { CopyButton, Toast } from "@/components/copy";
 import Demo from "@/components/demo";
-import Download, { DownloadLink } from "@/components/download";
+import Download, { SetupLink } from "@/components/download";
 import Header from "@/components/header";
 import Hero from "@/components/hero";
-import { AUDIT_PROMPT } from "@/components/prompts";
+import { AUDIT_PROMPT, INSTALL_PROMPT, OWN_PROMPT } from "@/components/prompts";
 import { APP, Footer, JsonLd, LICENSES, pageMetadata, Question, REPO, SITE } from "@/components/site";
 
-// I'll install it: the home page, for people who'd rather download an installer. Plain words: AI, never jargon.
+// My AI installs it: the home page. Your AI asks what you want and gives you one command, since the downloads are
+// coming soon. Plain words up top (AI, never LLM, GGUF or ZIM); Under the hood names the parts for technical readers.
 const DESCRIPTION =
-  "A free, open-source kit that keeps an AI, all of Wikipedia, medical and repair guides, and maps with directions on an external drive or your laptop. No internet needed.";
+  "A free, open-source kit that keeps an AI, all of Wikipedia, medical guides and maps on your laptop or a drive, with no internet. Your AI sets it up with one command.";
 
 export const metadata = pageMetadata({
   path: "/",
   title: "Tinfoil Kit: the internet's down, your AI isn't",
   description: DESCRIPTION,
 });
+
+const STEPS = [
+  [
+    "Buy an external SSD",
+    "A portable USB SSD with room for the kit, from about 20 GB for just the essentials to about 900 GB for everything, formatted exFAT so it works on a Mac, Windows or Linux. Or use the computer's own disk.",
+  ],
+  [
+    "Have your AI set it up",
+    "Paste the prompt into ChatGPT, Claude or any AI chat. It reads the kit's instructions, asks what goes in the kit, and gives you one command to paste into your terminal: a small kit to try first, then the rest.",
+  ],
+  [
+    "Use it on any computer",
+    "Plug the drive into any Mac, Windows or Linux computer and open Tinfoil Kit. The AI, the library and the maps work with no internet.",
+  ],
+];
 
 // What search engines and AI answer engines read about the kit. Keep its facts in step with the copy.
 const jsonLd = {
@@ -32,7 +62,7 @@ const jsonLd = {
       applicationCategory: "UtilitiesApplication",
       operatingSystem: "macOS, Windows, Linux",
       softwareRequirements:
-        "A Mac with an M chip (M1 or newer). Windows 10 or 11 and Linux PCs with an Intel or AMD chip work too, but they're experimental for now. The kit goes on the computer's own disk or an external SSD, and on a drive formatted exFAT it starts on all three.",
+        "A Mac with an M chip (M1 or newer). Windows 10 or 11 and Linux PCs with an Intel or AMD chip work too, but they're experimental for now. The kit goes on the computer's own disk or an external SSD, and on a drive formatted exFAT it starts on all three. Setup is one command in the terminal, which an AI chat writes for you.",
       memoryRequirements:
         "32 GB or more runs the default AI, Inkling 2 Mini; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B",
       storageRequirements:
@@ -57,15 +87,77 @@ const jsonLd = {
       sameAs: REPO,
       image: `${SITE}/og.png`,
     },
+    {
+      "@type": "HowTo",
+      "@id": `${SITE}/#howto`,
+      name: "Set up Tinfoil Kit with your AI",
+      description:
+        "Paste one prompt into ChatGPT, Claude or a coding agent. It reads llms.txt, asks what you want, and gives you one command that sets up the kit.",
+      url: `${SITE}/`,
+      about: { "@id": APP["@id"] },
+      tool: [{ "@type": "HowToTool", name: "An AI chat or coding agent, such as ChatGPT or Claude" }],
+      supply: [
+        {
+          "@type": "HowToSupply",
+          name: "An external SSD with room for the kit, from about 20 GB for just the essentials to about 900 GB for everything (optional)",
+        },
+      ],
+      step: STEPS.map(([name, text], i) => ({
+        "@type": "HowToStep",
+        position: i + 1,
+        name,
+        text,
+        url: `${SITE}/#how`,
+      })),
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      name: "Tinfoil Kit",
+      codeRepository: REPO,
+      programmingLanguage: ["Go", "JavaScript", "Shell"],
+      license: "https://opensource.org/license/mit",
+      runtimePlatform: "macOS on Apple silicon; Windows and Linux on x64 (experimental)",
+      targetProduct: { "@id": APP["@id"] },
+    },
   ],
 };
 
 const SECTIONS = [
   ["#how", "How it works"],
   ["#demo", "Try it"],
+  ["#builder", "Build your kit"],
+  ["#stack", "Under the hood"],
   ["#trust", "Is it safe?"],
   ["#faq", "Questions"],
 ];
+
+// What Open Tinfoil Kit starts (README's How it works has the same table)
+const SERVERS = [
+  [
+    "AI",
+    "llama-server (llama.cpp)",
+    "port 8080",
+    "Serves the LLM, one model at a time. AI chat is its built-in chat page.",
+  ],
+  ["Library", "kiwix-serve", "port 8888", "Serves the ZIM files with full-text search, and the kit page."],
+  ["Map", "pmtiles", "port 8090", "Serves vector tiles: street detail for your region, and a low-zoom world."],
+  ["Addresses", "Photon", "port 2322", "Geocoding: addresses, places, and the nearest hospital or pharmacy."],
+  ["Directions", "GraphHopper", "port 8989", "Driving and walking routes, on a road graph built from OpenStreetMap."],
+  ["Notes and pins", "the kit's program", "port 8095", "Keeps the household notes the AI reads, and the map's pins."],
+  [
+    "Sharing",
+    "the kit's program",
+    "port 8000",
+    "Off by default. One gate for the devices at home, behind an 8-digit code.",
+  ],
+];
+
+// llms.txt's example, one step to a line so it wraps where a person reads it
+const COMMAND = [
+  "mkdir -p ~/Downloads && cd ~/Downloads &&",
+  "curl -fsSL https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit.tar.gz | tar -xz &&",
+  "bash TinfoilKit/app/SETUP.command --region texas --drive /Volumes/Kit --yes",
+].join("\n");
 
 export default function Home() {
   return (
@@ -103,13 +195,13 @@ export default function Home() {
             <div className="head-row">
               <h2>How it works</h2>
               <p className="mono" style={{ fontSize: "14px", color: "var(--ink2)" }}>
-                Set it up once. Use it on any computer.
+                Your AI sets it up. You run one command.
               </p>
             </div>
             <ol className="how-steps">
               <li>
                 <b>01 · GET A DRIVE</b>
-                <h3>Buy an external SSD</h3>
+                <h3>{STEPS[0][0]}</h3>
                 <p>
                   A portable USB drive with room for the kit: from about 20&nbsp;GB for just the essentials to about
                   900&nbsp;GB for everything.
@@ -117,20 +209,21 @@ export default function Home() {
                 <small>No drive? It can go straight on your computer instead.</small>
               </li>
               <li>
-                <b>02 · DOWNLOAD</b>
-                <h3>Download and open it</h3>
+                <b>02 · TELL YOUR AI</b>
+                <h3>{STEPS[1][0]}</h3>
                 <p>
-                  It asks where you live and what you want in it. First it gets a small kit to try, and when you're
-                  ready, the rest: hours of downloading. It says how long before it starts.
+                  Paste the prompt into ChatGPT, Claude or any AI chat. It asks where you live and what you want in it,
+                  then gives you one command to paste into your terminal.
                 </p>
-                <DownloadLink>Download Tinfoil Kit</DownloadLink>
+                <SetupLink>Get the prompt</SetupLink>
                 <small>
-                  Already use ChatGPT or Claude? <a href="/ai-setup">Let your AI set it up</a> instead.
+                  First it gets a small kit to try, about 10&nbsp;GB. When you're ready, the rest: hours of downloading.
+                  It says how long before it starts.
                 </small>
               </li>
               <li>
                 <b>03 · PLUG IN ANYWHERE</b>
-                <h3>Use it on any computer</h3>
+                <h3>{STEPS[2][0]}</h3>
                 <p>
                   Plug the drive into any Mac, Windows or Linux computer and open Tinfoil Kit. The AI, the library and
                   the maps work with no internet.
@@ -138,6 +231,50 @@ export default function Home() {
                 <small>Windows and Linux are experimental for now.</small>
               </li>
             </ol>
+            <div className="example">
+              <div className="example-copy">
+                <p className="kicker">What it looks like</p>
+                <h3>Your AI checks first, then asks.</h3>
+                <p>
+                  An AI that can run commands on your computer, like Claude Code or Codex, looks first, with commands
+                  that only read: the chip and memory, which decide which AI your kit runs, and the drive's format and
+                  free space. It asks only what it can't see, like where you live, and hands you the command. A chat AI
+                  that can't reach your computer asks you instead.
+                </p>
+              </div>
+              <figure className="chat">
+                <figcaption>Your AI agent</figcaption>
+                <ol>
+                  <li className="you">
+                    <b>You</b>I want to set up Tinfoil Kit… Its instructions for AI assistants are at
+                    https://tinfoilkit.com/llms.txt. Read them first.
+                  </li>
+                  <li>
+                    <b>Your AI</b>Read them. I looked at your Mac and its drives, with commands that only read:
+                    <dl>
+                      <div>
+                        <dt>Mac</dt>
+                        <dd>MacBook Air, Apple M4, 32&nbsp;GB of memory</dd>
+                      </div>
+                      <div>
+                        <dt>Drive</dt>
+                        <dd>Kit, a 1&nbsp;TB external SSD: exFAT, 998&nbsp;GB free</dd>
+                      </div>
+                    </dl>
+                    Your Mac runs the default AI, Inkling 2 Mini, and all of the kit fits on Kit. Where do you live?
+                  </li>
+                  <li className="you">
+                    <b>You</b>Austin, Texas.
+                  </li>
+                  <li className="gap">Wikipedia, places nearby, what to leave out…</li>
+                  <li>
+                    <b>Your AI</b>Paste this into Terminal. It gets a small kit to try first; when it works, I'll give
+                    you the command for the rest.
+                    <code>{COMMAND}</code>
+                  </li>
+                </ol>
+              </figure>
+            </div>
           </div>
         </section>
         <section id="demo" className="band">
@@ -153,11 +290,185 @@ export default function Home() {
             <Demo />
           </div>
         </section>
+        <section id="builder" className="wrap section">
+          <Builder>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <p className="kicker">The kit builder</p>
+              <h2>Choose what goes in your kit.</h2>
+              <p style={{ fontSize: "18px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "680px" }}>
+                Pick what goes in, then copy the prompt for your AI. Your picks go with it, so it asks only about the
+                rest.
+              </p>
+            </div>
+            <div className="where">
+              <div className="field">
+                <label htmlFor="place">Where do you live?</label>
+                <PlaceSelect />
+              </div>
+              <div className="field">
+                <label htmlFor="nearby">Places nearby</label>
+                <NearbySelect />
+              </div>
+              <Nearby />
+              <div className="field">
+                <label htmlFor="wikiLang">Wikipedia in</label>
+                <WikiSelect />
+              </div>
+              <div className="field">
+                <label htmlFor="wikiSize">How much of Wikipedia</label>
+                <SizeSelect />
+              </div>
+              <p className="hint" id="placeNote">
+                Why we ask: street maps and directions for the whole world would take hundreds of gigabytes, so your kit
+                gets them only for where you live and any places nearby you add, like the state or country next door.
+                Everywhere else gets a simple map. This page doesn't send your answers anywhere: they only go into the
+                prompt you copy.
+              </p>
+            </div>
+            <div className="presets" role="group" aria-label="Preset">
+              <Preset value="essentials">Essentials</Preset>
+              <Preset value="recommended">Recommended</Preset>
+              <Preset value="everything">Everything</Preset>
+              <Preset value="no-ai">No AI</Preset>
+            </div>
+            <Groups />
+            <div className="where">
+              <div className="field">
+                <label htmlFor="where">Where will it live?</label>
+                <WhereSelect />
+              </div>
+              <div className="field">
+                <ShareBox />
+              </div>
+              <p className="hint" id="whereNote">
+                An external drive goes with you and works on any computer. A home server is a computer that stays on, so
+                the phones and laptops at home can use the kit through it, with an access code. Leave it unpicked and
+                your AI asks.
+              </p>
+            </div>
+            <div className="total" role="region" aria-label="Your kit">
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: "1 1 320px" }}>
+                <Total />
+                <Toast />
+                <SetupText />
+              </div>
+              <div className="acts">
+                <CopySetup>
+                  Copy AI <span className="long">setup </span>prompt
+                </CopySetup>
+              </div>
+            </div>
+          </Builder>
+        </section>
+        <section id="prompts" className="band">
+          <div className="wrap section">
+            <h2>Let any AI chat walk you through it.</h2>
+            <div className="prompts">
+              <div className="prompt">
+                <div className="bar">
+                  <div>
+                    <b>Install ours</b>
+                    <span>
+                      Paste it into ChatGPT, Claude or another AI chat. It asks what you want in it, then gives you the
+                      command to run.
+                    </span>
+                  </div>
+                  <CopyButton target="installPrompt" />
+                </div>
+                <pre id="installPrompt">{INSTALL_PROMPT}</pre>
+              </div>
+              <div className="prompt">
+                <div className="bar">
+                  <div>
+                    <b>Build your own</b>
+                    <span>Our kit as a starting point. Your AI asks what you need first.</span>
+                  </div>
+                  <CopyButton target="ownPrompt" />
+                </div>
+                <pre id="ownPrompt">{OWN_PROMPT}</pre>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="stack" className="wrap section">
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <p className="kicker">Under the hood</p>
+            <h2>What runs on your computer.</h2>
+            <p style={{ fontSize: "18px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "760px" }}>
+              Open Tinfoil Kit starts these servers from the kit's folder, each on 127.0.0.1, and opens the kit page in
+              your browser. No Docker, no runtime to install, no admin password: one Go program, standard library only,
+              downloads, checks and runs it all, with curl for every download.
+            </p>
+          </div>
+          <ul className="cards" aria-label="The servers">
+            {SERVERS.map(([part, program, port, what]) => (
+              <li key={part}>
+                <b>{part}</b>
+                <code>
+                  {program} · {port}
+                </code>
+                <span>{what}</span>
+              </li>
+            ))}
+          </ul>
+          <ul className="cards">
+            <li>
+              <b>Ask: answers with sources, or search</b>
+              <span>
+                Ask the AI: the LLM turns your question into short searches, kiwix-serve runs them over every ZIM, and
+                the LLM answers from the top articles with numbered citations. Map questions go to three tools instead:
+                search places, find nearby, get directions. Search skips the LLM: the question&apos;s own words over the
+                same full-text indexes, the best passages ranked in the page, in seconds and with no GPU. The LLM can
+                then answer from those passages, with no second search.
+              </span>
+            </li>
+            <li>
+              <b>Models: 4-bit GGUF, all with vision</b>
+              <span>
+                From Hugging Face: Inkling 2 Mini by default (a mixture of experts, about 3.4B of its 26B parameters
+                active per token), Qwen3.8 27B, and Gemma 4 26B-A4B, 12B and E4B. A model may take 60% of memory, and{" "}
+                <code>./kit fit</code> picks the one this computer runs.
+              </span>
+            </li>
+            <li>
+              <b>Library: Kiwix ZIM files</b>
+              <span>
+                Straight from Kiwix: Wikipedia in any language, all of it or the best 50,000 articles, with or without
+                pictures, plus WikiMed, iFixit, Stack Exchange, LibreTexts, US Army manuals and more.{" "}
+                <code>./kit search</code> finds any other ZIM.
+              </span>
+            </li>
+            <li>
+              <b>Maps: PMTiles, Photon, GraphHopper</b>
+              <span>
+                Protomaps' daily OpenStreetMap build, cut to your region and drawn by MapLibre GL; Photon's address
+                database; and a road graph built from Geofabrik's extract on the first sync. Photon and GraphHopper run
+                on a Java 21 inside the kit.
+              </span>
+            </li>
+            <li>
+              <b>One folder, three systems</b>
+              <span>
+                The kit carries every program for macOS on Apple silicon and for Windows and Linux on x64, so an exFAT
+                drive starts on any of them. On Windows and Linux the LLM runs on the GPU through Vulkan. Both are
+                experimental for now.
+              </span>
+            </li>
+            <li>
+              <b>Updates that keep what you have</b>
+              <span>
+                <code>./kit sync</code> asks each publisher for the newest edition, downloads only what changed over
+                eight connections per file, resumes, checks checksums, and keeps the old version until the new one
+                checks out. A new release replaces only the app folder.
+              </span>
+            </li>
+          </ul>
+        </section>
         <section id="trust" className="oss">
           <div className="wrap">
             <div style={{ flex: "1 1 520px", display: "flex", flexDirection: "column", gap: "16px" }}>
               <p className="kicker" style={{ color: "#E0884F" }}>
-                Open source, MIT license
+                Don't trust, verify
               </p>
               <h2>Don't trust us? Good. Have your AI audit the code.</h2>
               <p>
@@ -227,6 +538,13 @@ export default function Home() {
                 </span>
               </li>
             </ul>
+            <pre className="code" tabIndex={0}>
+              {`# check a release before you run it
+ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release \\
+  -n tinfoilkit-release -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz
+# rebuild a kit's program from its source, and compare
+tools/tinfoilkit/build.sh verify SHA256SUMS`}
+            </pre>
           </div>
         </section>
         <section id="faq" className="wrap section">
@@ -240,6 +558,22 @@ export default function Home() {
               medical and repair guides, and maps with directions on an external drive or your laptop. You set it up
               while you're online, and after that it all works with no internet.
             </Question>
+            <Question q="Where's the download?">
+              Coming soon. A Mac download has to be signed by Apple, or macOS makes you dig through System Settings to
+              open it, and Windows warns about unsigned downloads too. Until then, your AI gives you one command that
+              downloads the same kit and sets it up, on a Mac, Windows or Linux, with no warnings to click through.
+            </Question>
+            <Question q="Do I need ChatGPT or Claude?">
+              Any AI chat that can read a web page works, free ones included: it reads the kit's setup instructions at
+              tinfoilkit.com/llms.txt. One that can run commands on your computer, like Claude Code or Codex, checks
+              your computer and drive itself; a chat asks you instead. Either way, you paste the command it gives you.
+              Rather not use an AI? <a href={`${REPO}#set-up`}>The README</a> has the command and its options.
+            </Question>
+            <Question q="Can my AI just install it?">
+              It could, but the kit's instructions ask it not to. Your AI asks the questions and hands you one command,
+              so you see exactly what runs and nothing installs behind your back. Updates, fixes and removal work the
+              same way.
+            </Question>
             <Question q="Is the AI as good as ChatGPT?">
               Not quite. It's small enough to run on a laptop, so it's a step behind the big cloud AIs. It's good at
               explaining things, it shows where its answers come from, and it needs no internet.
@@ -247,16 +581,16 @@ export default function Home() {
             <Question q="Do I need the AI?">
               No. The books and the map work without it, and Search finds the best passages in every book in seconds,
               without the AI, on very little power. The AI is for when you want an answer written for you, with sources.
-              The installer lets you leave it out.
+              Pick No AI in the kit builder, or tell your AI to leave it out.
             </Question>
             <Question q="What do I need?">
               A Mac with an M chip (M1 or newer). Windows and Linux PCs with an Intel or AMD chip work too, but they're
               experimental for now. 32&nbsp;GB of memory runs the full-size AI; with less, you get a lighter one. On
               your laptop or an external SSD, the kit takes from about 20&nbsp;GB for just the essentials (the AI, the
               map, the medical, preparedness and repair books, and Wikipedia's best articles) to about 900&nbsp;GB for
-              everything. The recommended kit is about 200 to 300&nbsp;GB. The installer checks that it fits, and says
-              how long it takes to download, before it starts: on a 100&nbsp;Mbps connection, about an hour for the
-              essentials and 4 to 7 hours for the recommended kit.
+              everything. The recommended kit is about 200 to 300&nbsp;GB. Setup checks that it fits, and says how long
+              it takes to download, before it starts: on a 100&nbsp;Mbps connection, about an hour for the essentials
+              and 4 to 7 hours for the recommended kit.
             </Question>
             <Question q="Which AI will my laptop run?" block>
               <p>It depends on your laptop's memory. The kit picks for you, and you can switch any time.</p>
@@ -286,8 +620,8 @@ export default function Home() {
                 </tbody>
               </table>
               <p>
-                The installer says which one your laptop runs, and offers to skip the ones too big for it, which saves
-                about 50&nbsp;GB on a 16 or 24&nbsp;GB laptop. To see your memory, open About This Mac, or Settings &gt;
+                Setup says which one your laptop runs, and offers to skip the ones too big for it, which saves about
+                50&nbsp;GB on a 16 or 24&nbsp;GB laptop. To see your memory, open About This Mac, or Settings &gt;
                 System &gt; About on Windows. A Windows or Linux PC without a good graphics card should use Gemma 4 E4B.
               </p>
             </Question>
@@ -306,10 +640,10 @@ export default function Home() {
             <Question q="What does setup change on my computer?" block>
               <p>
                 Very little. Everything goes in one folder, TinfoilKit, in your home folder or on the drive, and nothing
-                runs unless you start it. Besides that:
+                runs unless you start it. It needs no Docker, Python or Node: the kit's own program downloads, checks
+                and runs it all with curl, which Macs and Windows come with. Besides that:
               </p>
               <ul>
-                <li>Mac: the Tinfoil Kit app goes in your Applications folder.</li>
                 <li>
                   Mac: the kit clears macOS's "downloaded from the internet" mark from its own files, and signs a
                   program if macOS won't open it otherwise, so everything opens in an outage.
@@ -318,7 +652,7 @@ export default function Home() {
                   Mac: what a kit in your home folder downloads stays out of Time Machine, and a kit drive stays out of
                   Spotlight.
                 </li>
-                <li>Linux: if curl is missing, the installer says how to get it.</li>
+                <li>Linux: if curl is missing, setup says how to get it.</li>
               </ul>
               <p>
                 Only if you ask: a home server starts the kit with the computer and shares it on your home network, with
@@ -328,11 +662,17 @@ export default function Home() {
             <Question q="How do I know it's safe?">
               All the code is public, and you don't have to trust a server of ours. Before you install, you can have
               your AI read the code and tell you what it does: this page has a prompt for that. The kit installs updates
-              to itself only if they're signed with the maintainer's key, which never touches GitHub. Every model, book,
-              map and program comes straight from its publisher, checked against the publisher's checksum when there is
-              one. Nothing outside your computer can reach the kit unless you turn on sharing, which asks for a code.
-              The <a href={`${REPO}#security`}>README's Security section</a> says what it protects against, what it
-              can't, and how to report a problem.
+              to itself only if they're signed with the maintainer's key, which never touches GitHub, and its program
+              rebuilds to the same bytes from its source, so anyone can check it. Every model, book, map and program
+              comes straight from its publisher, checked against the publisher's checksum when there is one. Nothing
+              outside your computer can reach the kit unless you turn on sharing, which asks for a code. The{" "}
+              <a href={`${REPO}#security`}>README's Security section</a> says what it protects against, what it can't,
+              and how to report a problem.
+            </Question>
+            <Question q="Can I add my own books or AI models?">
+              Yes. Everything the kit downloads is listed in one file in the kit, with each publisher's download, and a
+              new version of the kit adds its changes without touching yours. Your AI can find more of Kiwix's offline
+              books and add models from Hugging Face: the kit's instructions show it how.
             </Question>
             <Question q="What's the catch?">
               None. It's free and open source (MIT license), with no account, no tracking in the kit and no analytics on
@@ -367,15 +707,16 @@ export default function Home() {
             </Question>
             <Question q="Does it run on Windows or Linux?">
               Yes, all of it, but Windows and Linux are experimental for now: they're tested less than the Mac, so
-              expect rough edges. Download and open it on any of the three. A kit on a drive formatted exFAT works on a
-              Mac, Windows or Linux, whichever one set it up. Without a strong graphics card, the AI is slower.
+              expect rough edges. Your AI sets it up on any of the three. The kit carries the programs for all three, so
+              a kit on a drive formatted exFAT works on a Mac, Windows or Linux, whichever one set it up. Without a
+              strong graphics card, the AI is slower.
             </Question>
             <Question q="How do I update it?">
-              Open the installer again whenever you're online. There's no schedule. It shows what's new before anything
-              downloads, your picks stay, and only what changed downloads. A newer download of Tinfoil Kit finds the kit
-              you have and updates that one, so nothing downloads twice. Your old files keep working until the new ones
-              check out, and you never have to take a newer edition. A new version replaces only the kit's app folder:
-              your downloads and settings stay in folders of their own.
+              Run setup again whenever you're online: double-click SETUP in the kit's app folder, or ask your AI for the
+              command. There's no schedule. It shows what's new before anything downloads, your picks stay, and only
+              what changed downloads. Your old files keep working until the new ones check out, and you never have to
+              take a newer edition. A new version replaces only the kit's app folder: your downloads and settings stay
+              in folders of their own.
             </Question>
             <Question q="How do I remove it?">
               Run the uninstaller in the kit's app folder and type delete. It removes the kit and everything it
