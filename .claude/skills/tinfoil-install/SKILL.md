@@ -67,7 +67,7 @@ If the kit's code is already there, it's `bash TinfoilKit/app/SETUP.command OPTI
 Then tell them:
 
 - How to open the terminal: on a Mac, Cmd-Space, type Terminal, press Return. On Windows, open Start, type PowerShell, press Enter. Paste the command and press Return.
-- On a Mac without Python, SETUP gets one first (about 25 MB). Keep the laptop plugged in and the terminal open.
+- Keep the laptop plugged in and the terminal open.
 - What success looks like: "The try-it kit works", how big the rest is and how long it takes on their connection, and "When you're ready for it:" with the command for the rest. Then the kit opens (on Linux, SETUP prints the command that opens it).
 - If it stops, or the laptop sleeps, run the same command again: it picks up where it left off.
 

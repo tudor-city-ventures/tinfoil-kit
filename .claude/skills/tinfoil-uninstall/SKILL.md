@@ -11,7 +11,7 @@ This deletes the kit for good: the files don't go to the Trash. Give the person 
 
 - The kit folder, TinfoilKit: app, downloads and data.
 - Starting with the computer, if it was on.
-- The Python SETUP got for the kit: on Windows, and on a Mac that had none.
+- The Python SETUP got, if it got one (only for a kit without its own program, like a git checkout).
 - Nothing else. On a drive, the rest of the drive stays. If the app folder sits in a folder with other things in it, it deletes nothing and says so.
 
 ## The command

@@ -151,15 +151,15 @@ export default function Download({ children }) {
               <li>In the new TinfoilKit folder, open <b>app</b> and double-click <b>SETUP-Windows</b>.</li>
               <li>If Windows says it protected your PC, click <b>More info</b>, then <b>Run anyway</b>. It only asks once.</li>
             </ol>
-            <p>SETUP then gets the Python the kit's tools run on (about 15&nbsp;MB), and asks where you live and whether the kit goes on this PC or an external drive, with what fits on each. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes on your connection. To get the rest, double-click <b>SETUP-Windows</b> again.</p>
+            <p>SETUP then asks where you live and whether the kit goes on this PC or an external drive, with what fits on each. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes on your connection. To get the rest, double-click <b>SETUP-Windows</b> again.</p>
             <button type="button" className="dl-back" onClick={() => show('all')}>All downloads</button>
           </div>
           <div data-view="linux" hidden={view !== 'linux'}>
-            <p>Your download has started. In a terminal, install python3 and curl if they're missing:</p>
+            <p>Your download has started. In a terminal, install curl if it's missing:</p>
             <ul className="dl-distros">
-              <li><span>Ubuntu, Debian, Mint</span><code>sudo apt install python3 curl</code></li>
-              <li><span>Fedora</span><code>sudo dnf install python3 curl openssl3-libs</code></li>
-              <li><span>Arch, Manjaro</span><code>sudo pacman -S python curl</code></li>
+              <li><span>Ubuntu, Debian, Mint</span><code>sudo apt install curl</code></li>
+              <li><span>Fedora</span><code>sudo dnf install curl openssl3-libs</code></li>
+              <li><span>Arch, Manjaro</span><code>sudo pacman -S curl</code></li>
             </ul>
             <p>Then unpack the kit and start SETUP:</p>
             <pre className="dl-cmd">{'cd ~/Downloads && tar -xf TinfoilKit.tar.gz && bash TinfoilKit/app/SETUP.command'}</pre>

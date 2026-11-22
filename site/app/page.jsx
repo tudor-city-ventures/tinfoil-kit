@@ -360,7 +360,7 @@ export default function Home() {
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
               <summary itemProp="name">Does anything leave my laptop?</summary>
               <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
-                <p itemProp="text">No. Once it's set up, everything runs on your laptop, with no account and no tracking. It only goes online when you install or update it, and then it only talks to the places it downloads from: GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus nuget.org for Python on Windows and any source you add yourself.</p>
+                <p itemProp="text">No. Once it's set up, everything runs on your laptop, with no account and no tracking. It only goes online when you install or update it, and then it only talks to the places it downloads from: GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus any source you add yourself.</p>
               </div>
             </details>
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
@@ -369,13 +369,12 @@ export default function Home() {
                 <div itemProp="text">
                   <p>Very little. Everything goes in one folder, TinfoilKit, in your home folder or on the drive, and nothing runs unless you start it. Besides that:</p>
                   <ul>
-                    <li>Windows: the installer adds python.org's Python (about 15&nbsp;MB) to your user folder, because the kit's tools need it.</li>
-                    <li>Mac: the Tinfoil Kit app goes in your Applications folder. If your Mac has no Python, the installer adds one (about 25&nbsp;MB) to your Library folder.</li>
+                    <li>Mac: the Tinfoil Kit app goes in your Applications folder.</li>
                     <li>Mac: the kit clears macOS's "downloaded from the internet" mark from its own files, and signs a program if macOS won't open it otherwise, so everything opens in an outage.</li>
                     <li>Mac: what a kit in your home folder downloads stays out of Time Machine, and a kit drive stays out of Spotlight.</li>
-                    <li>Linux: if python3 or curl is missing, the installer says how to get them.</li>
+                    <li>Linux: if curl is missing, the installer says how to get it.</li>
                   </ul>
-                  <p>Only if you ask: a home server starts the kit with the computer and shares it on your home network, with an access code. Uninstalling deletes the folder and undoes the rest, including the Python the installer added.</p>
+                  <p>Only if you ask: a home server starts the kit with the computer and shares it on your home network, with an access code. Uninstalling deletes the folder and undoes the rest.</p>
                 </div>
               </div>
             </details>

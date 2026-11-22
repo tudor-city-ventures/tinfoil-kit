@@ -50,7 +50,7 @@ Nothing here needs the internet, an account, or an install.
   router on a battery backup, a small battery-powered travel router, or a phone's hotspot (an iPhone's may not turn on
   without cell service). Nobody without the code gets in. To share every time the kit starts, run `./kit share on`
   once in the app folder (`.\kit.cmd share on` on Windows). If macOS asks whether to accept incoming connections,
-  click **Allow**. If Windows asks about Python, click **Allow access**.
+  click **Allow**. If Windows asks about tinfoilkit-windows-x64.exe, click **Allow access**.
 
 The AI can be wrong. Treat it like a well-read friend, not a doctor: check the sources, and get trained help whenever you can.
 
@@ -141,11 +141,9 @@ what's new in the kit's own list (`app/kit.json`).
 2. Start SETUP:
    - **Mac**: double-click **Tinfoil Kit** and click **Open** when macOS asks about an app from the internet. It
      offers to move itself to Applications: say yes. Then click **Set Up**, and SETUP starts in a Terminal window.
-     On a Mac without Python, it first gets one for the kit's tools (about 25 MB, once).
    - **Windows**: double-click **`SETUP-Windows.bat`** in the TinfoilKit folder's `app` folder. If Windows says it protected your
-     PC, click **More info**, then **Run anyway**. First it gets Python, which the kit's tools run on (about 15 MB,
-     once).
-   - **Linux**: open a terminal in `TinfoilKit/app` and run `bash SETUP.command`. It needs python3 and curl.
+     PC, click **More info**, then **Run anyway**.
+   - **Linux**: open a terminal in `TinfoilKit/app` and run `bash SETUP.command`. It needs curl.
 3. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works
    too). That sets the maps' area, directions, address search and home, and offers Wikipedia in your language.
    Then it asks how much of Wikipedia: all of it (127 GB in English, with pictures), or just the best 50,000
@@ -187,7 +185,7 @@ Click **Remove** in the Mac app, or double-click `UNINSTALL.command` in the kit'
 Windows; on Linux, `bash UNINSTALL.command`). It shows what it will delete and how much space that frees, and deletes the kit and
 everything it downloaded, your notes and pins too, only after you type `delete`. The files don't go to the Trash.
 To keep your notes, copy `data/notes.txt` somewhere else first. On a drive, nothing else on
-the drive is touched. It also removes the Python SETUP got, on Windows or on a Mac that didn't have one.
+the drive is touched.
 To remove the Mac app too, drag it from Applications to the Trash.
 
 ## Power
@@ -204,7 +202,7 @@ and the Library tab (no AI) uses almost nothing.
 - Logs are in `data/logs`.
 - Phones can't open the shared address: they need the same Wi-Fi as the computer (a guest network often keeps
   devices apart). `./kit share` shows the address and the access code again. On Windows, set the Wi-Fi as a private
-  network (**Settings > Network & internet**, then the Wi-Fi's properties), and if Python was refused, allow it in
+  network (**Settings > Network & internet**, then the Wi-Fi's properties), and if tinfoilkit-windows-x64.exe was refused, allow it in
   **Windows Security > Firewall & network protection > Allow an app through firewall**, ticking **Private**.
 - If a model won't load or is very slow, quit other apps (big models need most of a 32 GB laptop's memory), or use `Gemma-4-E4B`.
   Starting with `bash "Open Tinfoil Kit.command" --no-maps` frees about 5 GB by not starting the map servers.
