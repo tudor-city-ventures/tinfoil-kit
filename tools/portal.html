@@ -14,6 +14,8 @@
   header h1 { font-size:1.15rem; margin:0; letter-spacing:.01em; }
   .pill { font-size:.8rem; padding:.15rem .6rem; border-radius:999px; border:1px solid var(--line); color:var(--mute); }
   .pill.ok { color:var(--ok); border-color:var(--ok); } .pill.bad { color:var(--bad); border-color:var(--bad); }
+  a.pill { text-decoration:none; }
+  #shareQr { display:block; width:12rem; max-width:100%; height:auto; margin:.6rem 0; border-radius:8px; }
   nav { display:flex; gap:.25rem; margin-left:auto; }
   nav a { padding:.35rem .8rem; border-radius:8px; color:var(--ink); text-decoration:none; cursor:pointer; }
   nav a.on { background:var(--accent); color:var(--on-accent); }
@@ -78,6 +80,7 @@
   <h1>Tinfoil Kit</h1>
   <span id="libStatus" class="pill ok">Library: on</span>
   <span id="aiStatus" class="pill">AI: checking</span>
+  <a id="sharePill" class="pill ok" href="#help" hidden>Shared on this network</a>
   <nav>
     <a href="#ask" data-tab="ask" class="on" aria-current="page">Ask</a>
     <a href="#map" data-tab="map">Map</a>
@@ -152,16 +155,21 @@
       <li>You can also ask in plain words on the Ask page, e.g. "How do I get to the nearest hospital?" or "Directions from home to 350 Fifth Avenue, New York". The answer appears there and the route on the Map tab.</li>
       <li>For driving, a phone with an offline maps app (Organic Maps, or downloaded areas in Apple or Google Maps) is better: it has GPS and spoken turn-by-turn directions.</li>
     </ul>
-    <h2>Sharing with family</h2>
-    <ul>
-      <li>Start the kit with <kbd>bash START-HERE.command --share</kbd>. It prints an address that phones on the same Wi-Fi or hotspot can open. No internet needed: turn on the Mac's hotspot or use your router while it has power.</li>
+    <h2 id="share">Sharing with family</h2>
+    <div id="shareOn" class="card" hidden>
+      <p>The kit is shared on this network. On another phone or laptop on the same Wi-Fi, open <b id="shareAddr"></b> and type the access code <b id="shareCode"></b>. Or scan this with the phone's camera:</p>
+      <img id="shareQr" alt="QR code that opens the kit, access code included">
+      <p class="note">No internet needed: a router with power, or a phone's hotspot, is enough.</p>
+    </div>
+    <ul id="shareOff">
+      <li>Phones and laptops on your Wi-Fi can use the kit too. In the kit's folder, run <kbd>./kit share on</kbd> in a terminal, then start the kit again. It shows an address, an access code and a QR code to scan. No internet needed: a router with power, or a phone's hotspot, is enough.</li>
     </ul>
     <h2>If something doesn't work</h2>
     <ul>
       <li>Close the kit's Terminal window and double-click <b>START-HERE.command</b> again.</li>
-      <li>Logs are in the <b>logs</b> folder on the drive.</li>
+      <li>Logs are in the <b>logs</b> folder, inside the kit's folder.</li>
       <li>If the AI won't start, the library still works. The Kiwix app in <b>installers</b> also opens the library files directly.</li>
-      <li>Big models need most of the Mac's memory: quit other apps. If a model still won't load, use Gemma-4-E4B.</li>
+      <li>Big models need most of the computer's memory: quit other apps. If a model still won't load, use Gemma-4-E4B.</li>
     </ul>
   </section>
 </main>
@@ -715,7 +723,10 @@ if (typeof module !== "undefined" && module.exports) { module.exports = Kit; }
 /* ---------------------------------------------------------------- page */
 if (typeof document !== "undefined") (function () {
   "use strict";
-  if (location.hostname === "localhost") {   // the AI only accepts requests from 127.0.0.1
+  // Set by tools/share.py when the page comes through the gate that shares the kit on the home network. Then
+  // the AI and the map servers are paths on this same address, behind the access code.
+  var GATE = window.KIT_GATE || null;
+  if (!GATE && location.hostname === "localhost") {   // the AI only accepts requests from 127.0.0.1
     location.replace(location.href.replace("//localhost", "//127.0.0.1"));
     return;
   }
@@ -725,13 +736,18 @@ if (typeof document !== "undefined") (function () {
   function stored(k) { try { return localStorage.getItem("kit." + k); } catch (e) { return null; } }
   function store(k, v) { try { localStorage.setItem("kit." + k, v); } catch (e) {} }
   var aiPort = params.get("ai") || stored("ai") || "8080";
-  var AI = location.protocol + "//" + location.hostname + ":" + aiPort;
+  var AI = GATE ? location.origin + "/ai" : location.protocol + "//" + location.hostname + ":" + aiPort;
   var preferredModel = params.get("model") || stored("model") || "";
   store("ai", aiPort); if (params.get("model")) store("model", params.get("model"));
   var $ = function (id) { return document.getElementById(id); };
   var books = [], aiUp = false, running = null;
 
   $("chatLink").href = AI + "/";
+  if (GATE) {
+    $("sharePill").hidden = false; $("shareOn").hidden = false; $("shareOff").hidden = true;
+    $("shareAddr").textContent = GATE.address; $("shareCode").textContent = GATE.code;
+    $("shareQr").src = "/_kit/qr.svg";
+  }
   function showTab(name) {
     document.querySelectorAll("nav a[data-tab]").forEach(function (x) {
       x.classList.toggle("on", x.dataset.tab === name);
@@ -860,9 +876,9 @@ if (typeof document !== "undefined") (function () {
   });
 
   /* ---------------------------------------------------------------- map tab */
-  var KM = window.KIT_MAPS || { available: false, reason: "the map isn't set up here. It's added by ./kit sync (on the Mac, while online) and starts with START-HERE.command." };
-  var host = location.protocol + "//" + location.hostname + ":";
-  var GEO = KM.ports ? host + KM.ports.geocoder : "", ROUTE = KM.ports ? host + KM.ports.routing : "";
+  var KM = window.KIT_MAPS || { available: false, reason: "the map isn't set up here. It's added by ./kit sync (while online) and starts with START-HERE.command." };
+  function server(name) { return GATE ? location.origin + "/" + name : location.protocol + "//" + location.hostname + ":" + KM.ports[name]; }
+  var GEO = KM.ports ? server("geocoder") : "", ROUTE = KM.ports ? server("routing") : "";
   var map = null, mapReady = false, pending = null, markers = [], homeMk = null, toPick = null;
   var svc = { geocoder: false, routing: false };
   var esc = Kit.escapeHtml;
@@ -911,7 +927,7 @@ if (typeof document !== "undefined") (function () {
     map = new maplibregl.Map({
       container: "mapCanvas", center: [h.lon, h.lat], zoom: h.zoom || 11, attributionControl: { compact: true },
       style: { version: 8, glyphs: "kitglyph://{fontstack}/{range}", sprite: "kitsprite://sprites/light",
-        sources: { protomaps: { type: "vector", tiles: [host + KM.ports.tiles + "/" + KM.tileset + "/{z}/{x}/{y}.mvt"],
+        sources: { protomaps: { type: "vector", tiles: [server("tiles") + "/" + KM.tileset + "/{z}/{x}/{y}.mvt"],
           maxzoom: KM.detailMaxzoom, attribution: "&copy; OpenStreetMap contributors, Protomaps" } },
         layers: basemaps.layers("protomaps", basemaps.namedFlavor("light"), { lang: "en" }) }
     });

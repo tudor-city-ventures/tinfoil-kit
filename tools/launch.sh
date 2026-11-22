@@ -4,7 +4,8 @@
 #
 #   bash tools/launch.sh [--share] [--model=NAME] [--no-browser] [--no-maps]
 #
-#   --share       also serve phones/laptops on the same Wi-Fi or hotspot
+#   --share       also serve phones and laptops on the home network, behind the access code (this time
+#                 only; ./kit share on turns it on for good: kit.json's share_on_network)
 #   --model=NAME  model to load first (a folder name in models/)
 #   --no-browser  don't open the browser
 #   --no-maps     don't start the map servers (saves about 5 GB of memory)
@@ -37,6 +38,8 @@ GEO_PORT="$(setting geocoder_port 2322)"
 ROUTE_PORT="$(setting routing_port 8989)"
 GEO_HEAP="$(setting geocoder_heap 3g)"
 ROUTE_HEAP="$(setting routing_heap 2g)"
+SHARE_PORT="$(setting share_port 8000)"
+[ "$(setting share_on_network false)" = true ] && SHARE=1
 
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) PLAT=macos-arm64 ;;
@@ -149,13 +152,9 @@ if [ "$CHOSEN" = 0 ] && [ "$ROOM" -gt 0 ] && [ ${#MODELS[@]} -gt 0 ] && [ "$(mod
   fi
 fi
 
+# Every server listens on 127.0.0.1 only. Sharing puts tools/share.py in front of them on the home network:
+# it asks for the access code, then passes requests on.
 HOST=127.0.0.1
-LAN_IP=""
-if [ "$SHARE" = 1 ]; then
-  HOST=0.0.0.0
-  # Wi-Fi or Ethernet, else the Mac's own network when Internet Sharing is on (bridge100), else Linux
-  LAN_IP="$( (ipconfig getifaddr en0 || ipconfig getifaddr en1 || ipconfig getifaddr bridge100 || hostname -I | awk '{print $1}') 2>/dev/null | head -1)"
-fi
 
 PIDS=()
 cleanup() {
@@ -177,8 +176,7 @@ elif [ -n "$KIWIX" ] && [ ${#ZIMS[@]} -gt 0 ]; then
   # (kit code updated, no sync since) shows up after the next sync, which rebuilds the page.
   PORTAL="$KIT/.kit/portal.html"
   [ -f "$PORTAL" ] || PORTAL="$KIT/tools/portal.html"
-  KARGS=(--port "$LIB_PORT" --customIndex "$PORTAL" --threads 4)
-  [ "$SHARE" = 1 ] || KARGS+=(--address 127.0.0.1)
+  KARGS=(--port "$LIB_PORT" --address "$HOST" --customIndex "$PORTAL" --threads 4)
   "$KIWIX" --help 2>&1 | grep -q -- --skipInvalid && KARGS+=(--skipInvalid)
   "$KIWIX" "${KARGS[@]}" "${ZIMS[@]}" > "$KIT/logs/kiwix-serve.log" 2>&1 &
   LIB_PID=$!; PIDS+=($!)
@@ -193,10 +191,9 @@ elif [ -n "$LLAMA" ] && [ ${#MODELS[@]} -gt 0 ]; then
   if taken "$AI_PORT"; then
     p="$(free_port "$AI_PORT")"; say "  Another program is using port $AI_PORT, so the AI uses $p."; AI_PORT="$p"
   fi
-  # Browsers accept exactly one allowed origin (llama-server would echo a list verbatim):
-  # the portal at 127.0.0.1 locally, or any origin when sharing with other devices.
+  # Browsers accept exactly one allowed origin (llama-server would echo a list verbatim): the page at
+  # 127.0.0.1. Through the sharing gate, the page and the AI share one address, so that needs none.
   CORS="http://127.0.0.1:$LIB_PORT"
-  [ "$SHARE" = 1 ] && CORS="*"
   PRESET="$KIT/.kit/presets.ini"
   printf 'version = 1\n\n[%s]\nload-on-startup = true\n' "$MODEL" > "$PRESET"
   "$LLAMA" --models-dir "$KIT/models" --models-preset "$PRESET" --models-max 1 -c "$CTX" \
@@ -231,9 +228,32 @@ if [ "$NO_MAPS" = 0 ] && [ -d "$KIT/maps" ]; then
   [ -n "$MAPS_STARTED" ] && say "  Starting maps:$MAPS_STARTED (address search and directions take up to a minute)..."
 fi
 
-# keep the Mac awake while the kit runs (the screen may still sleep)
+# --- sharing on the home network
+GATE_PID=""; SHARE_OK=0
+our_gate() { get "http://127.0.0.1:$1/" | grep -q "Tinfoil Kit"; }
+if [ "$SHARE" = 1 ]; then
+  if ! python3 -c "" >/dev/null 2>&1; then
+    say "  ! Sharing needs python3. On a Mac: xcode-select --install. On Linux: install the python3 package."
+  elif our_gate "$SHARE_PORT"; then
+    say "  Sharing already on, on port $SHARE_PORT."; SHARE_OK=1
+  else
+    if taken "$SHARE_PORT"; then
+      p="$(free_port "$SHARE_PORT")"; say "  Another program is using port $SHARE_PORT, so sharing uses $p."; SHARE_PORT="$p"
+    fi
+    GARGS=(--root "$KIT" --port "$SHARE_PORT" --library "$LIB_PORT" --ai "$AI_PORT")
+    [ "$NO_MAPS" = 0 ] && GARGS+=(--tiles "$TILES_PORT" --geocoder "$GEO_PORT" --routing "$ROUTE_PORT")
+    python3 "$KIT/tools/share.py" serve "${GARGS[@]}" > "$KIT/logs/share.log" 2>&1 &
+    GATE_PID=$!; PIDS+=($!)
+  fi
+fi
+
+# Keep the computer awake while the kit runs (the screen may still sleep).
 if [ "$(uname -s)" = Darwin ] && command -v caffeinate >/dev/null; then
   caffeinate -i -w $$ & PIDS+=($!)
+elif command -v systemd-inhibit >/dev/null; then
+  # (tail --pid ends with this script, even if systemd-inhibit is stopped first)
+  systemd-inhibit --what=sleep --who="Tinfoil Kit" --why="The kit is running" tail --pid=$$ -f /dev/null >/dev/null 2>&1 &
+  PIDS+=($!)
 fi
 
 # Wait for each server to answer, unless this window didn't start it or it has already quit.
@@ -249,6 +269,13 @@ for _ in $(seq 1 30); do
   { [ -n "$AI_PID" ] && kill -0 "$AI_PID" 2>/dev/null; } || break
   sleep 1
 done
+if [ -n "$GATE_PID" ]; then
+  for _ in $(seq 1 10); do
+    our_gate "$SHARE_PORT" && { SHARE_OK=1; break; }
+    kill -0 "$GATE_PID" 2>/dev/null || break
+    sleep 1
+  done
+fi
 
 URL="http://127.0.0.1:$LIB_PORT/?model=$MODEL&ai=$AI_PORT"
 say ""
@@ -257,10 +284,15 @@ if [ "$AI_OK" = 1 ]; then say "  AI:       ready (the first answer takes longer 
 else say "  AI:       NOT running (see logs/llama-server.log). The library still works."; fi
 say ""
 say "  Open:     $URL"
-[ -n "$LAN_IP" ] && say "  Others on this Wi-Fi/hotspot:  http://$LAN_IP:$LIB_PORT/?model=$MODEL&ai=$AI_PORT"
 say "  AI chat:  http://127.0.0.1:$AI_PORT/"
 [ -n "$MAPS_STARTED" ] && say "  Maps:     on the Map tab of the page above"
 say ""
+if [ "$SHARE_OK" = 1 ]; then
+  python3 "$KIT/tools/share.py" banner --root "$KIT" --port "$SHARE_PORT"
+  say ""
+elif [ -n "$GATE_PID" ]; then
+  say "  Sharing:  NOT running (see logs/share.log)"; say ""
+fi
 say "  Keep this window open. Close it or press Ctrl-C to stop everything."
 
 if [ "$NO_BROWSER" = 0 ] && [ "$LIB_OK" = 1 ]; then
