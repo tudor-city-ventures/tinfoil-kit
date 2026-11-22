@@ -319,7 +319,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
   - Nightly and push runs start only when a file the test covers changed since the last green run (or the push before), so site edits never cost Mac minutes. Monday's nightly always runs (Travis, 2026-11-22), because the fixtures take the newest llama.cpp and kiwix-tools builds, as a kit's sync does, and those change with no change here. Runs by hand always go.
   - Screenshots and logs are run artifacts. A run takes about 3 Mac minutes (about $0.25 with the other jobs while the repo is private; free once public).
   - Not covered: maps on the Mac and Linux (only the Windows setup job builds one), address search with a real database, real models on a real GPU, and the first-run prompts a person clicks through (Open Anyway for `SETUP.command`, Terminal's removable-volume permission).
-- **Website (`site_test.py`, every push):** serves `site/` with the production headers and drives the kit builder on desktop and phone sizes: presets, totals, no sideways scroll, fonts load from the site, nothing loads from other sites, both Copy paths, the kit.json download, and axe.
+- **Website (`site_test.py`, every push):** serves `site/` with the production headers and drives the kit builder on desktop and phone sizes: presets, totals, no sideways scroll, fonts load from the site, nothing loads from other sites, both Copy paths and the fallback when nothing can copy, and axe.
 - **`mock_remote.py`** fakes every download source. Flag files switch its behavior: `STATE_V2` ("3 months later"), `FLAKY` (a download breaks partway), `PHOTON_OLD_DUMP` (only an older database version is published). `/wifi-sign-in` answers like a hotel network's sign-in page.
 - **`tests/fakes/`:** a fake `java` (pretends to be GraphHopper's import and server, and Photon, by running the mocks) and a fake `pmtiles`.
 - **`make_tiny_model.py`:** the test AI. It gives one fixed answer to any question, with accents and symbols, some spelled byte by byte as real models write them, and `portal_test.js`, `ui_test.py` and `drive.py` check that it arrives with every character intact. Random weights would write random bytes, which look just like an encoding bug and would hide a real one.
@@ -389,7 +389,7 @@ Inspired by the DoTheySupportIt repo, but much smaller and written for people.
   - Starts from presets (Essentials, Recommended, Everything); users then turn individual sources on or off.
   - Each source is an informative card explaining what it is, why you'd want it, and its size, so the selector doubles as an explainer.
   - A running total shows the space needed.
-  - It gives back both a copy-paste setup prompt with the person's picks built in and a `kit.json` to download.
+  - It gives back both a copy-paste setup prompt with the person's picks built in and a `kit.json` to download. (Since 2026-11-22 only the prompt: Travis wanted no kit.json in the person's flow. The prompts let the person opt in or out of each part.)
 - **Two copy-paste prompts:**
   1. **Install ours:** works with any chat AI and walks a person through setup step by step.
   2. **Build your own:** concise principles to paste into any AI.

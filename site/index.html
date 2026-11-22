@@ -326,7 +326,7 @@ Menu</button>
 <section id="instructions" class="wrap agent" data-for="agent">
 <p class="kicker">For AI agents&nbsp;· Markdown at /llms.txt</p>
 <h1>Your agent can set this&nbsp;up.</h1>
-<p class="lede">Claude Code, Codex and other agents that can run commands on your computer can do the whole setup: help you choose between your laptop and a drive, fill it, test it, and later update or remove it. Tell yours to follow <a href="/llms.txt">tinfoilkit.com/llms.txt</a>, or copy the markdown below and paste it in.</p>
+<p class="lede">Point Claude Code, Codex or another agent that runs commands at <a href="/llms.txt">tinfoilkit.com/llms.txt</a>, or paste in the markdown below.</p>
 <div class="prompt">
 <div class="bar"><div><b>llms.txt</b><span>How it works, setup, updates, fixes and sources, in markdown.</span></div><button type="button" data-copy="agentDoc">Copy</button></div>
 <pre class="doc" id="agentDoc">The setup instructions for AI agents are at https://tinfoilkit.com/llms.txt</pre>
@@ -394,10 +394,20 @@ Menu</button>
 <h2>Let any AI chat walk you through it.</h2>
 <div class="prompts">
 <div class="prompt">
-<div class="bar"><div><b>Install ours</b><span>Paste it into ChatGPT, Claude or another AI chat. It goes one step at a time.</span></div><button type="button" data-copy="installPrompt">Copy</button></div>
-<pre id="installPrompt">I want to set up Tinfoil Kit. It's an offline AI assistant, an offline library (Wikipedia, medical and repair guides) and offline maps for when the internet is down, kept on my laptop or an external drive. The project is at https://github.com/tudor-city-ventures/tinfoilkit. Read its README and GUIDE, then walk me through setup one step at a time:
+<div class="bar"><div><b>Install ours</b><span>Paste it into ChatGPT, Claude or another AI chat. It asks what you want in it, then goes one step at a time.</span></div><button type="button" data-copy="installPrompt">Copy</button></div>
+<pre id="installPrompt">I want to set up Tinfoil Kit. It's an offline AI assistant, an offline library (Wikipedia, medical and repair guides) and offline maps for when the internet is down, kept on my laptop or an external drive. The project is at https://github.com/tudor-city-ventures/tinfoilkit, and its instructions for AI assistants are at https://tinfoilkit.com/llms.txt. Read those and the README, then walk me through setup one step at a time.
 
-1. Whether to keep it on my laptop or an external drive, and if a drive, which one to buy and how to format it.
+First, go through each part with me and let me opt in or out. For each, say what it's for and how much space it takes, and recommend what suits my computer. I'll keep the defaults for anything I don't mind:
+- Where it lives: my laptop, an external drive, or a computer that stays on at home as a home server.
+- Where I live, for the map's streets, directions and address search, and which languages we want Wikipedia in.
+- The AI: on or off, and which models my computer can run.
+- The maps.
+- The library, part by part: Wikipedia, medical, preparedness, repair and skills, books and courses, and the huge optional collections.
+- The whole kit, or just the essentials if space is short.
+- Sharing it with the phones and laptops on our home network, behind an access code.
+
+Then:
+1. If it's a drive, which one to buy and how to format it.
 2. How to download the kit and run its installer, which takes a few hours the first time.
 3. How to check that it works with Wi-Fi off.
 4. How to update it whenever I want the newest models, books and maps.
@@ -416,7 +426,15 @@ Before you plan anything, ask me probing questions, one or two at a time:
 - My computer: Mac, Windows or Linux, its chip, memory and free space.
 - Whether it lives on my laptop or an external drive, and what I'd spend on a drive.
 - Where I live and which languages we read.
-- Anything to leave out, like the AI, or sources whose licenses I'm not comfortable with.
+
+Then go through each part Tinfoil Kit offers and let me opt in or out. Say what each is for and roughly how much space it takes:
+- A local AI, and which models my computer can run. Without one, a search still finds the best passages.
+- Offline maps of my area: streets, address search, directions, the nearest hospital.
+- Wikipedia in our languages, with or without images.
+- Medical references, preparedness guides, and repair and skills guides.
+- Textbooks and courses, and the huge optional collections: Khan Academy's videos, Project Gutenberg's books and the Survivor Library.
+- Sharing it with the phones and laptops at home, behind an access code.
+- Flag any source whose license limits how I can use it, so I can leave it out.
 
 What has worked for Tinfoil Kit, unless you have a better idea:
 - Everything works with zero internet, served on my computer and opened in a browser.
@@ -706,7 +724,8 @@ View the code on GitHub</a>
   function setupPrompt() {
     var list = picks().map(function (s) { return "- " + s.title + " (" + s.id + ")"; }).join("\n"), r = state.place;
     return document.getElementById("installPrompt").textContent +
-      "\n\nI used the kit builder on the website. Set the kit up with only these sources switched on:\n" + list +
+      "\n\nI already picked what goes in with the kit builder on tinfoilkit.com. Take these as my answers for the AI, " +
+      "the maps and the library: switch on only these, and tell me if any won't fit my computer. Ask me about the rest:\n" + list +
       (r ? "\n\nI live in " + r.name + ", and want Wikipedia in " + langName(state.wiki) + ". In the kit folder, that's: " +
            "./kit region " + r.id + " --wikipedia " + state.wiki.join(",") : "");
   }
