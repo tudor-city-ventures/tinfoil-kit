@@ -31,9 +31,9 @@ import subprocess
 import sys
 import threading
 import time
-import uuid
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
 
 from make_tiny_model import ANSWER

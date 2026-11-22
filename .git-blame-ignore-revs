@@ -1,0 +1,4 @@
+# Commits that only reformat, which git blame can skip: git blame --ignore-revs-file .git-blame-ignore-revs FILE
+# (GitHub's blame view reads this file by itself.)
+ae12e4a73dc77c042bbc70dd295d0965d6fa0f3f  # Prettier: the website and the JavaScript tests
+9277d3a6b97e122de54ba01c795d65780828e0a7  # ruff format: the Python tests and site scripts

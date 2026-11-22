@@ -2,7 +2,8 @@
 
 import struct
 import zlib
-from libzim.writer import Creator, Item, StringProvider, Hint
+
+from libzim.writer import Creator, Hint, Item, StringProvider
 
 ARTICLES = {
     "testmed_en_all_maxi": (

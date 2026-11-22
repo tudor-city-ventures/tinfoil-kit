@@ -8,6 +8,7 @@ import base64
 import os
 import struct
 from string import Template
+
 from playwright.sync_api import sync_playwright
 
 SITE = os.path.dirname(os.path.abspath(__file__))

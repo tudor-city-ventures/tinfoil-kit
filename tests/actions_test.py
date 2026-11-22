@@ -184,7 +184,12 @@ GATE_BAD = {
 def regions_check():
     """Runs sizes.yml's merge of a new tools/regions.json, one change at a time: sizes and checked downloads come
     through, ids, names and anything else don't."""
-    import copy, json, shutil, subprocess, tempfile, textwrap
+    import copy
+    import json
+    import shutil
+    import subprocess
+    import tempfile
+    import textwrap
 
     root = WORKFLOWS.parent.parent
     code = textwrap.dedent(
@@ -255,7 +260,11 @@ def regions_check():
 
 def pins_check():
     """Runs pins.yml's check on tools/pins.json with one change each: new builds pass, nothing else does."""
-    import copy, json, subprocess, tempfile, textwrap
+    import copy
+    import json
+    import subprocess
+    import tempfile
+    import textwrap
 
     root = WORKFLOWS.parent.parent
     code = textwrap.dedent(

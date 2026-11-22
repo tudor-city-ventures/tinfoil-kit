@@ -1,0 +1,11 @@
+# Lint and format for the Python in tests/ and site/: tests/check.sh runs ruff when it's installed, and CI always
+# does. A developer tool: nothing on a drive uses it, and releases leave this file out.
+required-version = "==0.17.5"   # CI installs this one; pip install ruff==0.17.5
+line-length = 120
+target-version = "py39"
+
+[lint]
+select = ["E9", "F", "I"]   # syntax errors, unused or undefined names (pyflakes), sorted imports
+
+[lint.isort]
+known-first-party = ["drive", "make_tiny_model"]   # the tests' own modules, imported from tests/

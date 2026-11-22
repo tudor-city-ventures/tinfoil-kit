@@ -9,7 +9,9 @@ import json
 import os
 import subprocess
 import sys
+
 from playwright.sync_api import sync_playwright
+
 from drive import note
 from make_tiny_model import ANSWER
 

@@ -13,9 +13,9 @@ import socketserver
 import sys
 import time
 from email.utils import formatdate
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse, unquote
+from urllib.parse import parse_qs, unquote, urlparse
 
 R = Path(os.environ.get("KIT_TEST_WORK", Path(__file__).parent / "work")) / "remote"
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 19000

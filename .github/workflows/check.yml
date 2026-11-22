@@ -16,8 +16,11 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      # the developer tools in package.json, for the kit page's formatting and lint, with no install scripts
+      # the developer tools in package.json, for the formatting and lint of the kit page, the website and the
+      # JavaScript tests, with no install scripts
       - run: npm ci --ignore-scripts
+      # ruff, for the Python's lint and formatting, at the version ruff.toml requires
+      - run: pipx install "ruff$(sed -n 's/^required-version = "\([^"]*\)".*/\1/p' ruff.toml)"
       - run: tests/check.sh
       # The SHA-256 of the kit's own program as check.sh built it from this commit. .github/release.sh builds it
       # again on the maintainer's Mac and publishes only if they match.

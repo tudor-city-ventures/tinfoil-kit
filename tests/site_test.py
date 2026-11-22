@@ -14,6 +14,7 @@ import struct
 import subprocess
 import sys
 import threading
+
 from playwright.sync_api import sync_playwright
 
 SITE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site")

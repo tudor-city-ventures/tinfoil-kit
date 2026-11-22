@@ -1,5 +1,6 @@
 #!/bin/bash
-# Quick gate: run before calling any change done. Needs python3, node and Go; uses shellcheck if installed.
+# Quick gate: run before calling any change done. Needs python3, node and Go; uses shellcheck, ruff and the
+# developer tools in package.json (npm ci --ignore-scripts) if installed. CI has them all.
 cd "$(dirname "$0")/.." || exit 1
 fail=0
 step() { echo "== $*"; }
@@ -9,6 +10,15 @@ fails() { awk '/^(PASS|SKIP|ALL|[0-9]+ FAILED)/ {on = 0} /^FAIL/ {on = 1} on'; }
 
 step "python compiles"
 run python3 -m py_compile tests/*.py site/*.py
+
+step "Python lint and formatting (ruff, at the version ruff.toml requires)"
+ruff_version="$(sed -n 's/^required-version = "==\([^"]*\)".*/\1/p' ruff.toml)"
+if [ "$(ruff --version 2>/dev/null)" = "ruff $ruff_version" ]; then
+  run ruff check --quiet .
+  run ruff format --check --quiet .
+else
+  echo "skipped (needs ruff $ruff_version: pip install ruff==$ruff_version)"
+fi
 
 step "bash parses"
 SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command mac/app.sh mac/build.sh tools/tinfoilkit/build.sh
@@ -72,7 +82,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
   # and carry the kit's own files only: no tests, docs, website (besides the two site files the kit reads) or Mac app
   run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -Ev "^(site/|site/kit.json|site/sources.json)$" | grep -E "^(tests|docs|\.github|site|mac)/"'
   # and none of the developer tools or their settings
-  run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -E "(^|/)(package(-lock)?\.json|eslint\.config\.mjs|node_modules/|\.editorconfig)"'
+  run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -E "(^|/)(package(-lock)?\.json|eslint\.config\.mjs|node_modules/|\.editorconfig|ruff\.toml|\.git-blame-ignore-revs)"'
 else
   echo "skipped (not a git checkout)"
 fi

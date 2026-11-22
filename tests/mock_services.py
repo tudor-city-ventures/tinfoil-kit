@@ -10,8 +10,8 @@ import os
 import re
 import sys
 import time
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 MODE, PORT = sys.argv[1], int(sys.argv[2])
 

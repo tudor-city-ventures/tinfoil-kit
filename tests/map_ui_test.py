@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import urllib.request
+
 from playwright.sync_api import sync_playwright
 
 SHOTS = os.environ.get("KIT_TEST_SHOTS", os.path.join(os.path.dirname(__file__), "work", "shots"))
