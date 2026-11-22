@@ -14,11 +14,6 @@ export const metadata = pageMetadata({
   path: "/",
   title: "Tinfoil Kit: the internet's down, your AI isn't",
   description: DESCRIPTION,
-  preview: {
-    title: "Tinfoil Kit",
-    description:
-      "The internet's down. Your AI isn't. An AI, Wikipedia, medical guides and maps on one drive or your laptop. Free and open source.",
-  },
 });
 
 // What search engines and AI answer engines read about the kit. Keep its facts in step with the copy.

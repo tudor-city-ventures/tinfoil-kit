@@ -1180,6 +1180,15 @@ with sync_playwright() as p:
             "title": home.title(),
             "description": home.get_attribute("meta[name=description]", "content"),
             "og": home.get_attribute("meta[property='og:url']", "content"),
+            "preview": [
+                home.get_attribute(f"meta[{a}='{n}']", "content")
+                for a, n in [
+                    ("property", "og:title"),
+                    ("property", "og:description"),
+                    ("property", "og:image"),
+                    ("name", "twitter:image"),
+                ]
+            ],
             "nodes": {n["@type"]: n for d in ld for n in d.get("@graph", [d])},
         }
     canonical = seo[""]["canonical"]
@@ -1189,6 +1198,15 @@ with sync_playwright() as p:
         and len({v["title"] for v in seo.values()}) == 3
         and len({v["description"] for v in seo.values()}) == 3,
         json.dumps({k: [v["canonical"], v["title"]] for k, v in seo.items()}),
+    )
+    # a link shared with a friend shows the same title, summary and card whoever installs it; the agents' page shares
+    # the card under its own title
+    check(
+        "the home page and My AI installs it share one link preview; I'm an AI shares its card",
+        seo[""]["preview"] == seo["ai-setup"]["preview"]
+        and seo[""]["preview"][2:] == seo["agents"]["preview"][2:] == ["https://tinfoilkit.com/og.png"] * 2
+        and seo["agents"]["preview"][0] != seo[""]["preview"][0],
+        json.dumps({k: v["preview"] for k, v in seo.items()}),
     )
     robots = home.request.get(URL + "robots.txt").text()
     check(

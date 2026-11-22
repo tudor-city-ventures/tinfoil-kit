@@ -8,9 +8,18 @@ export const LICENSES = `${REPO}/blob/main/THIRD-PARTY.md`;
 // The kit, as each page's structured data names it. The home page describes it in full.
 export const APP = { "@type": "SoftwareApplication", "@id": `${SITE}/#app`, name: "Tinfoil Kit", url: `${SITE}/` };
 
-// A page's own address, title and summary, for search engines, AI answer engines and link previews. Addresses are in
-// full: the layout sets no metadataBase, which would drop the home page's trailing slash.
-export function pageMetadata({ path, title, description, preview }) {
+// What a link to the site shows in a chat or a post. The home page and /ai-setup show the same one: the pitch to a
+// friend is the same whoever installs it. Keep the card at /og.png: Facebook and Messenger cache it by its address, and
+// a new address starts over with previews that have no picture.
+const PREVIEW = {
+  title: "Tinfoil Kit",
+  description:
+    "The internet's down. Your AI isn't. An AI, Wikipedia, medical guides and maps on one drive or your laptop. Free and open source.",
+};
+
+// A page's own address, title and summary, for search engines and AI answer engines, and its link preview. Addresses
+// are in full: the layout sets no metadataBase, which would drop the home page's trailing slash.
+export function pageMetadata({ path, title, description, preview = PREVIEW }) {
   const url = SITE + path;
   return {
     title,

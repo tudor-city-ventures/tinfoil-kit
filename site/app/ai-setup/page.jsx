@@ -29,11 +29,6 @@ export const metadata = pageMetadata({
   path: "/ai-setup",
   title: "Install Tinfoil Kit with your AI: offline LLM, Wikipedia, maps",
   description: DESCRIPTION,
-  preview: {
-    title: "Let your AI install Tinfoil Kit",
-    description:
-      "One prompt, a few questions, one command: a local LLM, offline Wikipedia and maps, on your laptop or an external SSD.",
-  },
 });
 
 const STEPS = [
