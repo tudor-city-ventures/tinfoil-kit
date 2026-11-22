@@ -238,8 +238,8 @@ with sync_playwright() as p:
               and pg.evaluate("document.getElementById('downloads').open") and pg.evaluate(VIEWS) == [os_] and not errs,
               f"{label}, {href}, {pg.evaluate(VIEWS)}, {errs}")
         if os_ == "mac":
-            check("mac: the steps show the warning macOS gives, and the fallback past it",
-                  "Open Anyway" in pg.inner_text("#downloads") and pg.is_visible("#downloads .mac-alert .hit"))
+            check("mac: the steps show what macOS asks before it opens the app, and what to click",
+                  "Move to Applications" in pg.inner_text("#downloads") and pg.is_visible("#downloads .mac-alert .hit"))
             pg.locator("#downloads").screenshot(path=os.path.join(SHOTS, "site_download_mac.png"))
             axe(pg, "download steps for a Mac")
             pg.click("#downloads [data-view=mac] .dl-back")
