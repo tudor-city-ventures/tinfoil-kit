@@ -129,7 +129,8 @@ Why: a drive set up once kept its `tools/` and `kit.json` forever, so a source r
   - a partial of a different version under the same file name (models often keep their names) is discarded, not resumed into a corrupt file;
   - at the start of a sync, partials that a newer version made useless are deleted (they can be 100 GB); those of switched-off items are kept;
   - free-space checks count what a partial already has.
-- Exit codes: `sync` exits 1 if any item failed or couldn't be looked up, and 130 on Ctrl-C (everything finished is saved). `last_sync` is set only after a fully clean run. `plan` and `sync` exit 1 straight away when nothing could be looked up (offline, or a Wi-Fi sign-in page answering instead).
+- Exit codes: `sync` exits 1 if any item failed or couldn't be looked up, and 130 on Ctrl-C (everything finished is saved). `last_sync` is set only after a fully clean run; the page shows it as "Refreshed (date)" in its header.
+- `refresh_days` on a library entry (Wikipedia: 365) keeps the installed edition until it's that many days old, as long as its files are all there; the plan marks it `later`. Naming it in `--only` gets the new edition now. Library only: a map or model whose source changes (a new region) must never wait. `plan` and `sync` exit 1 straight away when nothing could be looked up (offline, or a Wi-Fi sign-in page answering instead).
 - The Kiwix catalog is cached only after it parses, so a sign-in page can't poison the cache.
 - Each download is verified against what its source publishes:
   - Kiwix: a `.sha256` sidecar file.
@@ -152,7 +153,7 @@ Why: a drive set up once kept its `tools/` and `kit.json` forever, so a source r
 
 - **Library:** kiwix-serve on port 8888, serving the library plus the portal page as `--customIndex`.
 - **AI:** llama-server on port 8080 in router mode: `--models-dir`, a `presets.ini` with `load-on-startup` for the default model, and `--models-max 1`.
-- **CORS:** llama-server echoes `--cors-origins` back verbatim, so the launcher sets exactly one origin: `http://127.0.0.1:8888`, or `*` with `--share`. That's also why the portal redirects `localhost` to `127.0.0.1`.
+- **CORS:** the AI, map tiles and address search allow exactly one origin, the page at `http://127.0.0.1:<library port>`, so other web pages open on the computer can't read their answers (llama-server echoes `--cors-origins` back verbatim, so it must be one). Through the sharing gate everything is on the page's own address and needs none. That's also why the portal redirects `localhost` to `127.0.0.1`. GraphHopper (directions) always allows every origin and has no setting for it.
 - **Maps:** `pmtiles serve` on 8090, Photon on 2322 and GraphHopper on 8989, all run by the bundled Java. Their memory comes from `kit.json` (`geocoder_heap` 3g, `routing_heap` 2g). `--no-maps` skips them and saves about 5 GB.
 - **Sharing:** `--share` listens on all network interfaces so phones on the same Wi-Fi or hotspot can use the kit.
 - `caffeinate` keeps the Mac awake while the kit runs.
@@ -198,7 +199,7 @@ Why: a drive set up once kept its `tools/` and `kit.json` forever, so a source r
     - Profiles: `car` (with CH speed-up) and `foot`.
     - Encoded values match the built-in `car.json` and `foot.json` at tag 11.1.
     - `graph.locktype: simple`, because exFAT can't do native file locks.
-  - The import uses `RAM_STORE` with `routing_import_heap` 12g; serving uses `MMAP`.
+  - The import uses `RAM_STORE` with `routing_import_heap` (auto: 12g, or 60% of the computer's memory if that's less); if Java runs out of memory (`-XX:+ExitOnOutOfMemoryError` exits 3), it builds again with `MMAP`, which needs far less. Serving uses `MMAP`.
   - Road data is Geofabrik's `us-northeast` PBF (about 1.6 GB). The network is rebuilt whenever the PBF or the GraphHopper version changes, which takes 10–40 minutes.
 - **Java:** Adoptium Temurin 21 JRE, from `api.adoptium.net`.
 - **Default coverage:**

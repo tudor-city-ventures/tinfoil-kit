@@ -94,7 +94,7 @@ MAPS_DEFAULTS: Dict[str, Any] = {
     "tiles_port": 8090,
     "geocoder_port": 2322,
     "routing_port": 8989,
-    "routing_import_heap": "12g",
+    "routing_import_heap": "auto",
     "routing_heap": "2g",
     "geocoder_heap": "3g",
 }
@@ -264,7 +264,7 @@ class Item:
     version: str = ""
     files: List[RemoteFile] = field(default_factory=list)
     error: Optional[str] = None
-    status: str = ""               # ok | new | update | error
+    status: str = ""               # ok | new | update | later (refresh_days) | error
     need: List[RemoteFile] = field(default_factory=list)
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -816,6 +816,21 @@ def evaluate(item: Item, state: Dict[str, Any], root: Path) -> None:
     item.status = "ok" if not item.need else ("update" if st else "new")
 
 
+def hold(item: Item, state: Dict[str, Any], root: Path, only: List[str]) -> None:
+    """A book with refresh_days in kit.json keeps the edition it has until that one is so many days old: a new
+    Wikipedia every few weeks isn't worth 115 GB each time. Naming it in --only gets the new edition now."""
+    days, st = item.cfg.get("refresh_days"), state["items"].get(item.key) or {}
+    if item.section != "library" or item.status != "update" or not isinstance(days, int) or only:
+        return
+    try:
+        due = dt.datetime.fromisoformat(st["updated"]) + dt.timedelta(days=days)
+    except (KeyError, TypeError, ValueError):
+        return
+    if due > dt.datetime.now() and st.get("files") and all((root / st.get("dest", item.dest) / name).is_file()
+                                                            for name in st["files"]):
+        item.status, item.need, item.extra["due"] = "later", [], due.date().isoformat()
+
+
 def safe_name(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", s or "unknown")
 
@@ -853,6 +868,7 @@ def build_plan(root: Path, cfg: Dict[str, Any], state: Dict[str, Any], only: Lis
             print(f"  [{n}/{len(active)}] {item.key}".ljust(78)[:78], end="\r", flush=True)
         resolver.resolve(item)
         evaluate(item, state, root)
+        hold(item, state, root, only)
     # Photon only opens address databases made for its own version: use the release that matches the database
     geo = next((i for i in active if i.cfg.get("type") == "photon_db" and not i.error), None)
     photon = resolver.resolved.get("photon")
@@ -876,7 +892,7 @@ def offline(items: List[Item]) -> bool:
 def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[str, Any]) -> None:
     free = shutil.disk_usage(root).free
     total = 0
-    labels = {"ok": "ok      ", "new": "NEW     ", "update": "UPDATE  ", "error": "ERROR   "}
+    labels = {"ok": "ok      ", "new": "NEW     ", "update": "UPDATE  ", "later": "later   ", "error": "ERROR   "}
     for section in SECTIONS:
         group = [i for i in items if i.section == section and i.enabled]
         if not group:
@@ -889,6 +905,8 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
                 detail = i.error or ""
             elif i.status == "ok":
                 detail = f"{i.version}"
+            elif i.status == "later":
+                detail = f"{(state['items'].get(i.key) or {}).get('version')}   ({i.version} waits until {i.extra['due']})"
             else:
                 old = (state["items"].get(i.key) or {}).get("version")
                 arrow = f"{old} -> {i.version}" if old and old != i.version else i.version
@@ -897,6 +915,9 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
                     size = "~" + size if need else "?"
                 detail = f"{size:>9}   {arrow}"
             log(f"  {labels.get(i.status, i.status)}{i.id[:44]:<46}{detail}")
+    if any(i.status == "later" for i in items if i.enabled):
+        log("\n  later: a big book keeps the edition it has until its refresh_days in kit.json pass. "
+            "To get the new one now:  ./kit sync --only NAME")
     disabled = [i for i in items if not i.enabled]
     if disabled:
         log(f"\n  ({len(disabled)} disabled in kit.json: {', '.join(i.id for i in disabled)})")
@@ -1380,6 +1401,37 @@ def graphhopper_yaml(m: Dict[str, Any], graph_dir: str, storage: str) -> str:
     return "\n".join(lines)
 
 
+def import_heap(m: Dict[str, Any]) -> str:
+    """Java memory for building the directions network: kit.json's routing_import_heap, else 12 GB or 60% of this
+    computer's memory if that's less, so an 8 or 16 GB laptop doesn't run out."""
+    if m["routing_import_heap"] != "auto":
+        return str(m["routing_import_heap"])
+    gb = memory_bytes() // 2**30    # Java's g
+    return f"{min(12, max(2, gb * 6 // 10))}g" if gb else "12g"
+
+
+def build_routing(java: Path, gh: Path, m: Dict[str, Any], dest: Path) -> None:
+    """GraphHopper's import into dest/graph-cache.new: in memory, the fast way, and if that runs out of memory,
+    again with the graph on disk, which needs far less."""
+    heap = import_heap(m)
+    for storage in ("RAM_STORE", "MMAP"):
+        (dest / "gh-import.yml").write_text(graphhopper_yaml(m, "graph-cache.new", storage), encoding="utf-8")
+        shutil.rmtree(dest / "graph-cache.new", ignore_errors=True)
+        log("    building the road network for directions (GraphHopper import, 10-40 minutes)..." if storage == "RAM_STORE"
+            else f"    that ran out of memory ({heap}), so building it again on disk, which takes longer...")
+        rc = subprocess.run([str(java), f"-Xmx{heap}", "-XX:+ExitOnOutOfMemoryError", "-jar", str(gh), "import",
+                             "gh-import.yml"], cwd=str(dest)).returncode
+        if rc == 0:
+            break
+        if rc != 3:    # what -XX:+ExitOnOutOfMemoryError exits with
+            raise RuntimeError(f"GraphHopper import failed (exit {rc}); see the messages above")
+    else:
+        raise RuntimeError(f"building the directions network ran out of memory ({heap}) even on disk. Close other apps "
+                           "and run sync again, or choose a smaller map region")
+    if not (dest / "graph-cache.new" / "properties").exists():
+        raise RuntimeError("GraphHopper import finished but produced no graph; see the messages above")
+
+
 def install_routing(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, Any], force: bool) -> int:
     m = maps_settings(cfg)
     java = runtime_binary(root, "java", "java")
@@ -1403,15 +1455,9 @@ def install_routing(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
             downloaded = pbf.stat().st_size
     else:
         sha = (old.get("files", {}).get(f.name) or {}).get("sha256") or sha256_file(pbf)
-    (dest / "gh-import.yml").write_text(graphhopper_yaml(m, "graph-cache.new", "RAM_STORE"), encoding="utf-8")
     (dest / "gh-serve.yml").write_text(graphhopper_yaml(m, "graph-cache", "MMAP"), encoding="utf-8")
     new = dest / "graph-cache.new"
-    shutil.rmtree(new, ignore_errors=True)
-    log("    building the road network for directions (GraphHopper import, 10-40 minutes)...")
-    run_logged([java, f"-Xmx{m['routing_import_heap']}", "-jar", gh, "import", "gh-import.yml"],
-               "GraphHopper import", cwd=dest)
-    if not (new / "properties").exists():
-        raise RuntimeError("GraphHopper import finished but produced no graph; see the messages above")
+    build_routing(java, gh, m, dest)
     current, trash = dest / "graph-cache", dest / "graph-cache.old"
     shutil.rmtree(trash, ignore_errors=True)
     if current.exists():
@@ -1550,6 +1596,7 @@ def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
             inject = (f"<style>{parts['map engine styles'].read_text(encoding='utf-8')}</style>\n"
                       f"<script>{code(parts['map engine'])}</script>\n<script>{code(parts['map style'])}</script>\n")
     inject += "<script>window.KIT_MAPS = " + json.dumps(info).replace("</", "<\\/") + ";</script>\n"
+    inject += f"<script>window.KIT_REFRESHED = {json.dumps(load_state(root).get('last_sync'))};</script>\n"
     html = tpl.replace("<!--KIT:MAPS-->", inject)
     # kiwix-serve renders this page as a Mustache template: switch the tag markers to something
     # that appears nowhere in the embedded code, so "{{" inside it is left alone.
@@ -2559,7 +2606,7 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
     if pm and tiles.exists():
         port = free_port()
         start_server(procs, logs_dir / "test-tiles.log",
-                     [pm, "serve", tiles.parent, "--port", port, "--interface", "127.0.0.1", "--cors", "*"])
+                     [pm, "serve", tiles.parent, "--port", port, "--interface", "127.0.0.1", "--cors", "http://127.0.0.1:8888"])
         up = wait_http(f"http://127.0.0.1:{port}/basemap.json", 30)
         ok = False
         if up:
@@ -2576,7 +2623,7 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
         port = free_port()
         start_server(procs, logs_dir / "test-geocoder.log",
                      [java, f"-Xmx{m['geocoder_heap']}", "-jar", photon, "serve", "-data-dir", gdir,
-                      "-listen-ip", "127.0.0.1", "-listen-port", port, "-cors-any"])
+                      "-listen-ip", "127.0.0.1", "-listen-port", port, "-cors-origin", "http://127.0.0.1:8888"])
         up = wait_http(f"http://127.0.0.1:{port}/status", 240)
         detail = "did not start (see logs/test-geocoder.log)"
         ok = False

@@ -165,6 +165,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 - If `./kit update` says a version isn't signed with the kit's release key, stop: don't install it another way. Tell the person, and report it at https://github.com/tudor-city-ventures/tinfoilkit/security.
 - Double-clicking SETUP.command again does all four.
 - A normal update brings new library editions, the newest AI engine, any re-released models and fresh map data. Only what changed downloads.
+- A book with `refresh_days` in kit.json keeps the edition it has until it's that many days old: Wikipedia (115 GB) has 365, so most updates don't download it again. The plan marks it `later`. `./kit sync --only wikipedia_en_all_maxi` gets the newest now.
 - It's safe to stop at any point and run it again: it picks up where it left off, and the old files keep working until the new ones check out.
 - `./kit status` shows what's installed and when it was last updated. INVENTORY.md lists every item with its version and size.
 

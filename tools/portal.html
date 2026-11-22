@@ -15,6 +15,7 @@
   .pill { font-size:.8rem; padding:.15rem .6rem; border-radius:999px; border:1px solid var(--line); color:var(--mute); }
   .pill.ok { color:var(--ok); border-color:var(--ok); } .pill.bad { color:var(--bad); border-color:var(--bad); }
   a.pill { text-decoration:none; }
+  .stamp { font-size:.8rem; color:var(--mute); }
   #shareQr { display:block; width:12rem; max-width:100%; height:auto; margin:.6rem 0; border-radius:8px; }
   nav { display:flex; gap:.25rem; margin-left:auto; }
   nav a { padding:.35rem .8rem; border-radius:8px; color:var(--ink); text-decoration:none; cursor:pointer; }
@@ -81,6 +82,7 @@
   <span id="libStatus" class="pill ok">Library: on</span>
   <span id="aiStatus" class="pill">AI: checking</span>
   <a id="sharePill" class="pill ok" href="#help" hidden>Shared on this network</a>
+  <span id="refreshed" class="stamp" title="When SETUP last brought every book, model and map up to date" hidden></span>
   <nav>
     <a href="#ask" data-tab="ask" class="on" aria-current="page">Ask</a>
     <a href="#map" data-tab="map">Map</a>
@@ -743,6 +745,11 @@ if (typeof document !== "undefined") (function () {
   var books = [], aiUp = false, running = null;
 
   $("chatLink").href = AI + "/";
+  if (window.KIT_REFRESHED) {    // the last complete ./kit sync, written into the page by the kit
+    $("refreshed").textContent = "Refreshed " + new Date(window.KIT_REFRESHED.slice(0, 10) + "T12:00:00")
+      .toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    $("refreshed").hidden = false;
+  }
   if (GATE) {
     $("sharePill").hidden = false; $("shareOn").hidden = false; $("shareOff").hidden = true;
     $("shareAddr").textContent = GATE.address; $("shareCode").textContent = GATE.code;

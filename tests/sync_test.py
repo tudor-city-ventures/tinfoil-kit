@@ -130,13 +130,16 @@ try:
           and same("models/Tiny/Tiny-Q8_0.gguf", "hf/tiny/Tiny-Q8_0.gguf")
           and same("models/Two/Two-Q4_K_M.gguf", "hf/two/Two-Q4_K_M.gguf"), out)
     check("no partial downloads left", not list(drive.rglob("*.partial")), str(list(drive.rglob("*.partial"))))
-    check("portal page built", (drive / ".kit" / "portal.html").exists())
+    check("portal page built, with no refresh date while a sync hasn't finished cleanly",
+          "window.KIT_REFRESHED = null;" in (drive / ".kit" / "portal.html").read_text())
 
     cfg["models"] = [m for m in cfg["models"] if m["id"] != "Ambiguous"]
     cfg["library"] = [z for z in cfg["library"] if z["zim"] != "does_not_exist_en"]
     write_cfg()
     rc, out = kit("sync", "-y")
     check("second sync has nothing to do", rc == 0 and "Everything is up to date." in out, out)
+    check("the page shows when everything was last brought up to date",
+          f'window.KIT_REFRESHED = "{state().get("last_sync")}";' in (drive / ".kit" / "portal.html").read_text())
 
     # SETUP's first run gets the essentials first, then the rest.
     ess = work / "essentials"
@@ -226,6 +229,28 @@ pathlib.Path(str(out) + ".aria2").unlink()
     (drive / ".kit" / "state.json").write_text(json.dumps(st))
     (R / "STATE_V2").touch()
     (drive / ".kit/cache/kiwix-catalog.xml").unlink()
+    # A book with refresh_days keeps the edition it has until that one is so many days old.
+    survival = next(z for z in cfg["library"] if z["zim"] == "testsurvival_en")
+    survival["refresh_days"] = 30
+    write_cfg()
+    rc, out = kit("plan")
+    line = next((x for x in out.splitlines() if "testsurvival_en" in x), "")
+    check("refresh_days: a new edition of a book installed this month waits, and the plan says how to get it now",
+          line.split()[:1] == ["later"] and "2026-02   (2026-05 waits until" in line and "./kit sync --only NAME" in out, out)
+    rc, out = kit("plan", "--only", "testsurvival")
+    check("refresh_days: naming it in --only gets the new edition now", "UPDATE  testsurvival_en" in out, out)
+    book = drive / "library/testsurvival_en_2026-02.zim"
+    book.rename(book.with_suffix(".gone"))
+    rc, out = kit("plan")
+    check("refresh_days: a book whose file is missing doesn't wait", "UPDATE  testsurvival_en" in out, out)
+    book.with_suffix(".gone").rename(book)
+    st = state()
+    st["items"]["library/testsurvival_en"]["updated"] = "2025-12-01T09:00:00"
+    (drive / ".kit" / "state.json").write_text(json.dumps(st))
+    rc, out = kit("plan")
+    check("refresh_days: once the edition is that old, the new one downloads", "UPDATE  testsurvival_en" in out, out)
+    del survival["refresh_days"]
+    write_cfg()
     rc, out = kit("sync", "-y")
     check("update: new editions installed", rc == 0 and same("library/testsurvival_en_2026-05.zim", "zim/testsurvival_en_2026-05.zim")
           and same("models/Tiny/Tiny-Q4_K_M.gguf", "hf/tiny_v2/Tiny-Q4_K_M.gguf"), out)
@@ -874,6 +899,48 @@ server.serve_forever()
     out = p.stdout + p.stderr
     check("launcher: another program on the library's port: it moves to the next free one",
           f"using port {port}, so the library uses" in out and "Library:  ready" in out and f":{port}/" not in out, out)
+
+    # Building the directions network: memory for it sized to the computer, and built again on disk if it runs out.
+    m = dict(kp.MAPS_DEFAULTS)
+    heaps = []
+    for mb in ("8192", "16384", "65536", "0"):
+        os.environ["KIT_MEMORY_MB"] = mb
+        heaps.append(kp.import_heap(m))
+    os.environ.pop("KIT_MEMORY_MB")
+    check("directions build: 60% of memory up to 12 GB, and 12 GB when it can't tell, unless kit.json says",
+          heaps == ["4g", "9g", "12g", "12g"] and kp.import_heap({**m, "routing_import_heap": "20g"}) == "20g", str(heaps))
+    gh_dir = work / "routing"
+    gh_dir.mkdir()
+    fake_java = gh_dir / "java"
+    fake_java.write_text('#!/bin/bash\necho "$@" >> calls.log\n'
+                         'grep -q "default_type: RAM_STORE" gh-import.yml && [ -n "$OOM_ALWAYS$OOM_IN_MEMORY" ] && exit 3\n'
+                         '[ -n "$OOM_ALWAYS" ] && exit 3\n[ -n "$CRASH" ] && exit 1\n'
+                         'mkdir -p graph-cache.new && echo graph > graph-cache.new/properties\n')
+    fake_java.chmod(0o755)
+
+    def build(**env_vars):
+        (gh_dir / "calls.log").unlink(missing_ok=True)
+        os.environ.update(env_vars)
+        try:
+            kp.build_routing(fake_java, gh_dir / "graphhopper-web.jar", m, gh_dir)
+            result = "built"
+        except RuntimeError as e:
+            result = str(e)
+        finally:
+            for k in env_vars:
+                os.environ.pop(k)
+        calls = (gh_dir / "calls.log").read_text().splitlines()
+        return result, calls
+    result, calls = build()
+    check("directions build: in memory the first time, stopping if Java runs out",
+          result == "built" and len(calls) == 1 and "-XX:+ExitOnOutOfMemoryError" in calls[0], f"{result} {calls}")
+    result, calls = build(OOM_IN_MEMORY="1")
+    check("directions build: out of memory in memory: built again on disk",
+          result == "built" and len(calls) == 2 and "default_type: MMAP" in (gh_dir / "gh-import.yml").read_text(), f"{result} {calls}")
+    result, calls = build(OOM_ALWAYS="1")
+    check("directions build: out of memory on disk too: says what to do", "Close other apps" in result and len(calls) == 2, result)
+    result, calls = build(CRASH="1")
+    check("directions build: any other failure isn't retried", "failed (exit 1)" in result and len(calls) == 1, result)
 
     # Windows has no unzip, and its tar may not read bzip2 (the address database): the kit unpacks in Python there.
     import zipfile

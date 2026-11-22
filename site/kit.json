@@ -3,6 +3,7 @@
     "This file is the list of everything the kit keeps, on a drive or on this computer.",
     "Edit it, then run:  ./kit plan   (preview)   and   ./kit sync   (download/update).",
     "Set \"enabled\": false to skip an item. Find more library content with:  ./kit search <words>",
+    "A book with \"refresh_days\": N keeps the edition it has until it's N days old, so a big one isn't downloaded again for every new edition. ./kit sync --only NAME gets the new one now.",
     "Sizes in notes are approximate (late 2026)."
   ],
 
@@ -208,7 +209,7 @@
       "routing_osm_pbf: road data for directions, from download.geofabrik.de (pick a region that covers your trips).",
       "geocoder_country: two-letter country code for the address search database (US: about 10-40 GB; if no US-only database is published, the North America one is used).",
       "Set home to where you live: it's where 'nearest' searches and directions start by default.",
-      "Memory for the map servers can be set with geocoder_heap (default 3g) and routing_heap (2g); building the directions network during sync uses routing_import_heap (12g)."
+      "Memory for the map servers can be set with geocoder_heap (default 3g) and routing_heap (2g); building the directions network during sync uses routing_import_heap (auto: 12g, or 60% of the computer's memory if that's less)."
     ]
   },
 
@@ -227,7 +228,7 @@
     {"zim": "energypedia_en_all_nopic",      "priority": 2, "note": "Energypedia: solar, power, energy (~0.7 GB)"},
     {"zim": "armypubs_en_all",               "priority": 2, "note": "US Army publications incl. field manuals (~7.7 GB)"},
 
-    {"zim": "wikipedia_en_all_maxi",         "priority": 2, "note": "All of English Wikipedia with images (~115 GB)"},
+    {"zim": "wikipedia_en_all_maxi",         "priority": 2, "refresh_days": 365, "note": "All of English Wikipedia with images (~115 GB)"},
     {"zim": "wiktionary_en_all_nopic",       "priority": 2, "note": "Dictionary (~8 GB)"},
     {"zim": "wikibooks_en_all_maxi",         "priority": 2, "note": "Wikibooks: open textbooks and how-tos (~5 GB)"},
     {"zim": "wikivoyage_en_all_maxi",        "priority": 2, "note": "Travel guide (~1 GB)"},

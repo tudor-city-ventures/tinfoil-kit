@@ -75,7 +75,8 @@ Terminal icon) and run:
 Either way it is safe to stop (Ctrl-C or close the window) and re-run; it picks up where it left off, and the kit
 keeps working with what it has meanwhile. A normal update gets the
 newest version of the kit itself, new library editions, the latest AI engine, any re-released models and fresh map data (rebuilding the
-directions network takes 10 to 40 minutes). Then pull the plug on Wi-Fi and open the kit once for real.
+directions network takes 10 to 40 minutes). Wikipedia is the exception: at 115 GB, it keeps the edition it has
+until that one is a year old. Then pull the plug on Wi-Fi and open the kit once for real.
 
 Other commands:
 

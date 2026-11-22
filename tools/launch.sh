@@ -183,6 +183,10 @@ elif [ -n "$KIWIX" ] && [ ${#ZIMS[@]} -gt 0 ]; then
 fi
 
 # --- AI
+# Browsers accept exactly one allowed origin (llama-server would echo a list verbatim): the page at 127.0.0.1, so
+# other web pages can't read the AI's or the map's answers. Through the sharing gate, the page and the servers share
+# one address, so that needs none.
+CORS="http://127.0.0.1:$LIB_PORT"
 AI_PID=""
 if our_ai "$AI_PORT"; then
   say "  AI already running on port $AI_PORT."
@@ -190,9 +194,6 @@ elif [ -n "$LLAMA" ] && [ ${#MODELS[@]} -gt 0 ]; then
   if taken "$AI_PORT"; then
     p="$(free_port "$AI_PORT")"; say "  Another program is using port $AI_PORT, so the AI uses $p."; AI_PORT="$p"
   fi
-  # Browsers accept exactly one allowed origin (llama-server would echo a list verbatim): the page at
-  # 127.0.0.1. Through the sharing gate, the page and the AI share one address, so that needs none.
-  CORS="http://127.0.0.1:$LIB_PORT"
   PRESET="$KIT/.kit/presets.ini"
   printf 'version = 1\n\n[%s]\nload-on-startup = true\n' "$MODEL" > "$PRESET"
   "$LLAMA" --models-dir "$KIT/models" --models-preset "$PRESET" --models-max 1 -c "$CTX" \
@@ -210,12 +211,12 @@ if [ "$NO_MAPS" = 0 ] && [ -d "$KIT/maps" ]; then
   PHOTON_JAR="$(newest "$KIT"/bin/photon/photon-*.jar)"
   GH_JAR="$(newest "$KIT"/bin/graphhopper/graphhopper-web-*.jar)"
   if [ -n "$PMTILES" ] && [ -f "$KIT/maps/tiles/basemap.pmtiles" ] && ! up "http://127.0.0.1:$TILES_PORT/basemap.json"; then
-    "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors '*' > "$KIT/logs/tiles.log" 2>&1 &
+    "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors "$CORS" > "$KIT/logs/tiles.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED map"
   fi
   if [ -n "$JAVA" ] && [ -n "$PHOTON_JAR" ] && [ -d "$KIT/maps/geocoder/photon_data" ] && ! up "http://127.0.0.1:$GEO_PORT/status"; then
     "$JAVA" "-Xmx$GEO_HEAP" -jar "$PHOTON_JAR" serve -data-dir "$KIT/maps/geocoder" -listen-ip "$HOST" \
-      -listen-port "$GEO_PORT" -cors-any > "$KIT/logs/geocoder.log" 2>&1 &
+      -listen-port "$GEO_PORT" -cors-origin "$CORS" > "$KIT/logs/geocoder.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED address-search"
   fi
   if [ -n "$JAVA" ] && [ -n "$GH_JAR" ] && [ -f "$KIT/maps/routing/graph-cache/properties" ] && ! up "http://127.0.0.1:$ROUTE_PORT/health"; then
