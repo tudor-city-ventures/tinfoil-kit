@@ -255,7 +255,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
     off = {**env, "KIT_HF": nowhere, "KIT_KIWIX_CATALOG": nowhere + "/catalog"}
     (drive / ".kit/cache/kiwix-catalog.xml").unlink()
     rc, out = kit("sync", "-y", env=off)
-    check("offline: sync stops with one clear message", rc == 1 and "Check that this Mac is online" in out
+    check("offline: sync stops with one clear message", rc == 1 and "Check that this computer is online" in out
           and "Problems" not in out and out.count("Kiwix catalog") <= 3, out)
     (drive / ".kit/cache").mkdir(exist_ok=True)
     portal = env["KIT_KIWIX_CATALOG"].replace("/catalog/v2/entries?count=-1", "/wifi-sign-in")
@@ -631,6 +631,48 @@ server.serve_forever()
     out = p.stdout + p.stderr
     check("launcher: another program on the library's port: it moves to the next free one",
           f"using port {port}, so the library uses" in out and "Library:  ready" in out and f":{port}/" not in out, out)
+
+    # Windows has no unzip, and its tar may not read bzip2 (the address database): the kit unpacks in Python there.
+    import importlib.util
+    import zipfile
+    spec = importlib.util.spec_from_file_location("kitpy", TESTS.parent / "tools" / "kit.py")
+    kp = sys.modules["kitpy"] = importlib.util.module_from_spec(spec)    # dataclasses look the module up
+    spec.loader.exec_module(kp)
+    ex = work / "extract"
+    ex.mkdir()
+    with zipfile.ZipFile(ex / "a.zip", "w") as z:
+        z.writestr("prog-1/bin/prog.exe", b"MZ")
+        info = zipfile.ZipInfo("prog-1/bin/tool")
+        info.external_attr = 0o100755 << 16
+        z.writestr(info, b"#!")
+    with tarfile.open(ex / "db.tar.bz2", "w:bz2") as tf:
+        for name, data in (("photon_data/node_1/a.bin", b"x" * 5000), ("photon_data/b.txt", b"hi")):
+            ti = tarfile.TarInfo(name)
+            ti.size = len(data)
+            tf.addfile(ti, io.BytesIO(data))
+    kp.unzip_py(ex / "a.zip", ex / "z")
+    check("unzip in Python: files land in place and programs stay runnable",
+          (ex / "z/prog-1/bin/prog.exe").read_bytes() == b"MZ" and os.access(ex / "z/prog-1/bin/tool", os.X_OK))
+    kp.untar_py(ex / "db.tar.bz2", ex / "t", "bz2")
+    check("untar in Python: a bzip2 database unpacks", (ex / "t/photon_data/node_1/a.bin").stat().st_size == 5000
+          and (ex / "t/photon_data/b.txt").read_bytes() == b"hi")
+    for bad in ("../escape.txt", "/abs.txt", "C:/win.txt", "ok/../../escape.txt"):
+        with zipfile.ZipFile(ex / "bad.zip", "w") as z:
+            z.writestr(bad, b"no")
+        try:
+            kp.unzip_py(ex / "bad.zip", ex / "bad")
+            refused = False
+        except RuntimeError:
+            refused = True
+        check(f"unzip in Python refuses a path outside the folder: {bad}", refused and not (work / "escape.txt").exists())
+    path = os.environ["PATH"]
+    try:
+        os.environ["PATH"] = str(ex / "empty")    # no unzip or tar: the Python fallback takes over
+        target = ex / "prog"
+        kp.extract_archive(ex / "a.zip", "a.zip", target)
+        check("extracting without unzip installed", (target / "prog-1/bin/prog.exe").exists())
+    finally:
+        os.environ["PATH"] = path
 finally:
     mock.terminate()
     shutil.rmtree(work, ignore_errors=True)

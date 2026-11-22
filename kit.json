@@ -78,7 +78,7 @@
       "repo": "ggml-org/llama.cpp",
       "asset": "llama-*-bin-win-vulkan-x64.zip",
       "binary": "llama-server.exe",
-      "note": "Fallback: AI engine for a Windows PC if the Mac dies (drive must be exFAT to be readable)"
+      "note": "AI engine for Windows PCs"
     },
     {
       "id": "kiwix-tools-windows-x64",
@@ -86,7 +86,26 @@
       "product": "kiwix-tools",
       "pattern": "kiwix-tools_win-x86_64-{version}.zip",
       "binary": "kiwix-serve.exe",
-      "note": "Fallback: library server for a Windows PC"
+      "note": "Library server for Windows PCs"
+    },
+    {
+      "id": "java-windows-x64",
+      "type": "adoptium",
+      "feature_version": 21,
+      "os": "windows",
+      "arch": "x64",
+      "binary": "java.exe",
+      "requires": "maps",
+      "note": "Java runtime for the map's address search and directions on Windows PCs"
+    },
+    {
+      "id": "pmtiles-windows-x64",
+      "type": "github",
+      "repo": "protomaps/go-pmtiles",
+      "asset": "go-pmtiles*_Windows_x86_64.zip",
+      "binary": "pmtiles.exe",
+      "requires": "maps",
+      "note": "Map tile server for Windows PCs"
     },
     {
       "id": "llama.cpp-linux-x64",
@@ -94,7 +113,7 @@
       "repo": "ggml-org/llama.cpp",
       "asset": "llama-*-bin-ubuntu-vulkan-x64.tar.gz",
       "binary": "llama-server",
-      "note": "Fallback: AI engine for a Linux PC"
+      "note": "AI engine for Linux PCs"
     },
     {
       "id": "kiwix-tools-linux-x64",
@@ -102,7 +121,26 @@
       "product": "kiwix-tools",
       "pattern": "kiwix-tools_linux-x86_64-{version}.tar.gz",
       "binary": "kiwix-serve",
-      "note": "Fallback: library server for a Linux PC"
+      "note": "Library server for Linux PCs"
+    },
+    {
+      "id": "java-linux-x64",
+      "type": "adoptium",
+      "feature_version": 21,
+      "os": "linux",
+      "arch": "x64",
+      "binary": "java",
+      "requires": "maps",
+      "note": "Java runtime for the map's address search and directions on Linux PCs"
+    },
+    {
+      "id": "pmtiles-linux-x64",
+      "type": "github",
+      "repo": "protomaps/go-pmtiles",
+      "asset": "go-pmtiles*_Linux_x86_64.tar.gz",
+      "binary": "pmtiles",
+      "requires": "maps",
+      "note": "Map tile server for Linux PCs"
     }
   ],
 

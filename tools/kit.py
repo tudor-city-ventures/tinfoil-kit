@@ -36,6 +36,7 @@ import platform
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tarfile
@@ -43,6 +44,7 @@ import tempfile
 import time
 import urllib.parse
 import xml.etree.ElementTree as ET
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Optional, Tuple
@@ -404,7 +406,7 @@ class Resolver:
                     # parse before caching: a Wi-Fi sign-in page answers every URL with HTML
                     self._catalog = parse_kiwix_catalog(data) or None
                 except HttpError as e:
-                    self._catalog_error = ValueError(f"couldn't reach the Kiwix catalog ({e}). Is this Mac online?")
+                    self._catalog_error = ValueError(f"couldn't reach the Kiwix catalog ({e}). Is this computer online?")
                     raise self._catalog_error from e
                 except ET.ParseError as e:
                     why = ("got a web page instead; does this Wi-Fi want you to sign in?"
@@ -872,7 +874,7 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
     if disabled:
         log(f"\n  ({len(disabled)} disabled in kit.json: {', '.join(i.id for i in disabled)})")
     if offline(items):
-        log("\nNothing could be looked up. Check that this Mac is online (on hotel or cafe Wi-Fi, "
+        log("\nNothing could be looked up. Check that this computer is online (on hotel or cafe Wi-Fi, "
             "open any web page and sign in first), then try again.")
         return
     keep = keep_free(root, cfg)
@@ -1100,18 +1102,69 @@ def install_files(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, 
     return downloaded
 
 
+def inside(dest: Path, name: str) -> Path:
+    """Where an archive member goes, refusing names that would land outside dest (downloads are untrusted)."""
+    parts = PurePosixPath(name.replace("\\", "/")).parts
+    if not parts or name.startswith(("/", "\\")) or ".." in parts or ":" in parts[0]:
+        raise RuntimeError(f"the archive has an unexpected path in it: {name}")
+    return dest.joinpath(*parts)
+
+
+def unzip_py(archive: Path, dest: Path) -> None:
+    """unzip in Python, for Windows and Linux PCs without unzip. Files and folders only: the zips the kit
+    downloads have no links (they're for Windows, or the Mac's pmtiles)."""
+    with zipfile.ZipFile(archive) as z:
+        for info in z.infolist():
+            path = inside(dest, info.filename)
+            mode = info.external_attr >> 16
+            if stat.S_ISLNK(mode):
+                continue
+            if info.is_dir():
+                path.mkdir(parents=True, exist_ok=True)
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with z.open(info) as src, open(path, "wb") as out:
+                shutil.copyfileobj(src, out, 1 << 20)
+            if mode & 0o111:
+                with contextlib.suppress(OSError):
+                    path.chmod(0o755)
+
+
+def untar_py(archive: Path, dest: Path, compression: str) -> None:
+    """tar in Python: Windows' tar can't always read bzip2, and a tar from Git for Windows takes C: for a
+    remote host. Files and folders only, as in the Photon database and the programs' archives. Read as a
+    stream, front to back, since the Photon database is tens of GB."""
+    with tarfile.open(archive, "r|" + compression) as tf:
+        for m in tf:
+            path = inside(dest, m.name)
+            if m.isdir():
+                path.mkdir(parents=True, exist_ok=True)
+            elif m.isfile():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with tf.extractfile(m) as src, open(path, "wb") as out:
+                    shutil.copyfileobj(src, out, 1 << 20)
+                if m.mode & 0o111:
+                    with contextlib.suppress(OSError):
+                        path.chmod(0o755)
+
+
 def extract_archive(archive: Path, name: str, target: Path) -> None:
     """Extract on the internal disk first, then copy with symlinks resolved:
     exFAT drives (readable by Windows/Linux too) can't store symlinks."""
     tmp = Path(tempfile.mkdtemp(prefix="tinfoilkit-"))
     try:
-        if name.endswith(".zip"):
-            cmd = ["unzip", "-q", "-o", str(archive), "-d", str(tmp)]
+        zipped = name.endswith(".zip")
+        tool = "unzip" if zipped else "tar"
+        if os.name == "nt" or not shutil.which(tool):
+            try:
+                unzip_py(archive, tmp) if zipped else untar_py(archive, tmp, "gz")
+            except (OSError, EOFError, tarfile.TarError, zipfile.BadZipFile) as e:
+                raise RuntimeError(f"could not extract {name}: {e}") from None
         else:
-            cmd = ["tar", "-xzf", str(archive), "-C", str(tmp)]
-        p = subprocess.run(cmd, capture_output=True, text=True)
-        if p.returncode != 0:
-            raise RuntimeError(f"could not extract {name}: {p.stderr.strip()}")
+            cmd = ["unzip", "-q", "-o", str(archive), "-d", str(tmp)] if zipped else ["tar", "-xzf", str(archive), "-C", str(tmp)]
+            p = subprocess.run(cmd, capture_output=True, text=True)
+            if p.returncode != 0:
+                raise RuntimeError(f"could not extract {name}: {p.stderr.strip()}")
         staging = target.with_name(target.name + ".partial")
         shutil.rmtree(staging, ignore_errors=True)
         shutil.copytree(tmp, staging, symlinks=False)
@@ -1325,13 +1378,24 @@ def install_photon(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str,
     staging.mkdir(parents=True)
     log("    unpacking it (10-40 minutes)...")
     fast = shutil.which("pbzip2") or shutil.which("lbzip2")
-    if fast:
+    ok = False
+    if os.name == "nt":
+        pass
+    elif fast:
         unpack = subprocess.Popen([fast, "-dc", str(partial)], stdout=subprocess.PIPE)
         untar = subprocess.run(["tar", "-x", "-f", "-", "-C", str(staging)], stdin=unpack.stdout)   # "-f -": BSD tar may default to a tape
         unpack.stdout.close()
         ok = unpack.wait() == 0 and untar.returncode == 0
     else:
         ok = subprocess.run(["tar", "-xjf", str(partial), "-C", str(staging)]).returncode == 0
+    if not ok:    # Windows, or a Linux PC without bzip2
+        shutil.rmtree(staging, ignore_errors=True)
+        staging.mkdir(parents=True)
+        try:
+            untar_py(partial, staging, "bz2")
+            ok = True
+        except (OSError, EOFError, tarfile.TarError, RuntimeError) as e:
+            log(f"    {e}")
     data = staging / "photon_data"
     if not data.is_dir():
         nested = [d for d in staging.glob("*/photon_data") if d.is_dir()]
@@ -1488,6 +1552,31 @@ def write_inventory(root: Path, state: Dict[str, Any]) -> None:
     (root / "INVENTORY.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+@contextlib.contextmanager
+def keep_awake():
+    """Keep the computer from sleeping (the screen may) through hours of downloads. Ends when this process does."""
+    child = None
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.kernel32.SetThreadExecutionState(0x80000001)    # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+    else:
+        pid = str(os.getpid())
+        cmd = (["caffeinate", "-i", "-w", pid] if sys.platform == "darwin" else
+               ["systemd-inhibit", "--what=idle:sleep", "--who=Tinfoil Kit", "--why=Downloading the kit",
+                "tail", f"--pid={pid}", "-f", os.devnull])
+        if shutil.which(cmd[0]):
+            with contextlib.suppress(OSError):    # no stdin, so it can't stop to ask for a password
+                child = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL)
+    try:
+        yield
+    finally:
+        if child:
+            child.terminate()
+        if sys.platform == "win32":
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
+
+
 class Lock:
     def __init__(self, root: Path):
         self.path = root / ".kit" / "lock"
@@ -1497,8 +1586,15 @@ class Lock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.fh = open(self.path, "w")
         try:
-            import fcntl
-            fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if os.name == "nt":
+                import msvcrt
+                try:
+                    msvcrt.locking(self.fh.fileno(), msvcrt.LK_NBLCK, 1)
+                except PermissionError:
+                    raise BlockingIOError from None
+            else:
+                import fcntl
+                fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             die("another ./kit sync is already running on this kit")
         except (OSError, ImportError):
@@ -1623,7 +1719,7 @@ def check_release(new: Path) -> None:
     except ValueError as e:
         raise ValueError(f"its kit.json doesn't parse ({e})") from None
     for script in ("kit", "SETUP.command", "START-HERE.command", "UNINSTALL.command", "tools/launch.sh"):
-        if subprocess.run(["bash", "-n", str(new / script)], capture_output=True).returncode:
+        if shutil.which("bash") and subprocess.run(["bash", "-n", str(new / script)], capture_output=True).returncode:
             raise ValueError(f"its {script} has a syntax error")
 
 
@@ -1682,7 +1778,7 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
     (root / "logs").mkdir(exist_ok=True)
     LOG_FILE = root / "logs" / f"sync-{dt.date.today().isoformat()}.log"
     log(f"\n===== sync started {now_iso()} =====")
-    with Lock(root):
+    with Lock(root), keep_awake():
         prepare_folder(root)
         cfg, state = load_config(root), load_state(root)
         items = build_plan(root, cfg, state, args.only)
@@ -1864,6 +1960,8 @@ def runtime_binary(root: Path, product: str, name: str) -> Optional[Path]:
     override = os.environ.get(f"KIT_{product.upper().replace('.', '').replace('-', '_')}_BIN")
     if override:
         return Path(override)
+    if os.name == "nt" and not name.endswith(".exe"):
+        name += ".exe"
     rel = f"bin/{product}-{platform_tag()}"
     cur = current_dir(root, rel)
     return (find_binary(cur, name) if cur else None) or find_binary(root / rel, name)
@@ -2033,7 +2131,7 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
                     reply = (msg.get("content") or msg.get("reasoning_content") or "").strip()
                     ok, detail = bool(reply), f"{name} answered in {time.time() - t0:.0f}s: {reply[:40]!r}"
                 check("model answers", ok, detail)
-                pre = subprocess.run(["curl", "-sS", "-o", "/dev/null", "-D", "-", "-X", "OPTIONS",
+                pre = subprocess.run(["curl", "-sS", "-o", os.devnull, "-D", "-", "-X", "OPTIONS",
                                       "-H", "Origin: http://127.0.0.1:8888",
                                       "-H", "Access-Control-Request-Method: POST",
                                       f"http://127.0.0.1:{lport}/v1/chat/completions"],
@@ -2132,6 +2230,9 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
 # ----------------------------------------------------------------------------- main
 
 def main() -> None:
+    for stream in (sys.stdout, sys.stderr):    # a Windows console can't show every character in a book's title
+        with contextlib.suppress(AttributeError, ValueError):
+            stream.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(prog="kit", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", type=Path, default=None, help="kit folder (default: the folder containing ./kit)")
     sub = ap.add_subparsers(dest="cmd")
