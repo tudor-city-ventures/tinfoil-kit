@@ -239,6 +239,7 @@ Step "a kit from before the three folders, as an old SETUP's kit update leaves i
 # kit update puts the new version's code there too. Then the old SETUP runs the new one with --updated, mid-count.
 Get-ChildItem -Force "$kit\app" | Where-Object Name -ne "kit.json" | Move-Item -Destination $kit
 Get-ChildItem -Force "$kit\downloads", "$kit\data" | Move-Item -Destination $kit
+if (Test-Path "$kit\.partial") { Move-Item "$kit\.partial" "$kit\.kit\downloads" }    # (unfinished downloads were there then)
 Remove-Item -Recurse -Force "$kit\app", "$kit\downloads", "$kit\data"
 Remove-Item -Force "$kit\.kit\kit.base.json" -ErrorAction SilentlyContinue    # (new with the three folders)
 $env:KIT_STEP = "1"; $env:KIT_STEPS = "3"
