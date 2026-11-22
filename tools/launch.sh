@@ -196,6 +196,9 @@ elif [ -n "$LLAMA" ] && [ ${#MODELS[@]} -gt 0 ]; then
   fi
   PRESET="$KIT/.kit/presets.ini"
   printf 'version = 1\n\n[%s]\nload-on-startup = true\n' "$MODEL" > "$PRESET"
+  # AI chat is llama-server's own page, so it gets Ask's safety rules as its default system message. An environment
+  # variable, not a flag: a llama-server too old to know it ignores it instead of refusing to start.
+  [ -f "$KIT/tools/ai-chat.json" ] && export LLAMA_ARG_UI_CONFIG_FILE="$KIT/tools/ai-chat.json"
   "$LLAMA" --models-dir "$KIT/models" --models-preset "$PRESET" --models-max 1 -c "$CTX" \
     --host "$HOST" --port "$AI_PORT" --cors-origins "$CORS" > "$KIT/logs/llama-server.log" 2>&1 &
   AI_PID=$!; PIDS+=($!)

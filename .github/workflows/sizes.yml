@@ -1,6 +1,7 @@
 name: refresh builder sizes
-# Asks every source for its current size (./kit plan --json downloads nothing) and commits
-# site/sources.json when it changed, so the website's kit builder stays accurate.
+# Asks every source for its current size (./kit plan --json downloads nothing), and rebuilds the places SETUP and the
+# builder offer for "Where do you live?" (site/build_regions.py), and commits site/sources.json and tools/regions.json
+# when they changed, so the website's kit builder and the kit's region list stay accurate.
 # Only the commit job can write to the repo, and it runs none of the kit's code: the build job, which talks to
 # every download host, has a read-only token and hands its result over as an artifact.
 on:
@@ -12,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -23,11 +24,14 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - name: list sources that couldn't be resolved (they would fail in a real sync too)
         run: python3 -c "import json, sys; [print(k, '->', v['error']) for k, v in json.load(open(sys.argv[1])).items() if v['error']]" "$RUNNER_TEMP/plan.json"
+      - run: python3 site/build_regions.py
       - run: python3 site/build_sources.py "$RUNNER_TEMP/plan.json"
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: sizes
-          path: site/sources.json
+          path: |
+            site/sources.json
+            tools/regions.json
           retention-days: 1
 
   commit:
@@ -44,9 +48,10 @@ jobs:
         with:
           name: sizes
           path: ${{ runner.temp }}/sizes
-      - name: commit the new sizes, and nothing else
+      - name: commit the new sizes and places, and nothing else
         env:
-          NEW: ${{ runner.temp }}/sizes/sources.json
+          NEW: ${{ runner.temp }}/sizes/site/sources.json
+          REGIONS: ${{ runner.temp }}/sizes/tools/regions.json
         run: |
           python3 -I - "$NEW" site/sources.json <<'PY'
           import json, sys
@@ -56,10 +61,66 @@ jobs:
           ok = rest(new) == rest(old) and all(type(s["bytes"]) is int and type(s["estimated"]) is bool for s in new["sources"])
           sys.exit(0 if ok else "The new sources.json changes more than sizes, so it isn't committed. Run build_sources.py by hand.")
           PY
+          # From the new regions.json, take only what a weekly refresh may change: sizes, download paths on Geofabrik and
+          # Photon (each path segment checked), Wikipedia file names, and which known languages a place offers. Ids,
+          # names, nicknames and home towns stay as a person last committed them: SETUP prints them, the site's agent
+          # prompt quotes them, and GeoNames, one of their sources, is edited by the public. What's kept back is listed
+          # as warnings, so a person can rebuild the file by hand.
+          python3 -I - "$REGIONS" tools/regions.json <<'PY'
+          import json, re, sys
+          new, old = (json.load(open(p, encoding="utf-8")) for p in sys.argv[1:])
+          seg = r"[a-z0-9][a-z0-9_-]*"
+          paths = {"pbf": rf"{seg}(/{seg})*-latest\.osm\.pbf", "photon": rf"{seg}(/{seg})*/photon-db-[a-z0-9_-]+-\d+\.\d+-latest\.tar\.bz2",
+                   "zim": r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)"}
+          def path(k):
+              return lambda v: type(v) is str and re.fullmatch(paths[k], v) is not None
+          def size(v):
+              return type(v) in (int, float) and v >= 0
+          REGION = {"mb": lambda v: type(v) is dict and all(size(x) for x in v.values()), "pbf": path("pbf"), "photon": path("photon"),
+                    "langs": lambda v: type(v) is list and all(type(c) is str and c in old["languages"] for c in v)}
+          LANGUAGE = {"zim": path("zim"), "mb": size, "pictures": lambda v: type(v) is bool}
+          kept = []
+          def take(have, got, allowed, name):
+              for k, good in allowed.items():
+                  if k == "photon" and got.get("addresses_wide") != have.get("addresses_wide"):
+                      kept.append(f"{name}: photon")    # a country's addresses switching to a continent's needs a person
+                  elif k in got and good(got[k]):
+                      have[k] = got[k]
+                  elif k in got:
+                      kept.append(f"{name}: {k}")
+                  elif k == "photon":
+                      have.pop(k, None)    # Photon no longer publishes this place's addresses
+              other = sorted({re.sub(r"[^a-z_]", "?", str(k))[:20] for k in set(have) | set(got) if k not in allowed and got.get(k) != have.get(k)})
+              if other:
+                  kept.append(f"{name}: {', '.join(other)}")
+          for part, allowed in (("regions", REGION), ("languages", LANGUAGE)):
+              if part == "regions":
+                  have = {r["id"]: r for r in old[part]}
+                  fresh = {r["id"]: r for r in new[part] if type(r) is dict and type(r.get("id")) is str}
+              else:
+                  have, fresh = old[part], {c: v for c, v in new[part].items() if type(v) is dict}
+              for k, v in have.items():
+                  name = k if part == "regions" else f"language {k}"
+                  if k in fresh:
+                      take(v, fresh[k], allowed, name)
+                  else:
+                      kept.append(f"{name}: missing from the new list")
+              if set(fresh) - set(have):
+                  kept.append(f"{len(set(fresh) - set(have))} new {part}")
+          for line in kept[:30] + ([f"and {len(kept) - 30} more"] if len(kept) > 30 else []):
+              print(f"::warning title=regions.json kept as committed::{line}")
+          langs, regions = list(old["languages"].items()), old["regions"]
+          lines = ["{", ' "_readme": ' + json.dumps(old["_readme"], ensure_ascii=False) + ",", ' "languages": {']
+          lines += [f"  {json.dumps(c)}: {json.dumps(v, ensure_ascii=False)}" + ("," if n < len(langs) - 1 else "") for n, (c, v) in enumerate(langs)]
+          lines += [" },", ' "regions": [']
+          lines += ["  " + json.dumps(r, ensure_ascii=False) + ("," if n < len(regions) - 1 else "") for n, r in enumerate(regions)]
+          open(sys.argv[2], "w", encoding="utf-8").write("\n".join(lines + [" ]", "}", ""]))
+          PY
           cp "$NEW" site/sources.json
-          git diff --quiet site/ && { echo "no change"; exit 0; }
+          cp tools/regions.json site/regions.json
+          git diff --quiet site/ tools/ && { echo "no change"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "Refresh kit builder sizes"
+          git commit -am "Refresh kit builder sizes and places"
           git pull --rebase origin main
           git push origin HEAD:main

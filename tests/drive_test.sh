@@ -105,8 +105,8 @@ mac() {
   download_kit "$src"
   n="$(drive_number "$src" TINFOIL)"
   echo "SETUP lists TINFOIL as drive ${n:-(not at all)}"
-  # Answers: an external drive, TINFOIL, start downloading, don't open the kit, close.
-  KIT_OWN_PYTHON=1 setup "$src" setup.log "1\n${n:-1}\ny\nn\n\n"
+  # Answers: keep where it's for, an external drive, TINFOIL, start downloading, don't open the kit, close.
+  KIT_OWN_PYTHON=1 setup "$src" setup.log "\n1\n${n:-1}\ny\nn\n\n"
   "$py/python/bin/python3" --version || fail "SETUP didn't get the kit's own Python"
   [ -d "$kit/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
@@ -139,9 +139,10 @@ mac() {
   kit="$HOME/TinfoilKit" agent="$HOME/Library/LaunchAgents/com.tinfoilkit.kit.plist"
   rm -rf "$kit"
   download_kit "$src"
-  # Answers: this Mac, all of it even if that leaves less free than SETUP likes (it asks then), download, close.
+  # Answers: keep where it's for, this Mac, all of it even if that leaves less free than SETUP likes (it asks then),
+  # download, close.
   much=""; [ "$("$src/kit" space "$kit" | cut -f1)" = tight ] && much="2\n"
-  setup "$src" setup-mac.log "2\n${much}y\n\n" --home-server
+  setup "$src" setup-mac.log "\n2\n${much}y\n\n" --home-server
   [ -d "$kit/models" ] || fail "the kit isn't set up in $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
   tmutil isexcluded "$kit" | grep -q Excluded || fail "Time Machine would back up $kit"

@@ -8,6 +8,7 @@ import os
 import sys
 from playwright.sync_api import sync_playwright
 from drive import note
+from make_tiny_model import ANSWER
 
 SHOTS = os.environ.get("KIT_TEST_SHOTS", os.path.join(os.path.dirname(__file__), "work", "shots"))
 os.makedirs(SHOTS, exist_ok=True)
@@ -24,6 +25,14 @@ def check(name, ok, detail=""):
     global fails
     print(("PASS  " if ok else "FAIL  ") + name + (f": {detail}" if detail else ""))
     fails += 0 if ok else 1
+
+
+def intact(page):
+    """Is the answer the test model's, as the page shows it (bold, [1] a link to the source), every character intact?
+    If not, what arrived, spelled in ASCII so a mangled character shows as its code."""
+    shown = page.inner_text("#answer")
+    ok = " ".join(shown.split()) == " ".join(ANSWER.replace("**", "").split()) and page.locator("#answer a.cite").count() == 1
+    return ok, "" if ok else ascii(shown)[:400]
 
 
 def pause(page, seconds=2.5):
@@ -102,8 +111,8 @@ with sync_playwright() as p:
     page.wait_for_function("document.getElementById('progress').textContent.startsWith('Done')", timeout=120000)
     srcs = page.eval_on_selector_all("#sources li a", "els => els.map(e => e.textContent)")
     check("sources listed", "Water purification" in srcs, ", ".join(srcs))
-    check("answer rendered", len(page.inner_text("#answer")) > 0)
-    note("The answer and its sources. This test kit's AI is a tiny model that writes nonsense; the real ones don't")
+    check("the AI's answer arrives with every character intact, and cites its source", *intact(page))
+    note("The answer and its sources. This test kit's AI always gives the same answer; the real ones answer the question")
     pause(page, 5)
     page.screenshot(path=os.path.join(SHOTS, "shot_ask.png"), full_page=True)
     href = page.get_attribute("#sources li a", "href")
@@ -189,6 +198,7 @@ with sync_playwright() as p:
         p3.wait_for_function("document.getElementById('progress').textContent.startsWith('Done')", timeout=120000)
         srcs = p3.eval_on_selector_all("#sources li a", "els => els.map(e => e.textContent)")
         check("shared: asking works through the gate", "Water purification" in srcs, ", ".join(srcs))
+        check("shared: the AI's answer arrives intact through the gate", *intact(p3))
         r = p3.request.get(share + p3.get_attribute("#sources li a", "href"))
         check("shared: a source opens through the gate", r.ok and "8 drops" in r.text())
         p3.click("nav a[data-tab=help]")
@@ -216,6 +226,7 @@ with sync_playwright() as p:
         p3.on("response", lambda r: sent.append(f"{r.request.method} {r.status} {r.url}") if r.request.method != "GET" else None)
         p3.on("requestfinished", lambda r: pending.pop(r, None))
         p3.on("requestfailed", lambda r: pending.pop(r, None))
+        asked_with = ""
         try:
             p3.goto(share + "/ai/")
             box = p3.locator("textarea:visible, [contenteditable=true]:visible").first
@@ -231,6 +242,7 @@ with sync_playwright() as p:
                 else:
                     p3.keyboard.press("Enter")
             answered, why = reply.value.ok, reply.value.url
+            asked_with = reply.value.request.post_data or ""
             p3.wait_for_timeout(2000)
         except Exception as e:    # a timeout: say what was on screen and what was still loading
             answered = False
@@ -241,6 +253,8 @@ with sync_playwright() as p:
                    + " | sent: " + "; ".join(sent)[:300])
         p3.screenshot(path=os.path.join(SHOTS, "shot_share_ai_chat.png"))
         check("shared: AI chat answers through the gate", answered, why)
+        # tools/ai-chat.json, through llama-server's UI settings: the stock page asks with Ask's safety rules.
+        check("shared: AI chat asks with the kit's safety rules", "wild plant" in asked_with, asked_with[:300])
         # The page asks whether llama-server's own tools are on. They aren't, and the gate keeps them off.
         tools = p3.request.get(share + "/ai/tools")
         check("shared: llama-server's tools stay off", tools.status == 403 and "feature_disabled" in tools.text(),

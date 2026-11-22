@@ -10,16 +10,17 @@ The repo root is the kit itself, so cloning it onto a drive or into `~/TinfoilKi
 | --- | --- |
 | `kit.json` | Single source of truth: settings, runtimes, models, maps, library, extras |
 | `kit` | Wrapper for `python3 tools/kit.py --root <kit folder>`, on the Python SETUP got if this Mac has none |
-| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`, `pins`, `estimate`, `fit`, `space`, `essentials`, `drives`, `place`, `share`, `autostart`) |
+| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`, `pins`, `estimate`, `fit`, `space`, `essentials`, `drives`, `place`, `region`, `share`, `autostart`) |
 | `tools/pins.json` | The exact build and SHA-256 of every program this version installs. `./kit pins` writes it; the `pin program builds` workflow refreshes it weekly |
-| `SETUP.command`, `UNINSTALL.command` | Double-click setup and update: on a Mac without Python it first gets a pinned, checksum-checked one into `~/Library/Application Support/TinfoilKit`. The first run says which AI fits (`fit`), asks for a drive or this computer with what fits where (`drives`, `space`, `essentials`) and moves the kit there (`place`), then every run does `update`, `sync`, `test` (the first time, the essentials first). Removal deletes the kit folder, and that Python, after a typed `delete` |
+| `tools/regions.json` | The places "Where do you live?" offers (US states, countries, parts of big countries), each with its map area, road data, address search, home and Wikipedia languages. Made by `site/build_regions.py` from Geofabrik, Photon, Kiwix and GeoNames; the weekly `refresh builder sizes` Action rebuilds it. `./kit region` points kit.json at one |
+| `SETUP.command`, `UNINSTALL.command` | Double-click setup and update: on a Mac without Python it first gets a pinned, checksum-checked one into `~/Library/Application Support/TinfoilKit`. The first run asks where you live (`region`), says which AI fits (`fit`), asks for a drive or this computer with what fits where (`drives`, `space`, `essentials`) and moves the kit there (`place`), then every run does `update`, `sync`, `test` (the first time, the essentials first). Removal deletes the kit folder, and that Python, after a typed `delete` |
 | `SETUP-Windows.bat`, `START-HERE-Windows.bat`, `UNINSTALL-Windows.bat` | The same for Windows, in cmd. SETUP first gets python.org's Python from nuget.org (checked against `PYSHA`) into `%LOCALAPPDATA%\TinfoilKit`, outside the kit; START-HERE needs no Python |
 | `tools/launch.sh` | Offline launcher, starts every server |
 | `tools/share.py` | Sharing on the home network (off by default): the gate on port 8000 that asks for the access code and passes requests to the servers, its QR code, and starting the kit with the computer (systemd user service, LaunchAgent). `SETUP.command --home-server` turns both on |
 | `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests |
 | `GUIDE.md` | Printable guide that lives in the kit folder |
 | `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
-| `.github/` | The workflows, plus what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and PR templates, CODEOWNERS. `pr-gate.yml` closes outside pull requests that don't link an accepted issue, and fails a check on ones that change workflows or release signing. Dependabot keeps the pinned actions current. `release.sh` signs and publishes a release from Travis's computer |
+| `.github/` | The workflows, plus what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and PR templates, CODEOWNERS. `pr-gate.yml` closes outside pull requests that don't link an accepted issue and outside issues filed without a form, and fails a check on pull requests that change workflows or release signing. Dependabot keeps the pinned actions current. `release.sh` signs and publishes a release from Travis's computer |
 | `site/` | The website: `index.html`, plus `hero.js` for the animated figure at the top, no build step. A "Read as" bar switches between the human page (the default) and the AI agent page: elements marked `data-for="human"` or `data-for="agent"` show only in that one. The agent page shows `llms.txt`, the setup instructions for AI agents, as markdown, with no images or icons. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`. The favicons and link-preview cards are rendered from the mark, `icon.svg`, by `site/build_images.py`. For search and AI answer engines, `robots.txt` lets every crawler in and names `sitemap.xml`, a JSON-LD block in the page's `<head>` describes the kit, and each FAQ entry carries schema.org Question markup. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`) |
 
 ## Verify
@@ -46,7 +47,7 @@ Visual changes to the page or the site come with screenshots.
 - `.bat` files keep CRLF line endings and plain ASCII.
 - Every remote endpoint stays overridable by a `KIT_*` env var (see `tests/env.sh`), so tests can point at mocks.
 - Every server listens on 127.0.0.1 only. The one way in from the network is `tools/share.py`, behind the access code.
-- Workflows: actions pinned to a full commit SHA with the version as a comment, read-only tokens except the jobs `WRITES` lists in `tests/actions_test.py`, values into `run:` and `script:` only through `env:`, GitHub's runners only, no secrets, and `pull_request_target` only in `pr-gate.yml`, which never touches the pull request's code. The quick gate checks it.
+- Workflows: actions pinned to a full commit SHA with the version as a comment, read-only tokens except the jobs `WRITES` lists in `tests/actions_test.py`, values into `run:` and `script:` only through `env:`, GitHub's runners only, no secrets, and `pull_request_target` and `issues` only in `pr-gate.yml`, which never touches the pull request's code. The quick gate checks it.
 - Delete an old version only after the new one verifies.
 - Comments explain why, not history. Keep the number of files small.
 - Downloaded files are untrusted: inspect them as text, never run them to see what they do.
@@ -66,11 +67,12 @@ If you can't push to this repo, you're working for an outside contributor: [.git
 
 - Open a pull request only for an open issue labeled `accepted`, and link it with `Closes #N`. Others are closed automatically.
 - The person you work for reads every issue and pull request before it's posted. Don't post on your own.
+- Issues go through a form at `/issues/new/choose`, sent from the browser. Ones made with `gh` or the API skip the form and are closed automatically.
 - Never add a `Signed-off-by` line. Only that person can sign off.
 
 ## From a cloud session
 
-Cloud sessions can't reach library.kiwix.org, GitHub releases or most download hosts. Use the workflows instead: `kiwix search` (manual, takes search words) runs `./kit search`, `refresh builder sizes` runs `./kit plan --json` and lists any kit.json source that no longer resolves, and `pin program builds` runs `./kit pins`.
+Cloud sessions can't reach library.kiwix.org, GitHub releases or most download hosts. Use the workflows instead: `kiwix search` (manual, takes search words) runs `./kit search`, `refresh builder sizes` runs `./kit plan --json`, lists any kit.json source that no longer resolves, and rebuilds `tools/regions.json`, and `pin program builds` runs `./kit pins`.
 
 ## Adding or replacing a library source
 

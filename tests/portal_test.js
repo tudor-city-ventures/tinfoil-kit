@@ -6,6 +6,9 @@ const m = { exports: {} };
 new Function("module", "exports", script)(m, m.exports);
 const Kit = m.exports;
 const LIB = "http://127.0.0.1:18888", AI = "http://127.0.0.1:18080";
+// The test model's fixed answer (tests/make_tiny_model.py)
+const ANSWER = require("child_process").execFileSync("python3", ["-c", "from make_tiny_model import ANSWER; print(ANSWER, end='')"],
+  { cwd: __dirname, encoding: "utf8", env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
 let failures = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ": " + detail : ""}`); if (!ok) failures++; };
 
@@ -26,7 +29,7 @@ const check = (name, ok, detail) => { console.log(`${ok ? "PASS" : "FAIL"}  ${na
   check("catalog parsed", books.length === 2, books.map(b => `${b.id} [${b.group}]`).join(", "));
   const q = "How much bleach do I add to a gallon of water to make it safe to drink?";
   const queries = await Kit.makeQueries({ aiBase: AI, model: "Tiny", queryTimeoutMs: 20000 }, q);
-  check("queries (tiny model gives gibberish; fallbacks must still be there)", queries.includes("bleach gallon water") || queries.some(x => /bleach/.test(x)), JSON.stringify(queries));
+  check("queries (the test model's answer isn't a query; fallbacks must still be there)", queries.includes("bleach gallon water") || queries.some(x => /bleach/.test(x)), JSON.stringify(queries));
   const progress = [];
   const sources = await Kit.gatherSources(q, books, { libraryBase: LIB, root: "", queries, onProgress: t => progress.push(t) });
   check("found the bleach article", sources.length > 0 && sources[0].title === "Water purification", sources.map(s => s.title).join(", "));
@@ -39,12 +42,13 @@ const check = (name, ok, detail) => { console.log(`${ok ? "PASS" : "FAIL"}  ${na
   const msgs = Kit.buildMessages(q, sources);
   check("prompt includes excerpt and question", msgs[1].content.includes("[1] \"Water purification\"") && msgs[1].content.includes(q));
   let content = "", reasoning = "", deltas = 0;
-  await Kit.streamChat({ aiBase: AI, model: "Tiny", maxTokens: 40 }, msgs, (c, r) => { content += c; reasoning += r; deltas++; });
-  check("streamed an answer", deltas > 5 && (content.length + reasoning.length) > 0, `${deltas} chunks`);
+  await Kit.streamChat({ aiBase: AI, model: "Tiny", maxTokens: 100 }, msgs, (c, r) => { content += c; reasoning += r; deltas++; });
+  check("streamed the answer with every character intact", deltas > 5 && content === ANSWER && !reasoning,
+        `${deltas} chunks: ${JSON.stringify(content)}`);
   // second model triggers a swap (models-max 1)
   let c2 = "";
   await Kit.streamChat({ aiBase: AI, model: "Two", maxTokens: 10 }, msgs, c => { c2 += c; });
-  check("switching models works", c2.length > 0);
+  check("switching models works", c2.length > 0 && ANSWER.startsWith(c2), JSON.stringify(c2));
   const models = await Kit.listModels(AI);
   check("model list", models.includes("Tiny") && models.includes("Two"), models.join(", "));
 

@@ -36,6 +36,7 @@
   #progress { color:var(--mute); font-size:.9rem; min-height:1.4rem; margin:.8rem 0 .2rem; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1rem 1.2rem; margin:.8rem 0; }
   #answer:empty { display:none; }
+  #answer, #sources { overflow-wrap:anywhere; }   /* a long link or unbroken string wraps instead of widening the page */
   #answer h4 { margin:1rem 0 .3rem; } #answer p { margin:.5rem 0; } #answer ul, #answer ol { padding-left:1.4rem; }
   #answer a.cite { text-decoration:none; font-size:.8em; vertical-align:super; }
   #sources li { margin:.5rem 0; } #sources .book { color:var(--mute); font-size:.85rem; }
@@ -115,6 +116,7 @@
   <section id="library">
     <form id="libSearch" class="row">
       <input type="search" id="libQ" aria-label="Search every book" placeholder="Search every book for a word or phrase" style="flex:1 1 20rem">
+      <select id="libLang" aria-label="Search the books in" hidden></select>
       <button type="submit">Search</button>
     </form>
     <div id="bookList"></div>
@@ -147,7 +149,7 @@
     <ul>
       <li><b>Ask</b> searches your offline books, then the AI answers and cites them as [1], [2]. Click a source to read it in full.</li>
       <li><b>Library</b> lets you browse or search every book yourself: Wikipedia, medical guides, repair manuals and more.</li>
-      <li><b>AI chat</b> is a plain chat with the AI (no library). You can attach photos there, e.g. of a broken part or a label. Use a model that reads photos (Inkling, Qwen, Gemma).</li>
+      <li><b>AI chat</b> is a plain chat with the AI. It doesn't search your books, so check anything important on Ask or in the Library. You can attach photos there, e.g. of a broken part or a label. Use a model that reads photos (Inkling, Qwen, Gemma).</li>
       <li>Pick a different <b>model</b> for a second opinion. <b>Gemma-4-E4B</b> is the small one: use it to save battery.</li>
       <li>The first answer after picking a model is slow while it loads into memory (up to a minute). After that it's quick.</li>
     </ul>
@@ -551,11 +553,13 @@ var Kit = (function () {
     return j;
   }
 
-  /* opts: { geoBase, routeBase, home: {lat, lon, label}, units, signal } */
+  /* opts: { geoBase, routeBase, home: {lat, lon, label}, units, lang, signal } */
+  // Photon's address databases carry names in these languages, and each place's own ("default").
+  function photonLang(lang) { lang = lang || "en"; return ["en", "de", "fr", "it"].indexOf(lang) >= 0 ? lang : "default"; }
   async function searchPlaces(opts, query, limit) {
     var ll = parseLatLon(query);
     if (ll) return [ll];
-    var u = opts.geoBase + "/api?q=" + encodeURIComponent(query) + "&limit=" + (limit || 5) + "&lang=en";
+    var u = opts.geoBase + "/api?q=" + encodeURIComponent(query) + "&limit=" + (limit || 5) + "&lang=" + photonLang(opts.lang);
     if (opts.home) u += "&lat=" + opts.home.lat + "&lon=" + opts.home.lon + "&zoom=10&location_bias_scale=0.3";
     var j = await getJson(u, opts.signal);
     return (j.features || []).map(function (f) { return placeFromFeature(f, opts.home); });
@@ -581,7 +585,7 @@ var Kit = (function () {
     var cat = categoryFor(category);
     if (!cat) throw new Error("Unknown kind of place: " + category + ". Try: " + Object.keys(CATEGORIES).join(", "));
     var origin = await resolvePlace(opts, near);
-    var base = opts.geoBase + "/reverse?lat=" + origin.lat + "&lon=" + origin.lon + "&radius=40&limit=" + (limit || 8) + "&lang=en";
+    var base = opts.geoBase + "/reverse?lat=" + origin.lat + "&lon=" + origin.lon + "&radius=40&limit=" + (limit || 8) + "&lang=" + photonLang(opts.lang);
     var j = null;
     try { j = await getJson(base + "&include=" + encodeURIComponent(CATEGORIES[cat].include), opts.signal); }
     catch (e) { if (e.name === "AbortError" || !/HTTP 400|parameter|include/i.test(e.message)) throw e; }
@@ -711,7 +715,16 @@ var Kit = (function () {
     return { tool: "search_places", args: { query: m ? m[1] : q } };
   }
 
+  // kiwix-serve searches one language at a time: the library's Wikipedia's first, then the rest by number of books.
+  function libraryLanguages(books) {
+    var count = {}, wiki = books.filter(function (b) { return /^wikipedia_/.test(b.name || b.id); })[0];
+    books.forEach(function (b) { (b.language || "eng").split(",").forEach(function (l) { count[l] = (count[l] || 0) + 1; }); });
+    var main = wiki ? (wiki.language || "eng").split(",")[0] : "";
+    return Object.keys(count).sort(function (a, b) { return (b === main) - (a === main) || count[b] - count[a] || (a < b ? -1 : 1); });
+  }
+
   return { keywords: keywords, terms: terms, decode: decode, parseCatalog: parseCatalog, parseSearch: parseSearch,
+    libraryLanguages: libraryLanguages, photonLang: photonLang,
     htmlToText: htmlToText, chunks: chunks, fallbackQueries: fallbackQueries, cleanQueryLines: cleanQueryLines,
     listModels: listModels, makeQueries: makeQueries, gatherSources: gatherSources, buildMessages: buildMessages,
     streamChat: streamChat, render: render, escapeHtml: escapeHtml, classify: classify, MEDICAL: MEDICAL,
@@ -793,6 +806,12 @@ if (typeof document !== "undefined") (function () {
       html += "</div>";
     });
     $("bookList").innerHTML = html || "<p>No books found.</p>";
+    var langs = Kit.libraryLanguages(books), names = null;
+    try { names = new Intl.DisplayNames(["en"], { type: "language" }); } catch (e) {}
+    $("libLang").innerHTML = langs.map(function (l) {
+      var n = l; try { n = names ? names.of(l) : l; } catch (e) {}
+      return "<option value=\"" + Kit.escapeHtml(l) + "\">" + Kit.escapeHtml("Books in " + n) + "</option>"; }).join("");
+    $("libLang").hidden = langs.length < 2;
   }
 
   async function checkAI() {
@@ -879,7 +898,8 @@ if (typeof document !== "undefined") (function () {
   $("libSearch").addEventListener("submit", function (ev) {
     ev.preventDefault();
     var q = $("libQ").value.trim(); if (!q) return;
-    location.href = ROOT + "/search?books.filter.lang=eng&pattern=" + encodeURIComponent(q);
+    var lang = $("libLang").value || Kit.libraryLanguages(books)[0] || "eng";
+    location.href = ROOT + "/search?books.filter.lang=" + encodeURIComponent(lang) + "&pattern=" + encodeURIComponent(q);
   });
 
   /* ---------------------------------------------------------------- map tab */
@@ -895,7 +915,7 @@ if (typeof document !== "undefined") (function () {
     try { var h = JSON.parse(stored("home") || "null"); if (h && isFinite(h.lat) && isFinite(h.lon)) return h; } catch (e) {}
     return KM.home || { lat: 40.75, lon: -73.99, zoom: 10, label: "Home" };
   }
-  function mapOpts(signal) { return { geoBase: GEO, routeBase: ROUTE, home: getHome(), units: units(), signal: signal, label: KM.label }; }
+  function mapOpts(signal) { return { geoBase: GEO, routeBase: ROUTE, home: getHome(), units: units(), lang: KM.lang, signal: signal, label: KM.label }; }
   function mapsUsable() { return !!KM.available && (svc.geocoder || svc.routing); }
   function emptyFC() { return { type: "FeatureCollection", features: [] }; }
   function b64buf(b64) { var bin = atob(b64), u = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; }
@@ -930,13 +950,15 @@ if (typeof document !== "undefined") (function () {
       if (v == null) return Promise.reject(new Error("missing map icon file " + name));
       return Promise.resolve({ data: /\.json$/.test(name) ? (p.type === "string" ? JSON.stringify(v) : v) : b64buf(v) });
     });
-    var h = getHome();
+    var h = getHome(), layers;
+    try { layers = basemaps.layers("protomaps", basemaps.namedFlavor("light"), { lang: KM.lang || "en" }); }
+    catch (e) { layers = basemaps.layers("protomaps", basemaps.namedFlavor("light"), { lang: "en" }); }   // a language it lacks
     map = new maplibregl.Map({
       container: "mapCanvas", center: [h.lon, h.lat], zoom: h.zoom || 11, attributionControl: { compact: true },
       style: { version: 8, glyphs: "kitglyph://{fontstack}/{range}", sprite: "kitsprite://sprites/light",
         sources: { protomaps: { type: "vector", tiles: [server("tiles") + "/" + KM.tileset + "/{z}/{x}/{y}.mvt"],
           maxzoom: KM.detailMaxzoom, attribution: "&copy; OpenStreetMap contributors, Protomaps" } },
-        layers: basemaps.layers("protomaps", basemaps.namedFlavor("light"), { lang: "en" }) }
+        layers: layers }
     });
     window.__kitMap = map;   // for the UI tests, and handy in the browser console
     map.addControl(new maplibregl.NavigationControl(), "top-right");

@@ -1,11 +1,13 @@
-name: pull request gate
+name: contribution gate
 # Outside pull requests must link an open issue the maintainer labeled `accepted` (.github/CONTRIBUTING.md),
 # and can't change CI, this gate or release signing without the maintainer merging past a failed check.
-# pull_request_target runs this file from the base branch with a write token, even for forks, so it must
-# never check out or run the pull request's code. It reads the pull request only through the API.
+# Outside issues must come through a form. pull_request_target and issues run this file with a write token
+# on strangers' input, so it never checks out or runs anything, and reads them only through the API.
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, edited]
+  issues:
+    types: [opened]
   workflow_dispatch: # run once by hand to create or update the labels below
 permissions: {}
 jobs:
@@ -85,6 +87,34 @@ jobs:
             if (!hits.length) return core.info('No protected files changed');
             core.setFailed(`This pull request changes ${hits.join(', ')}, which decide how CI, reviews or releases work. ` +
               'Only the maintainer can merge it, after reading those changes.');
+  forms:
+    # Bots and agents file issues through the API or `gh`, which skip the forms and the questions that make a
+    # report usable. GitHub can't require a form there, so this closes what came without one.
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const { owner, repo } = context.repo;
+            // Members, collaborators, past contributors and the repo's own apps file issues however they like.
+            if (issue.user.type === 'Bot' || ['OWNER', 'MEMBER', 'COLLABORATOR', 'CONTRIBUTOR'].includes(issue.author_association)) {
+              return core.info(`Skipped: ${issue.user.type === 'Bot' ? 'an app' : issue.author_association}`);
+            }
+            // Every form opens with "Before you start" boxes that must be ticked before it can be sent.
+            const body = issue.body || '';
+            if (/^### Before you start\s*$/m.test(body) && /^- \[x\] /im.test(body)) return core.info('Filed with a form');
+
+            await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body:
+              "Thanks. Issues here are filed with one of the forms, which ask for what it takes to act on them, and " +
+              `this one wasn't, so it's closed. Please file it again with a form: https://github.com/${owner}/${repo}/issues/new/choose` });
+            await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: 'closed', state_reason: 'not_planned' });
+            await github.rest.issues.addLabels({ owner, repo, issue_number: issue.number, labels: ['auto-closed'] })
+              .catch(e => core.warning(`Couldn't label it: ${e.message}`));
+            core.info('Closed: not filed with a form');
   labels:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -96,4 +126,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh label create accepted --force --color 0e8a16 --description "The maintainer wants this: a pull request for it is welcome"
-          gh label create auto-closed --force --color ededed --description "Closed by the pull request gate: no accepted issue linked"
+          gh label create auto-closed --force --color ededed --description "Closed by the contribution gate: its comment says why"
+          gh label create needs-triage --force --color fbca04 --description "New from a form: the maintainer hasn't looked yet"

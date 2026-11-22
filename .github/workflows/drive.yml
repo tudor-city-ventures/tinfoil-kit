@@ -58,7 +58,8 @@ jobs:
           esac
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2> /dev/null &&
              git diff --quiet "$base" HEAD -- tools kit kit.json SETUP.command START-HERE.command UNINSTALL.command '*.bat' \
-               'tests/drive*' tests/build_fixtures.sh tests/env.sh tests/mock_remote.py tests/ui_test.py .github/workflows/drive.yml \
+               'tests/drive*' 'tests/make_*.py' tests/build_fixtures.sh tests/env.sh tests/mock_remote.py tests/ui_test.py \
+               .github/workflows/drive.yml \
                ':(exclude)tools/pins.json'    # the test's kits take the mock's own builds, never the pinned ones
           then
             echo "Nothing the drive test covers changed since $base, so it doesn't run."

@@ -20,14 +20,16 @@ else
 fi
 
 step "kit.json is valid"
-run python3 -c "import json,sys; [json.load(open(f)) for f in sys.argv[1:]]" kit.json tools/pins.json tests/drive_kit.json tests/drive_kit_maps.json
+run python3 -c "import json,sys; [json.load(open(f)) for f in sys.argv[1:]]" kit.json tools/pins.json tools/ai-chat.json tests/drive_kit.json tests/drive_kit_maps.json
 
-step "site data matches kit.json"
+step "site data matches kit.json and tools/regions.json"
 run python3 -c "
-import json, subprocess, sys
-before = open('site/sources.json').read()
+import subprocess, sys
+files = ['site/sources.json', 'site/kit.json', 'site/regions.json']
+before = [open(f, encoding='utf-8').read() for f in files]
 subprocess.run([sys.executable, 'site/build_sources.py'], check=True, stdout=subprocess.DEVNULL)
-sys.exit(0 if open('site/sources.json').read() == before else 'site/sources.json is stale: run python3 site/build_sources.py')"
+stale = [f for f, b in zip(files, before) if open(f, encoding='utf-8').read() != b]
+sys.exit('stale: ' + ', '.join(stale) + ': run python3 site/build_sources.py' if stale else 0)"
 
 step "archives of the kit stamp kit.py with their commit (./kit update needs it)"
 if git rev-parse --git-dir >/dev/null 2>&1; then
@@ -52,7 +54,7 @@ const m = { exports: {} };
 new Function("module", "exports", h.split("<script>")[1].split("</script>")[0])(m, m.exports);
 if (typeof m.exports.isMapQuestion !== "function") throw new Error("Kit not exported");'
 
-step "pull request gate"
+step "contribution gate"
 out=$(node tests/pr_gate_test.js 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1

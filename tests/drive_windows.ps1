@@ -60,6 +60,14 @@ function Invoke-Setup($dir, $log, $answers) {
   }
 }
 
+# SETUP's answer when it asks how much of the kit goes to a place, from ./kit space there: none when all of it fits
+# with room to spare, all of it anyway when that leaves less free than SETUP likes, else just the essentials.
+function Get-RoomAnswer($dir, $place) {
+  $room = (python "$dir\tools\kit.py" --root $dir space $place).Split("`t")
+  "Room at ${place}: $($room -join ' ')" | Out-Host
+  if ($room[0] -eq "tight") { "2" } elseif ($room[0] -ne "fits") { "1" }
+}
+
 function Stop-Kit($kit, $proc) {
   Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$kit\bin\", "OrdinalIgnoreCase") } | Stop-Process -Force
   if ($proc) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
@@ -151,18 +159,24 @@ $dl = "$HOME\Downloads\tinfoilkit-main"
 $kit = "$HOME\TinfoilKit"
 if (Test-Path $kit) { Remove-Item -Recurse -Force $kit }
 Get-Kit $dl
-$need = [int](python "$dl\tools\kit.py" --root $dl estimate)
-$free = [math]::Floor((Get-PSDrive ($HOME.Substring(0, 1))).Free / 1e9)
-"The kit needs about $need GB; this PC has $free GB free"
-# Answers: this PC, yes even if the disk is short of room (SETUP asks then), download, don't open it, close.
-$answers = @("2") + @(if ($free -lt $need + 50) { "y" }) + @("y", "n", "")
+# Answers: keep where it's for, this PC, how much if room is short (SETUP asks then), download, don't open it, close.
+$answers = @("", "2") + @(Get-RoomAnswer $dl $kit) + @("y", "n", "")
 Invoke-Setup $dl "setup-windows-pc.log" $answers
+foreach ($said in "Step 1 of 4: where do you live", "The essentials work", "Step 4 of 4: everything else") {
+  if (-not (Select-String -Quiet -SimpleMatch -Path "$logs\setup-windows-pc.log" -Pattern $said)) { Fail "SETUP didn't say `"$said`"" }
+}
 if (-not (Test-Path "$kit\models")) { Fail "the kit isn't set up in $kit" }
 if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
 foreach ($f in "START-HERE-Windows.bat", "SETUP-Windows.bat", "UNINSTALL-Windows.bat") {
   if (Get-Item -LiteralPath "$kit\$f" -Stream Zone.Identifier -ErrorAction SilentlyContinue) { Fail "$f is still marked as from the internet" }
 }
 Test-Kit $kit "this PC"
+Step "SETUP-Windows.bat again in ~\TinfoilKit: an update"
+# Answers: keep where it's for, download, don't open it, close.
+Invoke-Setup $kit "setup-windows-update.log" @("", "y", "n", "")
+foreach ($said in "TINFOIL KIT UPDATE", "To change that", "Step 3 of 3: start everything offline") {
+  if (-not (Select-String -Quiet -SimpleMatch -Path "$logs\setup-windows-update.log" -Pattern $said)) { Fail "the update didn't say `"$said`"" }
+}
 Step "./kit fit: Windows says how much memory this PC has"
 $fit = python "$kit\tools\kit.py" --root $kit fit
 $fit
@@ -189,9 +203,8 @@ $lines = @(python "$dl\tools\kit.py" --root $dl drives)
 $lines | ForEach-Object { "  $_" }
 $n = 1 + [array]::FindIndex([string[]]$lines, [Predicate[string]] { param($l) $l.StartsWith("${letter}:\") })
 if ($n -lt 1) { Fail "SETUP doesn't list the drive ${letter}:"; $n = 1 }
-$vfree = [int]($lines[$n - 1].Split("`t")[2])
-# Answers: an external drive, this one, yes if it's short of room, download, don't open it, close.
-$answers = @("1", "$n") + @(if ($vfree -lt $need) { "y" }) + @("y", "n", "")
+# Answers: keep where it's for, an external drive, this one, how much if room is short, download, don't open it, close.
+$answers = @("", "1", "$n") + @(Get-RoomAnswer $dl $kit) + @("y", "n", "")
 Invoke-Setup $dl "setup-windows-drive.log" $answers
 if (-not (Test-Path "$kit\models")) { Fail "the kit isn't set up on the drive, at $kit" }
 if (Test-Path $dl) { Fail "the download is still in $dl after the move" }

@@ -1,4 +1,5 @@
-// Runs the portal's map logic (the same code the browser runs) against mock Photon / GraphHopper / tool-calling AI.
+// Runs the portal's map logic (the same code the browser runs) against mock Photon / GraphHopper / tool-calling AI,
+// and how it reads a streamed answer.
 // usage: node map_logic_test.js portal.html   (mocks: photon :12322, old photon :12323, graphhopper :18989, llama :18081)
 const fs = require("fs");
 const html = fs.readFileSync(process.argv[2], "utf8");
@@ -20,6 +21,14 @@ const opts = { geoBase: "http://127.0.0.1:12322", routeBase: "http://127.0.0.1:1
   check("parseLatLon", JSON.stringify(Kit.parseLatLon("40.7428, -73.986")) === JSON.stringify({ lat: 40.7428, lon: -73.986, name: "40.7428, -73.986", address: "" }) &&
         Kit.parseLatLon("100 Main St") === null);
   check("haversine ~1 deg lat = 111 km", Math.abs(Kit.haversine({ lat: 40, lon: -74 }, { lat: 41, lon: -74 }) - 111195) < 200);
+  check("address search asks in the place's language, or in local names where Photon has none",
+        Kit.photonLang("de") === "de" && Kit.photonLang(undefined) === "en" && Kit.photonLang("nb") === "default");
+  const books = [{ id: "a", name: "mdwiki_en_all", language: "eng" }, { id: "b", name: "wikipedia_de_all_maxi", language: "deu" },
+    { id: "c", name: "gutenberg_en", language: "eng" }, { id: "d", name: "x", language: "fra" }];
+  check("library search: its Wikipedia's language first, then by number of books",
+        JSON.stringify(Kit.libraryLanguages(books)) === JSON.stringify(["deu", "eng", "fra"]) &&
+        JSON.stringify(Kit.libraryLanguages(books.filter(b => b.id !== "b"))) === JSON.stringify(["eng", "fra"]),
+        JSON.stringify(Kit.libraryLanguages(books)));
   check("categoryFor", Kit.categoryFor("hospital") === "hospital" && Kit.categoryFor("drug store") === "pharmacy" &&
         Kit.categoryFor("Gas Station") === "gas" && Kit.categoryFor("urgent care") === "urgent_care" && Kit.categoryFor("pizza") === null);
   const intents = {
@@ -89,6 +98,11 @@ const opts = { geoBase: "http://127.0.0.1:12322", routeBase: "http://127.0.0.1:1
   let aiErr = null;
   try { await Kit.mapAgent({ ...opts, aiBase: "http://127.0.0.1:18081/nope", model: "x" }, "nearest hospital"); } catch (e) { aiErr = e; }
   check("AI HTTP errors surface with a status", aiErr && aiErr.status === 404, aiErr && aiErr.message.slice(0, 60));
+
+  // an answer the network cut in the middle of a character (the mock cuts "½" between its two bytes)
+  let streamed = "";
+  await Kit.streamChat({ aiBase: "http://127.0.0.1:18081", model: "Mock-Tools" }, [{ role: "user", content: "Hi" }], c => { streamed += c; });
+  check("AI answer: a character cut between network reads arrives whole", streamed === "Library answer [1]. ½ cup — café", JSON.stringify(streamed));
 
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASSED");
   process.exit(failures ? 1 : 0);

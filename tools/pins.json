@@ -3,5 +3,76 @@
   "The exact build of each program this version of the kit installs, and its SHA-256. ./kit pins writes it,",
   "and every release carries it, signed with the rest. To take each program's newest build instead, set",
   "\"pin_programs\": false in kit.json's settings."
- ]
+ ],
+ "Kiwix-macOS-app": {
+  "version": "3.18.0",
+  "sha256": "58744c6301d7ad6cb24c288e04d46c32fa0f032ba66deed1d75f7d2279f946bd"
+ },
+ "basemaps-assets": {
+  "version": "028c18f713baecad011301ff7a69acc39bcc2ae7"
+ },
+ "graphhopper": {
+  "version": "11.1",
+  "sha256": "8462f758d9ea49edaded557cec5c687a0a24f004ec371cd4daaeb0534824ea33"
+ },
+ "java-linux-x64": {
+  "version": "jdk-21.0.13.1+2",
+  "sha256": "18f44fab9065217f3ba61d0eef8a7b5f3c3713aa7293001b0d4ac10ede3850f0"
+ },
+ "java-macos-arm64": {
+  "version": "jdk-21.0.13.1+2",
+  "sha256": "848feb1906c7de79de4f8391636042193fbd46eff86e26299506c4656f62c260"
+ },
+ "java-windows-x64": {
+  "version": "jdk-21.0.13.1+2",
+  "sha256": "e15ee1e54a5a3b38027a09cedfa87bc3348d7dd3ce50866dd3d9671d7fffc6c1"
+ },
+ "kiwix-tools-linux-x64": {
+  "version": "3.8.2",
+  "sha256": "b0ae98dd344aa0469a15ab42feff6d5aafb79541a82fb4e2647c74b073123815"
+ },
+ "kiwix-tools-macos-arm64": {
+  "version": "3.8.2",
+  "sha256": "5c64d43176627e558a117146b02ea36b7da2b0cd3a332cbff075cde05d9585f9"
+ },
+ "kiwix-tools-windows-x64": {
+  "version": "3.8.1",
+  "sha256": "fcd01ed2b93e9a68632c7863c83b9f66bf64406a66357be1df7b8b75596f3e45"
+ },
+ "llama.cpp-linux-x64": {
+  "version": "b12623",
+  "sha256": "7a13a8e04702a17f90570847f1bc5357b95c91f267ca6896f662bce88160c796"
+ },
+ "llama.cpp-macos-arm64": {
+  "version": "b12623",
+  "sha256": "879f6063c075fc4d27beb51ca176743a5a79a43b32ffa65c55ae78a46bdd3b1d"
+ },
+ "llama.cpp-windows-x64": {
+  "version": "b12623",
+  "sha256": "36ee2d2bbfed23c5b41e55ac258b42668fb0961dafdd3e382ce575d4772b2a02"
+ },
+ "maplibre-gl": {
+  "version": "5.24.1",
+  "sha256": "b84d7fdf7fba5922fd3fff9a92733936c7a03b99165afc6c84f41c311bdbfa9d"
+ },
+ "photon": {
+  "version": "1.0.1",
+  "sha256": "4ef937f7f33fb89fef403f825edae14299240a0115df756f8fad67b3dc266437"
+ },
+ "pmtiles-linux-x64": {
+  "version": "v1.31.2",
+  "sha256": "3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f"
+ },
+ "pmtiles-macos-arm64": {
+  "version": "v1.31.2",
+  "sha256": "40528f7f616fcbf91207cd48c8fc023d213f6d86c0cbf1f748732803d1880f3d"
+ },
+ "pmtiles-windows-x64": {
+  "version": "v1.31.2",
+  "sha256": "a658baa4d7e55020aef6ca17bd9ff9faa1582671266b36f58c52db0ac8e785a1"
+ },
+ "protomaps-basemaps": {
+  "version": "5.7.2",
+  "sha256": "2d5d41b29cdd2364f7092ad439bd9d170b4f38cbec8858cefbe84d0f98125ce6"
+ }
 }

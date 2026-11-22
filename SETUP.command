@@ -202,6 +202,62 @@ pick_drive() {
   done
 }
 
+# Where the person lives sets the maps (street detail, directions, address search, home) and Wikipedia's language.
+# ./kit region does the work; this asks. The first run asks before the kit moves (its size depends on the answer),
+# and hands the answer on in KIT_REGION and KIT_WIKIPEDIA to the copy of this script where the kit lands, in case a
+# kit was there already. Updates ask after ./kit update, so a kit from before this question gets it too.
+pick_region() {
+  local now place n i id name c l g ids names codes labels sizes wiki
+  now="$(./kit region 2>/dev/null)" || return 0
+  export KIT_REGION_ASKED=1
+  if [ "$1" = first ]; then
+    step "where do you live?"
+    echo "The maps show your area in street detail, with directions and address search, and Wikipedia comes in your language."
+    echo "Right now: $now"
+    printf '\nType your US state or your country (like Texas, Ontario or Germany), or press Return to keep that: '
+  else
+    say "$now"
+    printf 'To change that, type where you live (a US state or a country), or press Return to keep it: '
+  fi
+  while :; do
+    read -r place || return 0     # (nothing more to read: the next question stops it)
+    [ -z "$place" ] && return 0
+    ids=(); names=()
+    while IFS=$'\t' read -r id name g; do ids+=("$id"); names+=("$name ($g)"); done < <(./kit region --find "$place" 2>/dev/null)
+    n=${#ids[@]}
+    if [ "$n" -eq 0 ]; then
+      printf '\nNo place called "%s" here. Type a US state or a country, in English (or press Return to keep the maps as they are): ' "$place"
+      continue
+    fi
+    if [ "$n" -gt 20 ]; then
+      printf '\n"%s" matches %d places. Type your state, province or a nearby big town instead: ' "$place" "$n"
+      continue
+    fi
+    id="${ids[0]}"
+    if [ "$n" -gt 1 ]; then
+      say "Which one?"
+      for ((i = 0; i < n; i++)); do printf '  %d  %s\n' $((i + 1)) "${names[$i]}"; done
+      echo "  $((n + 1))  None of these"
+      choose "Type a number, then press Return:" $((n + 1))
+      if [ "$pick" = $((n + 1)) ]; then printf '\nType where you live: '; continue; fi
+      id="${ids[$((pick - 1))]}"
+    fi
+    break
+  done
+  codes=(); labels=(); sizes=()
+  while IFS=$'\t' read -r c l g; do codes+=("$c"); labels+=("$l"); sizes+=("$g"); done < <(./kit region --languages "$id" 2>/dev/null)
+  wiki="${codes[0]:-}"
+  if [ ${#codes[@]} -gt 1 ]; then
+    say "Which language should Wikipedia be in?"
+    for ((i = 0; i < ${#codes[@]}; i++)); do printf '  %d  %s (%s)\n' $((i + 1)) "${labels[$i]}" "$(gb "${sizes[$i]}")"; done
+    choose "Type a number, then press Return:" ${#codes[@]}
+    wiki="${codes[$((pick - 1))]}"
+  fi
+  echo
+  ./kit region "$id" ${wiki:+--wikipedia "$wiki"} || return 0
+  export KIT_REGION="$id" KIT_WIKIPEDIA="$wiki"
+}
+
 # Put the kit at DEST: ./kit place moves it there (a git checkout is copied) and says so. If it's somewhere new,
 # the copy there runs the rest of the setup.
 put_kit() {
@@ -306,15 +362,18 @@ if [ "${1:-}" != "--updated" ]; then
       echo "The first time takes a few hours. Later runs only download what changed."
     fi
     need_python
-    if [ -d .kit ]; then step "the kit is $(where_kit), in $KIT"; else place; fi
+    if [ -d .kit ]; then step "the kit is $(where_kit), in $KIT"; else KIT_STEPS=4; pick_region first; place; fi
   else
     [ -n "${KIT_ESSENTIALS:-}" ] && ./kit essentials "$KIT_ESSENTIALS" >/dev/null
+    # a kit that was here already gets the answer to "where do you live?" too
+    [ -n "${KIT_REGION:-}" ] && ./kit region "$KIT_REGION" ${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"} >/dev/null 2>&1
   fi
   checks
   echo
   ./kit update
   [ $? -eq 3 ] && exec bash "$KIT/SETUP.command" --updated
 fi
+[ -n "${KIT_REGION_ASKED:-}" ] || pick_region    # (after ./kit update, so a kit from before this question gets it)
 
 [ -n "${KIT_FIT_ASKED:-}" ] || ./kit fit --ask    # an update can bring models too big for this computer
 ONLY=all; grep -q '"essentials_only": *true' kit.json 2>/dev/null && ONLY=essentials

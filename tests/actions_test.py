@@ -3,7 +3,8 @@
 
 Write tokens only where WRITES allows them, actions pinned to full commit SHAs from GitHub (plus Scorecard),
 no outsider-triggered events that run with a write token, no ${{ }} pasted into shell or script code, GitHub's
-own runners only, and no git credentials left behind. Usage: python3 tests/actions_test.py
+own runners only, and no git credentials left behind. Also that sizes.yml's commit job lets a weekly refresh change
+only sizes and checked download names in tools/regions.json, and pins.yml's only program versions and checksums. Usage: python3 tests/actions_test.py
 """
 import re
 import sys
@@ -14,17 +15,19 @@ WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
 # The only jobs that get a write token, and what each may write. Anything else is read-only.
 WRITES = {
     ("pr-gate.yml", "gate"): {"issues", "pull-requests"},      # closes outside PRs without an accepted issue
+    ("pr-gate.yml", "forms"): {"issues"},                      # closes outside issues filed without a form
     ("pr-gate.yml", "labels"): {"issues"},                     # creates the gate's labels, run by hand
-    ("sizes.yml", "commit"): {"contents"},                     # commits builder sizes; runs no kit code
+    ("sizes.yml", "commit"): {"contents"},                     # commits builder sizes and places; runs no kit code
     ("pins.yml", "commit"): {"contents"},                      # commits program pins; runs no kit code
     ("scorecard.yml", "analysis"): {"security-events", "id-token"},   # publishes the Scorecard results
 }
 # Actions from GitHub itself and OpenSSF's Scorecard, at a full commit SHA: a tag can be moved to new code.
 ALLOWED = re.compile(r"^(actions/[\w.-]+|github/codeql-action/[\w.-]+|ossf/scorecard-action)@[0-9a-f]{40}$")
 # Events an outsider can fire that run this repo's workflows with a write token and secrets.
-PRIVILEGED = {"pull_request_target", "workflow_run", "issue_comment", "pull_request_review",
+PRIVILEGED = {"pull_request_target", "workflow_run", "issues", "issue_comment", "pull_request_review",
               "pull_request_review_comment", "discussion", "discussion_comment"}
-GATE = "pr-gate.yml"    # the one pull_request_target workflow: GitHub's API through github-script, nothing else
+GATE = "pr-gate.yml"    # the one workflow those may start: GitHub's API through github-script, nothing else
+GATE_EVENTS = {"pull_request_target", "issues"}
 
 
 def parse(text):
@@ -89,12 +92,12 @@ def problems(name, text):
     events = {p[1] for p, _, _, _ in nodes if len(p) > 1 and p[0] == "on"}
     events |= {e for p, v, _, _ in nodes if p == ("on",) for e in re.findall(r"[\w-]+", v)}
     for e in sorted(events & PRIVILEGED):
-        if not (e == "pull_request_target" and name == GATE):
+        if not (e in GATE_EVENTS and name == GATE):
             errs.append(f"triggers on {e}, which runs with a write token on outsiders' input")
-    if "pull_request_target" in events:
+    if events & GATE_EVENTS:
         for p, v, _, n in nodes:
             if p[-1] == "uses" and not v.startswith("actions/github-script@"):
-                errs.append(f"line {n}: {v} in a pull_request_target workflow; use the API through github-script")
+                errs.append(f"line {n}: {v} in the gate, which strangers trigger; use the API through github-script")
         if re.search(r"head\.sha|head\.ref|head_ref|refs/pull/", text):
             errs.append("a pull_request_target workflow names the pull request's code; it must never fetch or run it")
 
@@ -135,6 +138,7 @@ BAD = {
     "issue_comment": JOB.replace("on: push", "on:\n  issue_comment:") + "      - run: true\n",
     "workflow_run": JOB.replace("on: push", "on: [push, workflow_run]") + "      - run: true\n",
     "pull_request_target outside the gate": JOB.replace("on: push", "on:\n  pull_request_target:") + "      - run: true\n",
+    "issues outside the gate": JOB.replace("on: push", "on:\n  issues:\n    types: [opened]") + "      - run: true\n",
     "an expression in run": JOB + "      - run: |\n          echo hi\n          echo \"${{ github.event.issue.title }}\"\n",
     "an expression in a one-line run": JOB + "      - run: echo ${{ inputs.words }}\n",
     "an expression in script": JOB + "      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8\n"
@@ -147,7 +151,86 @@ GATE_BAD = {
                             f"    steps:\n      - uses: {PIN}\n        with:\n          persist-credentials: false\n",
     "fetching the pull request in the gate": "permissions: {}\non:\n  pull_request_target:\njobs:\n  gate:\n"
                                              "    runs-on: ubuntu-latest\n    steps:\n      - run: git fetch origin refs/pull/1/head\n",
+    "checkout in the gate's issue job": f"permissions: {{}}\non:\n  issues:\njobs:\n  forms:\n    runs-on: ubuntu-latest\n"
+                                        f"    steps:\n      - uses: {PIN}\n        with:\n          persist-credentials: false\n",
 }
+
+
+def regions_check():
+    """Runs sizes.yml's merge of a new tools/regions.json, one change at a time: sizes and checked downloads come
+    through, ids, names and anything else don't."""
+    import copy, json, shutil, subprocess, tempfile, textwrap
+    root = WORKFLOWS.parent.parent
+    code = textwrap.dedent((WORKFLOWS / "sizes.yml").read_text().split("tools/regions.json <<'PY'\n", 1)[1]
+                           .split("\n          PY\n", 1)[0])
+    committed = root / "tools" / "regions.json"
+    base = json.loads(committed.read_text(encoding="utf-8"))
+    def first(d):
+        return d["regions"][0]
+    def same(*keys):
+        return lambda m: all(first(m)[k] == first(base)[k] for k in keys)
+    cases = [("nothing new", lambda d: None, lambda m: m == base),
+             ("new sizes", lambda d: first(d)["mb"].update(tiles=1), lambda m: first(m)["mb"]["tiles"] == 1),
+             ("a renamed place, with new sizes", lambda d: first(d).update(name="x", mb={"tiles": 1}),
+              lambda m: first(m)["name"] == first(base)["name"] and first(m)["mb"] == {"tiles": 1}),
+             ("a command in an id", lambda d: first(d).update(id="us/x; sh"), lambda m: m == base),
+             ("a new nickname and home", lambda d: first(d).update(also=["x"], home={"label": "x"}), same("also", "home")),
+             ("a download elsewhere", lambda d: first(d).update(pbf="https://x/a-latest.osm.pbf"), same("pbf")),
+             ("a path up", lambda d: first(d).update(pbf="../a-latest.osm.pbf", photon="a//photon-db-x-1.0-latest.tar.bz2"),
+              same("pbf", "photon")),
+             ("a file that isn't Wikipedia", lambda d: d["languages"]["en"].update(zim="x_en_all_maxi"), lambda m: m == base),
+             ("a size as text", lambda d: first(d)["mb"].update(tiles="1"), same("mb")),
+             ("a newer address database", lambda d: first(d).update(photon="north-america/usa/photon-db-usa-1.1-latest.tar.bz2"),
+              lambda m: first(m)["photon"] == "north-america/usa/photon-db-usa-1.1-latest.tar.bz2"),
+             ("addresses for a whole continent", lambda d: first(d).update(photon="europe/photon-db-europe-1.0-latest.tar.bz2",
+                                                                           addresses_wide=True),
+              lambda m: same("photon")(m) and "addresses_wide" not in first(m)),
+             ("an unknown language", lambda d: first(d)["langs"].append("zz"), same("langs")),
+             ("a new place", lambda d: d["regions"].append(dict(first(d), id="xx")), lambda m: m == base)]
+    errs = []
+    with tempfile.TemporaryDirectory() as t:
+        new, out = Path(t) / "new.json", Path(t) / "regions.json"
+        for what, change, holds in cases:
+            d = copy.deepcopy(base)
+            change(d)
+            new.write_text(json.dumps(d), encoding="utf-8")
+            shutil.copy(committed, out)
+            ran = subprocess.run([sys.executable, "-I", "-c", code, str(new), str(out)], capture_output=True).returncode == 0
+            if not (ran and holds(json.loads(out.read_text(encoding="utf-8")))):
+                errs.append(f"sizes.yml's regions.json merge gets {what} wrong")
+        if out.read_bytes() != committed.read_bytes():
+            errs.append("sizes.yml writes regions.json in another layout than build_regions.py")
+    return len(cases) + 1, errs
+
+
+def pins_check():
+    """Runs pins.yml's check on tools/pins.json with one change each: new builds pass, nothing else does."""
+    import copy, json, subprocess, tempfile, textwrap
+    root = WORKFLOWS.parent.parent
+    code = textwrap.dedent((WORKFLOWS / "pins.yml").read_text().split("tools/pins.json kit.json <<'PY'\n", 1)[1]
+                           .split("\n          PY\n", 1)[0])
+    committed = root / "tools" / "pins.json"
+    base = {"_readme": json.loads(committed.read_text(encoding="utf-8"))["_readme"],
+            "llama.cpp-macos-arm64": {"version": "b1", "sha256": "a" * 64}, "basemaps-assets": {"version": "f" * 40}}
+    cases = [("a new build", lambda d: d["llama.cpp-macos-arm64"].update(version="b2", sha256="b" * 64), True),
+             ("a changed note", lambda d: d["_readme"].append("run this"), False),
+             ("a program the kit doesn't download", lambda d: d.update(other={"version": "1", "sha256": "a" * 64}), False),
+             ("a command in a version", lambda d: d["llama.cpp-macos-arm64"].update(version="b2; sh"), False),
+             ("a checksum that isn't one", lambda d: d["llama.cpp-macos-arm64"].update(sha256="x" * 64), False),
+             ("another field", lambda d: d["llama.cpp-macos-arm64"].update(url="https://x/y"), False),
+             ("no pins at all", lambda d: [d.pop(k) for k in ("llama.cpp-macos-arm64", "basemaps-assets")], False)]
+    errs = []
+    with tempfile.TemporaryDirectory() as t:
+        new = Path(t) / "pins.json"
+        for what, change, want in cases:
+            d = copy.deepcopy(base)
+            change(d)
+            new.write_text(json.dumps(d), encoding="utf-8")
+            got = subprocess.run([sys.executable, "-I", "-c", code, str(new), str(committed), str(root / "kit.json")],
+                                 capture_output=True).returncode == 0
+            if got != want:
+                errs.append(f"pins.yml {'refuses' if want else 'accepts'} {what} in pins.json")
+    return len(cases), errs
 
 
 def main():
@@ -163,6 +246,10 @@ def main():
         else:
             print(f"FAIL: the checks miss {what}")
             failed += 1
+    for n, errs in (regions_check(), pins_check()):
+        for e in errs:
+            print(f"FAIL: {e}")
+        passed, failed = passed + n - len(errs), failed + len(errs)
     print(f"{failed} FAILED, {passed} passed" if failed else f"ALL {passed} PASSED")
     return 1 if failed else 0
 

@@ -4,17 +4,17 @@ Thanks for helping. One person maintains the kit, so the process keeps their tim
 
 ## How a change gets in
 
-1. **Open an issue first,** with the bug or idea form. Search the open issues before you do.
+1. **Open an issue first,** with one of the forms. Search the open and closed issues before you do.
 2. **Wait for the `accepted` label.** It means the maintainer wants the change and will review a pull request for it. Talk it through on the issue.
 3. **Open one pull request for it** that says `Closes #123` in its description.
 4. **Show it works.** Run the checks [AGENTS.md](../AGENTS.md#verify) lists for what you changed and paste the output. Changes to the page or the website come with screenshots.
 
-A bot closes pull requests that don't link an accepted issue. People who've had a pull request merged here skip that step. Anyone without write access can have two pull requests open at a time. A pull request that changes the workflows, CODEOWNERS, Dependabot's settings, `.gitattributes` or the release key fails a check, and only the maintainer can merge it.
+A bot closes issues filed without a form (with `gh` or the API, say) and pull requests that don't link an accepted issue. People who've had a pull request merged here skip both. Anyone without write access can have two pull requests open at a time. A pull request that changes the workflows, CODEOWNERS, Dependabot's settings, `.gitattributes` or the release key fails a check, and only the maintainer can merge it.
 
 ## Good places to start
 
 - **Library sources.** Suggest one with the idea form, with its exact name from `./kit search WORDS`. AGENTS.md has [the steps](../AGENTS.md#adding-or-replacing-a-library-source).
-- **Reports from a real Mac.** The tests run against mocks, so a bug report from a real drive, with the output, is the most useful thing you can send.
+- **Reports from real computers.** The tests run against mocks, so a bug report from a real Mac or PC, with the output, is the most useful thing you can send.
 - Issues labeled `good first issue`.
 
 ## AI tools
