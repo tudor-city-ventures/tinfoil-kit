@@ -62,7 +62,7 @@ Visual changes to the page or the site come with screenshots.
 - The kit points at publishers' downloads and never hosts, mirrors or bundles their files (not even in a release), so their licenses stay between them and the user.
 - A new model, source or program goes in `THIRD-PARTY.md` with its license and any use policy; a new download host also goes in the site FAQ's "Does anything leave my laptop?" list.
 - When setup or a command changes, update `site/public/llms.txt` with the GUIDE, the README and the skills in `.claude/skills`.
-- README's "How it works" (diagram, servers table, folder layout) is the architecture overview: change it with any server, port, setup step or top-level folder.
+- README's "How it works" (the diagram, `docs/how-it-works.svg`, the servers table and the folder layout) is the architecture overview: change it with any server, port, setup step or top-level folder.
 - A copy change that alters a fact in the page's JSON-LD (`jsonLd` in `site/app/page.jsx`: what the kit needs or does) updates it too. New FAQ entries copy the others' Question markup, and "What is Tinfoil Kit?" stays first: answer engines quote it.
 
 ## Workflow
