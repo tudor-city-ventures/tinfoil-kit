@@ -8,7 +8,7 @@ For the maintainer. A release reaches every kit at its next SETUP (`./kit update
 | --- | --- |
 | `tinfoilkit-vX.Y.Z.tar.gz` and `.sig` | `./kit update`: the app folder's files, signed with the release key. A kit refuses it unless a key in its own `tools/release-signers` signed it |
 | `TinfoilKit.tar.gz`, `TinfoilKit-Windows.zip` | What the setup command an AI gives people downloads (`site/public/llms.txt`): `TinfoilKit/app/`, the tar.gz for a Mac and Linux, the zip for Windows |
-| `TinfoilKit-Mac.zip` | The website's Mac download: the Tinfoil Kit app, signed with the Developer ID and notarized. Only once the Mac that makes releases can sign it (below); until then releases leave it out, and the website's downloads say "coming soon" |
+| `TinfoilKit-Mac.zip` | The website's Mac download: the Tinfoil Kit app, signed with the Developer ID and notarized. Only once the Mac that makes releases can sign it (below); until then releases leave it out, and the website offers no download |
 | `SHA256SUMS` and `.sig` | The SHA-256 of every file above and of each computer's program as built, signed with the release key |
 
 Everything is built from the tag and can be rebuilt byte for byte: `tools/tinfoilkit/build.sh verify SHA256SUMS` checks the programs, and `build.sh archive tar tinfoilkit-TAG TAG | shasum -a 256` the update archive (README, "Security", has the steps for anyone).
@@ -56,7 +56,7 @@ On the Mac that makes releases. The certificate and notarytool's password stay i
 5. Run `.github/release.sh mac`. It asks for the Apple account's email, then that password (notarytool keeps it in the keychain as the profile `tinfoilkit`), builds the app, has Apple notarize it and leaves `TinfoilKit-Mac.zip` on the Desktop, marked as downloaded. Open it to see what people will see: macOS should only ask whether to open an app from the internet.
 6. Back up the certificate with its key: Keychain Access > My Certificates, right-click "Developer ID Application: …" > Export, as a `.p12` with a password, kept with the release key's backup. A lost one means making a new one (Apple allows a few); a leaked one gets revoked at developer.apple.com.
 
-After that every release builds and notarizes the app by itself. Then the website's downloads can come back: they say "coming soon" in `site/components/download.jsx`, and llms.txt, the README, the GUIDE and the skills describe setup with the command alone.
+After that every release builds and notarizes the app by itself. Then the website's downloads can come back: `git show 977ad18:site/components/download.jsx` has them, with each computer's next steps (they were taken off the site after that), and llms.txt, the README, the GUIDE and the skills describe setup with the command alone.
 
 ## Things that expire
 

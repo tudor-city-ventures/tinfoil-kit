@@ -104,7 +104,7 @@ A nightly test sets the kit up on a Mac and on Windows, from a download onto the
 
 ## Set up
 
-Downloads you double-click are coming soon. For now, your AI sets it up: copy the prompt on [tinfoilkit.com](https://tinfoilkit.com) into ChatGPT, Claude or any AI chat. It asks what you want in the kit, then gives you one command to paste into Terminal (PowerShell on Windows). Or write the command yourself:
+Your AI sets it up: copy the prompt on [tinfoilkit.com](https://tinfoilkit.com) into ChatGPT, Claude or any AI chat. It asks what you want in the kit, then gives you one command to paste into Terminal (PowerShell on Windows). Or write the command yourself:
 
 ```sh
 # Mac or Linux, in Terminal

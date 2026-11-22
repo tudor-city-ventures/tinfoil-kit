@@ -149,7 +149,7 @@ new in the kit's own list (`app/kit.json`).
 1. On **tinfoilkit.com**, click **Set up with your AI**, copy the prompt into ChatGPT, Claude or any AI chat, and answer
    its questions. It gives you one command to paste into Terminal on a Mac (press Cmd-Space, type Terminal) or
    PowerShell on Windows (open Start, type PowerShell). The command downloads the kit and starts SETUP, which asks
-   whatever the command didn't answer (with `--yes`, nothing). Downloads you double-click are coming soon.
+   whatever the command didn't answer (with `--yes`, nothing).
 2. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works too).
    That sets the maps' area, directions, address search and home, and offers Wikipedia in your language. Then it asks
    for places nearby to put on the map too, like the state next door: type one at a time, and press Return when that's
