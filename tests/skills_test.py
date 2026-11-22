@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Keeps what AI agents read true to the code: the skills in .claude/skills, llms.txt, the GUIDE and the README.
+"""Keeps what AI agents read true to the code: the skills in .claude/skills, llms.txt, the GUIDE, the README,
+AGENTS.md, CONTRIBUTING and the docs.
 
 Every ./kit (or .\\kit.cmd) command they name has to exist, with options that command takes, and every option given to
 SETUP, the launchers and UNINSTALL has to be one that script takes. llms.txt's table of SETUP's options lists every
@@ -17,7 +18,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md"))
 LLMS = ROOT / "site" / "public" / "llms.txt"
-DOCS = SKILLS + [LLMS, ROOT / "GUIDE.md", ROOT / "README.md"]
+DOCS = SKILLS + [LLMS, ROOT / "GUIDE.md", ROOT / "README.md", ROOT / "AGENTS.md", ROOT / ".github" / "CONTRIBUTING.md"]
+DOCS += sorted((ROOT / "docs").glob("*.md"))
 # Commands no skill needs: SETUP runs them, or the maintainer does before a release.
 INTERNAL = {"layout", "pins", "place"}
 
@@ -193,7 +195,7 @@ for s in SKILLS:
         str(sorted(meta)),
     )
 check(
-    "there's a skill for each thing Travis asked for",
+    "there's a skill to install, update, choose what goes in, check, share and remove a kit",
     {"tinfoil-install", "tinfoil-update", "tinfoil-data", "tinfoil-status", "tinfoil-home-server", "tinfoil-uninstall"}
     <= set(names),
     str(names),
@@ -204,11 +206,7 @@ check(
     all(n in agents and n in llms for n in names),
     ", ".join(n for n in names if n not in agents or n not in llms),
 )
-mentioned = {
-    m
-    for d in DOCS + [ROOT / "AGENTS.md"]
-    for m in re.findall(r"\b(tinfoil-[a-z-]+) skill", d.read_text(encoding="utf-8"))
-}
+mentioned = {m for d in DOCS for m in re.findall(r"\b(tinfoil-[a-z-]+) skill", d.read_text(encoding="utf-8"))}
 check("every skill they point to exists", mentioned <= set(names), str(mentioned - set(names)))
 
 print(f"{failed} FAILED, {passed} passed" if failed else f"ALL {passed} PASSED")

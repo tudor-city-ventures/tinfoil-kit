@@ -1,73 +1,100 @@
 # Tinfoil Kit
 
-An offline "internet outage" kit for modern laptops: Apple Silicon Macs, and Windows and Linux PCs (x64). One folder, on the computer's own disk or an external SSD, holds local AI models (llama.cpp), an offline library (Kiwix ZIM files) and offline maps (pmtiles, Photon, GraphHopper). It sets up and runs on all three, and a kit on an exFAT drive starts on any of them. `./kit sync` brings everything up to date whenever the person runs it, on no schedule. `SETUP.command` (`SETUP-Windows.bat` on Windows) is the double-click version of update, sync and test. `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat`) serves it all on localhost and opens a browser page with Ask, AI chat, Library, Map and Notes tabs.
+An offline kit for when the internet goes down, for Apple Silicon Macs and Windows and Linux PCs (x64): local AI (llama.cpp), an offline library (Kiwix) and offline maps (pmtiles, Photon, GraphHopper) in one folder, on the computer's own disk or an external SSD. A kit on an exFAT drive starts on all three.
 
-A kit is three folders: `TinfoilKit/app/` is this repo's code as released (only `./kit update` writes it, and it can be deleted any time for a new version's), `downloads/` holds everything sync gets, and `data/` the person's own files (kit.json, logs, notes.txt and places.json, and new features' files), with the kit's records in `data/.kit/`. A git checkout is its own app folder, with `downloads/` and `data/` inside it (git-ignored), so cloning it onto a drive or into `~/TinfoilKit` just works. The marketing site lives in `site/`. How it works inside, and why: [docs/DESIGN.md](docs/DESIGN.md). Releases: [docs/RELEASING.md](docs/RELEASING.md).
+- `SETUP.command` (`SETUP-Windows.bat` on Windows) sets a kit up and brings it up to date: `./kit update`, `./kit sync`, `./kit test`, whenever the person runs it, on no schedule.
+- `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat`) runs `./kit open`, which serves it all on 127.0.0.1 and opens the kit page: Ask, AI chat, Library, Map and Notes.
+- A kit is three folders. `TinfoilKit/app/` is this repo's code as released: only `./kit update` writes it, and it can be deleted any time for a new version's. `downloads/` holds everything sync gets, and `data/` the person's own files (kit.json, logs, notes and pins) with the kit's records in `data/.kit/`. A git checkout is its own app folder, with `downloads/` and `data/` inside it (git-ignored).
+
+How it all works, and why: [docs/DESIGN.md](docs/DESIGN.md). Releases: [docs/RELEASING.md](docs/RELEASING.md). The maintainer is @travisbloom.
 
 ## Map
 
 | Path | What it is |
 | --- | --- |
-| `kit.json` | Single source of truth: settings, runtimes, models, maps, library, extras. This is the standard list; a kit's own is `data/kit.json`, a copy that every command merges a new version's changes into (`ensureConfig`) |
-| `kit`, `kit.cmd` | Wrappers that run the kit's own program for this computer: `tools/tinfoilkit-<computer> --root <kit folder>`. In a git checkout with Go installed, `./kit` builds it first when it's missing or older than its source; without it, both say where to get the kit. `kit.cmd` is the same on Windows (`.\kit.cmd sync`) |
-| `tools/pins.json` | The exact build and SHA-256 of every program this version installs. `./kit pins` writes it; the `pin program builds` workflow refreshes it weekly |
-| `tools/regions.json` | The places "Where do you live?" offers (US states, countries, parts of big countries), each with its map area, road data, address search, home and Wikipedia languages. Made by `site/build_regions.py` from Geofabrik, Photon, Kiwix and GeoNames; the weekly `refresh builder sizes` Action rebuilds it. `./kit region` points kit.json at one |
-| `SETUP.command`, `UNINSTALL.command` | Double-click setup and update, on the kit's own program: it needs only curl. The first run asks where you live (`region`), says which AI fits (`fit`), asks for a drive or this computer with what fits where (`drives`, `space`, `essentials`) and moves the kit there (`place`), then every run does `update`, `sync`, `test`. The first time, that's just a small kit to try (`starter`), which it opens; the next run gets the rest, after the kit builder's questions (`pick --ask`) unless what goes in was chosen already. Every answer also comes as an option, and `--yes` asks nothing, so an AI agent can ask the questions and hand over one command (`--help` lists them; what goes in is `./kit pick`). Removal deletes the kit folder after a typed `delete` |
-| `SETUP-Windows.bat`, `Open Tinfoil Kit for Windows.bat`, `UNINSTALL-Windows.bat` | The same for Windows, in cmd, on the kit's own program (`tools\tinfoilkit-windows-x64.exe`). Without it (GitHub's Download ZIP), SETUP says where to get the kit. Windows won't move the folder of a program that's running, so SETUP moves an older kit's code into `app\` from a copy of the program in TEMP (`KIT_CODE` names the code's folder) |
-| `Open Tinfoil Kit.command` | The offline launcher: `./kit open`, which starts every server, picks the AI that fits, and opens the kit page |
-| `tools/tinfoilkit/` | The kit's own program, in Go: every `./kit` command (`tinfoilkit --root KIT sync`; every command first moves a kit from before the three folders into them, by renaming: `ensureLayout`), `open` (the launchers), `gate`/`banner` (sharing on the home network), `data` (notes and pins) and `list` (SETUP-Windows.bat's numbered choices). `build.sh` builds it for each computer, the same bytes anywhere; `build.sh check` runs gofmt, vet and its tests. The tests in `tests/` run on it, so the quick gate builds it first |
-| `mac/` | The Mac app, the website's Mac download: `TinfoilKit.m` (its windows, Cocoa, one file) and `app.sh` (its file work) around a copy of the kit. It moves itself to Applications, opens SETUP in Terminal the first time and the kit after that. `build.sh` builds it; `.github/release.sh` signs and notarizes it on Travis's Mac (`release.sh mac` sets that up once) |
-| `tools/tinfoilkit/gate.go` | Sharing on the home network (off by default): the gate on port 8000 that asks for the access code and passes requests to the servers, and its QR code (`qr.go`). Starting the kit with the computer (systemd user service, LaunchAgent, Windows' Startup folder) is `./kit autostart`. `SETUP.command --home-server` (`SETUP-Windows.bat --home-server`) turns both on |
-| `tools/tinfoilkit/data.go` | Keeps the page's notes (`data/notes.txt`) and the map's home and pins (`data/places.json`), so they outlast a new version and reach every browser on the kit: a small server on 127.0.0.1 (port 8095) that answers only the kit page. `tests/data_test.py` checks it. When it doesn't answer, the page keeps them in the browser and moves them into the kit later |
-| `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests. It looks like the website (paper, ink, signal orange), in the computer's own fonts |
-| `package.json`, `eslint.config.mjs` | Developer tools, never on a drive: `npm ci --ignore-scripts` installs Prettier and ESLint for the kit page (`npm run format`, `npm run lint`, `npm run fix`) and axe-core for the tests' accessibility checks. Releases leave them out (`.gitattributes`), a kit copied from a checkout leaves `node_modules` behind (`devBuilds` in the program), and nothing the kit runs calls npm |
-| `GUIDE.md` | Printable guide that lives in the kit folder |
-| `.claude/skills/` | Skills for AI agents that set up or use a kit, one `SKILL.md` each with the exact commands, what they print and what to do when they fail: `tinfoil-install` (find the drive and check its format, ask what goes in, give the command), `tinfoil-update`, `tinfoil-data` (what goes in the kit), `tinfoil-status` (check it, fix it, open it), `tinfoil-home-server` and `tinfoil-uninstall`. They ship in releases, so an agent in a kit's app folder finds them. `tests/skills_test.py` fails if they, llms.txt, the GUIDE or the README name a command or option that doesn't exist, or if a command people use has no skill |
-| `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
-| `.github/` | The workflows, plus what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and PR templates, CODEOWNERS. `pr-gate.yml` closes outside pull requests that don't link an accepted issue and outside issues filed without a form, and fails a check on pull requests that change workflows or release signing. Dependabot keeps the pinned actions current. `release.sh` signs and publishes a release, with the notarized Mac app, from Travis's computer |
-| `site/` | The website: a static Next.js app (App Router, JavaScript, `output: 'export'`). `app/page.jsx` holds the page's copy, its metadata and the JSON-LD; `components/` the interactive parts (`hero.jsx`, the animated figure at the top, on a canvas; `builder.jsx`, the kit builder; `download.jsx`, the hero's two buttons, Set up with your AI and Download, with their dialogs; `read-as.jsx`; `demo.jsx`, the Try it demo of the kit page, in its styles, with answers written ahead of time and a sample town for the map, all in `demo-data.js`, so it runs no AI and needs no server: when the kit page changes, the demo follows); `app/globals.css` the styles. shadcn/ui is only for form controls (`components/ui/`: the builder's Select and Checkbox); everything else is plain CSS. A "Read as" bar switches between the human page (the default) and the AI agent page: elements marked `data-for="human"` or `data-for="agent"` show only in that one. The agent page shows `public/llms.txt`, the setup instructions for AI agents, as markdown, with no images or icons. `sources.json` (the kit builder's data) is generated from `kit.json` by `site/build_sources.py`; a weekly Action refreshes its sizes with `./kit plan --json`; it, `kit.json` and `regions.json` stay in `site/` and are served by `app/[file]/route.js`. The favicons and link-preview cards are rendered from the mark, `public/icon.svg`, by `site/build_images.py`. For search and AI answer engines, `app/robots.txt` lets every crawler in and names `app/sitemap.xml`, a JSON-LD block in the page describes the kit, and each FAQ entry carries schema.org Question markup. Deployed by Vercel (project `tinfoilkit`, tudor-city-ventures team, root `site/`, framework Next.js). `cd site && npm ci --ignore-scripts && npm run dev` runs it locally, and Next.js's guides for the installed version are then in `site/node_modules/next/dist/docs/`. Before working on the site, also run `npm run skills` there: it installs agent skills for this stack (Vercel's React and Next.js best practices and web design review, shadcn/ui, AI answer-engine optimization, schema.org markup) from their publishers' repos, at the commits pinned in `site/skills.py`, into `site/.claude/skills/`, which git ignores. Where a skill and this file disagree, this file wins. Move a pin only after reading what changed (`python3 site/skills.py --latest` prints the links) |
+| `kit.json` | The standard list: settings, programs, models, maps, books and extras. A kit's own is `data/kit.json`, a copy that every command merges a new version's changes into |
+| `kit`, `kit.cmd` | Run the kit's program for this computer (`tools/tinfoilkit-<computer> --root <kit folder>`). On Windows: `.\kit.cmd sync`. In a checkout with Go installed, `./kit` builds it first when it's missing or older than its source |
+| `tools/tinfoilkit/` | The kit's program, in Go: every `./kit` command, the launcher (`open.go`), sharing on the home network (`gate.go`, `qr.go`) and the notes and pins server (`data.go`). `build.sh` builds it for each computer, the same bytes anywhere; `build.sh check` runs gofmt, vet and its tests |
+| `tools/portal.html` | The kit page: one file, no build step, styled like the website (paper, ink, signal orange) in the computer's own fonts. Its logic is a `Kit` object, exported for the node tests |
+| `tools/pins.json` | The exact build and SHA-256 of every program this version installs (`./kit pins`; the `pin program builds` workflow refreshes it weekly) |
+| `tools/regions.json` | The places "Where do you live?" offers, each with its map area, road data, address search, home and languages. `site/build_regions.py` makes it; the weekly `refresh builder sizes` workflow rebuilds it |
+| `tools/release-signers` | The keys a release must be signed with to reach a kit |
+| `SETUP.command`, `UNINSTALL.command`, `Open Tinfoil Kit.command` | Setup and updates, removal, and the launcher, for a Mac or Linux: thin scripts around `./kit`. Every question SETUP asks is also an option (`--help`), and `--yes` asks nothing, so an AI agent can hand over one command |
+| `SETUP-Windows.bat`, `UNINSTALL-Windows.bat`, `Open Tinfoil Kit for Windows.bat` | The same for Windows, in cmd |
+| `mac/` | The Mac app, the website's Mac download: a door to SETUP and the launcher (`TinfoilKit.m`, one Cocoa file, and `app.sh`). `build.sh` builds it; `.github/release.sh` signs and notarizes it |
+| `.claude/skills/` | Skills for AI agents that set up or use a kit, with the exact commands, what they print and what to do when they fail: `tinfoil-install`, `tinfoil-update`, `tinfoil-data` (what goes in the kit), `tinfoil-status` (check it, fix it, open it), `tinfoil-home-server` and `tinfoil-uninstall`. They ship in releases, so an agent in a kit's app folder finds them |
+| `GUIDE.md` | The printable guide that lives in a kit |
+| `site/` | The website, tinfoilkit.com: [The website](#the-website) |
+| `tests/` | Mocks of every download source and server, and the tests that run against them (DESIGN.md, "Tests") |
+| `.github/` | The workflows, `release.sh`, and what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and pull request templates, CODEOWNERS. `pr-gate.yml` enforces the contribution policy; Dependabot keeps the pinned actions current |
+| `docs/` | DESIGN.md, RELEASING.md and the README's pictures |
+| `package.json`, `eslint.config.mjs`, `ruff.toml`, `.editorconfig` | Developer tools and their settings: Prettier, ESLint and axe-core (`npm ci --ignore-scripts`), and ruff. Releases leave them out (`.gitattributes`) |
+| `THIRD-PARTY.md` | Every model, source and program the kit downloads, with its license and use policy |
 
 ## Verify
 
-Use the cheapest check that proves the change, and paste its output in the commit or reply.
+Use the cheapest check that proves the change, and paste its output in the commit or reply. Visual changes to the page or the site come with screenshots.
 
-| Tier | Command | When |
+| Check | Command | When |
 | --- | --- | --- |
-| Targeted | `node tests/map_logic_test.js tools/portal.html` (start the mocks as `tests/check.sh` does) | While iterating |
-| Format and lint | `npm run lint`, after `npm ci --ignore-scripts` once (`npm run fix` repairs what it can); for Python, `ruff check . && ruff format --check .` with the ruff `ruff.toml` names (`ruff format . && ruff check --fix .` repairs) | Changes to `tools/portal.html`, `site/` or the tests. The quick gate runs them when the tools are installed; CI always does |
+| Targeted | One test, like `node tests/map_logic_test.js tools/portal.html` (start its mocks as `tests/check.sh` does) | While iterating |
+| Format and lint | `npm run lint` (`npm run fix` repairs), `ruff check . && ruff format --check .` (`ruff format . && ruff check --fix .` repairs), `tools/tinfoilkit/build.sh check` | After editing the page, the site, the tests or the program. The quick gate runs them when the tools are installed; CI always does |
 | Quick gate | `tests/check.sh` | Before every push. CI runs it on every push |
 | End to end | `tests/build_fixtures.sh` once, then `tests/run_all.sh` (Linux x86_64; needs GitHub and download.kiwix.org, which cloud sessions can't reach) | Changes to `tools/` or `kit.json`. CI runs it on those pushes |
-| Drive | The `drive test` workflow (`drive.yml`: Actions > drive test > Run workflow, or `run_workflow` at `main`). It sets the kit up on an exFAT disk on a Mac, with a small real map (Andorra), replaces its app folder with a new download's, and opens it with the Mac app, then starts it on Windows and Linux, and sets it up on Windows from a download (`only: windows-setup` runs just that, with no Mac minutes). Each machine's screen is filmed, and the run's page links the videos | Once the bulk of a change to `tools/`, `kit.json`, `mac/` or a launcher is done, and before calling it finished. Not on every push: Mac minutes cost money while the repo is private. It also runs nightly, only when a file it covers changed since its last green run (site edits never start it), and every Monday regardless, for new llama.cpp builds |
-| Website | `python3 tests/site_test.py` (builds `site/` with Node, then Playwright; with `KIT_AXE=node_modules/axe-core/axe.min.js`, which the repo root's `npm ci --ignore-scripts` installs, it checks accessibility too) | Changes to `site/`. CI runs it on every push |
-| Real Mac | `./kit sync && ./kit test` on a real drive | Before a release. Travis runs it |
-
-Visual changes to the page or the site come with screenshots.
+| Drive | The `drive test` workflow (`drive.yml`), run by hand at `main`: Actions > drive test > Run workflow (`only: windows-setup` skips the Mac). It sets a kit up on an exFAT disk on a Mac and on Windows, starts it on all three, and films each screen | Once the bulk of a change to `tools/`, `kit.json`, `mac/` or a launcher is done, before calling it finished. Not on every push: Mac minutes cost money while the repo is private. It also runs nightly when a file it covers changed, and every Monday |
+| Website | `python3 tests/site_test.py` (with `KIT_AXE=node_modules/axe-core/axe.min.js` it checks accessibility too) | Changes to `site/`. CI runs it on every push |
+| Real Mac | `./kit sync && ./kit test` on a real drive | Before a release, by the maintainer |
 
 ## Rules
 
-- Keep code, docs and copy slim and written for humans. No filler.
-- `tools/tinfoilkit/`: Go standard library only, built with the Go version `build.sh` pins, all HTTP through curl. Never commit a built program: releases carry them, and anyone can rebuild one and compare. The kit needs nothing else installed: no Python, no Node.
-- Bash must run on macOS's bash 3.2: no `mapfile`, no `set -u` with empty arrays.
-- No symlinks anywhere: drives are exFAT.
-- A kit's `app/` holds only the released code, and can be deleted any time: new features keep the person's files in `data/` and their downloads in `downloads/`, never in `app/`. Never move or delete a folder that holds anything but the kit (`alone` in the program; UNINSTALL checks the same).
-- The kit page, the website and the JavaScript tests stay Prettier-formatted and ESLint-clean (`npm run fix` after editing them), the Python stays ruff-clean, and Go gofmt-clean (`tools/tinfoilkit/build.sh check`). Developer tools never reach a drive, and the kit never needs Node or Python.
+Writing:
+
+- Keep code, docs and copy slim and written for humans. No filler. Comments explain why, not history.
+- Keep the number of files small.
+- Always "Tinfoil Kit" in full. Headings and buttons in sentence case.
+- Never write "2 TB" or an update interval anywhere: the drive's size isn't the point, and people update whenever they like.
+
+The kit:
+
+- It needs nothing installed but curl: no Python, no Node. `tools/tinfoilkit/` uses Go's standard library only, at the Go version `build.sh` pins, with all HTTP through curl.
+- Never commit a built program: releases carry them, and anyone can rebuild one and compare.
+- Bash runs on macOS's bash 3.2: no `mapfile`, no `set -u` with empty arrays.
 - `.bat` and `.cmd` files keep CRLF line endings and plain ASCII.
-- Every remote endpoint stays overridable by a `KIT_*` env var (see `tests/env.sh`), so tests can point at mocks.
-- Every server listens on 127.0.0.1 only. The one way in from the network is the program's gate, behind the access code.
-- Workflows: actions pinned to a full commit SHA with the version as a comment, read-only tokens except the jobs `WRITES` lists in `tests/actions_test.py`, values into `run:` and `script:` only through `env:`, GitHub's runners only, no secrets, and `pull_request_target` and `issues` only in `pr-gate.yml`, which never touches the pull request's code. The quick gate checks it.
-- Delete an old version only after the new one verifies.
-- Comments explain why, not history. Keep the number of files small.
-- The website's packages are exact versions in `site/package.json`, installed with `npm ci --ignore-scripts`. Add one only when the site needs it, a release at least a week old, and list it in `THIRD-PARTY.md`. Headings and buttons stay in sentence case.
+- No symlinks anywhere: drives are exFAT.
+- `app/` holds only the released code and can be deleted any time: new features keep the person's files in `data/` and downloads in `downloads/`. Never move or delete a folder that holds anything but the kit (`alone` in the program; UNINSTALL checks the same).
+- A new version reuses what's already downloaded and works with older data: newer data is offered, never forced. Delete an old version only after the new one verifies.
+- Every server listens on 127.0.0.1. The one way in from the network is the gate, behind the access code.
+- Every remote endpoint can be pointed elsewhere by a `KIT_*` variable (`tests/env.sh`), so tests can use mocks.
 - Downloaded files are untrusted: inspect them as text, never run them to see what they do.
-- The kit points at publishers' downloads and never hosts, mirrors or bundles their files (not even in a release), so their licenses stay between them and the user.
-- A new model, source or program goes in `THIRD-PARTY.md` with its license and any use policy; a new download host also goes in the site FAQ's "Does anything leave my laptop?" list.
-- When setup or a command changes, update `site/public/llms.txt` with the GUIDE, the README and the skills in `.claude/skills`.
-- README's "How it works" (the diagram, `docs/how-it-works.svg`, the servers table and the folder layout) is the architecture overview: change it with any server, port, setup step or top-level folder.
-- A copy change that alters a fact in the page's JSON-LD (`jsonLd` in `site/app/page.jsx`: what the kit needs or does) updates it too. New FAQ entries copy the others' Question markup, and "What is Tinfoil Kit?" stays first: answer engines quote it.
+- The kit points at publishers' downloads and never hosts, mirrors or bundles their files, not even in a release, so their licenses stay between them and the person.
+
+Formatting: the kit page, the website and the JavaScript tests stay Prettier-formatted and ESLint-clean (`npm run fix`), the Python ruff-clean and the Go gofmt-clean. `.editorconfig` has the whitespace rules, which the quick gate checks. Developer tools never reach a kit.
+
+Keep these in step:
+
+- When setup or a command changes: `site/public/llms.txt`, the GUIDE, the README and the skills. `tests/skills_test.py` fails when any of them, this file or the docs name a command or option that doesn't exist, or when a command people use has no skill.
+- README's "How it works" (the diagram, `docs/how-it-works.svg`, the servers table and the folder layout) changes with any server, port, setup step or top-level folder.
+- A new model, source or program goes in `THIRD-PARTY.md` with its license and any use policy; a new download host also goes in the site FAQ's "Does anything leave my laptop?".
+- A change to the kit page's look reaches the website's demo of it (`site/components/demo.jsx`).
+
+Workflows: actions pinned to a full commit SHA with the version as a comment; read-only tokens except the jobs `WRITES` lists in `tests/actions_test.py`; values reach `run:` and `script:` only through `env:`; GitHub's runners only; no secrets; `pull_request_target` and `issues` only in `pr-gate.yml`, which never touches the pull request's code. The quick gate checks it.
+
+## The website
+
+`site/` is a static Next.js app (App Router, JavaScript, `output: 'export'`), deployed by Vercel from `main` (project `tinfoilkit`, tudor-city-ventures team, root `site/`).
+
+- `app/page.jsx` holds the copy, the metadata and the JSON-LD, and `app/globals.css` the styles. `components/` has the interactive parts: the animated hero (`hero.jsx`, on a canvas), the kit builder (`builder.jsx`), the two main buttons with their dialogs (`download.jsx`), the "Read as" bar (`read-as.jsx`) and the Try it demo of the kit page (`demo.jsx`, with answers written ahead of time and a sample town in `demo-data.js`, so it runs no AI and needs no server).
+- shadcn/ui is only for form controls (`components/ui/`); everything else is plain CSS.
+- "Read as" switches between the page for people (the default) and for AI agents: elements marked `data-for="human"` or `data-for="agent"` show only in that one. The agent page shows `public/llms.txt`, the setup instructions for AI agents, as markdown, with no images or icons.
+- `site/build_sources.py` makes the builder's data (`sources.json`) from `kit.json` and copies `kit.json` and `tools/regions.json` beside it; `app/[file]/route.js` serves them. The weekly `refresh builder sizes` workflow updates the sizes (`./kit plan --json`).
+- `site/build_images.py` draws the favicons and link-preview cards from the mark, `public/icon.svg`.
+- For search and AI answer engines: `app/robots.txt` lets every crawler in and names `app/sitemap.xml`, the JSON-LD describes the kit, and each FAQ entry carries schema.org Question markup. A copy change that alters a fact in the JSON-LD (`jsonLd` in `page.jsx`: what the kit needs or does) updates it too. New FAQ entries copy the others' markup, and "What is Tinfoil Kit?" stays first: answer engines quote it.
+- Packages are exact versions in `site/package.json`, installed with `npm ci --ignore-scripts`. Add one only when the site needs it, a release at least a week old, and list it in `THIRD-PARTY.md`.
+- To work on it: `cd site && npm ci --ignore-scripts && npm run dev`. Next.js's guides for the installed version are then in `site/node_modules/next/dist/docs/`. Also run `npm run skills` there: it installs agent skills for this stack (React and Next.js practices, web design review, shadcn/ui, answer-engine optimization, schema.org markup) from their publishers, at the commits `site/skills.py` pins, into `site/.claude/skills/`, which git ignores. Where a skill and this file disagree, this file wins. Move a pin only after reading what changed (`python3 site/skills.py --latest` prints the links).
 
 ## Workflow
 
-Pre-launch: commit straight to `main` in small increments, no PRs or review. Run the quick gate before each push and check CI after. PRs come back once the site is live.
+Until launch, the maintainer's agents commit straight to `main` in small increments, with no pull requests or review. Run the quick gate before each push and check CI after. Pull requests come back once the site is live.
 
 ## Outside contributors
 
@@ -80,7 +107,7 @@ If you can't push to this repo, you're working for an outside contributor: [.git
 
 ## From a cloud session
 
-Cloud sessions can't reach library.kiwix.org, GitHub releases or most download hosts. Use the workflows instead: `kiwix search` (manual, takes search words) runs `./kit search`, `refresh builder sizes` runs `./kit plan --json`, lists any kit.json source that no longer resolves, and rebuilds `tools/regions.json`, and `pin program builds` runs `./kit pins`.
+Cloud sessions can't reach library.kiwix.org, GitHub releases or most download hosts. Use the workflows instead: `kiwix search` (run by hand with search words) runs `./kit search`; `refresh builder sizes` runs `./kit plan --json`, lists any kit.json source that no longer resolves, and rebuilds `tools/regions.json`; `pin program builds` runs `./kit pins`.
 
 ## Adding or replacing a library source
 
@@ -91,8 +118,8 @@ Cloud sessions can't reach library.kiwix.org, GitHub releases or most download h
 
 ## Guardrails
 
-- Never run a real `./kit sync` in CI or a cloud session. It downloads about 300 GB. Use the mocks in `tests/`.
-- Vercel: touch only the Tinfoil Kit project in the tudor-city-ventures team. Never change other projects or team settings.
-- A GitHub release reaches every drive at its next SETUP (`./kit update`). Publish one only with Travis's OK, from a commit that passed CI and a real-Mac run, with `.github/release.sh` on Travis's computer: drives install only releases signed with a key in `tools/release-signers`, and that key never goes into GitHub or a workflow. Nor does the Developer ID certificate that signs the Mac app: it stays in that Mac's keychain.
-- Ask Travis before buying anything (like the domain), before making the repo public, and before anything that can't be undone.
+- Never run a real `./kit sync` in CI or a cloud session: it downloads about 300 GB. Use the mocks in `tests/`.
+- Vercel: touch only the `tinfoilkit` project in the tudor-city-ventures team. Never change other projects or team settings.
+- A release reaches every kit at its next SETUP (`./kit update`). Publish one only with the maintainer's OK, from a commit that passed CI and a real-Mac run, with `.github/release.sh` on the maintainer's Mac ([docs/RELEASING.md](docs/RELEASING.md)). Kits install only releases signed with a key in `tools/release-signers`, and that key never goes into GitHub or a workflow. Nor does the Developer ID certificate that signs the Mac app: it stays in that Mac's keychain.
+- Ask the maintainer before buying anything, before making the repo public, and before anything that can't be undone.
 - If missing access blocks you (GitHub, Vercel, anything else), stop and say exactly what to grant. Don't work around it.
