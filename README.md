@@ -14,7 +14,7 @@ Open the kit folder (or plug in the drive it's on), double-click `START-HERE.com
 
 ## How it works
 
-The whole kit is one folder. Put it on an external drive to grab and go, or on your computer's own disk. While you're online, `SETUP.command` fills it. When the internet is down, `START-HERE.command` starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet.
+The whole kit is one folder. Put it on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, START-HERE starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `START-HERE.command` on a Mac or Linux, `SETUP-Windows.bat` and `START-HERE-Windows.bat` on Windows.
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 300}}}%%
@@ -44,11 +44,13 @@ flowchart TB
 
 ### Setting up (online)
 
-The first time, `SETUP.command` asks where the kit goes: an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free and stays out of Time Machine). `./kit drives` lists the drives with their format and free space, and `./kit place` moves the kit there. Then, that time and every time after, it runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl):
+The first time, SETUP asks where the kit goes: an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free, and on a Mac stays out of Time Machine). `./kit drives` lists the drives with their format and free space, and `./kit place` moves the kit there. Then, that time and every time after, it runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl):
 
 1. **Update** (`./kit update`): installs the kit's own code from the newest Tinfoil Kit release on GitHub, keeping your changes to `kit.json`. It installs only a release signed with the maintainer's key, and shows what's new and asks first.
 2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in [kit.json](kit.json) and downloads only what changed. A big book can wait for its next edition: Wikipedia (115 GB) keeps the one it has until it's a year old (`refresh_days` in kit.json). Downloads resume after a break, every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
 3. **Check** (`./kit test`): starts every server offline and checks that each one answers.
+
+Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build from nuget.org (about 15 MB, checked against its SHA-256) and keeps it in `%LOCALAPPDATA%\TinfoilKit`, outside the kit. The kit on a drive doesn't need it: START-HERE uses only the programs in the kit.
 
 ### Using it (offline)
 
@@ -63,7 +65,7 @@ The first time, `SETUP.command` asks where the kit goes: an external drive (`<dr
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
 | Sharing (off by default) | `tools/share.py` | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on, `--share` for one run |
 
-Photon and GraphHopper run on a Java that's in the kit. On Windows and Linux, only the AI and the library start for now.
+Photon and GraphHopper run on a Java that's in the kit. The kit has each program for Macs, Windows PCs and Linux PCs, so a drive set up on one starts on all three.
 
 The kit page (`tools/portal.html`) is one HTML file with no build step. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
 
@@ -74,10 +76,12 @@ The kit page (`tools/portal.html`) is one HTML file with no build step. Each syn
 
 ```text
 TinfoilKit/
-├── SETUP.command           set up, or update whenever you like (online)
-├── UNINSTALL.command       remove the kit and everything it downloaded
+├── SETUP.command           set up, or update whenever you like (online; Mac, Linux)
 ├── START-HERE.command      start the kit offline (Mac, Linux)
-├── START-HERE-Windows.bat  start the kit offline (Windows)
+├── UNINSTALL.command       remove the kit and everything it downloaded (Mac, Linux)
+├── SETUP-Windows.bat       the same three, for Windows
+├── START-HERE-Windows.bat
+├── UNINSTALL-Windows.bat
 ├── GUIDE.md                the printable guide
 ├── INVENTORY.md            what's installed, with versions and sizes
 ├── kit, kit.json, tools/   the kit's code and its list of downloads
@@ -97,11 +101,17 @@ The repo is the kit, so `site/` (the website), `tests/` and `docs/` come along, 
 - A modern laptop or desktop: a Mac with Apple Silicon, or a Windows or Linux PC. Built around 32 GB of memory; the small model runs on 8-16 GB.
 - Room for the kit: the first sync downloads about 300 GB. On the computer's own disk it leaves 50 GB free. An external SSD lets you grab it and go.
 
-For now, setup and the map need a Mac. On Windows and Linux the kit runs the library and the AI. A nightly test sets the kit up on a Mac and starts it on all three.
+A nightly test sets the kit up on a Mac and on Windows, from a download onto the computer and onto an exFAT drive, and starts the Mac's drive on Windows and Linux.
 
 ## Set up
 
-Download the kit (**Code > Download ZIP** on GitHub), unzip it, and double-click `SETUP.command` in the unzipped folder. macOS asks once before it opens a script from the internet: open **System Settings > Privacy & Security** and click **Open Anyway**. SETUP asks whether the kit goes on an external drive or on this Mac, moves it there, downloads everything and tests it. Or from Terminal:
+Download the kit (**Code > Download ZIP** on GitHub) and unzip it. Then, in the unzipped folder:
+
+- **Mac:** double-click `SETUP.command`. macOS asks once before it opens a script from the internet: open **System Settings > Privacy & Security** and click **Open Anyway**.
+- **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat`. If Windows says it protected your PC, click **More info**, then **Run anyway**.
+- **Linux:** run `bash SETUP.command` in a terminal. It needs python3 and curl.
+
+SETUP asks whether the kit goes on an external drive or on this computer, moves it there, downloads everything and tests it. Or from a terminal on a Mac or Linux:
 
 ```sh
 git clone https://github.com/tudor-city-ventures/tinfoilkit ~/TinfoilKit    # or /Volumes/<drive>/TinfoilKit
@@ -111,15 +121,15 @@ cd ~/TinfoilKit
 ./kit test    # start every server offline and check it answers
 ```
 
-Then turn Wi-Fi off and double-click `START-HERE.command`. [GUIDE.md](GUIDE.md) is the printable guide that lives in the kit folder.
+Then turn Wi-Fi off and double-click `START-HERE.command` (`START-HERE-Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the kit folder.
 
 ## Update
 
-Double-click `SETUP.command` again whenever you want the newest models, books and maps, or run `./kit update`, `./kit sync` and then `./kit test`. There's no schedule. It installs the kit's newest version first, so models and sources added to the kit since then arrive too, and then downloads only what changed (see [How it works](#how-it-works)). If an update is cut off, the kit keeps working with what it has.
+Double-click SETUP again whenever you want the newest models, books and maps, or run `./kit update`, `./kit sync` and then `./kit test`. There's no schedule. It installs the kit's newest version first, so models and sources added to the kit since then arrive too, and then downloads only what changed (see [How it works](#how-it-works)). If an update is cut off, the kit keeps working with what it has.
 
 ## Remove
 
-Double-click `UNINSTALL.command` in the kit folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. `bash UNINSTALL.command --yes` skips the question.
+Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. On Windows it also removes the Python SETUP got. `--yes` skips the question.
 
 ## Home server
 

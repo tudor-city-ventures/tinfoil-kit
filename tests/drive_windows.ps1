@@ -97,6 +97,10 @@ foreach ($f in "START-HERE-Windows.bat", "SETUP-Windows.bat", "UNINSTALL-Windows
   if (Get-Item -LiteralPath "$kit\$f" -Stream Zone.Identifier -ErrorAction SilentlyContinue) { Fail "$f is still marked as from the internet" }
 }
 Test-Kit $kit "this PC"
+Step "./kit fit: Windows says how much memory this PC has"
+$fit = python "$kit\tools\kit.py" --root $kit fit
+$fit
+if (-not ($fit -match "has \d+ GB of memory")) { Fail "./kit fit can't tell this PC's memory" }
 Step "UNINSTALL-Windows.bat --yes: the kit, its downloads and the Python SETUP got are gone"
 Invoke-Uninstall $kit "uninstall-windows-pc.log"
 

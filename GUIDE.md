@@ -8,12 +8,17 @@ on your computer or on an external drive. Print this page and keep it handy (wit
 
 ## In an outage: start it
 
-1. If the kit is on a drive, plug it into the Mac (Apple Silicon, ideally 32 GB memory). Plug the Mac into power if you can.
-2. Open the kit folder and **double-click `START-HERE.command`**. On a drive, it's the `TinfoilKit` folder on the drive.
-   On the Mac, in Finder choose **Go > Home** and open **TinfoilKit**.
-   - If macOS won't open it: open Terminal and type `bash ` (with a space), drag `START-HERE.command` into the
-     window, and press Return. That always works.
-3. A browser tab opens. **Keep the Terminal window open** while you use it. Closing it stops everything.
+1. If the kit is on a drive, plug it in: any Mac, Windows PC or Linux PC will do (ideally 32 GB memory).
+   Plug the laptop into power if you can.
+2. Open the kit folder: on a drive, the `TinfoilKit` folder on the drive. On the computer itself, `TinfoilKit` in
+   your home folder (Mac: in Finder choose **Go > Home**. Windows: in File Explorer, your user folder, `C:\Users\<you>`).
+3. Start it:
+   - **Mac**: double-click **`START-HERE.command`**. If macOS won't open it, open Terminal and type `bash ` (with a
+     space), drag `START-HERE.command` into the window, and press Return. That always works.
+   - **Windows**: double-click **`START-HERE-Windows.bat`**. If Windows says it protected your PC, click
+     **More info**, then **Run anyway**.
+   - **Linux**: open a terminal in the folder and run `bash START-HERE.command`.
+4. A browser tab opens. **Keep the kit's window open** while you use it. Closing it stops everything.
 
 Nothing here needs the internet, an account, or an install.
 
@@ -33,7 +38,7 @@ Nothing here needs the internet, an account, or an install.
     bigger models don't fit.
   - `Gemma-4-E4B`: small. Use it to **save battery**. On an 8 GB laptop the kit starts with it.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
-- **Share with family**: start with `bash START-HERE.command --share`. It shows an address, an access code and a QR
+- **Share with family** (Mac, Linux): start with `bash START-HERE.command --share`. It shows an address, an access code and a QR
   code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. No internet
   needed: a router with power, or a phone's hotspot, is enough. Nobody without the code gets in. To share every time
   the kit starts, run `./kit share on` once in the kit folder. If macOS asks whether to accept incoming connections,
@@ -47,7 +52,7 @@ The AI can be wrong. Treat it like a well-read friend, not a doctor: check the s
   Click its pin for **Directions here** or **Set as home**.
 - **Directions**: fill in From (leave it blank for home) and To, pick Drive or Walk, press Go. Click a step to zoom to it.
 - **Nearest**: the buttons (Hospital, Pharmacy, Gas station...) list the closest ones to home, or to the From address.
-- **Set home** first: the Mac has no GPS, so "home" is where nearest-searches and directions start.
+- **Set home** first: the laptop has no GPS, so "home" is where nearest-searches and directions start.
   Use **Set as home** on a search result, or move the map and click **Set home to the map center**.
 - **Ask in plain words** on the Ask page: "How do I get to the nearest hospital?", "Directions from home to
   350 Fifth Avenue, New York", "Where is the closest gas station?". The AI looks it up and the route appears on the Map tab.
@@ -63,10 +68,10 @@ The kit's map is the backup, and it's handy for planning on a big screen and for
 
 ## Update it (whenever you like, while you have internet)
 
-There's no schedule. Double-click `SETUP.command` in the kit folder. It gets the newest version of the kit itself,
-with any models and books added since, then the newest editions of everything, checks every file, and starts it all
-once offline to make sure it works. Or open Terminal in the kit folder (drag the `TinfoilKit` folder onto the
-Terminal icon) and run:
+There's no schedule. Double-click `SETUP.command` in the kit folder (`SETUP-Windows.bat` on Windows; on Linux,
+`bash SETUP.command`). It gets the newest version of the kit itself, with any models and books added since, then the
+newest editions of everything, checks every file, and starts it all once offline to make sure it works. Or, on a Mac
+or Linux, open a terminal in the kit folder (Mac: drag the `TinfoilKit` folder onto the Terminal icon) and run:
 
 ```
 ./kit update    # gets the newest signed version of the kit itself, keeping your kit.json changes
@@ -98,38 +103,44 @@ Everything the kit keeps is listed in **`kit.json`** (open it in any text editor
 - Add a book: `./kit search <words>`, then paste the line it prints into the `"library"` list.
 - Swap a model: change its `"repo"` and `"files"` (Hugging Face repo and file name patterns). Each pattern must
   match exactly one file. A new model generation every few months is normal; check which GGUF models fit a
-  32 GB Mac (about 20 GB or less) before swapping.
+  32 GB laptop (about 20 GB or less) before swapping.
 
 Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit itself keep these changes.
 
 ## First-time setup
 
-1. Download the kit (on GitHub: **Code > Download ZIP**) and double-click the ZIP to unzip it.
-2. Double-click **`SETUP.command`** in the unzipped folder. macOS says it can't check it for malware: click
-   **Done**, open **System Settings > Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
-   If it asks to install the Command Line Tools, click **Install**; SETUP waits, then carries on.
+1. Download the kit (on GitHub: **Code > Download ZIP**) and unzip it: on a Mac, double-click the ZIP. On
+   Windows, right-click it and choose **Extract All**.
+2. Start SETUP in the unzipped folder:
+   - **Mac**: double-click **`SETUP.command`**. macOS says it can't check it for malware: click **Done**, open
+     **System Settings > Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
+     If it asks to install the Command Line Tools, click **Install**; SETUP waits, then carries on.
+   - **Windows**: double-click **`SETUP-Windows.bat`**. If Windows says it protected your PC, click **More info**,
+     then **Run anyway**. First it gets Python, which the kit's tools run on (about 15 MB, once).
+   - **Linux**: open a terminal in the folder and run `bash SETUP.command`. It needs python3 and curl.
 3. SETUP asks where the kit should go, and moves it there for you:
-   - **An external drive**: keep it somewhere safe and plug it in when you need it, into any Mac or a Windows or
-     Linux PC. It goes in a `TinfoilKit` folder on the drive. The drive must be **exFAT** (recommended: Windows and
-     Linux can read it too) or **APFS** (Macs only). Many new drives come as exFAT. FAT32 (files over 4 GB don't
-     fit) and NTFS (Macs can't write to it) won't work; SETUP says so and shows how to erase the drive as exFAT.
+   - **An external drive**: keep it somewhere safe and plug it in when you need it, into any Mac, Windows PC or
+     Linux PC. It goes in a `TinfoilKit` folder on the drive. The drive should be **exFAT**, which all three can use.
+     Many new drives come as exFAT. FAT32 won't work (files over 4 GB don't fit), and SETUP shows how to erase the
+     drive as exFAT. APFS works on Macs only, and NTFS on Windows and Linux only.
      Always eject the drive before unplugging, especially with exFAT. If macOS asks whether Terminal may access
      files on a removable volume, say yes.
-   - **This Mac**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder, leaves 50 GB free
-     for the Mac, and stays out of Time Machine backups.
+   - **This computer**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder and leaves 50 GB
+     free for the computer. On a Mac it stays out of Time Machine backups.
 4. It downloads everything (about 280 to 330 GB the first time, a few hours; maps are 20 to 30 GB of that), then
-   starts each part offline to check it answers. Leave the Mac plugged in; it stays awake while this runs. If you
-   stop it, double-click `SETUP.command` in the kit's folder again and it picks up where it left off. If it ends
-   with "some downloads didn't finish", the kit already works with what it has: run SETUP again later for the rest.
-5. Turn off Wi-Fi and double-click `START-HERE.command`.
+   starts each part offline to check it answers. Leave the laptop plugged in; it stays awake while this runs. If
+   you stop it, start SETUP in the kit's folder again and it picks up where it left off. If it ends with "some
+   downloads didn't finish", the kit already works with what it has: run SETUP again later for the rest.
+5. Turn off Wi-Fi and start the kit (see the top of this page).
 
 ## Removing it
 
-Double-click `UNINSTALL.command` in the kit folder. It shows what it will delete and how much space that frees, and
-deletes the kit and everything it downloaded only after you type `delete`. The files don't go to the Trash. On a
-drive, nothing else on the drive is touched.
+Double-click `UNINSTALL.command` in the kit folder (`UNINSTALL-Windows.bat` on Windows; on Linux,
+`bash UNINSTALL.command`). It shows what it will delete and how much space that frees, and deletes the kit and
+everything it downloaded only after you type `delete`. The files don't go to the Trash. On a drive, nothing else on
+the drive is touched. On Windows it also removes the Python SETUP got.
 
-Optional: `brew install aria2` makes downloads faster.
+Optional, on a Mac: `brew install aria2` makes downloads faster.
 
 ## Power
 
@@ -139,26 +150,25 @@ and the Library tab (no AI) uses almost nothing.
 
 ## If something doesn't work
 
-- Close the Terminal window and double-click `START-HERE.command` again.
+- Close the kit's window and start it again.
 - Terminal says "Operation not permitted": macOS is keeping it off the drive. Open **System Settings > Privacy &
   Security > Files and Folders**, turn on **Removable Volumes** under Terminal, and start again.
 - Logs are in the `logs` folder.
 - Phones can't open the shared address: they need the same Wi-Fi as the computer (a guest network often keeps
   devices apart). `./kit share` shows the address and the access code again.
-- If a model won't load or is very slow, quit other apps (big models need most of a 32 GB Mac's memory), or use `Gemma-4-E4B`.
+- If a model won't load or is very slow, quit other apps (big models need most of a 32 GB laptop's memory), or use `Gemma-4-E4B`.
   Starting with `bash START-HERE.command --no-maps` frees about 5 GB by not starting the map servers.
 - Map says address search or directions are "not running": they take up to a minute to start. If they never do,
   see `logs/geocoder.log` and `logs/routing.log`. If `./kit test` fails on address search with a "lock" error in
   `logs/test-geocoder.log`, the exFAT format is the cause: reformat the drive as APFS and copy the kit back.
-  Advanced: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
+  Advanced, on a Mac: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
 - The previous version of each program is kept in `bin/` as a fallback and is used automatically if the newest one won't start.
 - The Kiwix app in `installers/` opens the `.zim` books in `library/` directly, without the rest of the kit.
 
-## If the Mac is gone
+## On another computer
 
-On a Windows PC, double-click `START-HERE-Windows.bat` (the drive must be exFAT). On Linux, run
-`bash START-HERE.command`. These fallbacks are less tested than the Mac path, and without a good graphics card
-the AI is slow: use `Gemma-4-E4B`. The map works on the Mac only.
+A kit on an exFAT drive starts on any Mac, Windows PC or Linux PC, whichever one set it up: plug it in and start it
+as at the top of this page. Without a good graphics card the AI is slow: use `Gemma-4-E4B`.
 Fedora 45 and later need one extra package for the AI: run `sudo dnf install openssl3-libs` while you still
 have internet. If the window says another library is missing, install that too.
 
@@ -188,9 +198,9 @@ and starts it whenever the computer starts. At the end it shows the address, the
 | Folder / file | What it is |
 |---|---|
 | `START-HERE.command` | Starts everything (Mac, Linux) |
-| `START-HERE-Windows.bat` | Starts everything (Windows fallback) |
 | `SETUP.command` | Sets the kit up, and updates it whenever you like (needs internet) |
 | `UNINSTALL.command` | Removes the kit and everything it downloaded |
+| `START-HERE-Windows.bat`, `SETUP-Windows.bat`, `UNINSTALL-Windows.bat` | The same three, for Windows |
 | `kit`, `kit.json` | Update tool and the list of what to keep |
 | `INVENTORY.md` | What's in the kit right now, with versions |
 | `library/` | The books (`.zim` files) |
