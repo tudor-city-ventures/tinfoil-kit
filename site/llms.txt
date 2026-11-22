@@ -119,16 +119,17 @@ kit.json lists everything. The default kit:
 
 - AI models, all of which read photos: Inkling 2 Mini (the default, fast, about 18 GB), Qwen3.8 27B (a second opinion from another lab, slower, 17.5 GB), Gemma 4 26B-A4B (a third opinion, 15.7 GB), Gemma 4 12B (mid-size, for 16 to 24 GB, 7.2 GB) and Gemma 4 E4B (small, saves battery, for 8 GB, 5.3 GB).
 - Library: all of English Wikipedia with images (about 115 GB), WikiMed, field and military medicine manuals, LibreTexts textbooks, iFixit repair guides, Ready.gov, US Army publications, Wikibooks, Wiktionary, Wikivoyage, Wikiversity, Appropedia, Energypedia, and Stack Exchange Q&A on home improvement, cooking, gardening, car and bicycle repair, electronics, amateur radio and more. Off by default because they're huge: Survivor Library (232 GB), Khan Academy videos (168 GB) and Project Gutenberg (206 GB).
-- Maps: street detail, addresses and directions for the US Northeast (New England, New York, New Jersey, Pennsylvania), address search for the whole US, and a low-detail world map. 20 to 30 GB.
+- Maps: street detail, addresses and directions for one place, address search for that place's whole country, and a low-detail world map. Where nobody publishes address search for the country alone (much of Europe, the Caribbean), it covers the whole region of the world, 16 to 32 GB, and just the essentials (`./kit essentials on`) leave it out. Out of the box the place is the US Northeast (New England, New York, New Jersey, Pennsylvania); set where the person lives (below). 5 to 30 GB, depending on the place.
 
 To change it:
 
 - Skip an item: set "enabled": false on it in models, library or maps.
-- Just the essentials: `./kit essentials on` (30 to 50 GB). The kit works with them alone, and `./kit essentials off` gets the rest whenever there's room.
+- Just the essentials: `./kit essentials on` (30 to 50 GB). The kit works with them alone, and `./kit essentials off`, then `./kit sync -y`, gets the rest whenever there's room.
 - Skip the models this computer can't run: `./kit fit --skip`.
 - Run without the AI: set "enabled": false on every model, or pick No AI in the builder. The library and the map work as usual, Ask shows the best passages instead of an answer, and `./kit test` doesn't ask for a model.
 - Add a book: `./kit search WORDS` finds Kiwix books and prints a line to paste into library.
-- Change the map region: edit "maps" (its notes explain how).
+- Where the person lives: ask them, then `./kit region PLACE`, with a US state or a country in English ("Texas", "Ontario", "Germany: Bayern"; nicknames like "UK" and big towns like "Lyon" work too). It sets the map's street detail, directions, address search, home and units, and prints what it set. A big country comes in parts (US states, Canadian provinces, German states): pick the person's part. When a name fits more than one place, it lists them: `./kit region --find WORDS` prints the matches as id, name and group (no words: every place), and `./kit region ID` takes the one meant. `./kit region` alone says what's set now.
+- Wikipedia in the person's language: `./kit region --languages PLACE` lists the choices for that place (codes, name, GB). `./kit region PLACE --wikipedia de` (or `de,en` for two) swaps Wikipedia for those, and sync removes the old one once the new one is in.
 - Or make a kit.json with the builder at https://tinfoilkit.com/#builder and put it in the kit folder, replacing the one there.
 
 Run `./kit estimate` again after any change.
@@ -159,7 +160,7 @@ Then, in the kit folder:
 
 ### For people who'd rather click
 
-Download https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip, unzip it and double-click SETUP.command (on Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat; on Linux, run `bash SETUP.command`). The first time, it asks "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it downloads and tests the essentials, then the rest, explaining each step. On a Mac without Python, it gets one first. On macOS 15 and later the first double-click says Apple could not verify it: open System Settings > Privacy & Security and click Open Anyway, once. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
+Download https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip, unzip it and double-click SETUP.command (on Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat; on Linux, run `bash SETUP.command`). The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), then "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it downloads and tests the essentials, then the rest, explaining each step. On a Mac without Python, it gets one first. On macOS 15 and later the first double-click says Apple could not verify it: open System Settings > Privacy & Security and click Open Anyway, once. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
 
 ## Use it
 

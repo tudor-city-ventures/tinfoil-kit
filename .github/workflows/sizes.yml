@@ -1,6 +1,7 @@
 name: refresh builder sizes
-# Asks every source for its current size (./kit plan --json downloads nothing) and commits
-# site/sources.json when it changed, so the website's kit builder stays accurate.
+# Asks every source for its current size (./kit plan --json downloads nothing), and rebuilds the places SETUP and the
+# builder offer for "Where do you live?" (site/build_regions.py), and commits site/sources.json and tools/regions.json
+# when they changed, so the website's kit builder and the kit's region list stay accurate.
 # Only the commit job can write to the repo, and it runs none of the kit's code: the build job, which talks to
 # every download host, has a read-only token and hands its result over as an artifact.
 on:
@@ -12,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -23,11 +24,14 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - name: list sources that couldn't be resolved (they would fail in a real sync too)
         run: python3 -c "import json, sys; [print(k, '->', v['error']) for k, v in json.load(open(sys.argv[1])).items() if v['error']]" "$RUNNER_TEMP/plan.json"
+      - run: python3 site/build_regions.py
       - run: python3 site/build_sources.py "$RUNNER_TEMP/plan.json"
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: sizes
-          path: site/sources.json
+          path: |
+            site/sources.json
+            tools/regions.json
           retention-days: 1
 
   commit:
@@ -44,9 +48,10 @@ jobs:
         with:
           name: sizes
           path: ${{ runner.temp }}/sizes
-      - name: commit the new sizes, and nothing else
+      - name: commit the new sizes and places, and nothing else
         env:
-          NEW: ${{ runner.temp }}/sizes/sources.json
+          NEW: ${{ runner.temp }}/sizes/site/sources.json
+          REGIONS: ${{ runner.temp }}/sizes/tools/regions.json
         run: |
           python3 -I - "$NEW" site/sources.json <<'PY'
           import json, sys
@@ -56,10 +61,37 @@ jobs:
           ok = rest(new) == rest(old) and all(type(s["bytes"]) is int and type(s["estimated"]) is bool for s in new["sources"])
           sys.exit(0 if ok else "The new sources.json changes more than sizes, so it isn't committed. Run build_sources.py by hand.")
           PY
+          # A weekly refresh may change sizes, which files a place downloads (relative paths on Geofabrik and Photon,
+          # and Wikipedia's file names) and which languages it offers. Every id, name, nickname and home town, which
+          # SETUP prints and the site's agent prompt quotes, stays as a person last committed it: GeoNames, one of the
+          # sources, is edited by the public.
+          python3 -I - "$REGIONS" tools/regions.json <<'PY'
+          import json, re, sys
+          new, old = (json.load(open(p, encoding="utf-8")) for p in sys.argv[1:])
+          seg = r"[a-z0-9][a-z0-9_-]*"
+          pbf = re.compile(rf"{seg}(/{seg})*-latest\.osm\.pbf")
+          photon = re.compile(rf"{seg}(/{seg})*/photon-db-[a-z0-9_-]+-\d+\.\d+-latest\.tar\.bz2")
+          zim = re.compile(r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)")
+          def fixed(d):    # everything but sizes and what to download
+              return (d["_readme"], [{k: v for k, v in r.items() if k not in ("mb", "pbf", "photon", "langs")} for r in d["regions"]],
+                      {c: {k: v for k, v in l.items() if k not in ("zim", "mb", "pictures")} for c, l in d["languages"].items()})
+          def size(x):
+              return type(x) in (int, float) and x >= 0
+          langs = new["languages"]
+          ok = fixed(new) == fixed(old)
+          ok = ok and all(pbf.fullmatch(r["pbf"]) and (photon.fullmatch(r["photon"]) if "photon" in r else True)
+                          and type(r["langs"]) is list and all(c in langs for c in r["langs"])
+                          and all(size(v) for v in r["mb"].values()) for r in new["regions"])
+          ok = ok and all(zim.fullmatch(l["zim"]) and size(l["mb"]) and type(l["pictures"]) is bool for l in langs.values())
+          sys.exit(0 if ok else "The new regions.json changes more than sizes and downloads, or names something the kit "
+                   "shouldn't download, so it isn't committed. Run site/build_regions.py by hand and read its diff.")
+          PY
           cp "$NEW" site/sources.json
-          git diff --quiet site/ && { echo "no change"; exit 0; }
+          cp "$REGIONS" tools/regions.json
+          cp "$REGIONS" site/regions.json
+          git diff --quiet site/ tools/ && { echo "no change"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "Refresh kit builder sizes"
+          git commit -am "Refresh kit builder sizes and places"
           git pull --rebase origin main
           git push origin HEAD:main

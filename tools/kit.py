@@ -36,6 +36,9 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      access code. Shows the address, the code and a QR code.
   autostart [on|off] Start the kit whenever this computer starts, for a home server (Linux: a
                      systemd user service; Mac: when you log in).
+  region [PLACE]     Where you live (a US state or a country): sets the map area, the road data for
+                     directions, address search, home and units. --wikipedia en,es also picks Wikipedia's
+                     languages; --find WORDS lists places; --languages lists a place's languages.
 
 Only needs python3 (3.9+) and curl, both standard on macOS. aria2c is used if installed
 (brew install aria2) for faster multi-connection downloads.
@@ -64,6 +67,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import unicodedata
 import urllib.parse
 import xml.etree.ElementTree as ET
 import zipfile
@@ -85,6 +89,7 @@ GITHUB_WEB = os.environ.get("KIT_GITHUB_WEB", "https://github.com")
 PROTOMAPS_BUILDS = os.environ.get("KIT_PROTOMAPS_BUILDS", "https://build-metadata.protomaps.dev/builds.json")
 PROTOMAPS_BUILD_BASE = os.environ.get("KIT_PROTOMAPS_BUILD_BASE", "https://build.protomaps.com")
 PHOTON_DUMPS = os.environ.get("KIT_PHOTON_DUMPS", "https://download1.graphhopper.com/public/")
+GEOFABRIK = os.environ.get("KIT_GEOFABRIK", "https://download.geofabrik.de")    # the road data in tools/regions.json
 GB = 1_000_000_000
 SECTIONS = ("runtimes", "models", "maps", "library", "extras")
 MAPS_DEFAULTS: Dict[str, Any] = {
@@ -94,7 +99,7 @@ MAPS_DEFAULTS: Dict[str, Any] = {
     "detail_bbox": [-80.6, 38.8, -66.8, 47.6],
     "detail_maxzoom": 15,
     "world_maxzoom": 7,
-    "routing_osm_pbf": "https://download.geofabrik.de/north-america/us-northeast-latest.osm.pbf",
+    "routing_osm_pbf": f"{GEOFABRIK.rstrip('/')}/north-america/us-northeast-latest.osm.pbf",
     "routing_profiles": ["car", "foot"],
     "geocoder_country": "us",
     "units": "imperial",
@@ -104,7 +109,12 @@ MAPS_DEFAULTS: Dict[str, Any] = {
     "routing_import_heap": "auto",
     "routing_heap": "2g",
     "geocoder_heap": "3g",
+    "lang": "en",
 }
+# What a place in tools/regions.json sets ("Where do you live?"). Any of these in kit.json's maps wins over it.
+REGION_KEYS = ("label", "home", "detail_bbox", "routing_osm_pbf", "geocoder_country", "geocoder_wide", "units", "lang")
+REGIONS_FILE = Path(__file__).resolve().parent / "regions.json"
+WIKIPEDIA_RE = re.compile(r"^wikipedia_([a-z]{2,3}(?:-[a-z]+)?)_all_")
 GH_ENCODED_VALUES = {
     "car": ["car_access", "car_average_speed", "road_access"],
     "foot": ["foot_access", "foot_priority", "foot_average_speed", "foot_road_access", "hike_rating",
@@ -343,9 +353,52 @@ def load_pins(root: Path, cfg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     return {k: v for k, v in pins.items() if isinstance(v, dict) and isinstance(v.get("version"), str)}
 
 
+_REGIONS: Dict[str, Any] = {}
+
+
+def regions() -> Dict[str, Any]:
+    """tools/regions.json: the places "Where do you live?" offers and Wikipedia's languages, made by
+    site/build_regions.py from Geofabrik, Photon, Kiwix and GeoNames."""
+    if not _REGIONS:
+        try:
+            _REGIONS.update(json.loads(REGIONS_FILE.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            pass
+        _REGIONS.setdefault("regions", [])
+        _REGIONS.setdefault("languages", {})
+    return _REGIONS
+
+
+def region(ident: Any) -> Optional[Dict[str, Any]]:
+    return next((r for r in regions()["regions"] if r["id"] == ident), None) if ident else None
+
+
+def region_maps(r: Dict[str, Any]) -> Dict[str, Any]:
+    """A place's map settings, as kit.json's maps would spell them. Its road data can only come from Geofabrik."""
+    if ".." in r["pbf"] or not re.fullmatch(r"[a-z0-9][a-z0-9/_-]*-latest\.osm\.pbf", r["pbf"]):
+        raise ValueError(f"tools/regions.json has a bad road data path for {r['id']}")
+    return {"label": r["name"], "home": {**r["home"], "zoom": 10}, "detail_bbox": r["bbox"],
+            "routing_osm_pbf": f"{GEOFABRIK.rstrip('/')}/{r['pbf']}",
+            "geocoder_country": r["country"] if r.get("photon") else "",    # Photon publishes none for a few places
+            # a place with no address database of its own gets its whole region of the world's (most of Europe)
+            "geocoder_wide": bool(r.get("addresses_wide")),
+            "units": r["units"], "lang": (r.get("langs") or ["en"])[0]}
+
+
 def maps_settings(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    m = {**MAPS_DEFAULTS, **(cfg.get("maps") or {})}
-    m["home"] = {**MAPS_DEFAULTS["home"], **(m.get("home") or {})}
+    user = cfg.get("maps") or {}
+    preset: Dict[str, Any] = {}
+    if user.get("region"):
+        r = region(user["region"])
+        try:
+            preset = region_maps(r) if r else {"region_error": f"kit.json's region '{user['region']}' isn't one the kit "
+                                                               "knows; ./kit region --find WORDS lists them"}
+        except ValueError as e:
+            preset = {"region_error": str(e)}
+    m = {**MAPS_DEFAULTS, **preset, **user}
+    m["home"] = {**MAPS_DEFAULTS["home"], **(preset.get("home") or {}), **(user.get("home") or {})}
+    if "geocoder_country" in user and "geocoder_wide" not in user:
+        m["geocoder_wide"] = False
     return m
 
 
@@ -353,6 +406,9 @@ def maps_items(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     m = maps_settings(cfg)
     if not m["enabled"]:
         return []
+    geocoder = [{"id": "geocoder", "type": "photon_db", "country": m["geocoder_country"], "priority": 3,
+                 "wide": bool(m.get("geocoder_wide")),
+                 "note": "Address and place search database (Photon)"}] if m.get("geocoder_country") else []
     return [
         {"id": "maplibre-gl", "type": "npm", "package": "maplibre-gl", "version_prefix": "5.", "priority": 1,
          "note": "Map display engine (MapLibre)"},
@@ -360,13 +416,11 @@ def maps_items(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
          "priority": 1, "note": "Map style (Protomaps)"},
         {"id": "basemaps-assets", "type": "github_archive", "repo": "protomaps/basemaps-assets", "branch": "main",
          "priority": 1, "note": "Map fonts and icons"},
-        {"id": "basemap", "type": "protomaps", "priority": 2,
-         "note": f"Offline map: {m['label']} in street detail, plus a world overview"},
         {"id": "routing", "type": "routing", "url": m["routing_osm_pbf"], "priority": 2,
          "note": "Road network for directions (GraphHopper)"},
-        {"id": "geocoder", "type": "photon_db", "country": m["geocoder_country"], "priority": 3,
-         "note": "Address and place search database (Photon)"},
-    ]
+        {"id": "basemap", "type": "protomaps", "priority": 2,    # after routing: its size estimate uses the road data's
+         "note": f"Offline map: {m['label']} in street detail, plus a world overview"},
+    ] + geocoder
 
 
 def items_from_config(cfg: Dict[str, Any]) -> List[Item]:
@@ -675,33 +729,42 @@ class Resolver:
         item.kind, item.dest, item.version = "archive", f"maps/viewer/{item.id}", sha[:12]
         item.files = [RemoteFile(name=f"{item.id}-{sha[:12]}.tar.gz", url=f"{GITHUB_WEB}/{repo}/archive/{sha}.tar.gz")]
 
+    def _map_area(self) -> Dict[str, Any]:
+        m = maps_settings(self.cfg)
+        if m.get("region_error"):
+            raise ValueError(m["region_error"])
+        return m
+
     def _protomaps(self, item: Item) -> None:
+        m = self._map_area()
         builds = [b for b in http_json(PROTOMAPS_BUILDS) if str(b.get("key", "")).endswith(".pmtiles")]
         major = str(item.cfg.get("tiles_major", "4")) + "."
         usable = [b for b in builds if str(b.get("version", major)).startswith(major)] or builds
         if not usable:
             raise ValueError("no Protomaps map build listed")
         latest = max(usable, key=lambda b: b["key"])
-        m = maps_settings(self.cfg)
-        w, s, e, n = (float(x) for x in m["detail_bbox"])
-        sq_deg = abs(e - w) * abs(n - s) * math.cos(math.radians((n + s) / 2))
-        # rough: ~1 GB world overview + ~40 MB per square degree of street detail at zoom 15
-        est = int(GB + sq_deg * 40e6 * 0.4 ** max(0, 15 - int(m["detail_maxzoom"])))
+        roads = self.resolved.get("routing")
+        est = tiles_estimate(m["detail_bbox"], m["detail_maxzoom"], roads.files[0].size if roads and roads.files else None)
         item.kind, item.dest = "custom", "maps/tiles"
-        item.version = latest["key"].replace(".pmtiles", "")
+        item.version = f"{latest['key'].replace('.pmtiles', '')} {m['label']}"
+        # a different area is a new map, even from the same build
+        item.extra["area"] = [[float(x) for x in m["detail_bbox"]], int(m["world_maxzoom"]), int(m["detail_maxzoom"])]
         item.files = [RemoteFile(name="basemap.pmtiles", url=f"{PROTOMAPS_BUILD_BASE}/{latest['key']}", estimate=est)]
 
     def _routing(self, item: Item) -> None:
-        url = item.cfg["url"]
-        h = http_head(url)
+        self._map_area()
+        latest = item.cfg["url"]
+        url, h = geofabrik_head(latest)
         size = content_length(h)
         gh = self.resolved.get("graphhopper")
         item.kind, item.dest = "custom", "maps/routing"
-        item.version = http_day(h) or str(size)
+        # which extract it is, then its date: another place's road data is new even on the same day
+        item.version = f"{latest.rsplit('/', 1)[-1].replace('-latest.osm.pbf', '')} {http_day(h) or size}"
         item.extra["gh_version"] = gh.version if gh is not None and not gh.error else ""
         item.files = [RemoteFile(name="region.osm.pbf", url=url, size=size, md5_sidecar=True)]
 
     def _photon_db(self, item: Item) -> None:
+        self._map_area()
         cc = str(item.cfg.get("country", "us")).lower()
         base = PHOTON_DUMPS.rstrip("/") + "/"
         rows = photon_regions(http_get(base).decode(errors="replace"))
@@ -737,11 +800,38 @@ class Resolver:
                 continue
             size = content_length(h)
             item.kind, item.dest = "custom", "maps/geocoder"
-            item.version = f"{ver}/{http_day(h) or size}"
+            item.version = f"{path[-1]} {ver}/{http_day(h) or size}"
             item.extra["db_version"] = ver
             item.files = [RemoteFile(name=url.rsplit("/", 1)[-1], url=url, size=size, md5_sidecar=True)]
             return
         raise ValueError(f"couldn't find a Photon database file in {folder} for version(s) {', '.join(wanted)}")
+
+
+def geofabrik_head(url: str) -> Tuple[str, Dict[str, str]]:
+    """A road data file's address and headers. Geofabrik's -latest sends you on to the day's file (name-YYMMDD), which
+    can be missing while they publish it: then the newest of the week before."""
+    try:
+        return url, http_head(url)
+    except HttpError as first:
+        if not url.endswith("-latest.osm.pbf"):
+            raise
+        for days in range(1, 8):
+            dated = url[:-len("-latest.osm.pbf")] + (dt.date.today() - dt.timedelta(days=days)).strftime("-%y%m%d.osm.pbf")
+            try:
+                return dated, http_head(dated)
+            except HttpError:
+                continue
+        raise first
+
+
+def tiles_estimate(bbox: List[float], maxzoom: Any, roads_bytes: Optional[int] = None) -> int:
+    """Rough size of the map tiles: about 1 GB of world overview, plus street detail at about 40 MB per square
+    degree where streets are dense. A big, mostly empty area (a desert state's box) is capped at twice its road data."""
+    w, s, e, n = (float(x) for x in bbox)
+    detail = abs(e - w) * abs(n - s) * math.cos(math.radians((n + s) / 2)) * 40e6
+    if roads_bytes:
+        detail = min(detail, 2 * roads_bytes)
+    return int(GB + detail * 0.4 ** max(0, 15 - int(maxzoom)))
 
 
 def http_day(h: Dict[str, str]) -> str:
@@ -858,6 +948,8 @@ def evaluate(item: Item, state: Dict[str, Any], root: Path) -> None:
             ok = ok and (d / "photon_data").is_dir()
         else:
             ok = ok and all((d / f.name).exists() for f in item.files)
+        if "area" in item.extra:
+            ok = ok and st.get("area") == item.extra["area"]
         item.need = [] if ok else list(item.files)
         item.status = "ok" if ok else ("update" if st else "new")
         return
@@ -916,6 +1008,8 @@ def essential(item: Item, fit: Dict[str, Any]) -> bool:
     runs plus the smallest one. SETUP's first run downloads and checks these first, so the kit works hours sooner."""
     if item.section == "models":
         return item.id in (fit["runs"], fit["smallest"])
+    if item.cfg.get("wide"):     # address search for a whole region of the world, tens of GB
+        return False
     return item.section in ("runtimes", "maps") or (item.section == "library" and item.priority <= 1)
 
 
@@ -1186,6 +1280,21 @@ def sweep_partials(root: Path, state: Dict[str, Any], items: List[Item]) -> None
             partials.pop(rel)
 
 
+def drop_replaced_wikipedias(root: Path, state: Dict[str, Any], items: List[Item]) -> None:
+    """A Wikipedia in a language ./kit region switched away from (50 to 130 GB) goes once the new one is in."""
+    wanted = [i for i in items if i.section == "library" and WIKIPEDIA_RE.match(i.id) and i.enabled]
+    if not wanted or not all("files" in state["items"].get(i.key, {}) for i in wanted):
+        return
+    listed = {i.key for i in items}
+    for key, v in list(state["items"].items()):
+        section, _, ident = key.partition("/")
+        if section == "library" and WIKIPEDIA_RE.match(ident) and key not in listed and "files" in v:
+            for name in v["files"]:
+                (root / v["dest"] / name).unlink(missing_ok=True)
+            del state["items"][key]
+            log(f"Removed {ident}: kit.json has Wikipedia in another language now.")
+
+
 def matches(path: Path, f: RemoteFile, expected: Dict[str, str]) -> Optional[str]:
     """The SHA-256 of a file already in the kit if it's exactly f (same size and published checksums)."""
     if not expected or not path.is_file() or (f.size and path.stat().st_size != f.size):
@@ -1431,7 +1540,8 @@ def install_protomaps(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[s
     shutil.rmtree(work, ignore_errors=True)
     size = (dest / "basemap.pmtiles").stat().st_size
     log(f"    ok: maps/tiles/basemap.pmtiles ({fmt_size(size)})")
-    state["items"][item.key] = {"version": item.version, "dest": item.dest, "updated": now_iso(), "note": item.note,
+    state["items"][item.key] = {"version": item.version, "area": item.extra.get("area"), "dest": item.dest,
+                                "updated": now_iso(), "note": item.note,
                                 "files": {"basemap.pmtiles": {"size": size, "sha256": sha, "verified": False}}}
     return size
 
@@ -1457,7 +1567,7 @@ def graphhopper_yaml(m: Dict[str, Any], graph_dir: str, storage: str) -> str:
               "  routing.snap_preventions_default: tunnel, bridge, ferry",
               "  routing.non_ch.max_waypoint_distance: 1000000",
               "  import.osm.ignored_highways: " + ('""' if set(profiles) - {"car"} else "footway,construction,cycleway,path,steps"),
-              "  datareader.preferred_language: en",
+              f"  datareader.preferred_language: {m.get('lang') or 'en'}",
               f"  graph.dataaccess.default_type: {storage}",
               "  graph.locktype: simple",
               "server:",
@@ -1662,7 +1772,7 @@ def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
                     spr[f"{name}.png"] = b64file(sprites / f"{name}.png")
             info = {
                 "available": True, "label": m["label"], "home": m["home"], "bbox": m["detail_bbox"],
-                "detailMaxzoom": int(m["detail_maxzoom"]), "units": m["units"],
+                "detailMaxzoom": int(m["detail_maxzoom"]), "units": m["units"], "lang": m.get("lang") or "en",
                 "profiles": [p for p in m["routing_profiles"] if p in GH_ENCODED_VALUES],
                 "ports": {"tiles": int(m["tiles_port"]), "geocoder": int(m["geocoder_port"]),
                           "routing": int(m["routing_port"])},
@@ -2363,6 +2473,8 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
             log("\nStopped. Everything finished so far is saved; run ./kit sync again to resume.")
             sys.exit(130)
         errors = [i for i in items if i.enabled and i.status == "error"]
+        if not part:
+            drop_replaced_wikipedias(root, state, items)
         if not failures and not errors and not part:
             state["last_sync"] = now_iso()
         save_state(root, state)
@@ -2473,6 +2585,15 @@ def estimate_gb(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] = No
         sizes = {s["id"]: s.get("bytes") or 0 for s in listed}
     except (OSError, ValueError, KeyError, TypeError):
         sizes = {}
+    # a place's maps, and Wikipedia in other languages, are sized in tools/regions.json
+    for lang in regions()["languages"].values():
+        sizes.setdefault(lang["zim"], lang.get("mb", 0) * 1e6)
+    maps = cfg.get("maps") or {}
+    r = region(maps.get("region"))
+    if r and not any(k in maps for k in ("detail_bbox", "routing_osm_pbf", "geocoder_country")):
+        wide = essentials and r.get("addresses_wide")     # see essential()
+        mb = {k: v for k, v in (r.get("mb") or {}).items() if not (wide and k == "addresses")}
+        sizes["maps"] = sum(mb.values()) * 1e6 + 0.1 * GB    # plus the map viewer, fonts and icons
     on = [m["id"] for m in cfg.get("models", [])
           if m.get("enabled", True) and (not essentials or m["id"] in (fit["runs"], fit["smallest"]))]
     on += [z["zim"] for z in cfg.get("library", [])
@@ -2711,6 +2832,169 @@ def cmd_fit(root: Path, args: argparse.Namespace) -> None:
         log("Skipped them. On a computer with more memory, SETUP offers them again.")
     elif not args.ask:
         log("To skip them: ./kit fit --skip")
+# ----------------------------------------------------------------------------- where you live
+
+def fold(s: str) -> str:
+    """Lower case, without accents or punctuation, for matching what someone typed."""
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)).lower()
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", s).split())
+
+
+def find_regions(text: str) -> List[Dict[str, Any]]:
+    """The places that best match what someone typed: exact names (or other names: "UK", "Bavaria", a big town) if
+    any, else names that start with it, else names with a word that starts with it, else names that contain it.
+    Nothing typed: all of them."""
+    q = fold(text)
+    if not q:
+        return list(regions()["regions"])
+    found = []
+    for r in regions()["regions"]:
+        keys = [fold(k) for k in [r["name"], r["id"], *r.get("also", []), *r["name"].split(": ")[1:]]]
+        if q in keys:
+            rank = 0
+        elif any(k.startswith(q) for k in keys):
+            rank = 1
+        elif any(f" {q}" in f" {k}" for k in keys):
+            rank = 2
+        elif len(q) > 2 and any(q in k for k in keys):
+            rank = 3
+        else:
+            continue
+        found.append((rank, r))
+    best = min((rank for rank, _ in found), default=None)
+    return [r for rank, r in found if rank == best]
+
+
+def wikipedia_langs(cfg: Dict[str, Any]) -> List[str]:
+    """The languages of the Wikipedias switched on in kit.json."""
+    return [m.group(1) for z in cfg.get("library", []) if z.get("enabled", True)
+            for m in [WIKIPEDIA_RE.match(z.get("zim", ""))] if m]
+
+
+def lang_names(codes: List[str]) -> str:
+    names = [regions()["languages"].get(c, {}).get("name", c) for c in codes]
+    return ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else "".join(names)
+
+
+def language_choices(r: Dict[str, Any]) -> List[Tuple[List[str], str, int]]:
+    """Wikipedia's languages to offer for a place: each of its own, English, and its first two together. A small
+    Wikipedia (under 1 GB) comes only with another, so nobody swaps English for a few thousand articles by mistake.
+    Each is (codes, label, GB)."""
+    langs = regions()["languages"]
+    codes = [c for c in r.get("langs", []) if c in langs]
+    if "en" in langs and "en" not in codes:
+        codes.append("en")
+    picks = [[c] for c in codes if c == "en" or langs[c].get("mb", 0) >= 1000] + ([codes[:2]] if len(codes) > 1 else [])
+    out = []
+    for p in picks:
+        if len(p) == 1:
+            name, native = langs[p[0]]["name"], langs[p[0]].get("native", "")
+            label = f"{name} ({native})" if native and native != name else name
+        else:
+            label = lang_names(p)
+        out.append((p, label, max(1, round(sum(langs[c].get("mb", 0) for c in p) / 1000))))
+    return out
+
+
+def describe_region(cfg: Dict[str, Any]) -> str:
+    m = maps_settings(cfg)
+    r = region((cfg.get("maps") or {}).get("region"))
+    wiki = wikipedia_langs(cfg)
+    where = m["label"] if r else f"{m['label']} (set by hand in kit.json)"
+    maps = f"Maps are for {where}" if m["enabled"] else "Maps are switched off"
+    return f"{maps}, and Wikipedia is in {lang_names(wiki)}." if wiki else f"{maps}, with no Wikipedia."
+
+
+def set_region(root: Path, r: Dict[str, Any], wiki: Optional[List[str]]) -> Dict[str, Any]:
+    """Point kit.json's maps at a place, and swap its Wikipedia for the languages given (None: leave it)."""
+    path = root / "kit.json"
+    cfg = load_config(root)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    old = raw.get("maps") or {}
+    maps = {"enabled": old.get("enabled", True), "region": r["id"]}
+    maps.update({k: v for k, v in old.items() if k not in maps and k not in REGION_KEYS})
+    raw["maps"] = maps
+    if wiki is not None:
+        langs = regions()["languages"]
+        lib = raw.get("library", [])
+        was = [i for i, z in enumerate(lib) if WIKIPEDIA_RE.match(z.get("zim", ""))]
+        # the new ones keep the old one's settings (priority, refresh_days)
+        keep = {k: v for k, v in lib[was[0]].items() if k not in ("zim", "note")} if was else {"priority": 2}
+        new = [{"zim": langs[c]["zim"], **keep,
+                "note": f"All of {langs[c]['name']} Wikipedia{' with images' if langs[c].get('pictures') else ''}"
+                        f" (~{max(1, round(langs[c].get('mb', 0) / 1000))} GB)"} for c in wiki]
+        at = was[0] if was else len(lib)
+        lib = [z for i, z in enumerate(lib) if i not in was]
+        lib[at:at] = new
+        raw["library"] = lib
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+    return {**cfg, **raw}
+
+
+def cmd_region(root: Path, args: argparse.Namespace) -> None:
+    """Where you live: sets the map area, the road data for directions, the address search, home, units and the
+    language Wikipedia comes in. SETUP and the website's kit builder use it."""
+    if not regions()["regions"]:
+        die(f"{REGIONS_FILE} is missing or broken; get the kit again (./kit update) to restore it")
+    if args.find is not None:
+        for r in find_regions(" ".join(args.find)):
+            print(f"{r['id']}\t{r['name']}\t{r['group']}")
+        return
+    cfg = load_config(root)
+    if not args.place:
+        if args.languages:
+            r = region((cfg.get("maps") or {}).get("region"))
+            if not r:
+                die("kit.json has no region yet: ./kit region --languages PLACE")
+            args.place = [r["id"]]
+        else:
+            print(describe_region(cfg))
+            return
+    text = " ".join(args.place)
+    r = region(text)
+    if not r:
+        found = find_regions(text)
+        if len(found) != 1:
+            if not found:
+                die(f"No place matches \"{text}\". Try a US state or a country, in English: ./kit region --find WORDS")
+            die(f"\"{text}\" could be: " + "; ".join(f"{f['name']} ({f['id']})" for f in found[:12]) +
+                ("; ..." if len(found) > 12 else "") + ". Run it again with the one in brackets.")
+        r = found[0]
+    choices = language_choices(r)
+    if args.languages:
+        for codes, label, gb in choices:
+            print(f"{','.join(codes)}\t{label}\t{gb}")
+        return
+    wiki = None
+    if args.wikipedia:
+        wiki = [c.strip().lower() for c in args.wikipedia.split(",") if c.strip()]
+        langs = regions()["languages"]
+        bad = [c for c in wiki if c not in langs]
+        if bad or not wiki:
+            die(f"Wikipedia doesn't come in '{','.join(bad)}' here. Languages: " +
+                ", ".join(f"{c} ({v['name']})" for c, v in sorted(langs.items())))
+    cfg = set_region(root, r, wiki)
+    m = maps_settings(cfg)
+    log(f"Maps: {r['name']}. Street maps and directions for {r['name']}, and a simple map of the whole world.")
+    if not r.get("photon"):
+        log("Address search: none, since nobody publishes it for there yet.")
+    elif r.get("addresses_wide"):
+        log(f"Address search: all of {r['addresses']} (about {max(1, round(r['mb'].get('addresses', 0) / 1000))} GB), "
+            f"since nobody publishes it for {r['name']} alone. Just the essentials leave it out.")
+    else:
+        log(f"Address search: all of {r.get('addresses') or r['name']}.")
+    if not m["enabled"]:
+        log('Maps are switched off in kit.json ("enabled": false under "maps"), so none of this downloads.')
+    log(f"Home: {m['home'].get('label') or 'the middle of it'}. Directions and \"nearest\" searches start there; "
+        "set your own on the Map tab.")
+    wiki_now = wikipedia_langs(cfg)
+    if wiki_now:
+        gb = round(sum(v.get("mb", 0) for c, v in regions()["languages"].items() if c in wiki_now) / 1000)
+        log(f"Wikipedia: {lang_names(wiki_now)} (about {gb} GB).")
+    else:
+        log("Wikipedia: none.")
 
 
 def cmd_drives(root: Path, args: argparse.Namespace) -> None:
@@ -3205,14 +3489,21 @@ def main() -> None:
     p.add_argument("--qr", action="store_true", help="draw the QR code even when not printing to a terminal")
     p = sub.add_parser("autostart", help="start the kit whenever this computer starts, for a home server")
     p.add_argument("action", nargs="?", choices=("on", "off"))
+    p = sub.add_parser("region", help="where you live: sets the map area, directions, address search, home and "
+                                      "Wikipedia's language")
+    p.add_argument("place", nargs="*", help="a US state or a country (a name, or an id from --find)")
+    p.add_argument("--find", nargs="*", metavar="WORDS", help="list the places matching WORDS: id, name, group")
+    p.add_argument("--languages", action="store_true", help="the Wikipedia languages to offer for the place: codes, "
+                                                            "name, GB")
+    p.add_argument("--wikipedia", metavar="CODES", help="Wikipedia's languages, comma-separated (en, es, de...)")
     args = ap.parse_args()
     root = (args.root or ROOT).resolve()
     if args.cmd not in ("share", "autostart") and not shutil.which("curl"):
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
-                "drives": cmd_drives, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials, "fit": cmd_fit, "share": cmd_share,
-                "autostart": cmd_autostart, "pins": cmd_pins}
+                "drives": cmd_drives, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials,
+                "fit": cmd_fit, "share": cmd_share, "autostart": cmd_autostart, "pins": cmd_pins, "region": cmd_region}
     if args.cmd not in commands:
         ap.print_help()
         return
