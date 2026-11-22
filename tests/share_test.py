@@ -172,6 +172,14 @@ try:
           r.getheader("Cache-Control") == "no-store" and r.getheader("ETag") is None and "cookie" not in lower
           and "if-none-match" not in lower and "accept-encoding" not in lower and lower.get("host") == f"127.0.0.1:{lib_port}",
           str(up))
+    r, data, _ = req("GET", "/", headers={"Host": "evil.example.com:8000", "Accept": "text/html"})
+    check("gate: a name a website elsewhere could point here is turned away (DNS rebinding)",
+          r.status == 403 and b"doesn't answer to that name" in data, f"{r.status} {data}")
+    r, data, _ = req("GET", "/ai/v1/models", headers={**signed, "Host": "kit.example.com"})
+    check("gate: ...even with the cookie", r.status == 403)
+    hosts = ("192.168.1.20:8000", "homeserver.local:8000", "homeserver:8000", "localhost:8000", "kit.lan", "[::1]:8000")
+    codes = [req("GET", "/ai/v1/models", headers={**signed, "Host": h})[0].status for h in hosts]
+    check("gate: an address, a bare name and a .local or .lan name all work", codes == [200] * len(hosts), str(codes))
     r, data, _ = req("HEAD", "/catalog", headers=signed)
     check("gate: HEAD has headers and no body", r.status == 200 and data == b"" and r.getheader("Content-Length"))
 

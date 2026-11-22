@@ -384,6 +384,7 @@ case "$1" in
         [ $SYNC = 1 ] && printf 'Problems (everything else is done):\n  - models/Big: download failed\nRe-run ./kit sync\n' >> logs/sync-2026-01-01.log
         exit $SYNC;;
   test) exit $TEST;;
+  share|autostart) echo "$*" >> home.log;;
 esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     def kit_folder(path, git=False):
@@ -402,10 +403,11 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     setup = kit_folder(work / "setup")
     (setup / ".kit").mkdir()     # set up before, so SETUP doesn't ask where it goes
 
-    def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="y\nn\n\n", **env_extra):
+    def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="y\nn\n\n", args=(), **env_extra):
         shutil.copy(TESTS.parent / "SETUP.command", folder)
         (folder / "calls.log").write_text("")
-        p = subprocess.run(["bash", str(folder / "SETUP.command")], input=answers, capture_output=True, text=True, timeout=60,
+        (folder / "home.log").write_text("")
+        p = subprocess.run(["bash", str(folder / "SETUP.command"), *args], input=answers, capture_output=True, text=True, timeout=60,
                            env={**os.environ, "PLAN": str(plan), "SYNC": str(sync), "TEST": str(test), "UPDATE": str(update),
                                 **env_extra})
         return p.returncode, p.stdout, (folder / "calls.log").read_text().split()[1::2]
@@ -434,6 +436,20 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("SETUP: Ctrl-C during the download", rc == 130 and "Stopped" in out and calls == ["update", "plan", "sync"], out)
     rc, out, calls = run_setup(plan=1)
     check("SETUP: offline: stops before asking to download", rc == 1 and calls == ["update", "plan"] and "Start downloading" not in out, out)
+    home = ["share on", "autostart on", "share"]
+    check("SETUP: a normal setup doesn't share the kit or start it with the computer", (setup / "home.log").read_text() == "")
+    rc, out, calls = run_setup(args=("--home-server",), answers="y\n\n")
+    check("SETUP --home-server: shares the kit, starts it with the computer, shows the address, and doesn't open it",
+          rc == 0 and calls[:4] == ["update", "plan", "sync", "test"] and (setup / "home.log").read_text().splitlines() == home
+          and "Home server" in out and "Open the kit now" not in out and "double-click START-HERE" not in out, out)
+    rc, out, calls = run_setup(update=3, args=("--home-server",), answers="y\n\n")
+    check("SETUP --home-server: still a home server after the kit updates itself and starts over",
+          rc == 0 and "(new version)" in out and (setup / "home.log").read_text().splitlines() == home, out)
+    rc, out, calls = run_setup(sync=1, args=("--home-server",), answers="y\n\n")
+    check("SETUP --home-server: some downloads failed but the kit works: shares it anyway",
+          rc == 1 and "didn't finish" in out and (setup / "home.log").read_text().splitlines() == home, out)
+    rc, out, calls = run_setup(test=1, args=("--home-server",), answers="y\n\n")
+    check("SETUP --home-server: checks failed: doesn't share it", rc == 1 and (setup / "home.log").read_text() == "", out)
 
     # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
     # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.
@@ -531,7 +547,8 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         (gone / "library" / "book.zim").write_bytes(os.urandom(5000))
         shutil.copy(TESTS.parent / "UNINSTALL.command", gone)
         if kit_files:
-            (gone / "kit").write_text("#!/bin/bash\n")
+            (gone / "kit").write_text(f'#!/bin/bash\necho "$*" >> "{work / "uninstall-kit.log"}"\n')
+            (gone / "kit").chmod(0o755)
             (gone / "tools").mkdir()
             (gone / "tools" / "kit.py").write_text("# kit\n")
         (gone.parent / "keep.txt").write_text("not the kit's")
@@ -539,15 +556,19 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
                            timeout=60, env={**os.environ, "HOME": str(work)})
         return p.returncode, p.stdout, gone
 
+    kit_log = work / "uninstall-kit.log"
+    kit_log.write_text("")
     rc, out, gone = uninstall(answers="\n\n")
     check("UNINSTALL: says what it deletes, and just Return keeps everything",
           rc == 0 and "This deletes Tinfoil Kit" in out and "can't be undone" in out and "Kept" in out
-          and (gone / "models/Tiny/Tiny.gguf").exists(), out)
+          and (gone / "models/Tiny/Tiny.gguf").exists() and kit_log.read_text() == "", out)
     rc, out, gone = uninstall(answers="yes\n\n")
     check("UNINSTALL: anything but delete keeps it", rc == 0 and "Kept" in out and (gone / "library/book.zim").exists(), out)
     rc, out, gone = uninstall(answers="delete\n\n")
     check("UNINSTALL: typing delete removes the kit and its downloads, and nothing beside it",
           rc == 0 and not gone.exists() and (gone.parent / "keep.txt").exists() and "Tinfoil Kit is gone" in out, out)
+    check("UNINSTALL: a home server's kit stops starting with the computer first", kit_log.read_text() == "autostart off\n",
+          kit_log.read_text())
     rc, out, gone = uninstall(answers="delete\n\n", kit_files=False)
     check("UNINSTALL: refuses a folder that isn't a kit", rc == 1 and gone.exists() and "doesn't look like a Tinfoil Kit" in out, out)
     rc, out, gone = uninstall(answers="DELETE\n\n")
