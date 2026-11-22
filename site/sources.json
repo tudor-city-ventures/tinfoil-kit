@@ -43,8 +43,8 @@
    "group": "AI models",
    "title": "Gemma 4 12B",
    "why": "Mid-size, from Google. The AI for 16 to 24 GB laptops. Reads photos.",
-   "bytes": 7200000000,
-   "estimated": true,
+   "bytes": 7145181440,
+   "estimated": false,
    "presets": [
     "recommended",
     "everything"
@@ -68,7 +68,7 @@
    "group": "Maps",
    "title": "Offline maps",
    "why": "Street maps, address search and driving or walking directions for your region.",
-   "bytes": 16969233263,
+   "bytes": 15156511974,
    "estimated": false,
    "presets": [
     "essentials",
