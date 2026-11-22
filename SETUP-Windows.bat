@@ -273,6 +273,7 @@ if not defined KIT_HOME_SERVER if "!WHERE!"=="on this PC" (
 ) else (
   echo In an outage: plug in the drive, open !KIT:~3!\app and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
 )
+echo While you have power, open the kit and click Print the essentials at the top: about 20 pages worth having on paper.
 echo(
 echo Also in the app folder:
 echo   GUIDE.md               a short guide. Print it and keep it handy.

@@ -167,6 +167,18 @@ with sync_playwright() as p:
     page.reload()
     page.wait_for_function(f"document.getElementById('notesText').value === {json.dumps(NOTES)}", timeout=10000)
     check("notes: saved in the kit, there after a reload", True)
+    note("Print the essentials: the pages worth having on paper, and a page of your own")
+    page.evaluate("window.print = () => { window.printed = true; }")  # (no print dialog in a test)
+    page.click("#printLink")
+    page.wait_for_function(f"document.getElementById('sheet').textContent.includes({json.dumps(NOTES)})", timeout=10000)
+    page.click("#printMine")
+    check(
+        "print the essentials: your page has your notes, and prints",
+        page.evaluate("window.printed === true") and page.get_attribute("#printLink", "aria-current") == "page",
+        page.inner_text("#sheet")[:200],
+    )
+    pause(page)
+    page.screenshot(path=os.path.join(SHOTS, "shot_print.png"), full_page=True)
     note("The Library tab: the books on this kit")
     page.click("nav a[data-tab=library]")
     pause(page)
@@ -198,8 +210,8 @@ with sync_playwright() as p:
             pa.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai={AI}&data={DATA}")
             pa.wait_for_function("document.querySelectorAll('#scope option').length > 1", timeout=20000)
             pa.add_script_tag(path=os.environ["KIT_AXE"])
-            for tab in ("ask", "map", "library", "notes", "help"):
-                pa.click(f"nav a[data-tab={tab}]")
+            for tab in ("ask", "map", "library", "notes", "print", "help"):
+                pa.click(f"a[data-tab={tab}]")
                 bad = pa.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
                 check(f"{scheme} mode, {tab} tab: no accessibility violations (axe)", not bad, ", ".join(bad))
             pa.close()
@@ -219,8 +231,8 @@ with sync_playwright() as p:
     check("AI-off fallback shows passages", "5 to 7 cm" in page2.inner_text("#answer"), page2.inner_text("#progress"))
     pause(page2, 4)
     page2.screenshot(path=os.path.join(SHOTS, "shot_ai_off.png"), full_page=True)
-    for tab in ("ask", "map", "library", "notes", "help"):
-        page2.click(f"nav a[data-tab={tab}]")
+    for tab in ("ask", "map", "library", "notes", "print", "help"):
+        page2.click(f"a[data-tab={tab}]")
         width = page2.evaluate("document.documentElement.scrollWidth")
         check(f"phone, {tab} tab: no sideways scroll", width <= 390, f"{width}px")
 

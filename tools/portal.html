@@ -539,6 +539,167 @@
         background: #fff;
       }
 
+      /* Print the essentials: what to print, numbered on across both lists in the site's step circles, then the
+         household's own page as it prints */
+      #printLink.on {
+        color: var(--bg);
+        background: var(--ink);
+      }
+      #printLink::before {
+        display: none;
+      }
+      #print {
+        counter-reset: doc;
+      }
+      #print .lead {
+        margin: 0 0 16px;
+        font-size: 17px;
+        color: var(--ink2);
+      }
+      .print-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .print-list li {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 20px;
+        padding: 14px 18px 16px 60px;
+        border: 2px solid var(--line);
+        counter-increment: doc;
+      }
+      .print-list li::before {
+        content: counter(doc);
+        position: absolute;
+        top: 14px;
+        left: 16px;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border: 2px solid var(--line);
+        border-radius: 50%;
+        font: 600 13px var(--mono);
+      }
+      .print-list .what {
+        flex: 1 1 20rem;
+      }
+      .print-list b {
+        font-size: 17px;
+      }
+      .print-list .pages {
+        margin-left: 10px;
+        font: 13px var(--mono);
+        color: var(--olive);
+        white-space: nowrap;
+      }
+      .print-list p {
+        margin: 4px 0 0;
+        font-size: 15px;
+        line-height: 1.45;
+        color: var(--ink2);
+      }
+      a.btn {
+        display: inline-flex;
+        align-items: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border: 2px solid var(--line);
+        border-radius: 4px;
+        font: 600 16px var(--sans);
+        color: var(--ink);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      a.btn:hover {
+        color: var(--ink);
+        background: var(--panel);
+      }
+      .sheet {
+        padding: 24px 28px;
+        border: 2px solid var(--line);
+        font-size: 15px;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+      .sheet h3 {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 4px 16px;
+        margin: 0;
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--line);
+        font: 600 15px var(--mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .sheet h3 span + span {
+        font-weight: 500;
+        letter-spacing: 0;
+        text-transform: none;
+      }
+      .sheet h4 {
+        margin: 18px 0 6px;
+        font: 600 12px var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--olive);
+      }
+      .sheet h4 small {
+        font-weight: 500;
+        letter-spacing: 0;
+        text-transform: none;
+      }
+      .sheet p,
+      .sheet ul {
+        margin: 0 0 6px;
+      }
+      .sheet ul {
+        padding-left: 18px;
+      }
+      .sheet li {
+        margin: 4px 0;
+      }
+      .sheet .coords,
+      .sheet small {
+        font: 12px var(--mono);
+        color: var(--ink2);
+      }
+      .sheet .notes-text {
+        white-space: pre-wrap;
+      }
+      .sheet .fill {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        align-items: flex-end;
+      }
+      .sheet .blank {
+        flex: 1;
+        min-width: 4rem;
+        height: 26px;
+        border-bottom: 1px solid var(--mute);
+      }
+      .sheet .screen {
+        flex: 1 0 100%;
+        font-size: 14px;
+        color: var(--ink2);
+      }
+      .sheet .foot {
+        margin: 20px 0 0;
+        padding-top: 8px;
+        border-top: 1px solid var(--mute);
+        font-size: 13px;
+        color: var(--ink2);
+      }
+
       /* Map: the panel beside the map fills the window under the header */
       main.wide {
         max-width: none;
@@ -790,6 +951,57 @@
           top: 12px;
           left: 12px;
         }
+        .print-list li {
+          padding: 12px 14px 14px 54px;
+        }
+        .print-list li::before {
+          top: 12px;
+          left: 12px;
+        }
+        .print-list a.btn,
+        .print-list button {
+          flex: 1 1 auto;
+          justify-content: center;
+        }
+        .sheet {
+          padding: 18px 16px;
+        }
+      }
+
+      /* Paper is white whatever the screen's colors, and Print the essentials prints the household's page alone */
+      @media print {
+        :root {
+          --bg: #fff;
+          --ink: #000;
+          --ink2: #222;
+          --mute: #777;
+          --olive: #333;
+          --line: #000;
+          --link: #000;
+          color-scheme: light;
+        }
+        header {
+          display: none;
+        }
+        main {
+          max-width: none;
+          padding: 0;
+        }
+        #print.on > :not(#sheet),
+        .sheet .screen {
+          display: none;
+        }
+        .sheet {
+          padding: 0;
+          border: 0;
+          font-size: 11pt;
+        }
+        .sheet h4 {
+          margin-top: 14px;
+        }
+        .sheet .blank {
+          height: 22px;
+        }
       }
     </style>
     <!--KIT:MAPS-->
@@ -835,6 +1047,7 @@
         title="When SETUP last brought every book, model and map up to date"
         hidden
       ></span>
+      <a id="printLink" class="pill" href="#print" data-tab="print">Print the essentials</a>
       <nav>
         <a href="#ask" data-tab="ask" class="on" aria-current="page">Ask</a>
         <a href="#map" data-tab="map">Map</a>
@@ -887,6 +1100,7 @@
           <select id="libLang" aria-label="Search the books in" hidden></select>
           <button type="submit">Search</button>
         </form>
+        <p class="note">Which pages to print first, while there's power: <a href="#print">Print the essentials</a>.</p>
         <div id="bookList"></div>
       </section>
 
@@ -910,7 +1124,8 @@
         <p class="note">
           Write down what you'd need to know in an emergency: who lives here, allergies and medicines, doctors, where to
           meet, where the water shut-off is. Ask reads your notes with every question, so its answers fit your
-          household.
+          household. <a href="#print">Print them</a> with your pins and the nearest hospital, for when the battery's
+          flat.
         </p>
         <p class="note">
           <span id="notesWhere"></span> They aren't encrypted: anyone with this drive or computer, or with the kit's
@@ -963,6 +1178,37 @@
         </div>
       </section>
 
+      <section id="print">
+        <h2>Print the essentials</h2>
+        <p class="lead">
+          If you have a printer, print these now, while there's power, and keep them with the kit. Most important first.
+          <span id="printTotal"></span>
+        </p>
+        <ol class="print-list" id="printFirst">
+          <li>
+            <div class="what">
+              <b>Your page</b><span class="pages">1 page</span>
+              <p>
+                Your home and pins with their coordinates, your notes, and the nearest hospitals. It's at the bottom.
+              </p>
+            </div>
+            <button type="button" id="printMine">Print your page</button>
+          </li>
+        </ol>
+        <h2 id="printMoreHead" hidden>Then, if you can</h2>
+        <ol class="print-list" id="printMore"></ol>
+        <p class="note">
+          To print only the pages shown, open it, press <kbd>Ctrl</kbd>+<kbd>P</kbd> (<kbd>⌘</kbd>+<kbd>P</kbd> on a
+          Mac), choose Pages and type them, e.g. 124-129. Some of these books run to hundreds of pages.
+        </p>
+        <p class="note">
+          These are the kit's books, and some of them are decades old: a first aid course teaches what's current. Get
+          trained medical help whenever you can reach it.
+        </p>
+        <h2>Your page</h2>
+        <div id="sheet" class="sheet"></div>
+      </section>
+
       <section id="help" class="help">
         <h2>Using the kit</h2>
         <ul>
@@ -991,6 +1237,10 @@
           <li>
             The first answer after picking a model is slow while it loads into memory (up to a minute). After that it's
             quick.
+          </li>
+          <li>
+            <b><a href="#print">Print the essentials</a></b> while there's power: the few pages of the kit's books worth
+            having on paper, and a page of your own with your notes, your pins and the nearest hospital.
           </li>
         </ul>
         <h2>Maps and directions</h2>
@@ -2261,6 +2511,105 @@
           });
         }
 
+        /* Print the essentials: the few pages worth having on paper, most important first, from the books every kit
+           has (the try-it kit's) and Ready.gov's, where a kit has it. Each is in one or more books, best first. Pages
+           are the PDF's own, as a print dialog takes them, checked in zimgit-medicine_en_2024-08,
+           zimgit-water_en_2024-08, zimgit-post-disaster_en_2024-05, irp.fas.org_en_military-medicine_2026-10 and
+           ready.gov_en_all_2026-10: a new edition of one of those needs them checked again. */
+        var NO_DOCTOR = [
+          ["zimgit-medicine_en", "files/First Aid and Medicine (11).pdf"],
+          ["zimgit-post-disaster_en", "files/First Aid and Medicine (11).pdf"],
+        ];
+        var PRINT = [
+          {
+            title: "Make water safe to drink",
+            about: "Boiling, bleach and storing water.",
+            doc: "Purifying Water During an Emergency (Washington State Department of Health)",
+            pages: 2,
+            from: [
+              ["zimgit-water_en", "files/Water (2).pdf"],
+              ["zimgit-post-disaster_en", "files/Water (2).pdf"],
+            ],
+          },
+          {
+            title: "First aid for the worst emergencies",
+            about: "Shock, someone unconscious, choking, rescue breathing, heat stroke and heavy bleeding.",
+            doc: "Where There Is No Doctor",
+            first: 124,
+            last: 129,
+            from: NO_DOCTOR,
+          },
+          {
+            title: "Diarrhea and dehydration",
+            about: "The rehydration drink, from clean water, sugar and salt.",
+            doc: "Where There Is No Doctor",
+            first: 198,
+            last: 199,
+            from: NO_DOCTOR,
+          },
+          {
+            title: "Power outages",
+            about: "Generators and carbon monoxide, and when food from the fridge is still safe to eat.",
+            doc: "Be Prepared for a Power Outage (Ready.gov)",
+            pages: 2,
+            from: [
+              ["ready.gov_en_all", "www.ready.gov/sites/default/files/2024-08/ready.gov_power-outage_info-sheet.pdf"],
+              [
+                "ready.gov_en_all",
+                "www.ready.gov/sites/default/files/2024-03/ready.gov_power-outage_hazard-info-sheet.pdf",
+              ],
+            ],
+          },
+          {
+            title: "Burns, broken bones and moving someone who's hurt",
+            doc: "Where There Is No Doctor",
+            first: 143,
+            last: 147,
+            from: NO_DOCTOR,
+            more: true,
+          },
+          {
+            title: "A tourniquet, for bleeding that pressing doesn't stop",
+            doc: "First Aid, the US Army's field manual FM 4-25.11",
+            first: 45,
+            last: 49,
+            from: [
+              ["zimgit-medicine_en", "files/First Aid and Medicine (3).pdf"],
+              ["irp.fas.org_en_military-medicine", "irp.fas.org/doddir/milmed/first.pdf"],
+              ["zimgit-post-disaster_en", "files/First Aid and Medicine (3).pdf"],
+            ],
+            more: true,
+          },
+        ];
+        // The documents a kit has, from its catalog, each with how many pages to print and its links: one for each
+        // book that has it, opening at the first page to print.
+        function printList(books, root) {
+          var byName = {};
+          books.forEach(function (b) {
+            var n = b.name || b.id.replace(/_\d{4}-\d\d$/, "");
+            byName[n] = byName[n] || b;
+          });
+          return PRINT.map(function (d) {
+            var links = d.from
+              .filter(function (f) {
+                return byName[f[0]];
+              })
+              .map(function (f) {
+                return (
+                  root +
+                  "/content/" +
+                  encodeURIComponent(byName[f[0]].id) +
+                  "/" +
+                  f[1].split("/").map(encodeURIComponent).join("/") +
+                  (d.first ? "#page=" + d.first : "")
+                );
+              });
+            return Object.assign({}, d, { count: d.first ? d.last - d.first + 1 : d.pages, links: links });
+          }).filter(function (d) {
+            return d.links.length;
+          });
+        }
+
         return {
           keywords: keywords,
           terms: terms,
@@ -2268,6 +2617,8 @@
           parseCatalog: parseCatalog,
           parseSearch: parseSearch,
           libraryLanguages: libraryLanguages,
+          PRINT: PRINT,
+          printList: printList,
           photonLang: photonLang,
           htmlToText: htmlToText,
           chunks: chunks,
@@ -2373,7 +2724,7 @@
             $("shareQr").src = "/_kit/qr.svg";
           }
           function showTab(name) {
-            document.querySelectorAll("nav a[data-tab]").forEach(function (x) {
+            document.querySelectorAll("a[data-tab]").forEach(function (x) {
               x.classList.toggle("on", x.dataset.tab === name);
               if (x.dataset.tab === name) x.setAttribute("aria-current", "page");
               else x.removeAttribute("aria-current");
@@ -2383,6 +2734,7 @@
             });
             document.querySelector("main").classList.toggle("wide", name === "map");
             if (name === "notes") loadNotes();
+            if (name === "print") showPrint();
             if (name === "map")
               // (with home and the pins as the kit has them, which may have changed on another device)
               loadPlaces().then(function () {
@@ -2393,7 +2745,7 @@
                   }, 0);
               });
           }
-          document.querySelectorAll("nav a[data-tab]").forEach(function (a) {
+          document.querySelectorAll("a[data-tab]").forEach(function (a) {
             a.addEventListener("click", function (ev) {
               ev.preventDefault();
               showTab(a.dataset.tab);
@@ -2402,7 +2754,7 @@
           });
           function tabInAddress() {
             var t = location.hash.slice(1);
-            return ["ask", "map", "library", "notes", "help"].indexOf(t) >= 0 ? t : "";
+            return ["ask", "map", "library", "notes", "print", "help"].indexOf(t) >= 0 ? t : "";
           }
           window.addEventListener("hashchange", function () {
             if (tabInAddress()) showTab(tabInAddress());
@@ -3740,6 +4092,181 @@
             progress("Done. Map results come from your offline map data (OpenStreetMap).");
             return true;
           }
+
+          /* ---------------------------------------------------------------- print the essentials */
+          // Each document from the first of its books that has it, and the household's own page from the notes, pins
+          // and home as the kit has them now. Printing from this tab prints that page alone.
+          var printDocs = null,
+            NEAREST = ["hospital", "urgent_care", "pharmacy", "fire_station", "police"],
+            FILL = [
+              "Who lives here",
+              "Allergies and medicines",
+              "Doctors and pharmacy",
+              "Where we meet",
+              "Someone to call outside the area",
+              "Water, gas and power shut-offs",
+            ];
+          async function opens(url) {
+            var c = new AbortController(),
+              t = setTimeout(function () {
+                c.abort();
+              }, 5000);
+            try {
+              var r = await fetch(url.split("#")[0], { headers: { Range: "bytes=0-0" }, signal: c.signal });
+              return r.ok;
+            } catch (e) {
+              return false;
+            } finally {
+              clearTimeout(t);
+              c.abort(); // only whether it's there: none of the file
+            }
+          }
+          async function showPrint() {
+            if (!printDocs) {
+              if (!books.length) await loadBooks().catch(function () {});
+              var docs = await Promise.all(
+                Kit.printList(books, ROOT).map(async function (d) {
+                  for (var i = 0; i < d.links.length; i++)
+                    if (await opens(d.links[i])) return Object.assign(d, { href: d.links[i] });
+                  return null;
+                }),
+              );
+              docs = docs.filter(Boolean);
+              if (books.length) printDocs = docs;
+              var html = { first: "", more: "" },
+                total = 1;
+              docs.forEach(function (d) {
+                total += d.count;
+                html[d.more ? "more" : "first"] +=
+                  '<li class="doc"><div class="what"><b>' +
+                  esc(d.title) +
+                  '</b><span class="pages">' +
+                  d.count +
+                  " pages</span><p>" +
+                  (d.about ? esc(d.about) + " " : "") +
+                  "<i>" +
+                  esc(d.doc) +
+                  "</i>: " +
+                  (d.first ? "pages " + d.first + "&ndash;" + d.last : "all of it") +
+                  '.</p></div><a class="btn" href="' +
+                  esc(d.href) +
+                  '" target="_blank" rel="noopener">' +
+                  (d.first ? "Open at page " + d.first : "Open it") +
+                  "</a></li>";
+              });
+              $("printFirst")
+                .querySelectorAll(".doc")
+                .forEach(function (li) {
+                  li.remove();
+                });
+              $("printFirst").insertAdjacentHTML("beforeend", html.first);
+              $("printMore").innerHTML = html.more;
+              $("printMoreHead").hidden = !html.more;
+              $("printTotal").textContent = docs.length ? "About " + total + " pages in all." : "";
+            }
+            await Promise.all([loadNotes(), loadPlaces()]);
+            renderSheet();
+          }
+          function homeSet() {
+            var h = placesUp ? homeSaved : fromBrowser("home");
+            return h && isFinite(h.lat) && isFinite(h.lon) ? h : null;
+          }
+          function coords(p) {
+            return Kit.fmtLatLon(p.lat, p.lon) + " &middot; " + Kit.fmtDMS(p.lat, p.lon);
+          }
+          function renderSheet() {
+            var home = homeSet(),
+              text = notesBox.value.trim(),
+              day = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }),
+              s = "<h3><span>Tinfoil Kit</span><span>Printed " + esc(day) + "</span></h3><h4>Home</h4>";
+            s += home
+              ? "<p>" + esc(home.label || "Home") + ' <span class="coords">' + coords(home) + "</span></p>"
+              : '<p class="fill"><span class="blank"></span><span class="screen">Set home on the <a href="#map">Map</a> ' +
+                "tab, and your page gets its coordinates and the nearest hospitals.</span></p>";
+            if (pins.length)
+              s +=
+                "<h4>Pins</h4><ul>" +
+                pins
+                  .map(function (p) {
+                    return (
+                      "<li><b>" +
+                      esc(p.name) +
+                      "</b>" +
+                      (p.note ? ": " + esc(p.note) : "") +
+                      '<br><span class="coords">' +
+                      coords(p) +
+                      (home ? " &middot; " + dist(Kit.haversine(home, p)) + " from home" : "") +
+                      "</span></li>"
+                    );
+                  })
+                  .join("") +
+                "</ul>";
+            if (home && KM.available && GEO)
+              s +=
+                '<div id="sheetNear"><h4>Nearest to home <small>(as the crow flies)</small></h4>' +
+                '<ul><li class="screen">Looking them up...</li></ul></div>';
+            s += "<h4>Notes</h4>";
+            // Lines to write on, fewer when the nearest places take the room, so the page stays one sheet
+            s += text
+              ? '<div class="notes-text">' + esc(text) + "</div>"
+              : FILL.map(function (f) {
+                  return (
+                    '<p class="fill">' +
+                    esc(f) +
+                    '<span class="blank"></span></p>' +
+                    '<p class="blank"></p>'.repeat(home ? 1 : 2)
+                  );
+                }).join("") +
+                '<p class="screen">Or write them on the <a href="#notes">Notes</a> tab, and they print here.</p>';
+            s +=
+              '<p class="foot">Tinfoil Kit: an AI, a library and maps that work with no internet. To start it, see ' +
+              "GUIDE.md in the kit's app folder.</p>";
+            $("sheet").innerHTML = s;
+            if ($("sheetNear")) nearest($("sheetNear"));
+          }
+          async function nearest(box) {
+            var rows = (await ping(GEO + "/status"))
+              ? await Promise.all(
+                  NEAREST.map(function (cat) {
+                    return Kit.findNearby(mapOpts(), cat, "home", 2).catch(function () {
+                      return null;
+                    });
+                  }),
+                )
+              : [];
+            var html = rows
+              .filter(function (r) {
+                return r && r.places.length;
+              })
+              .map(function (r) {
+                return (
+                  "<li><b>" +
+                  esc(r.label) +
+                  "</b>: " +
+                  r.places
+                    .map(function (p) {
+                      return (
+                        esc(p.name) +
+                        (p.address ? ", " + esc(p.address) : "") +
+                        " <small>(" +
+                        dist(p.distance_m) +
+                        " " +
+                        p.direction +
+                        ")</small>"
+                      );
+                    })
+                    .join("; ") +
+                  "</li>"
+                );
+              })
+              .join("");
+            if (!box.isConnected) return; // the page was drawn again meanwhile
+            if (html) box.querySelector("ul").innerHTML = html;
+            else box.remove();
+          }
+          $("printMine").addEventListener("click", function () {
+            window.print();
+          });
 
           if (!KM.available) {
             $("mapOff").hidden = false;

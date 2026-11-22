@@ -509,6 +509,7 @@ all_set() {
   else
     echo "In an outage: plug in the drive, open ${KIT##*/}/app and double-click Open Tinfoil Kit.command. No internet needed."
   fi
+  echo "While you have power, open the kit and click Print the essentials at the top: about 20 pages worth having on paper."
   if [ $MAC = 1 ]; then again="double-click it again"; else again="run it again"; fi
   echo
   echo "Also in the app folder:"

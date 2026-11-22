@@ -46,6 +46,7 @@ Photon and GraphHopper run on a Java that's in the kit. Every server listens onl
 
 - Ask: the AI turns the question into short searches, kiwix-serve searches every book, and the AI answers from the top articles with numbered sources. With the AI off, Ask shows the best passages. Map questions ("nearest pharmacy", "directions to the hospital") go to three map tools instead (search places, find nearby, get directions), and the answer shows on the Map tab.
 - Notes: what the person keeps about their household (allergies, medicines, who to call, where to meet), in data/notes.txt. The AI reads them with every question on Ask.
+- Print the essentials, a link at the top of the kit page: the few pages of the kit's books worth having on paper, most important first (making water safe, first aid, dehydration, power outages), each opening at the first page to print, and a page of the household's own (home and pins with their coordinates, notes, the nearest hospitals) that prints alone.
 - The kit page (tools/portal.html) is one HTML file. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
 - The kit's code: `./kit` (`.\kit.cmd` on Windows) runs the kit's own program, tools/tinfoilkit-* (built from the Go source in tools/tinfoilkit/, standard library only, with curl for every download), and Open Tinfoil Kit starts the servers with it (`./kit open`). Every download carries the program. A git checkout or GitHub's Download ZIP has none until `tools/tinfoilkit/build.sh` builds it (it needs Go); with Go installed, `./kit` builds it by itself.
 
@@ -187,6 +188,7 @@ SETUP's last message says how big the rest is, how long it takes at the speed it
 
 - Add `--even-if-tight` to get all of it even if that leaves less free space than SETUP likes. Without it, SETUP takes all of what they picked if it fits with room to spare, or else the essentials, and says so.
 - Double-clicking SETUP again (Update, in the Mac app) gets the rest too. Without `--yes`, it asks the kit builder's questions first (`./kit pick --ask`), unless what goes in was picked already.
+- When it's done, suggest they open the kit and print the essentials while they have power (the link at the top of its page): about 20 pages, and a page of their own with their notes, pins and the nearest hospitals.
 
 ### For people who'd rather click
 
@@ -219,7 +221,7 @@ For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` fo
 
 - Open the Tinfoil Kit app on a Mac that has it, or double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows), or run `bash "Open Tinfoil Kit.command"`. It opens http://127.0.0.1:8888. Keep its window open: closing it stops everything.
 - Open Tinfoil Kit.command's options: `--share` lets phones and laptops on the same network open it with an access code (it prints the address, the code and a QR code), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in downloads/models/), `--no-browser` skips opening the browser. Open Tinfoil Kit for Windows.bat and `./kit open` take the same. If macOS asks whether to accept incoming connections, click Allow; if Windows asks whether tinfoilkit-windows-x64.exe may use the network, click Allow access.
-- Ask answers from the books and cites them. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station, and keeps pins. Notes holds what the AI should know about the household, like an allergy or a medicine; they aren't encrypted, so passwords and bank details stay out.
+- Ask answers from the books and cites them. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station, and keeps pins. Notes holds what the AI should know about the household, like an allergy or a medicine; they aren't encrypted, so passwords and bank details stay out. Print the essentials, at the top of the page, lists the pages worth printing while there's power.
 - Models: pick one on the Ask page. The first answer after switching takes up to a minute while it loads.
 - Map: set home first, since a laptop has no GPS (Set as home on a search result, or Set home to the map center). For actually driving, a phone with offline maps and GPS is better; the kit's map is for planning and for the AI's map questions.
 - Power: a big model drains a laptop battery in a couple of hours of steady use. Gemma 4 E4B saves battery, and the Library tab uses almost nothing.

@@ -17,6 +17,7 @@ import {
   PINS,
   PLACES,
   POND,
+  PRINT,
   QUESTIONS,
   RIVER,
   STREETS,
@@ -1100,6 +1101,128 @@ function ChatPanel() {
   );
 }
 
+/* ----------------------------------------------------------------------------------- print the essentials */
+const NEAR = ["hospital", "urgent_care", "pharmacy", "fire_station", "police"];
+const pages = (d) => (d.first ? d.last - d.first + 1 : d.pages);
+const BLANKS = [
+  "Who lives here",
+  "Allergies and medicines",
+  "Doctors and pharmacy",
+  "Where we meet",
+  "Someone to call outside the area",
+  "Water, gas and power shut-offs",
+];
+
+// Drawn only while it shows, so the date it was printed is the visitor's, not the build's.
+function PrintPanel({ notes, say }) {
+  const day = new Date().toLocaleDateString(undefined, { dateStyle: "long" });
+  const text = notes.trim();
+  const doc = (d) => (
+    <li key={d.title}>
+      <div>
+        <b>{d.title}</b>
+        <span className="kd-pages">{pages(d)} pages</span>
+        <p>
+          {d.about && d.about + " "}
+          <i>{d.doc}</i>: {d.first ? `pages ${d.first}–${d.last}` : "all of it"}.
+        </p>
+      </div>
+      <button
+        type="button"
+        className="kd-btn secondary"
+        onClick={() => say(`In the kit, this opens ${d.doc}${d.first ? " at page " + d.first : ""}, offline.`)}
+      >
+        {d.first ? "Open at page " + d.first : "Open it"}
+      </button>
+    </li>
+  );
+  return (
+    <>
+      <h3 className="kd-h" id="kd-print-h">
+        Print the essentials
+      </h3>
+      <p className="kd-lead">
+        If you have a printer, print these now, while there&apos;s power, and keep them with the kit. Most important
+        first. About {PRINT.reduce((t, d) => t + pages(d), 1)} pages in all.
+      </p>
+      <ol className="kd-sources kd-print">
+        <li>
+          <div>
+            <b>Your page</b>
+            <span className="kd-pages">1 page</span>
+            <p>Your home and pins, your notes, and the nearest hospitals. It&apos;s at the bottom.</p>
+          </div>
+          <button type="button" className="kd-btn" onClick={() => say("In the kit, this prints your page alone.")}>
+            Print your page
+          </button>
+        </li>
+        {PRINT.filter((d) => !d.more).map(doc)}
+      </ol>
+      <h3 className="kd-h">Then, if you can</h3>
+      <ol className="kd-sources kd-print">{PRINT.filter((d) => d.more).map(doc)}</ol>
+      <p className="kd-note">
+        These are the kit&apos;s books, and some of them are decades old: a first aid course teaches what&apos;s
+        current. Get trained medical help whenever you can reach it.
+      </p>
+      <h3 className="kd-h">Your page</h3>
+      <div className="kd-sheet">
+        <div className="kd-sheethead">
+          <span>Tinfoil Kit</span>
+          <span>Printed {day}</span>
+        </div>
+        <h4>Home</h4>
+        <p>{HOME.address}</p>
+        <h4>Pins</h4>
+        <ul>
+          {PINS.map((p) => (
+            <li key={p.id}>
+              <b>{p.name}</b>: {p.note}
+              <br />
+              <small>{fmtDist(seg(HOME.xy, p.xy))} from home</small>
+            </li>
+          ))}
+        </ul>
+        <h4>
+          Nearest to home <small>(as the crow flies)</small>
+        </h4>
+        <ul>
+          {NEAR.map((k) => (
+            <li key={k}>
+              <b>{KIND[k]}</b>:{" "}
+              {nearest(k)
+                .slice(0, 2)
+                .map((p, i) => (
+                  <Fragment key={p.id}>
+                    {i > 0 && "; "}
+                    {p.name}, {p.address}{" "}
+                    <small>
+                      ({fmtDist(p.d)} {p.dir})
+                    </small>
+                  </Fragment>
+                ))}
+            </li>
+          ))}
+        </ul>
+        <h4>Notes</h4>
+        {text ? (
+          <p className="kd-sheetnotes">{text}</p>
+        ) : (
+          BLANKS.map((f) => (
+            <p key={f} className="kd-fill">
+              {f}
+              <span />
+            </p>
+          ))
+        )}
+        <p className="kd-sheetfoot">
+          Tinfoil Kit: an AI, a library and maps that work with no internet. To start it, see GUIDE.md in the kit&apos;s
+          app folder.
+        </p>
+      </div>
+    </>
+  );
+}
+
 /* --------------------------------------------------------------------------------------------- the window */
 const TABS = [
   ["ask", "Ask"],
@@ -1161,6 +1284,14 @@ export default function Demo() {
         </span>
         <span className="kd-pill">Library: on</span>
         <span className="kd-pill">AI: ready</span>
+        <button
+          type="button"
+          className="kd-pill kd-printlink"
+          aria-current={tab === "print" ? "page" : undefined}
+          onClick={() => setTab("print")}
+        >
+          Print the essentials
+        </button>
         <div className="kd-tabs" role="tablist" aria-label="The kit page">
           {TABS.map(([id, label]) => (
             <button
@@ -1170,7 +1301,7 @@ export default function Demo() {
               id={"kd-tab-" + id}
               aria-selected={tab === id}
               aria-controls={"kd-" + id}
-              tabIndex={tab === id ? 0 : -1}
+              tabIndex={id === (tab === "print" ? "ask" : tab) ? 0 : -1}
               onClick={() => setTab(id)}
               onKeyDown={keys}
             >
@@ -1208,6 +1339,9 @@ export default function Demo() {
       </div>
       <div {...panel("chat")} className="kd-page">
         <ChatPanel />
+      </div>
+      <div id="kd-print" role="region" aria-labelledby="kd-print-h" hidden={tab !== "print"} className="kd-page">
+        {tab === "print" && <PrintPanel notes={notes} say={say} />}
       </div>
       <div className="kd-toast" role="status">
         {toast && <span>{toast}</span>}

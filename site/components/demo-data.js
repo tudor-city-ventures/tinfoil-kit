@@ -200,6 +200,50 @@ If we're split up, we meet at the library on Main Street.
 Water shut-off: in the basement, by the furnace.
 Dr. Patel: (802) 555-0147`;
 
+// Print the essentials, as a kit with Ready.gov's books lists it (PRINT in tools/portal.html).
+export const PRINT = [
+  {
+    title: "Make water safe to drink",
+    about: "Boiling, bleach and storing water.",
+    doc: "Purifying Water During an Emergency (Washington State Department of Health)",
+    pages: 2,
+  },
+  {
+    title: "First aid for the worst emergencies",
+    about: "Shock, someone unconscious, choking, rescue breathing, heat stroke and heavy bleeding.",
+    doc: "Where There Is No Doctor",
+    first: 124,
+    last: 129,
+  },
+  {
+    title: "Diarrhea and dehydration",
+    about: "The rehydration drink, from clean water, sugar and salt.",
+    doc: "Where There Is No Doctor",
+    first: 198,
+    last: 199,
+  },
+  {
+    title: "Power outages",
+    about: "Generators and carbon monoxide, and when food from the fridge is still safe to eat.",
+    doc: "Be Prepared for a Power Outage (Ready.gov)",
+    pages: 2,
+  },
+  {
+    title: "Burns, broken bones and moving someone who's hurt",
+    doc: "Where There Is No Doctor",
+    first: 143,
+    last: 147,
+    more: true,
+  },
+  {
+    title: "A tourniquet, for bleeding that pressing doesn't stop",
+    doc: "First Aid, the US Army's field manual FM 4-25.11",
+    first: 45,
+    last: 49,
+    more: true,
+  },
+];
+
 // AI chat: a plain chat with the AI, no books.
 export const CHATS = [
   {

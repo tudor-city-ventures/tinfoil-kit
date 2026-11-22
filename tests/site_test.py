@@ -1073,6 +1073,19 @@ with sync_playwright() as p:
         and demo.get_attribute("#kd-tab-ask", "aria-selected") == "true"
         and demo.is_hidden("#kd-chat"),
     )
+    demo.click(".kd-printlink")
+    sheet = demo.inner_text("#kd-print .kd-sheet")
+    check(
+        "demo: Print the essentials lists the pages to print, then a page with the notes and the nearest hospital",
+        "About 23 pages in all" in demo.inner_text("#kd-print .kd-lead")
+        and demo.locator("#kd-print .kd-print li").count() == 7
+        and "we meet at the fire station" in sheet
+        and "Riverside General Hospital" in sheet
+        and demo.get_attribute(".kd-printlink", "aria-current") == "page"
+        and demo.get_attribute("#kd-tab-ask", "tabindex") == "0",
+        sheet[:300],
+    )
+    axe(demo, "demo's print the essentials")
     check("demo: no page errors", not errs, "; ".join(errs))
     demo.close()
     demo = b.new_page(viewport={"width": 390, "height": 844}, reduced_motion="reduce")

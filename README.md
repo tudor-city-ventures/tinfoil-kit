@@ -59,6 +59,7 @@ The kit page (`tools/portal.html`) is one HTML file with no build step. Each syn
 - **Ask:** the AI turns your question into short searches, `kiwix-serve` searches every book, and the AI answers from the top articles with numbered sources. With the AI off, Ask shows the best passages instead. Map questions ("nearest pharmacy", "directions to the hospital") skip the library: the AI gets three map tools (search places, find nearby, get directions), and the answer shows on the Map tab.
 - **Map:** MapLibre draws the map from `pmtiles`. Its search, directions and "nearest" buttons ask Photon and GraphHopper. Home and pins are saved in the kit (`data/places.json`).
 - **Notes:** what the AI should know about your household (allergies, medicines, who to call, where to meet), in `data/notes.txt`, a plain text file. The AI reads them with every question on Ask, map questions included.
+- **Print the essentials:** the few pages of the kit's books worth having on paper, most important first (making water safe, first aid, dehydration, power outages), each opening at the first page to print, and a page of the household's own (home and pins with their coordinates, the notes, and the nearest hospitals and pharmacies) that prints alone.
 
 ### What's in the folder
 

@@ -1961,6 +1961,131 @@ pre.code {
   line-height: 1.5;
   color: var(--ink2);
 }
+/* Print the essentials: numbered on across both lists, then the household's own page */
+.kd-printlink {
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.kd-printlink::before {
+  content: none;
+}
+.kd-printlink:hover {
+  background: var(--paper2);
+}
+.kd-printlink[aria-current="page"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+#kd-print {
+  counter-reset: src;
+}
+.kd-lead {
+  margin: 0 0 16px;
+  font-size: 17px;
+  color: var(--ink2);
+}
+.kd-print {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kd-print li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+.kd-print li > div {
+  flex: 1 1 18rem;
+}
+.kd-print b {
+  font-size: 17px;
+}
+.kd-pages {
+  margin-left: 10px;
+  font: 13px var(--mono);
+  color: var(--olive);
+  white-space: nowrap;
+}
+.kd-print p {
+  margin: 4px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink2);
+}
+.kd-sheet {
+  padding: 24px 28px;
+  border: var(--rule);
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.kd-sheethead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding-bottom: 8px;
+  border-bottom: var(--rule);
+  font: 600 15px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.kd-sheethead span + span {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.kd-sheet h4 {
+  margin: 18px 0 6px;
+  font: 600 12px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--olive);
+}
+.kd-sheet h4 small {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.kd-sheet p,
+.kd-sheet ul {
+  margin: 0 0 6px;
+}
+.kd-sheet ul {
+  padding-left: 18px;
+}
+.kd-sheet li {
+  margin: 4px 0;
+}
+.kd-sheet small {
+  font: 12px var(--mono);
+  color: var(--ink2);
+}
+.kd-sheetnotes {
+  white-space: pre-wrap;
+}
+.kd-fill {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.kd-fill span {
+  flex: 1;
+  height: 26px;
+  border-bottom: 1px solid var(--mute);
+}
+.kd-sheet .kd-sheetfoot {
+  margin: 20px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--mute);
+  font-size: 13px;
+  color: var(--ink2);
+}
 .kd-libsearch input {
   flex: 1 1 20rem;
   min-width: 0;
@@ -2390,6 +2515,12 @@ pre.code {
   .kd-sources li::before {
     top: 12px;
     left: 12px;
+  }
+  .kd-print .kd-btn {
+    flex: 1 1 auto;
+  }
+  .kd-sheet {
+    padding: 18px 16px;
   }
   .kd-sources blockquote {
     display: -webkit-box;

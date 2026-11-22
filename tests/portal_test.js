@@ -80,6 +80,26 @@ const check = (name, ok, detail) => {
     merge.every(Boolean),
     JSON.stringify(merge),
   );
+  // Print the essentials, from a kit with two of the books and no Ready.gov
+  const printed = Kit.printList(
+    [
+      { id: "zimgit-post-disaster_en_2024-05", name: "zimgit-post-disaster_en" },
+      { id: "zimgit-medicine_en_2024-08", name: "zimgit-medicine_en" },
+    ],
+    "/root",
+  );
+  const aid = printed.find((d) => d.first === 124) || { links: [] };
+  check(
+    "print list: what the kit's books have, linked at the first page to print, the best book first",
+    printed.length === Kit.PRINT.length - 1 &&
+      !printed.some((d) => /Ready\.gov/.test(d.doc)) &&
+      aid.count === 6 &&
+      aid.links[0] ===
+        "/root/content/zimgit-medicine_en_2024-08/files/First%20Aid%20and%20Medicine%20(11).pdf#page=124" &&
+      String(aid.links[1]).startsWith("/root/content/zimgit-post-disaster_en_2024-05/files/") &&
+      printed.reduce((t, d) => t + d.count, 1) === 21,
+    printed.map((d) => `${d.title}: ${d.count}`).join("; "),
+  );
 
   // live: catalog + search + sources
   const books = Kit.parseCatalog(await (await fetch(LIB + "/catalog/v2/entries?count=-1")).text());

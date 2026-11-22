@@ -35,6 +35,9 @@ Nothing here needs the internet, an account, or an install.
   to meet. The AI reads them with every question on Ask. They're saved in the kit, in `data/notes.txt` (a plain text
   file you can also open in any text editor), and every browser and phone on the kit sees the same notes. They aren't
   encrypted, so leave out passwords and bank details.
+- **Print the essentials** (at the top of the page): about 20 pages of the kit's books worth having on paper, most
+  important first, from making water safe to first aid, and a page of your own with your notes, your pins and the
+  nearest hospitals. Print them while you have power and keep them with the kit.
 - **AI chat**: plain chat with the AI. You can attach a photo (a broken part, a label). It doesn't search the library,
   so check anything important there, and never eat a wild plant or mushroom because an AI said it was safe.
 - **Models**: pick from the list on the Ask page.
@@ -197,7 +200,7 @@ To remove the Mac app too, drag it from Applications to the Trash.
 
 Running a big model uses a lot of battery: expect a couple of hours of active use on a laptop battery. A USB-C power
 station plus a folding solar panel keeps it going. Use `Gemma-4-E4B` when power is short, and the Library tab (no AI)
-uses almost nothing.
+uses almost nothing. Paper uses none: print the essentials while you can.
 
 ## If something doesn't work
 
