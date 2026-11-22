@@ -40,6 +40,18 @@ export const metadata = {
 };
 
 // What search engines and AI answer engines read about the kit. Keep its facts in step with the copy.
+// How it compares: what each kit is, from its own docs. Keep it factual, and say where Project NOMAD is ahead.
+const COMPARE = [
+  ["Runs on", "The Mac, Windows or Linux computer you have", "A PC running Ubuntu or Debian, usually one set aside for it"],
+  ["Setup", "Double-click, or paste one command. No Docker or admin password.", "One command, run as admin. It runs in Docker."],
+  ["Where it lives", "One folder, on an external drive or your computer. The drive works on any Mac, Windows or Linux computer.", "On that PC"],
+  ["Library", "Wikipedia, plus medical, preparedness and repair books, from Kiwix", "Kiwix collections too, plus Khan Academy courses through Kolibri"],
+  ["AI", "Answers from every book, with sources. Nothing to index first.", "Chat that answers from your own documents and its books, once it indexes them"],
+  ["Maps", "Address search, driving and walking directions, the nearest hospital, and pins", "Offline maps, with pins and notes"],
+  ["Sharing at home", "Off until you turn it on, then behind an access code", "Open to every device on the network, with no login, by design"],
+  ["Apps", "Just the library, the AI and the map", "An app catalog: CyberChef, notes, translation and more"],
+];
+
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
@@ -252,6 +264,34 @@ export default function Home() {
             </ul>
           </div>
         </section>
+        <section id="compare" className="band" data-for="human">
+          <div className="wrap section">
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <p className="kicker">How it compares</p>
+              <h2>How it's different from Project NOMAD.</h2>
+              <p style={{ fontSize: "18px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "680px" }}><a href="https://github.com/Crosstalk-Solutions/project-nomad">Project NOMAD</a>, from Crosstalk Solutions, is another free, open-source way to keep knowledge offline. It turns a spare PC into an offline server. Tinfoil Kit goes on the laptop you have, or on a drive you can plug into any computer.</p>
+            </div>
+            <table className="compare" role="table">
+              <thead role="rowgroup">
+                <tr role="row">
+                  <td role="cell" />
+                  <th scope="col" role="columnheader">Tinfoil Kit</th>
+                  <th scope="col" role="columnheader">Project NOMAD</th>
+                </tr>
+              </thead>
+              <tbody role="rowgroup">
+                {COMPARE.map(([what, ours, theirs]) => (
+                  <tr key={what} role="row">
+                    <th scope="row" role="rowheader">{what}</th>
+                    <td role="cell" data-label="Tinfoil Kit">{ours}</td>
+                    <td role="cell" data-label="Project NOMAD">{theirs}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="compare-note">Pick Project NOMAD for a home server with apps, and an AI that reads your own documents. Pick Tinfoil Kit for the laptop you have, or a drive that works on any computer.</p>
+          </div>
+        </section>
         <section id="faq" className="wrap section" data-for="human">
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <p className="kicker">Questions</p>
@@ -348,6 +388,12 @@ export default function Home() {
               </div>
             </details>
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
+              <summary itemProp="name">How is Tinfoil Kit different from Project NOMAD?</summary>
+              <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
+                <p itemProp="text">Project NOMAD, from Crosstalk Solutions, is also free and open source. It turns a PC running Ubuntu or Debian into an offline server, in Docker, with an app catalog and an AI that can answer from your own documents. Tinfoil Kit runs on the Mac, Windows or Linux computer you have, with no Docker, from one folder that can live on a drive you plug into any of them. Its map finds addresses and gives directions, and sharing it at home takes an access code. <a href="#compare">The comparison above</a> has more.</p>
+              </div>
+            </details>
+            <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
               <summary itemProp="name">Can I trust the AI's answers?</summary>
               <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
                 <p itemProp="text">Check it, like you'd check a well-read friend. Each answer shows the pages it came from, so you can read them yourself. For anything medical, use it to look things up in WikiMed and the Army's medical manuals. It isn't a doctor: read the source, and get trained help when you can.</p>
@@ -424,7 +470,7 @@ export default function Home() {
           {' '}
           <span>Tinfoil Kit · MIT · No analytics on this site · <a href="/llms.txt">llms.txt</a> for AI agents</span>
           {' '}
-          <span className="fine">Provided as is, with no warranty, and not medical advice. Not affiliated with Apple, Wikipedia, Kiwix or any source named here; their names are their owners' trademarks. <a href="https://github.com/tudor-city-ventures/tinfoil-kit/blob/main/THIRD-PARTY.md">Third-party licenses</a>.</span>
+          <span className="fine">Provided as is, with no warranty, and not medical advice. Not affiliated with Apple, Wikipedia, Kiwix, Project NOMAD or any source named here; their names are their owners' trademarks. <a href="https://github.com/tudor-city-ventures/tinfoil-kit/blob/main/THIRD-PARTY.md">Third-party licenses</a>.</span>
         </div>
       </footer>
     </>

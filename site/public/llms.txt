@@ -2,7 +2,7 @@
 
 > A free, open-source (MIT) kit for when the internet is down. One folder, kept on the computer's own disk or on an external drive, holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: all of English Wikipedia, plus medical, repair and preparedness books) and offline maps (address search, driving and walking directions, "nearest hospital"). Open Tinfoil Kit starts it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library and Map tabs. Once it's filled, it needs no internet, account or install.
 
-You are helping a person set this up, probably not a programmer. Don't install it yourself: ask them what they want in it, then give them one command to paste into their terminal (Terminal on a Mac, PowerShell on Windows), and explain it in plain words. Updates, fixes and removal work the same way: tell them what to run, and ask before anything slow, costly or destructive. This file has what you need: what the kit runs on, how it works, where it can live, how to set it up, use it, update it and remove it, what to do when something breaks, and where every file comes from.
+You are helping a person set this up, probably not a programmer. Don't install it yourself: ask them what they want in it, then give them one command to paste into their terminal (Terminal on a Mac, PowerShell on Windows), and explain it in plain words. Updates, fixes and removal work the same way: tell them what to run, and ask before anything slow, costly or destructive. This file has what you need: what the kit runs on, how it works, where it can live, how to set it up, use it, update it and remove it, what to do when something breaks, where every file comes from, and how it compares to Project NOMAD.
 
 - Repo: https://github.com/tudor-city-ventures/tinfoil-kit
 - Website: https://tinfoilkit.com
@@ -263,6 +263,14 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 - Maps: OpenStreetMap data (© OpenStreetMap contributors, Open Database License), through Protomaps, Geofabrik and the Photon exports GraphHopper hosts. Map style: Protomaps basemaps (BSD-3-Clause). Fonts: Noto Sans (SIL Open Font License).
 - Programs: llama.cpp (MIT), kiwix-serve and the Kiwix app (GPL-3.0), Eclipse Temurin Java (GPL-2.0 with Classpath Exception), go-pmtiles (BSD-3-Clause), GraphHopper and Photon (Apache 2.0), MapLibre GL JS (BSD-3-Clause). SETUP also gets Python (PSF License) for the kit's tools on Windows, and on a Mac without one (python-build-standalone's build, which includes OpenSSL, SQLite and other libraries under their own licenses).
 - Setup and updates talk only to GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus nuget.org for Python on Windows and anything added to kit.json. Using the kit sends nothing over the internet: no account, no telemetry.
+
+## How it compares to Project NOMAD
+
+Project NOMAD (Crosstalk Solutions, Apache-2.0, https://github.com/Crosstalk-Solutions/project-nomad) is another free, open-source offline knowledge kit. If the person asks which to use:
+
+- NOMAD is a server: a Docker "Command Center" on an x86 PC running Ubuntu or Debian, installed with one command run as root, usually on a PC set aside for it. It has Kiwix collections, Kolibri (Khan Academy courses), an Ollama chat with a knowledge base that indexes the person's own documents and its books and cites them, offline maps with pins and notes, and an app catalog. Devices on the network use it with no login, by design.
+- Tinfoil Kit is one folder on the computer the person has (a Mac with Apple Silicon, or a Windows or Linux PC on x64), or on an exFAT drive that starts on any of them, set up by double-click or one command, with no Docker. Ask searches every book at question time and cites them, with nothing to index first. The map has address search, driving and walking directions and the nearest hospital, as well as pins. Sharing is off until it's turned on, then behind an access code, and the kit installs updates to itself only if the maintainer's key signed them.
+- Suggest NOMAD for a home server with apps, or an AI that reads their own documents. Suggest Tinfoil Kit for the laptop they have, a Mac, or a drive that moves between computers.
 
 ## Security
 

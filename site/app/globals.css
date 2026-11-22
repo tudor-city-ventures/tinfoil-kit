@@ -233,6 +233,19 @@ code{font:.9em var(--mono)}
 .total .acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));width:100%}.total .long{display:none}.total .btn{min-height:44px;font-size:14px;padding:0 10px;justify-content:center}}
 @media (max-width:420px){.readas .wrap{gap:6px 10px;font-size:12px;letter-spacing:.02em}.readas .seg{gap:4px}.readas button{padding:0 8px}.prompt .doc{padding:16px;font-size:13px}}
 @media (max-height:600px){.total{position:static}}
+/* How it compares: a table, and on a phone a card per row, each answer labeled */
+.compare{width:100%;table-layout:fixed;border-collapse:collapse;background:var(--paper);font-size:16px;line-height:1.45}
+.compare th,.compare td{border:1px solid var(--ink);padding:14px 16px;text-align:left;vertical-align:top}
+.compare thead th{font:600 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--olive);background:var(--paper2)}
+.compare thead td{width:20%;background:var(--paper2)}
+.compare tbody th{font:600 16px/1.45 var(--sans);color:var(--ink)}
+.compare td{color:var(--ink2)}
+.compare-note{margin:0;max-width:760px;font-size:17px;line-height:1.55;color:var(--ink2)}
+@media (max-width:600px){.compare,.compare tbody,.compare tr,.compare th,.compare td{display:block;width:auto}
+.compare thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.compare tr{border:1px solid var(--ink);border-top:0}.compare tbody tr:first-child{border-top:1px solid var(--ink)}
+.compare tbody th,.compare td{border:0;padding:4px 14px}.compare tbody th{padding-top:14px}.compare td:last-child{padding-bottom:14px}
+.compare td::before{content:attr(data-label);display:block;font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--olive)}}
 /* The 404 page */
 .nf{min-height:100vh;display:grid;place-items:center;padding:24px}
 .nf main{max-width:560px}

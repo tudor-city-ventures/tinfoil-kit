@@ -142,6 +142,9 @@ with sync_playwright() as p:
               where == ("beside" if name == "desktop" else "below") and star.inner_text().strip() == "Star on GitHub"
               and star.get_attribute("href") == "https://github.com/tudor-city-ventures/tinfoil-kit", where)
         if name == "phone":
+            label = page.evaluate("getComputedStyle(document.querySelector('#compare tbody td'), '::before').content")
+            check("phone: How it compares shows a card per point, each answer labeled", label == '"Tinfoil Kit"'
+                  and page.evaluate("getComputedStyle(document.querySelector('#compare tbody tr')).display") == "block", label)
             page.set_viewport_size({"width": 320, "height": 640})    # the narrowest width WCAG asks a page to fit
             width = page.evaluate("document.documentElement.scrollWidth")
             check("320px phone: no sideways scroll", width <= 320, f"{width}px")
@@ -195,6 +198,10 @@ with sync_playwright() as p:
             ours = page.text_content("#installPrompt")
             check("Install ours: the AI asks about a drive and its format, then gives the command to run",
                   "external drive" in ours and "formatted" in ours and "give me the command" in ours)
+            heads = page.eval_on_selector_all("#compare thead th", "els => els.map(e => e.textContent)")
+            rows = page.eval_on_selector_all("#compare tbody th", "els => els.map(e => e.textContent)")
+            check("How it compares: Tinfoil Kit and Project NOMAD side by side, point by point",
+                  heads == ["Tinfoil Kit", "Project NOMAD"] and len(rows) >= 6 and rows[0] == "Runs on", str(rows))
             old = b.new_page()    # a browser without the clipboard API (e.g. the page opened over plain http)
             old.add_init_script("Object.defineProperty(Navigator.prototype, 'clipboard', {get: () => undefined})")
             old.goto(URL)
