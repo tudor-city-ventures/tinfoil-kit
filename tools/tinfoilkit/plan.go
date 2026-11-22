@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -684,21 +685,26 @@ func (r *resolver) protomaps(it *item) error {
 		}
 	}
 	key := needStr(latest, "key")
-	var roadBytes int64
-	if roads := r.resolved["routing"]; roads != nil && len(roads.files) > 0 {
-		roadBytes = roads.files[0].size
+	var roadBytes []int64
+	if roads := r.resolved["routing"]; roads != nil {
+		for _, f := range roads.files {
+			roadBytes = append(roadBytes, f.size)
+		}
 	}
-	bbox, err := floats(m.get("detail_bbox"))
+	areas, err := mapAreas(m)
 	if err != nil {
 		return err
 	}
-	est := tilesEstimate(bbox, intOr(m.get("detail_maxzoom"), 15), roadBytes)
+	est := tilesEstimate(areas, intOr(m.get("detail_maxzoom"), 15), roadBytes)
 	it.kind, it.dest = "custom", "maps/tiles"
 	it.version = strings.ReplaceAll(key, ".pmtiles", "") + " " + pyStr(m.get("label"))
-	// a different area is a new map, even from the same build
-	area := make([]any, len(bbox))
-	for i, x := range bbox {
-		area[i] = x
+	// a different area is a new map, even from the same build. Several places' are a list of areas.
+	var area []any
+	for _, box := range areas {
+		area = append(area, []any{box[0], box[1], box[2], box[3]})
+	}
+	if len(area) == 1 {
+		area = area[0].([]any)
 	}
 	it.extra.set("area", []any{area, intOr(m.get("world_maxzoom"), 7), intOr(m.get("detail_maxzoom"), 15)})
 	it.files = []*remoteFile{{name: "basemap.pmtiles", url: protomapsBuildBase + "/" + key, estimate: est}}
@@ -732,26 +738,45 @@ func (r *resolver) routing(it *item) error {
 	if _, err := r.mapArea(); err != nil {
 		return err
 	}
-	latest := pyStr(need(it.cfg, "url"))
-	url, h, err := geofabrikHead(latest)
-	if err != nil {
-		return err
+	urls := []string{pyStr(need(it.cfg, "url"))}
+	if l, ok := it.cfg.get("url").([]any); ok { // several places: GraphHopper gets them merged into one
+		urls = strs(l)
 	}
-	size := contentLength(h)
+	var names, days []string
+	it.files = nil
+	for i, latest := range urls {
+		url, h, err := geofabrikHead(latest)
+		if err != nil {
+			return err
+		}
+		size := contentLength(h)
+		day := httpDay(h)
+		if day == "" {
+			day = sizeOrNone(size)
+		}
+		file := latest[strings.LastIndexByte(latest, '/')+1:]
+		names = append(names, strings.ReplaceAll(file, "-latest.osm.pbf", ""))
+		days = append(days, day)
+		// one place's is region.osm.pbf; several keep their own names, so a place added later reuses the others'
+		name := "region.osm.pbf"
+		if len(urls) > 1 {
+			name = file
+			taken := slices.ContainsFunc(it.files, func(f *remoteFile) bool { return f.name == name })
+			if !strings.HasSuffix(name, ".osm.pbf") || name == "region.osm.pbf" || taken {
+				name = fmt.Sprintf("region-%d.osm.pbf", i+1)
+			}
+		}
+		it.files = append(it.files, &remoteFile{name: name, url: url, size: size, md5Sidecar: true})
+	}
 	it.kind, it.dest = "custom", "maps/routing"
-	// which extract it is, then its date: another place's road data is new even on the same day
-	day := httpDay(h)
-	if day == "" {
-		day = sizeOrNone(size)
-	}
-	it.version = strings.ReplaceAll(latest[strings.LastIndexByte(latest, '/')+1:], "-latest.osm.pbf", "") + " " + day
+	// which extracts they are, then their dates: another place's road data is new even on the same day
+	it.version = strings.Join(names, "+") + " " + strings.Join(days, "+")
 	gh := r.resolved["graphhopper"]
 	if gh != nil && gh.err == "" {
 		it.extra.set("gh_version", gh.version)
 	} else {
 		it.extra.set("gh_version", "")
 	}
-	it.files = []*remoteFile{{name: "region.osm.pbf", url: url, size: size, md5Sidecar: true}}
 	return nil
 }
 
@@ -870,14 +895,15 @@ func geofabrikHead(url string) (string, map[string]string, error) {
 // tilesEstimate is the rough size of the map tiles: about 1 GB of world overview, plus street detail at about 40 MB
 // per square degree where streets are dense. A big, mostly empty area (a desert state's box) is capped at twice its
 // road data.
-func tilesEstimate(bbox []float64, maxzoom int64, roadBytes int64) int64 {
-	if len(bbox) != 4 {
-		panic(badAnswer{fmt.Sprintf("expected 4 values in detail_bbox, got %d", len(bbox))})
-	}
-	w, s, e, n := bbox[0], bbox[1], bbox[2], bbox[3]
-	detail := math.Abs(e-w) * math.Abs(n-s) * math.Cos((n+s)/2*(math.Pi/180)) * 40e6
-	if roadBytes > 0 {
-		detail = math.Min(detail, 2*float64(roadBytes))
+func tilesEstimate(areas [][]float64, maxzoom int64, roadBytes []int64) int64 {
+	var detail float64
+	for i, box := range areas {
+		w, s, e, n := box[0], box[1], box[2], box[3]
+		d := math.Abs(e-w) * math.Abs(n-s) * math.Cos((n+s)/2*(math.Pi/180)) * 40e6
+		if len(roadBytes) == len(areas) && roadBytes[i] > 0 {
+			d = math.Min(d, 2*float64(roadBytes[i]))
+		}
+		detail += d
 	}
 	return int64(GB + detail*math.Pow(0.4, float64(max(0, 15-maxzoom))))
 }

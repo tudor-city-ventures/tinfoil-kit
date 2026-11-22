@@ -6,7 +6,8 @@
 # prompts for first-timers: first a small kit to try (./kit starter), then the rest when SETUP runs again.
 # The answers can come with it instead, so one command sets the kit up: an AI helping someone asks them the
 # questions, then gives them that command (site/llms.txt). It asks only what these leave out:
-#   --region PLACE      where you live: a US state, a country or a part of one, as ./kit region takes it
+#   --region PLACES     where you live: a US state, a country or a part of one, as ./kit region takes it, and any
+#                       places nearby for the map, after commas (like us/new-york,us/new-jersey)
 #   --wikipedia CODES   Wikipedia's languages, like de or de,en
 #   --wikipedia-size SIZE  how much of Wikipedia: all (the default), all-text, top (the best 50,000 articles),
 #                       top-text or top-intros (their opening paragraphs)
@@ -238,13 +239,13 @@ pick_drive() {
   done
 }
 
-# Where the person lives sets the maps (street detail, directions, address search, home) and Wikipedia's language.
-# ./kit region does the work; this asks. The first run asks before the kit moves (its size depends on the answer),
-# and hands the answer on in KIT_REGION and KIT_WIKIPEDIA to the copy of this script where the kit lands, in case a
-# kit was there already. Updates ask after ./kit update, so a kit from before this question gets it too. The first
-# run also asks how much of Wikipedia (pick_size).
+# Where the person lives sets the maps (street detail, directions, address search, home) and Wikipedia's language,
+# and places nearby can go on the map too. ./kit region does the work; this asks. The first run asks before the kit
+# moves (its size depends on the answer), and hands the answer on in KIT_REGION and KIT_WIKIPEDIA to the copy of this
+# script where the kit lands, in case a kit was there already. Updates ask after ./kit update, so a kit from before
+# this question gets it too. The first run also asks how much of Wikipedia (pick_size).
 pick_region() {
-  local now place n i id name c l g ids names codes labels sizes wiki
+  local now place places n i id name c l g ids names codes labels sizes wiki keep again
   now="$(./kit region 2>/dev/null)" || return 0
   export KIT_REGION_ASKED=1
   [ "$1" = first ] && step "where do you live?"
@@ -254,25 +255,31 @@ pick_region() {
     return 0
   fi
   if [ "$1" = first ]; then
-    echo "The maps show your area in street detail, with directions and address search, and Wikipedia comes in your language."
+    echo "The map shows where you live in street detail, with directions and address search, and places nearby can go"
+    echo "on it too. Wikipedia comes in your language."
     echo "Right now: $now"
     printf '\nType your US state or your country (like Texas, Ontario or Germany), or press Return to keep that: '
   else
     say "$now"
     printf 'To change that, type where you live (a US state or a country), or press Return to keep it: '
   fi
+  places=""; keep="or press Return to keep the maps as they are"; again="Type where you live: "
   while :; do
     read -r place || return 0     # (nothing more to read: the next question stops it)
-    [ -z "$place" ] && { [ "$1" = first ] && pick_size; return 0; }
+    if [ -z "$place" ]; then
+      [ -n "$places" ] && break   # that's all of them
+      [ "$1" = first ] && pick_size
+      return 0
+    fi
     ids=(); names=()
     while IFS=$'\t' read -r id name g; do ids+=("$id"); names+=("$name ($g)"); done < <(./kit region --find "$place" 2>/dev/null)
     n=${#ids[@]}
     if [ "$n" -eq 0 ]; then
-      printf '\nNo place called "%s" here. Type a US state or a country, in English (or press Return to keep the maps as they are): ' "$place"
+      printf '\nNo place called "%s" here. Type a US state or a country, in English (%s): ' "$place" "$keep"
       continue
     fi
     if [ "$n" -gt 20 ]; then
-      printf '\n"%s" matches %d places. Type your state, province or a nearby big town instead: ' "$place" "$n"
+      printf '\n"%s" matches %d places. Type a state, province or a nearby big town instead: ' "$place" "$n"
       continue
     fi
     id="${ids[0]}"
@@ -281,11 +288,14 @@ pick_region() {
       for ((i = 0; i < n; i++)); do printf '  %d  %s\n' $((i + 1)) "${names[$i]}"; done
       echo "  $((n + 1))  None of these"
       choose "Type a number, then press Return:" $((n + 1))
-      if [ "$pick" = $((n + 1)) ]; then printf '\nType where you live: '; continue; fi
+      if [ "$pick" = $((n + 1)) ]; then printf '\n%s' "$again"; continue; fi
       id="${ids[$((pick - 1))]}"
     fi
-    break
+    case ",$places," in *",$id,"*) ;; *) places="${places:+$places,}$id" ;; esac
+    keep="or press Return if that's all"; again="Type the place: "
+    printf '\nAnother place for your map, like a state or country next door? Type it, or press Return if that'"'"'s all: '
   done
+  id="${places%%,*}"    # where they live: Wikipedia's language is its
   codes=(); labels=(); sizes=()
   while IFS=$'\t' read -r c l g; do codes+=("$c"); labels+=("$l"); sizes+=("$g"); done < <(./kit region --languages "$id" 2>/dev/null)
   wiki="${KIT_WIKIPEDIA:-${codes[0]:-}}"
@@ -296,8 +306,8 @@ pick_region() {
     wiki="${codes[$((pick - 1))]}"
   fi
   echo
-  ./kit region "$id" ${wiki:+--wikipedia "$wiki"} || return 0
-  export KIT_REGION="$id" KIT_WIKIPEDIA="$wiki"
+  ./kit region "$places" ${wiki:+--wikipedia "$wiki"} || return 0
+  export KIT_REGION="$places" KIT_WIKIPEDIA="$wiki"
   [ "$1" = first ] && pick_size
   return 0
 }

@@ -160,6 +160,8 @@ print(max((v for v in re.findall(r"<version>([0-9.]+)</version>", sys.stdin.read
   # Andorra's roads, from GraphHopper's own tests (Geofabrik answers GitHub's runners with 404s)
   get https://raw.githubusercontent.com/graphhopper/graphhopper/master/core/files/andorra.osm.pbf "$DL/andorra.osm.pbf"
   cp "$DL/andorra.osm.pbf" "$R/geofabrik/andorra-latest.osm.pbf" && md5 "$R/geofabrik/andorra-latest.osm.pbf"
+  # and as the place nearby's, so the kit merges two places' roads for GraphHopper (every road in both: merged once)
+  cp "$DL/andorra.osm.pbf" "$R/geofabrik/liechtenstein-latest.osm.pbf" && md5 "$R/geofabrik/liechtenstein-latest.osm.pbf"
   # Andorra's address database, the newest version a Photon release opens, and that Photon (the mock lists it beside
   # its stand-ins, so the kit has to match the release to the database, as it does for real)
   curl -fsSL https://download1.graphhopper.com/public/europe/andorra/ > "$TMP/andorra.html"

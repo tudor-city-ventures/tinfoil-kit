@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -254,6 +256,66 @@ func fold(s string) string {
 		b.WriteString(strings.ToLower(string(r)))
 	}
 	return strings.Join(strings.Fields(notAlnum.ReplaceAllString(b.String(), " ")), " ")
+}
+
+// placesIn is the places someone named, separated by commas: ids, names or other names (a place's own name can have
+// commas in it, like "US Northeast (CT, MA...)"). It stops with a message when one matches no place, or several.
+func placesIn(text string) []*obj {
+	if r := regionByID(strings.TrimSpace(text)); r != nil {
+		return []*obj{r}
+	}
+	if strings.Contains(text, ",") {
+		for _, r := range regions().objs("regions") {
+			if fold(r.str("name")) == fold(text) {
+				return []*obj{r}
+			}
+		}
+	}
+	var rs []*obj
+	if words := strings.Fields(text); !strings.Contains(text, ",") && len(words) > 1 { // ids, which cmd parts at commas
+		for _, w := range words {
+			if r := regionByID(w); r != nil && !slices.Contains(rs, r) {
+				rs = append(rs, r)
+			} else if r == nil {
+				rs = nil
+				break
+			}
+		}
+		if len(rs) > 0 {
+			return rs
+		}
+	}
+	for _, part := range strings.Split(text, ",") {
+		if part = strings.TrimSpace(part); part == "" {
+			continue
+		}
+		r := regionByID(part)
+		if r == nil {
+			found := findRegions(part)
+			if len(found) == 0 {
+				die(fmt.Sprintf("No place matches \"%s\". Try a US state or a country, in English: ./kit region --find WORDS", part))
+			}
+			if len(found) > 1 {
+				var some []string
+				for _, f := range found[:min(12, len(found))] {
+					some = append(some, pyStr(f.get("name"))+" ("+pyStr(f.get("id"))+")")
+				}
+				more := ""
+				if len(found) > 12 {
+					more = "; ..."
+				}
+				die(fmt.Sprintf("\"%s\" could be: %s%s. Run it again with the one in brackets.", part, strings.Join(some, "; "), more))
+			}
+			r = found[0]
+		}
+		if !slices.Contains(rs, r) {
+			rs = append(rs, r)
+		}
+	}
+	if len(rs) == 0 {
+		die("Name a place: ./kit region PLACE (several with commas)")
+	}
+	return rs
 }
 
 // findRegions is the places that best match what someone typed: exact names (or other names: "UK", "Bavaria", a big
@@ -544,10 +606,10 @@ func describeWikipedia(cfg *obj) string {
 
 func describeRegion(cfg *obj) string {
 	m := mapsSettings(cfg)
-	r := regionByID(cfg.child("maps").get("region"))
+	region := cfg.child("maps").get("region")
 	wiki, edition := wikipediaLangs(cfg), wikipediaEdition(cfg)
 	where := pyStr(m.get("label"))
-	if r == nil {
+	if _, unknown := regionsOf(region); !truthy(region) || unknown != "" {
 		where += " (set by hand in kit.json)"
 	}
 	maps := "Maps are switched off"
@@ -663,18 +725,26 @@ func saveConfig(root string, raw *obj) {
 	}
 }
 
-// setRegion points kit.json's maps at a place (nil: leaves them), and its Wikipedia at these languages (nil: leaves
-// them) and this edition ("": leaves it).
-func setRegion(root string, r *obj, wiki []string, edition string) *obj {
+// setRegion points kit.json's maps at places (none: leaves them), and its Wikipedia at these languages (nil: leaves
+// them) and this edition ("": leaves it). One place is its id, several a list of them.
+func setRegion(root string, rs []*obj, wiki []string, edition string) *obj {
 	cfg := loadConfig(root)
 	raw := rawConfig(root)
-	if r != nil {
+	if len(rs) > 0 {
 		old := raw.child("maps")
 		enabled := any(true)
 		if old != nil {
 			enabled = old.getOr("enabled", true)
 		}
-		maps := newObj("enabled", enabled, "region", r.get("id"))
+		var ids []any
+		for _, r := range rs {
+			ids = append(ids, r.get("id"))
+		}
+		region := any(ids)
+		if len(ids) == 1 {
+			region = ids[0]
+		}
+		maps := newObj("enabled", enabled, "region", region)
 		for _, k := range old.Keys() {
 			if !maps.has(k) && !contains(regionKeys, k) {
 				maps.set(k, old.get(k))
@@ -703,8 +773,9 @@ func wikiSize(name string) string {
 	return ""
 }
 
-// cmdRegion is where you live: it sets the map area, the road data for directions, the address search, home, units
-// and the language Wikipedia comes in. SETUP and the website's kit builder use it. Also how much of Wikipedia.
+// cmdRegion is where you live, and any places nearby: it sets the map areas, the road data for directions, the
+// address search, home, units and the language Wikipedia comes in. SETUP and the website's kit builder use it. Also
+// how much of Wikipedia.
 func cmdRegion(root string, a *cliArgs) {
 	if len(regions().list("regions")) == 0 {
 		die(regionsFile() + " is missing or broken; get the kit again (./kit update) to restore it")
@@ -763,13 +834,13 @@ func cmdRegion(root string, a *cliArgs) {
 	}
 	place := a.list("place")
 	if len(place) == 0 {
-		r := regionByID(cfg.child("maps").get("region"))
+		rs, unknown := regionsOf(cfg.child("maps").get("region"))
 		switch {
 		case a.flag("languages"): // for the place kit.json has now
-			if r == nil {
+			if !truthy(cfg.child("maps").get("region")) || unknown != "" {
 				die("kit.json has no region yet: ./kit region PLACE")
 			}
-			place = []string{pyStr(r.get("id"))}
+			place = []string{pyStr(rs[0].get("id"))}
 		case wiki != nil || edition != "":
 			cfg = setRegion(root, nil, wiki, edition)
 			log("Wikipedia: " + describeWikipedia(cfg) + ".")
@@ -779,49 +850,44 @@ func cmdRegion(root string, a *cliArgs) {
 			return
 		}
 	}
-	text := strings.Join(place, " ")
-	r := regionByID(text)
-	if r == nil {
-		found := findRegions(text)
-		if len(found) != 1 {
-			if len(found) == 0 {
-				die(fmt.Sprintf("No place matches \"%s\". Try a US state or a country, in English: ./kit region --find WORDS", text))
-			}
-			var some []string
-			for _, f := range found[:min(12, len(found))] {
-				some = append(some, pyStr(f.get("name"))+" ("+pyStr(f.get("id"))+")")
-			}
-			more := ""
-			if len(found) > 12 {
-				more = "; ..."
-			}
-			die(fmt.Sprintf("\"%s\" could be: %s%s. Run it again with the one in brackets.", text, strings.Join(some, "; "), more))
-		}
-		r = found[0]
-	}
+	rs := placesIn(strings.Join(place, " "))
+	first := rs[0]
 	if a.flag("languages") {
-		for _, c := range languageChoices(r) {
+		for _, c := range languageChoices(first) {
 			out(strings.Join(c.codes, ",") + "\t" + c.label + "\t" + strconv.FormatInt(c.gb, 10) + "\n")
 		}
 		return
 	}
-	cfg = setRegion(root, r, wiki, edition)
+	cfg = setRegion(root, rs, wiki, edition)
 	m := mapsSettings(cfg)
-	name := pyStr(r.get("name"))
-	log("Maps: " + name + ". Street maps and directions for " + name + ", and a simple map of the whole world.")
+	label, name := pyStr(m.get("label")), pyStr(first.get("name"))
+	log("Maps: " + label + ". Street maps and directions for " + label + ", and a simple map of the whole world.")
 	switch {
-	case !truthy(r.get("photon")):
-		log("Address search: none, since nobody publishes it for there yet.")
-	case truthy(r.get("addresses_wide")):
-		mb, _ := asNumber(r.child("mb").getOr("addresses", 0))
+	case !truthy(first.get("photon")):
+		log("Address search: none, since nobody publishes it for " + name + " yet.")
+	case truthy(first.get("addresses_wide")):
+		mb, _ := asNumber(first.child("mb").getOr("addresses", 0))
 		log(fmt.Sprintf("Address search: all of %s (about %d GB), since nobody publishes it for %s alone. Just the "+
-			"essentials leave it out.", pyStr(r.get("addresses")), max(1, int64(pyRound(mb/1000))), name))
+			"essentials leave it out.", pyStr(first.get("addresses")), max(1, int64(pyRound(mb/1000))), name))
 	default:
-		where := r.get("addresses")
+		where := first.get("addresses")
 		if !truthy(where) {
-			where = r.get("name")
+			where = first.get("name")
 		}
 		log("Address search: all of " + pyStr(where) + ".")
+	}
+	// The address search is the first place's: it covers the others in its database (a country, or a whole region of
+	// the world's), and not the rest.
+	var left []string
+	db := first.str("photon")
+	for _, r := range rs[1:] {
+		in := r.str("photon")
+		if db == "" || in != db && !(truthy(first.get("addresses_wide")) && strings.HasPrefix(in, path.Dir(db)+"/")) {
+			left = append(left, r.str("name"))
+		}
+	}
+	if len(left) > 0 && db != "" {
+		log("Not for " + names(left) + ": the kit has one address search, the first place's.")
 	}
 	if !truthy(m.get("enabled")) {
 		log(`Maps are switched off in kit.json ("enabled": false under "maps"), so none of this downloads.`)
@@ -878,13 +944,24 @@ func estimateBytes(root string, cfg *obj, essentials, starter *bool, left bool) 
 		}
 	}
 	maps := cfg.child("maps")
-	r := regionByID(maps.get("region"))
+	rs, unknown := regionsOf(maps.get("region"))
 	mapParts := [][2]string{{"maps/basemap", "tiles"}, {"maps/routing", "roads"}, {"maps/geocoder", "addresses"}}
-	if r != nil && !maps.has("detail_bbox") && !maps.has("routing_osm_pbf") && !maps.has("geocoder_country") {
-		wide := ess && truthy(r.get("addresses_wide")) // see essential()
+	if truthy(maps.get("region")) && unknown == "" && !maps.has("detail_bbox") && !maps.has("routing_osm_pbf") &&
+		!maps.has("geocoder_country") {
+		wide := ess && truthy(rs[0].get("addresses_wide")) // see essential()
 		for _, p := range mapParts {
 			if !(wide && p[1] == "addresses") && !(st && p[1] != "tiles") {
-				mb, _ := asNumber(r.child("mb").getOr(p[1], 0))
+				// each place's street detail and road data, with one world overview (1 GB in each place's tiles),
+				// and the first place's address search
+				var mb float64
+				for i, r := range rs {
+					n, _ := asNumber(r.child("mb").getOr(p[1], 0))
+					if i == 0 || p[1] == "roads" {
+						mb += n
+					} else if p[1] == "tiles" {
+						mb += max(0, n-GB/1e6)
+					}
+				}
 				sizes[p[0]] = mb * 1e6
 			}
 		}

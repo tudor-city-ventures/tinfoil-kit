@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/ed25519"
+	"crypto/md5"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -991,5 +992,201 @@ func TestSystemdUnit(t *testing.T) {
 	want := `ExecStart=/bin/bash "` + strings.NewReplacer("%", "%%", "$", "$$").Replace(odd) + `/app/Open Tinfoil Kit.command" --no-browser`
 	if unit := systemdUnit(odd); !strings.Contains(unit, want+"\n") {
 		t.Errorf("a folder with spaces, %% and $ survives systemd's quoting:\n%s", unit)
+	}
+}
+
+// readPBF is every thing in a road data file, in order.
+func readPBF(t *testing.T, path string) []osmThing {
+	t.Helper()
+	p, err := openPBF(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.f.Close()
+	var all []osmThing
+	for {
+		th, err := p.peek()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if th == nil {
+			return all
+		}
+		all = append(all, *th)
+		p.skip()
+	}
+}
+
+func writePBF(t *testing.T, path string, stamp int64, things ...osmThing) {
+	t.Helper()
+	o, err := createPBF(path, stamp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, th := range things {
+		o.add(th)
+	}
+	if err := o.close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Directions across several places: their road data merged into one file, everything once, nodes, then ways, then
+// relations, as GraphHopper reads them.
+func TestMergeRoads(t *testing.T) {
+	dir := t.TempDir()
+	tags := func(kv ...string) [][]byte {
+		var out [][]byte
+		for _, s := range kv {
+			out = append(out, []byte(s))
+		}
+		return out
+	}
+	node := func(id int64) osmThing {
+		return osmThing{kind: 0, id: id, lat: 42_500_000_000 + id*100, lon: -1_500_000_000 - id*300}
+	}
+	var a, b []osmThing
+	for id := int64(1); id <= 8100; id++ { // more than a block's worth
+		n := node(id)
+		if id == 2 {
+			n.tags = tags("amenity", "hospital", "name", "Hospital de Meritxell")
+		}
+		a = append(a, n)
+	}
+	for id := int64(8050); id <= 8200; id++ { // the border: 8050 to 8100 are in both
+		b = append(b, node(id))
+	}
+	road := osmThing{kind: 1, id: 10, refs: []int64{1, 2, 8100}, tags: tags("highway", "residential")}
+	a = append(a, road, osmThing{kind: 2, id: 100, refs: []int64{10, 1}, types: []uint64{1, 0}, roles: tags("outer", ""),
+		tags: tags("type", "multipolygon")})
+	b = append(b, road, osmThing{kind: 1, id: 11, refs: []int64{8100, 8200}, tags: tags("highway", "primary", "ref", "CG-1")},
+		osmThing{kind: 2, id: 101, refs: []int64{11}, types: []uint64{1}, roles: tags("")})
+	writePBF(t, filepath.Join(dir, "a.osm.pbf"), 1_700_000_000, a...)
+	writePBF(t, filepath.Join(dir, "b.osm.pbf"), 1_700_086_400, b...)
+	out := filepath.Join(dir, "region.osm.pbf")
+	if err := mergePBF(out, []string{filepath.Join(dir, "a.osm.pbf"), filepath.Join(dir, "b.osm.pbf")}); err != nil {
+		t.Fatal(err)
+	}
+	got := readPBF(t, out)
+	var ids []int64
+	byID := map[[2]int64]osmThing{}
+	for _, th := range got {
+		ids = append(ids, th.id)
+		byID[[2]int64{int64(th.kind), th.id}] = th
+	}
+	if len(got) != 8200+2+2 || ids[0] != 1 || ids[8199] != 8200 || got[8200].kind != 1 || got[8202].kind != 2 {
+		t.Fatalf("every node, way and relation once, in order: %d things", len(got))
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i].kind < got[i-1].kind || got[i].kind == got[i-1].kind && got[i].id <= got[i-1].id {
+			t.Fatalf("out of order at %d", i)
+		}
+	}
+	h := byID[[2]int64{0, 2}]
+	if string(bytes.Join(h.tags, []byte("="))) != "amenity=hospital=name=Hospital de Meritxell" || h.lat != node(2).lat || h.lon != node(2).lon {
+		t.Error("a node keeps its place and tags: ", h)
+	}
+	w := byID[[2]int64{1, 11}]
+	if fmt.Sprint(w.refs) != "[8100 8200]" || string(w.tags[3]) != "CG-1" {
+		t.Error("a way keeps its nodes and tags: ", w)
+	}
+	r := byID[[2]int64{2, 100}]
+	if fmt.Sprint(r.refs, r.types) != "[10 1] [1 0]" || string(r.roles[0]) != "outer" || string(r.roles[1]) != "" {
+		t.Error("a relation keeps its members and their roles: ", r)
+	}
+	if p, _ := openPBF(out); p == nil || p.stamp != 1_700_086_400 {
+		t.Error("the merged data is as new as the newest file's")
+	} else {
+		p.f.Close()
+	}
+	writePBF(t, filepath.Join(dir, "unsorted.osm.pbf"), 0, node(5), node(4))
+	if err := mergePBF(out, []string{filepath.Join(dir, "a.osm.pbf"), filepath.Join(dir, "unsorted.osm.pbf")}); err == nil ||
+		!strings.Contains(err.Error(), "unsorted.osm.pbf isn't sorted") {
+		t.Error("data out of order can't be merged: ", err)
+	}
+	os.WriteFile(filepath.Join(dir, "page.osm.pbf"), []byte("<html>Not found</html>"), 0o644)
+	if err := mergePBF(out, []string{filepath.Join(dir, "a.osm.pbf"), filepath.Join(dir, "page.osm.pbf")}); err == nil ||
+		!strings.Contains(err.Error(), "page.osm.pbf isn't road data") {
+		t.Error("a file that isn't road data: ", err)
+	}
+	if len(readPBF(t, out)) != 8204 {
+		t.Error("a failed merge leaves the last one as it was")
+	}
+	if _, err := os.Stat(out + ".partial"); err == nil {
+		t.Error("a failed merge leaves nothing half written")
+	}
+}
+
+// Several places: street detail and directions for each, and home and address search from the first.
+func TestSeveralPlaces(t *testing.T) {
+	withRegions(t)
+	both := []any{"us/new-york", "us/new-jersey"}
+	m := mapsSettings(newObj("maps", newObj("enabled", true, "region", both)))
+	areas, err := mapAreas(m)
+	roads, _ := m.get("routing_osm_pbf").([]any)
+	if err != nil || len(areas) != 2 || len(roads) != 2 || m.str("label") != "New York and New Jersey" ||
+		!strings.HasSuffix(pyStr(roads[1]), "/new-jersey-latest.osm.pbf") || m.str("geocoder_country") != "us" ||
+		m.child("home").str("label") != regionByID("us/new-york").child("home").str("label") {
+		t.Error("two places' maps: ", m)
+	}
+	one := mapsSettings(newObj("maps", newObj("enabled", true, "region", "us/new-york")))
+	if a, _ := mapAreas(one); len(a) != 1 || one.str("routing_osm_pbf") == "" || one.str("label") != "New York" {
+		t.Error("one place: one area and one road data file, as before")
+	}
+	for _, i := range mapsItems(newObj("maps", newObj("enabled", true, "region", both))) {
+		if l, _ := i.get("url").([]any); i.str("id") == "routing" && len(l) != 2 {
+			t.Error("directions get both places' road data: ", i)
+		}
+	}
+	if !mapsSettings(newObj("maps", newObj("region", []any{"us/new-york", "atlantis"}))).has("region_error") {
+		t.Error("a place the kit doesn't know, among several")
+	}
+	if _, err := mapAreas(newObj("detail_bbox", []any{1, 2, 3})); err == nil {
+		t.Error("a map area needs four numbers")
+	}
+	if got, want := tilesEstimate(areas, 15, nil), tilesEstimate(areas[:1], 15, nil)+tilesEstimate(areas[1:], 15, nil)-GB; got < want-2 || got > want+2 {
+		t.Errorf("tiles: one world overview, and each place's street detail: %d, not %d", got, want)
+	}
+	data, err := os.ReadFile(filepath.Join("..", "..", "kit.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := parseObj(data)
+	root := t.TempDir()
+	cfg.child("maps").set("region", "us/new-york")
+	alone := estimateBytes(root, cfg, nil, nil, false)
+	cfg.child("maps").set("region", both)
+	nj := regionByID("us/new-jersey").child("mb")
+	tiles, _ := asNumber(nj.get("tiles"))
+	road, _ := asNumber(nj.get("roads"))
+	if got := estimateBytes(root, cfg, nil, nil, false) - alone; math.Abs(got-(tiles-1000+road)*1e6) > 1e6 {
+		t.Errorf("the estimate adds New Jersey's street detail and road data, and no second world or address search: %.0f MB", got/1e6)
+	}
+}
+
+// Adding a place, or going back to one, reuses the road data the kit has under another name.
+func TestRoadsFromBefore(t *testing.T) {
+	dest := t.TempDir()
+	os.WriteFile(filepath.Join(dest, "region.osm.pbf"), []byte("new york's roads"), 0o644)
+	os.WriteFile(filepath.Join(dest, "new-jersey-latest.osm.pbf"), []byte("new jersey's roads"), 0o644)
+	sum := func(s string) [][2]string { return [][2]string{{"md5", fmt.Sprintf("%x", md5.Sum([]byte(s)))}} }
+	old := newObj("files", newObj("region.osm.pbf", newObj(), "new-jersey-latest.osm.pbf", newObj()))
+	ny := &remoteFile{name: "new-york-latest.osm.pbf", size: 16}
+	nj := &remoteFile{name: "new-jersey-latest.osm.pbf", size: 18}
+	pa := &remoteFile{name: "pennsylvania-latest.osm.pbf", size: 16}
+	it := &item{files: []*remoteFile{ny, nj, pa}}
+	if sha := roadsFromBefore(dest, old, it, pa, sum("pennsylvania")); sha != "" {
+		t.Errorf("another place's road data passed as Pennsylvania's: %s", sha)
+	}
+	want := fmt.Sprintf("%x", sha256.Sum256([]byte("new york's roads")))
+	if sha := roadsFromBefore(dest, old, it, ny, sum("new york's roads")); sha != want ||
+		!exists(filepath.Join(dest, "new-york-latest.osm.pbf")) || exists(filepath.Join(dest, "region.osm.pbf")) {
+		t.Errorf("one place's road data wasn't moved to its name for several places: %q", sha)
+	}
+	one := &item{files: []*remoteFile{{name: "region.osm.pbf", size: 18}}}
+	old = newObj("files", newObj("new-york-latest.osm.pbf", newObj(), "new-jersey-latest.osm.pbf", newObj()))
+	if sha := roadsFromBefore(dest, old, one, one.files[0], sum("new jersey's roads")); sha == "" ||
+		!exists(filepath.Join(dest, "region.osm.pbf")) || !exists(filepath.Join(dest, "new-york-latest.osm.pbf")) {
+		t.Errorf("going back to one place didn't reuse its road data: %q", sha)
 	}
 }

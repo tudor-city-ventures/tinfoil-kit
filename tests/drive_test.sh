@@ -189,6 +189,7 @@ mac() {
   grep -q "All set" "$L/setup-rest.log" || kit_logs "$kit" test-tiles.log test-geocoder.log test-routing.log
   grep -q "What goes in the kit?" "$L/setup-rest.log" || fail "SETUP didn't ask what goes in the kit"
   [ -f "$kit/downloads/maps/routing/graph-cache/properties" ] || fail "SETUP didn't build the map's roads on the drive"
+  grep -q "merging the road data of 2 places" "$L/setup-rest.log" || fail "SETUP didn't merge the two places' roads"
   [ -d "$kit/downloads/models/Two" ] && fail "the try-it kit's sample AI is still there after the rest"
   [ -d "$kit/downloads/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
