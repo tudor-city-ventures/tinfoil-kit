@@ -67,7 +67,7 @@ once offline to make sure it works. Or open Terminal in the kit folder (drag the
 Terminal icon) and run:
 
 ```
-./kit update    # gets the newest version of the kit itself, keeping your kit.json changes
+./kit update    # gets the newest signed version of the kit itself, keeping your kit.json changes
 ./kit sync      # shows what's new, downloads it, checks every file, then removes old versions
 ./kit test      # starts everything briefly and confirms it works
 ```

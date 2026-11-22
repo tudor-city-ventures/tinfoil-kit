@@ -33,6 +33,8 @@ step "archives of the kit stamp kit.py with their commit (./kit update needs it)
 if git rev-parse --git-dir >/dev/null 2>&1; then
   run grep -q '^KIT_COMMIT = "\$Format:%H\$"' tools/kit.py
   run sh -c 'git check-attr export-subst tools/kit.py | grep -q ": set$"'
+  # and carry the kit's own files only: no tests, docs or website besides the two site files the kit reads
+  run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -Ev "^(site/|site/kit.json|site/sources.json)$" | grep -E "^(tests|docs|\.github|site)/"'
 else
   echo "skipped (not a git checkout)"
 fi
