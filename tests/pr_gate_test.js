@@ -29,8 +29,18 @@ const FEATURE = { labels: [{ name: "feature" }, { name: "accepted" }] };
 // What GitHub writes when someone drags a picture or a video into a description
 const SCREENSHOT = "![the Map tab](https://github.com/user-attachments/assets/4e6b1c0a-8f1d-4c3e-9a51-2f7d0c9e1b23)";
 const VIDEO = "https://github.com/user-attachments/assets/9b0f3d2e-1c4a-4e8b-b7a6-5d2c1e0f9a87";
+// What GitHub says someone may do in this repo: admin, write, read or none. null: the request fails.
+function repos(permission) {
+  return {
+    getCollaboratorPermissionLevel: async ({ owner, repo, username }) => {
+      if (owner !== REPO.owner || repo !== REPO.repo) throw Object.assign(new Error("Not Found"), { status: 404 });
+      if (permission === null) throw Object.assign(new Error("Forbidden"), { status: 403 });
+      return { data: { permission, user: { login: username } } };
+    },
+  };
+}
 
-async function run({ pr = {}, issues = {}, action = "opened", sender }) {
+async function run({ pr = {}, issues = {}, action = "opened", sender, permission = "read" }) {
   const calls = [];
   const p = {
     number: 50,
@@ -55,6 +65,7 @@ async function run({ pr = {}, issues = {}, action = "opened", sender }) {
         addLabels: async (a) => calls.push(`label ${a.labels}`),
       },
       pulls: { update: async (a) => calls.push(a.state) },
+      repos: repos(permission),
     },
   };
   const context = { repo: REPO, payload: { action, pull_request: p, sender: sender || p.user } };
@@ -157,6 +168,18 @@ async function expect(name, opts, closed) {
     false,
   );
   check("a maintainer's pull request is left alone", !t.calls.length && !t.failure);
+  // An event can say NONE for a maintainer (a private org membership), so write access to the repo counts too.
+  for (const permission of ["admin", "write"]) {
+    t = await expect(
+      `a fork's pull request from someone with ${permission} access`,
+      { pr: { body: "Closes #12" }, issues: { 12: FEATURE }, permission },
+      false,
+    );
+    check(`${permission} access is left alone like a maintainer`, !t.calls.length && !t.failure);
+  }
+  await expect("read access isn't enough", { permission: "read" }, true);
+  await expect("no access at all", { permission: "none" }, true);
+  await expect("GitHub won't say what they may do", { permission: null }, true);
   await expect("first-time contributor", { pr: { author_association: "FIRST_TIME_CONTRIBUTOR" } }, true);
   await expect("fork was deleted", { pr: { head: { repo: null } } }, true);
 
@@ -285,7 +308,7 @@ async function expect(name, opts, closed) {
   check("more files than GitHub lists fails it", !!(await files(["README.md"], { changed_files: 3001 })));
 
   // forms: outside issues that didn't come through a form are closed.
-  async function issue({ action = "opened", ...opts } = {}) {
+  async function issue({ action = "opened", permission = "read", ...opts } = {}) {
     const calls = [];
     const i = {
       number: 60,
@@ -307,6 +330,7 @@ async function expect(name, opts, closed) {
           addLabels: async (a) => calls.push(`label ${a.labels}`),
           removeLabel: async (a) => calls.push(`unlabel ${a.name}`),
         },
+        repos: repos(permission),
       },
     };
     await forms(github, { repo: REPO, payload: { action, issue: i } }, { info() {}, warning() {} });
@@ -416,6 +440,18 @@ async function expect(name, opts, closed) {
     true,
   );
   await expectIssue("the maintainer's feature with no picture", { author_association: "OWNER", body: feature }, false);
+  // An event can say NONE for a maintainer (a private org membership), so write access to the repo counts too.
+  for (const permission of ["admin", "write"]) {
+    const m = await expectIssue(
+      `made with the API by someone with ${permission} access`,
+      { body: "Help wanted: Windows setup", labels: [{ name: "feature" }], permission },
+      false,
+    );
+    check(`${permission} access is left alone like a maintainer`, !m.calls.length);
+  }
+  await expectIssue("made with the API, with read access", { body: "Fix this", permission: "read" }, true);
+  await expectIssue("made with the API, with no access", { body: "Fix this", permission: "none" }, true);
+  await expectIssue("made with the API, and GitHub won't say", { body: "Fix this", permission: null }, true);
   await expectIssue(
     "not from a form, but with a feature's heading",
     { body: "### What it looks like\n\nNothing yet" },

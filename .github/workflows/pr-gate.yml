@@ -38,11 +38,19 @@ jobs:
             ];
             const shows = text => SHOWS.some(re => re.test(text.replace(/<!--[\s\S]*?-->/g, '')));
 
-            // Branches in this repo come from people with write access, and members are the maintainers.
+            // Branches in this repo come from people with write access, and members are the maintainers. An event can
+            // report a maintainer as NONE (an org member whose membership is private, say), so anyone else is asked
+            // about: write access to the repo counts too. The forms job does the same.
+            const writes = async login => {
+              const r = await github.rest.repos.getCollaboratorPermissionLevel({ owner, repo, username: login })
+                .catch(() => null);
+              return !!r && ['admin', 'write'].includes(r.data.permission);
+            };
             const here = !!pr.head.repo && pr.head.repo.full_name.toLowerCase() === full.toLowerCase();
-            if (here || ['OWNER', 'MEMBER'].includes(pr.author_association)) {
-              return core.info(`Skipped: ${here ? 'branch in this repo' : pr.author_association}`);
-            }
+            const maintainer = here ? 'branch in this repo'
+              : ['OWNER', 'MEMBER'].includes(pr.author_association) ? pr.author_association
+              : (await writes(pr.user.login)) ? 'write access' : '';
+            if (maintainer) return core.info(`Skipped: ${maintainer}`);
             // Collaborators (including read-only ones the maintainer vouched for) and anyone with a merged commit
             // needn't link an accepted issue, but what they link still labels theirs.
             const trusted = ['COLLABORATOR', 'CONTRIBUTOR'].includes(pr.author_association);
@@ -155,10 +163,18 @@ jobs:
               /https:\/\/(www\.)?(youtube\.com\/watch|youtu\.be\/|loom\.com\/share\/|vimeo\.com\/\d)/i, // a video site
             ];
             const shows = text => SHOWS.some(re => re.test(text.replace(/<!--[\s\S]*?-->/g, '')));
-            // The maintainers and the repo's own apps file issues however they like.
-            if (issue.user.type === 'Bot' || ['OWNER', 'MEMBER'].includes(issue.author_association)) {
-              return core.info(`Skipped: ${issue.user.type === 'Bot' ? 'an app' : issue.author_association}`);
-            }
+            // The maintainers and the repo's own apps file issues however they like. An event can report a
+            // maintainer as NONE (an org member whose membership is private, say), so anyone else is asked about:
+            // write access to the repo counts too. The gate job does the same.
+            const writes = async login => {
+              const r = await github.rest.repos.getCollaboratorPermissionLevel({ owner, repo, username: login })
+                .catch(() => null);
+              return !!r && ['admin', 'write'].includes(r.data.permission);
+            };
+            const maintainer = issue.user.type === 'Bot' ? 'an app'
+              : ['OWNER', 'MEMBER'].includes(issue.author_association) ? issue.author_association
+              : (await writes(issue.user.login)) ? 'write access' : '';
+            if (maintainer) return core.info(`Skipped: ${maintainer}`);
             // Collaborators the maintainer vouched for and past contributors needn't use a form.
             const trusted = ['COLLABORATOR', 'CONTRIBUTOR'].includes(issue.author_association);
             const body = issue.body || '';
