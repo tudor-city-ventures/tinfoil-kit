@@ -80,7 +80,7 @@ export default function Download({ children }) {
               </li>
               <li>It offers to move itself to your Applications folder, where you'll look for it in an outage: click <b>Move to Applications</b>. Then click <b>Set Up</b>.</li>
             </ol>
-            <p>Setup runs in a Terminal window. It asks where you live, and whether the kit goes on this Mac or an external drive, with what fits on each. If your Mac asks whether Terminal may use files on a removable volume, click Allow. The essentials come first, so the kit works long before the rest arrives over the next few hours. In an outage, open Tinfoil Kit from Applications.</p>
+            <p>Setup runs in a Terminal window. It asks where you live, and whether the kit goes on this Mac or an external drive, with what fits on each. If your Mac asks whether Terminal may use files on a removable volume, click Allow. Then it downloads a small sample to try, about 8&nbsp;GB, and offers to open it. Its last message says how big the rest is, how long it will take on your connection, and how to get it: click <b>Update</b> in the app. In an outage, open Tinfoil Kit from Applications.</p>
             <button type="button" className="dl-back" onClick={() => show('all')}>All downloads</button>
           </div>
           <div data-view="windows" hidden={view !== 'windows'}>
@@ -90,7 +90,7 @@ export default function Download({ children }) {
               <li>In the new TinfoilKit folder, double-click <b>SETUP-Windows</b>.</li>
               <li>If Windows says it protected your PC, click <b>More info</b>, then <b>Run anyway</b>. It only asks once.</li>
             </ol>
-            <p>SETUP then gets the Python the kit's tools run on (about 15&nbsp;MB), and asks where you live and whether the kit goes on this PC or an external drive, with what fits on each. The essentials come first, so the kit works long before the rest arrives over the next few hours.</p>
+            <p>SETUP then gets the Python the kit's tools run on (about 15&nbsp;MB), and asks where you live and whether the kit goes on this PC or an external drive, with what fits on each. Then it downloads a small sample to try, about 8&nbsp;GB, and offers to open it. Its last message says how big the rest is, how long it will take on your connection, and how to get it: double-click SETUP-Windows again.</p>
             <button type="button" className="dl-back" onClick={() => show('all')}>All downloads</button>
           </div>
           <div data-view="linux" hidden={view !== 'linux'}>
@@ -102,7 +102,7 @@ export default function Download({ children }) {
             </ul>
             <p>Then unpack the kit and start SETUP:</p>
             <pre className="dl-cmd">{'cd ~/Downloads && tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command'}</pre>
-            <p>It asks where you live, and whether the kit goes on this computer or an external drive, with what fits on each.</p>
+            <p>It asks where you live, and whether the kit goes on this computer or an external drive, with what fits on each. Then it downloads a small sample to try, about 8&nbsp;GB, and offers to open it. Its last message says how big the rest is, how long it will take on your connection, and how to get it.</p>
             <button type="button" className="dl-back" onClick={() => show('all')}>All downloads</button>
           </div>
         </div>

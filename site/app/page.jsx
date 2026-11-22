@@ -102,7 +102,7 @@ export default function Home() {
         <section id="instructions" className="wrap agent" data-for="agent">
           <p className="kicker">For AI agents&nbsp;· Markdown at /llms.txt</p>
           <h1>Your agent can set this&nbsp;up.</h1>
-          <p className="lede">Point Claude Code, Codex or another agent that runs commands at <a href="/llms.txt">tinfoilkit.com/llms.txt</a>, or paste in the markdown below.</p>
+          <p className="lede">Point ChatGPT, Claude or any other AI at <a href="/llms.txt">tinfoilkit.com/llms.txt</a>, or paste in the markdown below. It asks what you want, then gives you the command to run.</p>
           <div className="prompt">
             <div className="bar">
               <div>
@@ -140,12 +140,12 @@ export default function Home() {
                 <p>Download Tinfoil Kit and open it. It asks where you live, and whether to keep it on your laptop or an external drive.</p>
               </div>
               <div className="step">
-                <b>02 · LET IT FILL</b>
-                <p>It downloads the AI, the books and the maps. The essentials come first, then the rest over a few hours. Keep your laptop plugged in.</p>
+                <b>02 · TRY IT</b>
+                <p>It downloads a small sample first, about 8&nbsp;GB, and opens it. Turn off Wi-Fi and try it.</p>
               </div>
               <div className="step">
-                <b>03 · TRY IT OFFLINE</b>
-                <p>Turn off Wi-Fi and open Tinfoil Kit. Everything still works.</p>
+                <b>03 · GET THE REST</b>
+                <p>When you're ready, it downloads the rest and says how long that will take. Keep your laptop plugged in.</p>
               </div>
               <div className="step">
                 <b>04 · KEEP IT FRESH</b>
@@ -159,7 +159,7 @@ export default function Home() {
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               <p className="kicker">The kit builder</p>
               <h2>Choose what goes in your kit.</h2>
-              <p style={{ fontSize: "18px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "680px" }}>The installer sets up our recommended kit. Want something else? Pick what goes in, copy the prompt and paste it into any AI chat. It walks you through the rest.</p>
+              <p style={{ fontSize: "18px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "680px" }}>Pick what goes in, copy the prompt and paste it into any AI chat. It asks what else it needs, then gives you the command to run. Or skip this: the installer asks you the same questions.</p>
             </div>
             <div className="where">
               <div className="field">
@@ -199,7 +199,7 @@ export default function Home() {
                 <div className="bar">
                   <div>
                     <b>Install ours</b>
-                    <span>Paste it into ChatGPT, Claude or another AI chat. It asks what you want in it, then goes one step at a time.</span>
+                    <span>Paste it into ChatGPT, Claude or another AI chat. It asks what you want in it, then gives you the command to run.</span>
                   </div>
                   <CopyButton target="installPrompt" />
                 </div>

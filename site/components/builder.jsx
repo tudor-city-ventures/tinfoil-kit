@@ -91,16 +91,17 @@ function reducer(state, a) {
       return withPreset({ ...state, data, place: home, wiki }, state.preset || 'recommended');
     }
     case 'failed': return { ...state, failed: true };
-    case 'preset': return withPreset(state, a.preset);
+    case 'preset': return withPreset({ ...state, from: a.preset }, a.preset);
     case 'pick': return { ...state, preset: null, picked: { ...state.picked, [a.id]: a.on } };
     case 'more': return { ...state, open: { ...state.open, [a.group]: !state.open[a.group] } };
-    case 'place': return withWiki({ ...state, place: a.place }, languageChoices(state.data.regions, a.place)[0]);
-    case 'wiki': return withWiki(state, a.wiki);
+    case 'place': return withWiki({ ...state, chosen: true, place: a.place }, languageChoices(state.data.regions, a.place)[0]);
+    case 'wiki': return withWiki({ ...state, chosen: true }, a.wiki);
     default: throw new Error(a.type);
   }
 }
 
-const START = { data: null, failed: false, place: null, wiki: ['en'], picked: {}, preset: 'recommended', open: {} };
+// chosen: the person picked where they live (until then the AI asks). from: the preset their picks started from.
+const START = { data: null, failed: false, place: null, wiki: ['en'], picked: {}, preset: 'recommended', from: 'recommended', chosen: false, open: {} };
 const Kit = createContext(null);
 
 export default function Builder({ children }) {
@@ -220,14 +221,36 @@ export function Total() {
   return <div className="mono sum" id="totalText" aria-live="polite">{text}</div>;
 }
 
+// The picks as SETUP's options: the preset they started from (the recommended kit, or just the essentials),
+// with --skip and --add for what's different.
+function setupOptions(state, cards) {
+  const base = state.from === 'essentials' ? 'essentials' : 'recommended';
+  const on = (s) => !!state.picked[s.id];
+  const inBase = (s) => s.presets.includes(base);
+  const ids = (list) => list.map((s) => s.id);
+  const wiki = cards.filter((s) => WIKI.test(s.id));
+  const langs = wiki.filter(on).map((s) => s.id.split('_')[1]);
+  const models = cards.filter((s) => s.group === 'AI models');
+  const rest = cards.filter((s) => s.group !== 'AI models' && !WIKI.test(s.id));
+  const skip = ids(rest.filter((s) => inBase(s) && !on(s)));
+  const add = ids(rest.filter((s) => !inBase(s) && on(s)));
+  if (wiki.some(inBase) && !langs.length) skip.unshift('wikipedia');
+  if (!wiki.some(inBase) && langs.length) add.unshift('wikipedia');
+  const opts = state.chosen ? ['--region ' + state.place.id, '--wikipedia ' + (langs.length ? langs : state.wiki).join(',')] : [];
+  if (base === 'essentials') opts.push('--essentials');
+  if (!models.some(on)) opts.push('--no-ai');
+  else if (models.some((s) => on(s) !== inBase(s))) opts.push('--models ' + ids(models.filter(on)).join(','));
+  if (skip.length) opts.push('--skip ' + skip.join(','));
+  if (add.length) opts.push('--add ' + add.join(','));
+  return opts;
+}
+
 function setupPrompt(state, cards) {
-  const list = cards.filter((s) => state.picked[s.id]).map((s) => `- ${s.title} (${s.id})`).join('\n');
-  const r = state.place;
-  return INSTALL_PROMPT
-    + '\n\nI already picked what goes in with the kit builder on tinfoilkit.com. Take these as my answers for the AI, '
-    + "the maps and the library: switch on only these, and tell me if any won't fit my computer. Ask me about the rest:\n" + list
-    + (r ? `\n\nI live in ${r.name}, and want Wikipedia in ${langName(state.data.regions, state.wiki)}. In the kit folder, that's: `
-         + `./kit region ${r.id} --wikipedia ${state.wiki.join(',')}` : '');
+  const opts = setupOptions(state, cards);
+  const gbs = Math.round(cards.filter((s) => state.picked[s.id]).reduce((t, s) => t + (s.bytes || 0), 0) / 1e9);
+  return INSTALL_PROMPT + `\n\nI already picked what goes in with the kit builder on tinfoilkit.com. It comes to about ${gbs} GB`
+    + (opts.length ? `. In the setup command, that's:\n${opts.join(' ')}\nUse those options as they are. ` : ', the recommended kit. ')
+    + "Tell me if it won't fit my computer, and ask me only about the rest.";
 }
 
 export function CopySetup({ children }) {
