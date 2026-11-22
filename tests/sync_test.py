@@ -6,6 +6,7 @@ Needs only python3 and curl, so it runs in the quick gate and in cloud sessions.
 usage: python3 tests/sync_test.py
 """
 import base64
+import difflib
 import hashlib
 import http.server
 import importlib.util
@@ -601,12 +602,14 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # SETUP.command's choices, with a stand-in ./kit that exits as told. Its update rewrites SETUP.command in
     # place, the hard case for bash, which reads a script as it goes. Its space says what SPACE does (all of it, the
     # essentials, GB free, GB in all, GB all of it needs, GB the essentials need, GB worth leaving free), or for a
-    # drive what SPACE_DRIVE does. Calls with --essentials go in calls.log as plan-essentials and sync-essentials.
+    # drive what SPACE_DRIVE does. Calls with --essentials go in calls.log as plan-essentials and sync-essentials,
+    # and every call goes in args.log with its options.
     def space(*v):
         return "\t".join(map(str, v))
     roomy = space("fits", "fits", 900, 1000, 400, 100, 50)
     stand_in = """#!/bin/bash
-case "$1" in drives|place|region) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
+case "$1" in drives|place|region|pick) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
+echo "$*" >> args.log
 c="$1"; case " $* " in *" --essentials "*) c="$1-essentials";; esac
 [ "$1" = essentials ] && c="essentials-$2"
 [ "$1" = space ] || echo "kit $c" >> calls.log
@@ -649,8 +652,8 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="\ny\nn\n\n", args=(), **env_extra):
         shutil.copy(TESTS.parent / "SETUP.command", folder)
-        (folder / "calls.log").write_text("")
-        (folder / "home.log").write_text("")
+        for log in ("calls.log", "home.log", "args.log"):
+            (folder / log).write_text("")
         p = subprocess.run(["bash", str(folder / "SETUP.command"), *args], input=answers, capture_output=True, text=True, timeout=60,
                            env={**os.environ, "PLAN": str(plan), "SYNC": str(sync), "TEST": str(test), "UPDATE": str(update),
                                 "SPACE": roomy, **env_extra})
@@ -681,6 +684,18 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out, calls = run_setup(answers="\n\ny\nn\n\n")
     check("SETUP: an update of just the essentials: just Return keeps it that way",
           rc == 0 and "room for the rest" in out and calls == update_calls and "essentials_only" in (setup / "kit.json").read_text(), out)
+    asked = ("[Y/n]", "[y/N]", "Type a number", "Press Return")
+    rc, out, calls = run_setup(args=("--yes",), answers="")
+    check("SETUP --yes: an update of just the essentials, now that the rest fits: says how to get it, asks nothing",
+          rc == 0 and "SETUP --all gets it" in out and calls == update_calls and not any(a in out for a in asked)
+          and "update --yes" in (setup / "args.log").read_text().splitlines(), out)
+    rc, out, calls = run_setup(args=("--all", "--yes"), answers="")
+    check("SETUP --all: an update of just the essentials gets the rest",
+          rc == 0 and calls == ["update", "fit", "essentials-off", "plan", "sync", "test"], out)
+    rc, out, calls = run_setup(args=("--essentials", "--yes"), answers="")
+    check("SETUP --essentials: an update of all of it gets just the essentials from now on",
+          rc == 0 and calls == ["update", "fit", "essentials-on", "plan", "sync", "test"]
+          and "essentials_only" in (setup / "kit.json").read_text(), out)
     rc, out, calls = run_setup(SPACE=space("no", "fits", 300, 1000, 400, 100, 50))
     check("SETUP: an update of just the essentials, and the rest still doesn't fit: doesn't offer it",
           rc == 0 and "room for the rest" not in out and calls == update_calls, out)
@@ -722,6 +737,36 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           rc == 0 and "Maps are for US Northeast" in out and "Maps: Germany: Bayern" in out and c["maps"]["region"] == "bayern"
           and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_de_all_"], out)
     shutil.copy(TESTS.parent / "kit.json", setup)
+    rc, out, calls = run_setup(args=("--yes",), answers="")
+    argv = (setup / "args.log").read_text().splitlines()
+    check("SETUP --yes: asks nothing, gets what fits on this computer, doesn't open the kit, and closes on its own",
+          rc == 0 and "All set" in out and calls == first and "update --yes" in argv and "fit --restore --skip" in argv
+          and not any(a in out for a in asked) and "Start downloading" not in out and "Open the kit now" not in out, out)
+    rc, out, calls = run_setup(args=("--region", "texas", "--wikipedia", "es", "--skip", "maps", "--add", "gutenberg_en_all",
+                                     "--share", "--yes"), answers="")
+    c = json.loads((setup / "kit.json").read_text())
+    check("SETUP --region, --wikipedia, --skip, --add and --share on an update: kit.json changes, and the kit is shared",
+          rc == 0 and c["maps"]["region"] == "us/texas" and c["maps"]["enabled"] is False
+          and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_es_all_"]
+          and {k: v for k, v in c["library"][-1].items() if k in ("enabled", "essential")} == {"essential": True}
+          and (setup / "home.log").read_text().splitlines() == ["share on", "share"] and "Sharing:" in out
+          and "Open the kit now" not in out, out)
+    shutil.copy(TESTS.parent / "kit.json", setup)
+    rc, out, calls = run_setup(args=("--no-ai", "--yes"), answers="")
+    argv = (setup / "args.log").read_text().splitlines()
+    check("SETUP --no-ai: every AI model off, and fit doesn't put one back",
+          rc == 0 and all(m.get("enabled") is False for m in json.loads((setup / "kit.json").read_text())["models"])
+          and "fit" in argv and "fit --restore --skip" not in argv, out)
+    shutil.copy(TESTS.parent / "kit.json", setup)
+    rc, out, calls = run_setup(args=("--yes", "--skip", "wikipedia,nothing-such"), answers="")
+    check("SETUP --skip with a name the kit doesn't have: stops before downloading, and kit.json is as it was",
+          rc == 1 and "Nothing in the kit is called nothing-such" in out and calls == ["update"]
+          and (setup / "kit.json").read_text() == (TESTS.parent / "kit.json").read_text(), out)
+    rc, out, calls = run_setup(args=("--bogus",), answers="")
+    rc2, out2, calls2 = run_setup(args=("--drive",), answers="")
+    rc3, out3, _ = run_setup(args=("--help",), answers="")
+    check("SETUP: an option it doesn't have, or one without its value, stops it at once; --help lists them",
+          rc == 2 and rc2 == 2 and calls == calls2 == [] and rc3 == 0 and "--yes" in out3 and "--drive PATH" in out3, out + out3)
 
     # A Mac without Python: SETUP gets the kit's own (a stand-in archive here), checked against its SHA-256.
     mac = work / "mac"
@@ -780,7 +825,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
     # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.
-    def first_run(answers, drives=(), git=False, home_kit=None, where="\n", **env_extra):
+    def first_run(answers, drives=(), git=False, home_kit=None, where="\n", args=(), **env_extra):
         """SETUP's first run. ./kit space says what SPACE (this computer) and SPACE_DRIVE (drives) say. where: the
         answers to "Where do you live?" (Return keeps the kit's place)."""
         place = work / "place"
@@ -797,7 +842,8 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
             (home / "TinfoilKit" / "notes.txt").write_text("mine")
         dl = kit_folder(place / "Downloads" / "tinfoilkit-main", git=git)
         (dl / "calls.log").write_text("")
-        p = subprocess.run(["bash", str(dl / "SETUP.command")], input=where + answers, capture_output=True, text=True, timeout=60,
+        p = subprocess.run(["bash", str(dl / "SETUP.command"), *args], input=where + answers, capture_output=True, text=True,
+                           timeout=60,
                            env={**os.environ, "HOME": str(home), "KIT_DRIVES": str(env_extra.pop("KIT_DRIVES", vols)),
                                 "SPACE": roomy, "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0", **env_extra})
         return p.returncode, p.stdout + p.stderr, dl, home, vols    # ./kit place says what it did on stderr
@@ -876,6 +922,35 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           rc == 0 and "Which one?" in out and "Georgia (United States)" in out and "Georgia (Europe)" in out
           and "Which language should Wikipedia be in?" in out
           and placed_cfg(home / "TinfoilKit") == ("us/georgia", ["wikipedia_es_all_maxi"]), out)
+    rc, out, dl, home, _ = first_run("", where="", args=("--region", "texas", "--this-computer", "--yes"))
+    k = home / "TinfoilKit"
+    check("SETUP --region texas --this-computer --yes: asks nothing, sets up in the home folder, doesn't open the kit",
+          rc == 0 and placed_ok(k) and not dl.exists() and placed_cfg(k) == ("us/texas", ["wikipedia_en_all_maxi"])
+          and "update --yes" in (k / "args.log").read_text().splitlines() and not any(a in out for a in asked)
+          and "Open the kit now" not in out and "All set" in out, out)
+    t7 = work / "place" / "Volumes" / "SAMSUNG T7"
+    rc, out, dl, home, _ = first_run("", where="", drives=["SAMSUNG T7"], args=(
+        "--drive", str(t7), "--essentials", "--models", "Gemma-4-E4B", "--skip", "maps", "--add", "gutenberg_en_all,wikipedia",
+        "--yes"))
+    c = json.loads((t7 / "TinfoilKit" / "kit.json").read_text()) if (t7 / "TinfoilKit" / "kit.json").exists() else {}
+    check("SETUP --drive --essentials --models --skip --add --yes: on the drive, just the essentials plus what was added",
+          rc == 0 and placed_ok(t7 / "TinfoilKit", essentials=True) and "What goes in it:" in out
+          and [m["id"] for m in c["models"] if m.get("enabled", True)] == ["Gemma-4-E4B"] and c["maps"]["enabled"] is False
+          and [z["zim"] for z in c["library"] if z.get("essential")] == ["wikipedia_en_all_maxi", "gutenberg_en_all"], out)
+    rc, out, dl, home, _ = first_run("", where="", args=("--drive", str(t7.parent / "NOPE"), "--yes"))
+    check("SETUP --drive with no drive there, --yes: says so and stops", rc == 1 and "There's no drive at" in out
+          and dl.exists() and not (home / "TinfoilKit").exists(), out)
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", args=("--drive", str(t7.parent / "NOPE")))
+    check("SETUP --drive with no drive there: says so, then asks where", rc == 0 and "There's no drive at" in out
+          and placed_ok(home / "TinfoilKit"), out)
+    rc, out, dl, home, _ = first_run("", where="", args=("--yes",), SPACE=small)
+    check("SETUP --yes: all of it won't fit with room to spare: just the essentials, and says so",
+          rc == 0 and "So it gets just the essentials" in out and placed_ok(home / "TinfoilKit", essentials=True), out)
+    rc, out, dl, home, _ = first_run("", where="", args=("--all", "--yes"), SPACE=small)
+    rc2, out2, dl2, home2, _ = first_run("", where="", args=("--yes",), SPACE=space("no", "no", 50, 1000, 400, 100, 100))
+    check("SETUP --yes: all of it with --all, or even the essentials, won't fit: stops before moving anything",
+          rc == rc2 == 1 and dl.exists() and dl2.exists() and not (home / "TinfoilKit").exists()
+          and "There isn't room on this computer, even for the essentials" in out2, out + out2)
     rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Texas\n1\n", home_kit="kit")
     check("SETUP first run: a kit already in the home folder gets the place chosen in the download",
           rc == 0 and "already a Tinfoil Kit" in out and placed_cfg(home / "TinfoilKit")[0] == "us/texas", out)
@@ -1074,6 +1149,12 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("kit fit --skip: leaves alone a model that's already downloaded", rc == 0 and "can't run" not in out
           and (fk / "kit.json").read_text() == fit_json, out)
     (fk / ".kit" / "state.json").unlink()
+    named = fit_json.replace('"id": "Big",', '"id": "Big",\n      "essential": true,')
+    (fk / "kit.json").write_text(named)
+    rc, out = fit(16, "--skip")
+    check("kit fit --skip: keeps a model asked for by name", rc == 0 and "Big comes anyway, as asked" in out
+          and (fk / "kit.json").read_text() == named, out)
+    (fk / "kit.json").write_text(fit_json)
 
     # ./kit essentials on|off: just the essentials from now on, or everything again.
     rc, out = kit("essentials", "on", root=fk)
@@ -1082,6 +1163,34 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           and len((fk / "kit.json").read_text().splitlines()) == len(fit_json.splitlines()) + 1, out)
     rc, out = kit("essentials", "off", root=fk)
     check("kit essentials off: kit.json as it was", rc == 0 and "Everything" in out and (fk / "kit.json").read_text() == fit_json, out)
+
+    # ./kit pick: what goes in the kit, by name (SETUP's --no-ai, --models, --skip and --add).
+    pk = work / "pick"
+    shutil.copytree(TESTS.parent / "tools", pk / "tools")
+    shutil.copy(TESTS.parent / "kit.json", pk)
+    before = (pk / "kit.json").read_text()
+    rc, out = kit("pick", "--models", "gemma-4-e4b", "--skip", "stackexchange", "--add", "gutenberg_en_all Wikipedia", root=pk)
+    c = json.loads((pk / "kit.json").read_text())
+    diff = list(difflib.ndiff(before.splitlines(), (pk / "kit.json").read_text().splitlines()))
+    added, gone = [x for x in diff if x.startswith("+ ")], [x for x in diff if x.startswith("- ")]
+    se = [z for z in c["library"] if ".stackexchange.com_" in z["zim"]]
+    check("kit pick: just that model, every Stack Exchange site off, and the adds on, changing only the lines that say so",
+          rc == 0 and [m["id"] for m in c["models"] if m.get("enabled", True)] == ["Gemma-4-E4B"]
+          and len(se) == 10 and all(z.get("enabled") is False for z in se) and "enabled" not in c["library"][-1]
+          and len(added) == 17 and len(gone) == 12 and all('"enabled": false' in x or '"essential": true' in x for x in added)
+          and "AI models: Gemma-4-E4B." in out, out)
+    items = {i.key: i for i in kp.items_from_config(kp.load_config(pk))}
+    runs = {"runs": "Inkling-2-Mini", "smallest": "Inkling-2-Mini"}
+    check("kit pick: what's asked for by name comes even with just the essentials",
+          all(kp.essential(items[k], runs) for k in ("library/gutenberg_en_all", "library/wikipedia_en_all_maxi",
+                                                     "models/Gemma-4-E4B"))
+          and not kp.essential(items["library/wiktionary_en_all_nopic"], runs))
+    now = (pk / "kit.json").read_text()
+    rc, out = kit("pick", "--add", "libretexts,nothing-such", root=pk)
+    rc2, out2 = kit("pick", "--models", "wikipedia", root=pk)
+    check("kit pick: a name the kit doesn't have changes nothing, and says what there is",
+          rc == rc2 == 2 and "Nothing in the kit is called nothing-such" in out and "Books: mdwiki_en_all_maxi" in out
+          and "No AI model is called wikipedia" in out2 and (pk / "kit.json").read_text() == now, out + out2)
 
     # ./kit space: whether the kit, or just its essentials, fits on a disk and leaves 10% of the computer's (5% of a
     # drive's) free. A made-up 1000 GB disk, a kit of 300 GB and essentials of 40 GB.

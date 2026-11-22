@@ -1,17 +1,54 @@
 #!/bin/bash
 # Double-click me (macOS) to set up Tinfoil Kit, and again whenever you want the newest models, books and maps.
 # Linux: bash SETUP.command
-# A home server, a computer that stays on (no screen needed): bash SETUP.command --home-server
-# The first time, it asks whether the kit goes on an external drive or on this Mac, says how much fits there, and
-# moves it there. Then it's ./kit update, ./kit sync and ./kit test (the first time, the essentials come first), with
-# checks and plain-English prompts for first-timers.
+# The first time, it asks where you live and whether the kit goes on an external drive or on this Mac, says how much
+# fits there, and moves it there. Then it's ./kit update, ./kit sync and ./kit test (the first time, the essentials
+# come first), with checks and plain-English prompts for first-timers.
+# The answers can come with it instead, so one command sets the kit up: an AI helping someone asks them the
+# questions, then gives them that command (site/llms.txt). It asks only what these leave out:
+#   --region PLACE      where you live: a US state, a country or a part of one, as ./kit region takes it
+#   --wikipedia CODES   Wikipedia's languages, like de or de,en
+#   --this-computer     the kit goes on this computer, in the home folder
+#   --drive PATH        the kit goes on the drive at PATH (like /Volumes/T7), in a TinfoilKit folder at its top
+#   --essentials        just the essentials
+#   --all               all of it, even when that leaves less free space than SETUP likes
+#   --no-ai             no AI models
+#   --models IDS        just these AI models (./kit pick)
+#   --skip IDS          leave these out: AI models, books, maps, extras (./kit pick)
+#   --add IDS           add these, like the books that are off unless asked for (./kit pick)
+#   --share             share the kit on the home network, behind an access code, whenever it's open
+#   --home-server       share it, and start it with the computer: for a computer that stays on, no screen needed
+#   --yes               ask nothing: what isn't given keeps its default, and SETUP stops and says why instead of asking
 # The whole script is one { } block, so bash reads all of it before running any: ./kit update can replace this
 # file, and the first run moves it.
 {
 cd "$(dirname "$0")" || exit 1
-# --home-server: at the end, share the kit on the home network behind an access code, and start it whenever the
-# computer starts. It goes in the environment because this script starts itself again after moving or updating the kit.
-for a in "$@"; do [ "$a" = --home-server ] && export KIT_HOME_SERVER=1; done
+# The answers go in the environment, since this script starts itself again after moving or updating the kit.
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --placed|--updated) break ;;    # this script starting itself again
+    --yes) export KIT_YES=1 ;;
+    --this-computer) export KIT_PLACE=computer ;;
+    --essentials|--all) export KIT_HOW_MUCH="${1#--}" ;;
+    --no-ai) export KIT_NO_AI=1 ;;
+    --share) export KIT_SHARE=1 ;;
+    --home-server) export KIT_HOME_SERVER=1 ;;
+    --region|--wikipedia|--drive|--models|--skip|--add)
+      [ -n "${2:-}" ] || { echo "SETUP: $1 needs a value after it. SETUP --help lists them all." >&2; exit 2; }
+      case "$1" in
+        --region) export KIT_REGION="$2" KIT_REGION_ASKED=1 ;;
+        --wikipedia) export KIT_WIKIPEDIA="$2" ;;
+        --drive) export KIT_PLACE=drive KIT_DRIVE="$2" ;;
+        --models) export KIT_MODELS="$2" ;;
+        --skip) export KIT_SKIP="$2" ;;
+        --add) export KIT_ADD="$2" ;;
+      esac
+      shift ;;
+    -h|--help) grep '^#   -' SETUP.command | cut -c5-; exit 0 ;;
+    *) { echo "SETUP: there's no $1. It takes:"; grep '^#   -' SETUP.command | cut -c5-; } >&2; exit 2 ;;
+  esac
+  shift
+done
 KIT="$(pwd)"
 NAME=TinfoilKit    # the kit's folder: at the top of a drive, or in the home folder
 MAC=0; [ "$(uname -s)" = Darwin ] && MAC=1
@@ -29,14 +66,18 @@ APP=""    # the Mac app (the website's Mac download), once it's in Applications:
 for a in "/Applications/Tinfoil Kit.app" "$HOME/Applications/Tinfoil Kit.app"; do [ $MAC = 1 ] && [ -d "$a" ] && APP="$a" && break; done
 
 say() { printf '\n%s\n' "$*"; }
-ask() { printf '\n%s [Y/n] ' "$1"; read -r a; case "$a" in ""|y|Y|yes|Yes) return 0;; esac; return 1; }
-ask_no() { printf '\n%s [y/N] ' "$1"; read -r a; case "$a" in y|Y|yes|Yes) return 0;; esac; return 1; }
+# With --yes the questions take their defaults, and one that has none stops SETUP rather than wait for an answer.
+ask() { [ -n "${KIT_YES:-}" ] && return 0
+        printf '\n%s [Y/n] ' "$1"; read -r a; case "$a" in ""|y|Y|yes|Yes) return 0;; esac; return 1; }
+ask_no() { [ -n "${KIT_YES:-}" ] && return 1
+           printf '\n%s [y/N] ' "$1"; read -r a; case "$a" in y|Y|yes|Yes) return 0;; esac; return 1; }
 step() { KIT_STEP=$((KIT_STEP + 1)); export KIT_STEP; say "Step $KIT_STEP of $KIT_STEPS: $*"; }
 # A number from 1 to $2, in $pick. Stops if the window has nothing more to read, rather than asking forever.
-choose() { while :; do printf '\n%s ' "$1"; read -r pick || exit 1
+choose() { [ -n "${KIT_YES:-}" ] && { say "SETUP needs an answer here, so it stopped. Run it without --yes to be asked."; exit 1; }
+           while :; do printf '\n%s ' "$1"; read -r pick || exit 1
              case "$pick" in ""|*[!0-9]*) ;; *) [ "$pick" -ge 1 ] && [ "$pick" -le "$2" ] && return 0 ;; esac
              echo "Type a number from 1 to $2, then press Return."; done; }
-finish() { printf '\a\nPress Return to close this window.'; read -r _; exit "${1:-0}"; }
+finish() { printf '\a'; [ -n "${KIT_YES:-}" ] && exit "${1:-0}"; printf '\nPress Return to close this window.'; read -r _; exit "${1:-0}"; }
 gb() { awk -v g="$1" 'BEGIN { if (g >= 1000) printf "%.1f TB", g / 1000; else printf "%d GB", g }'; }
 dev_of() { stat -c %d "$1" 2>/dev/null || stat -f %d "$1" 2>/dev/null; }    # Linux, then macOS
 same_disk() { [ "$(dev_of "$1")" = "$(dev_of "$2")" ]; }
@@ -120,9 +161,30 @@ room_note() {
 # After space(): how much of the kit goes to the place it looked at ($1 names it). Sets ONLY to all or essentials,
 # or returns 1 to choose somewhere else.
 how_much() {
-  local spare why=""
+  local spare why="" pref="${KIT_HOW_MUCH:-}"
   spare="$(gb "$LEAVE")"
   [ "$1" = "$THIS" ] && why=", so $THIS keeps running well"
+  case "$pref/$FULL/$ESS" in    # --essentials or --all, and what fits
+    /fits/*|all/fits/*|essentials/*/fits) ONLY="${pref:-all}"; return 0 ;;
+    all/tight/*)
+      say "All of it fits on $1, but leaves only $(gb $((FREE - NEED))) free. Better to leave at least $spare$why."
+      ONLY=all; return 0 ;;
+    essentials/*/tight)
+      say "Only the essentials fit on $1, and they leave only $(gb $((FREE - NEED_ESS))) free. Better to leave at least $spare$why."
+      ONLY=essentials; return 0 ;;
+  esac
+  if [ -n "${KIT_YES:-}" ]; then    # nobody to ask: just the essentials where all of it doesn't fit with room to spare
+    case "$FULL/$ESS" in
+      */no) say "There isn't room on $1, even for the essentials: they need about $(gb "$NEED_ESS") plus some to spare, and $(gb "$FREE") is free."
+            return 1 ;;
+      tight/*) say "All of it fits on $1, but leaves only $(gb $((FREE - NEED))) free. Better to leave at least $spare$why." ;;
+      */tight) say "Only the essentials fit on $1, and they leave only $(gb $((FREE - NEED_ESS))) free. Better to leave at least $spare$why." ;;
+      *) say "All of it won't fit on $1: it needs about $(gb "$NEED") plus some to spare, and $(gb "$FREE") is free." ;;
+    esac
+    [ "$pref" = all ] && return 1
+    echo "So it gets just the essentials (about $(gb "$NEED_ESS")). SETUP offers the rest later, once it fits."
+    ONLY=essentials; return 0
+  fi
   case "$FULL/$ESS" in
     fits/*) ONLY=all; return 0 ;;
     tight/*)
@@ -212,8 +274,13 @@ pick_region() {
   local now place n i id name c l g ids names codes labels sizes wiki
   now="$(./kit region 2>/dev/null)" || return 0
   export KIT_REGION_ASKED=1
+  [ "$1" = first ] && step "where do you live?"
+  [ -n "${KIT_REGION:-}" ] && { given_region || finish 1; return 0; }    # (it came with SETUP)
+  if [ -n "${KIT_YES:-}" ]; then
+    if [ -n "${KIT_WIKIPEDIA:-}" ]; then given_region || finish 1; elif [ "$1" = first ]; then echo "$now"; fi
+    return 0
+  fi
   if [ "$1" = first ]; then
-    step "where do you live?"
     echo "The maps show your area in street detail, with directions and address search, and Wikipedia comes in your language."
     echo "Right now: $now"
     printf '\nType your US state or your country (like Texas, Ontario or Germany), or press Return to keep that: '
@@ -248,8 +315,8 @@ pick_region() {
   done
   codes=(); labels=(); sizes=()
   while IFS=$'\t' read -r c l g; do codes+=("$c"); labels+=("$l"); sizes+=("$g"); done < <(./kit region --languages "$id" 2>/dev/null)
-  wiki="${codes[0]:-}"
-  if [ ${#codes[@]} -gt 1 ]; then
+  wiki="${KIT_WIKIPEDIA:-${codes[0]:-}}"
+  if [ ${#codes[@]} -gt 1 ] && [ -z "${KIT_WIKIPEDIA:-}" ]; then
     say "Which language should Wikipedia be in?"
     for ((i = 0; i < ${#codes[@]}; i++)); do printf '  %d  %s (%s)\n' $((i + 1)) "${labels[$i]}" "$(gb "${sizes[$i]}")"; done
     choose "Type a number, then press Return:" ${#codes[@]}
@@ -258,6 +325,27 @@ pick_region() {
   echo
   ./kit region "$id" ${wiki:+--wikipedia "$wiki"} || return 0
   export KIT_REGION="$id" KIT_WIKIPEDIA="$wiki"
+}
+
+# The answers that came with SETUP's options (or the first run's, for a kit that was already where it put this one):
+# where you live, and what goes in the kit. Saying them again changes nothing.
+given_region() {
+  if [ -n "${KIT_REGION:-}" ]; then ./kit region "$KIT_REGION" ${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"}
+  elif [ -n "${KIT_WIKIPEDIA:-}" ]; then ./kit region --wikipedia "$KIT_WIKIPEDIA"; fi
+}
+picked() { [ -n "${KIT_NO_AI:-}${KIT_MODELS:-}${KIT_SKIP:-}${KIT_ADD:-}" ]; }
+given_parts() {
+  picked || return 0
+  ./kit pick ${KIT_NO_AI:+--no-ai} ${KIT_MODELS:+--models "$KIT_MODELS"} ${KIT_SKIP:+--skip "$KIT_SKIP"} ${KIT_ADD:+--add "$KIT_ADD"}
+}
+
+# Which AI model this computer runs, and whether to get the ones too big for it (on an update, also the ones skipped
+# before on a computer with less memory). Models chosen with --models or --no-ai stay as chosen.
+fit_ai() {
+  if [ -n "${KIT_NO_AI:-}${KIT_MODELS:-}" ]; then ./kit fit
+  elif [ -n "${KIT_YES:-}" ]; then ./kit fit --restore --skip    # what --ask does when nobody answers
+  else ./kit fit --ask; fi
+  export KIT_FIT_ASKED=1
 }
 
 # Put the kit at DEST: ./kit place moves it there (a git checkout is copied) and says so. If it's somewhere new,
@@ -274,9 +362,14 @@ put_kit() {
 # First run only: ask where the kit should live, then carry on from there.
 place() {
   step "where should the kit go?"
-  ./kit fit --ask    # which AI model this computer runs, and whether to get the ones too big for it
-  export KIT_FIT_ASKED=1
+  if picked; then echo "What goes in it:"; given_parts || finish 1; fi
+  fit_ai
+  export KIT_GIVEN=1
   space "$HOME/$NAME"
+  if [ -n "${KIT_PLACE:-}${KIT_YES:-}" ]; then
+    place_given && return
+    [ -n "${KIT_YES:-}" ] && { echo "Run the command again once that's sorted. Without --yes, SETUP asks instead."; finish 1; }
+  fi
   say "All of the kit is about $(gb "$NEED"). Just the essentials (the AI, the medical, preparedness and repair"
   echo "books, and the map) are about $(gb "$NEED_ESS")."
   echo
@@ -297,6 +390,35 @@ place() {
     fi
     pick=1
   done
+}
+
+# Where --this-computer or --drive puts the kit (with --yes and neither, this computer), and putting it there.
+given_dest() {
+  local d="${KIT_DRIVE%/}"
+  if [ "${KIT_PLACE:-computer}" = computer ]; then echo "$HOME/$NAME"
+  elif [ "${d##*/}" = "$NAME" ]; then echo "$d"
+  else echo "$d/$NAME"; fi
+}
+place_given() {
+  local dest label why
+  dest="$(given_dest)" label="$THIS"
+  if [ "${KIT_PLACE:-computer}" = drive ]; then
+    label="${dest%/*}"; label="${label##*/}"
+    if [ ! -d "${dest%/*}" ]; then
+      say "There's no drive at $KIT_DRIVE. Is it plugged in? Give it a few seconds after plugging it in."
+      return 1
+    fi
+    why="$(./kit drives 2>/dev/null | awk -F'\t' -v p="${dest%/*}" '$1 == p && $4 != "-" {print $4; exit}')"
+    if [ -n "$why" ]; then
+      say "$label won't work: $why."
+      echo "To use it, erase it as exFAT. Erasing deletes everything on it, so copy off anything you want to keep first."
+      [ $MAC = 1 ] && echo "In Disk Utility: click $label in the sidebar, click Erase, choose ExFAT as the format, and click Erase."
+      return 1
+    fi
+  fi
+  space "$dest"
+  how_much "$label" || return 1
+  put_kit "$dest"
 }
 
 checks() {
@@ -346,6 +468,14 @@ all_set() {
   [ $MAC = 1 ] && open "$KIT" 2>/dev/null    # show where it lives
 }
 
+# --share: phones and laptops on the home network can use the kit, with its access code, whenever it's open.
+share_home() {
+  say "Sharing: phones and laptops on your home network can use the kit whenever it's open, with its access code."
+  ./kit share on >/dev/null
+  echo
+  ./kit share
+}
+
 # Phones and laptops on the home network open the kit with its access code, and it starts with the computer.
 home_server() {
   say "Home server: sharing the kit on your home network, and starting it whenever $THIS starts."
@@ -369,29 +499,46 @@ if [ "${1:-}" != "--updated" ]; then
       echo "The first time takes a few hours. Later runs only download what changed."
     fi
     need_python
-    if [ -d .kit ]; then step "the kit is $(where_kit), in $KIT"; else KIT_STEPS=4; pick_region first; place; fi
+    if [ -d .kit ]; then
+      step "the kit is $(where_kit), in $KIT"
+      [ -n "${KIT_PLACE:-}" ] && [ "$(given_dest)" != "$KIT" ] && echo "It stays there: --this-computer and --drive choose where a new kit goes."
+    else
+      KIT_STEPS=4; pick_region first; place
+    fi
   else
     [ -n "${KIT_ESSENTIALS:-}" ] && ./kit essentials "$KIT_ESSENTIALS" >/dev/null
-    # a kit that was here already gets the answer to "where do you live?" too
-    [ -n "${KIT_REGION:-}" ] && ./kit region "$KIT_REGION" ${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"} >/dev/null 2>&1
   fi
   checks
   # The Mac app looks for the kit here, and names its drive if it isn't plugged in.
   [ $MAC = 1 ] && { mkdir -p "$PY_HOME" && printf '%s\n' "$KIT" > "$PY_HOME/last-kit"; } 2>/dev/null
   echo
-  ./kit update
+  ./kit update ${KIT_YES:+--yes}
   [ $? -eq 3 ] && exec bash "$KIT/SETUP.command" --updated
+fi
+# The answers that came with SETUP, after ./kit update so that new items can be left out too. The first run said
+# them before moving the kit, and says them again quietly in case a kit was already where it landed.
+if [ -n "${KIT_GIVEN:-}" ]; then
+  { given_region; given_parts; } >/dev/null 2>&1
+else
+  given_region || finish 1
+  given_parts || finish 1
 fi
 [ -n "${KIT_REGION_ASKED:-}" ] || pick_region    # (after ./kit update, so a kit from before this question gets it)
 
-[ -n "${KIT_FIT_ASKED:-}" ] || ./kit fit --ask    # an update can bring models too big for this computer
+[ -n "${KIT_FIT_ASKED:-}" ] || fit_ai    # an update can bring models too big for this computer
 ONLY=all; grep -q '"essentials_only": *true' kit.json 2>/dev/null && ONLY=essentials
-if [ $FIRST = 0 ] && [ $ONLY = essentials ]; then
-  space "$KIT"
-  if [ "$FULL" = fits ]; then
-    say "This kit has just the essentials, and now there's room for the rest (about $(gb "$NEED") more)."
-    ask_no "Get the rest too?" && { ./kit essentials off >/dev/null; ONLY=all; }
-  fi
+if [ $FIRST = 0 ]; then
+  case "${KIT_HOW_MUCH:-}/$ONLY" in
+    essentials/all) ./kit essentials on; ONLY=essentials ;;
+    all/essentials) ./kit essentials off; ONLY=all ;;
+    /essentials)
+      space "$KIT"
+      if [ "$FULL" = fits ]; then
+        say "This kit has just the essentials, and now there's room for the rest (about $(gb "$NEED") more)."
+        if [ -n "${KIT_YES:-}" ]; then echo "SETUP --all gets it."
+        elif ask_no "Get the rest too?"; then ./kit essentials off >/dev/null; ONLY=all; fi
+      fi ;;
+  esac
 fi
 
 # The first time, the essentials come first and get checked, so the kit works hours before the rest is in.
@@ -406,7 +553,7 @@ say "Each item comes from its publisher under its own license, listed in THIRD-P
 echo "Big downloads take hours. Keep $THIS plugged in with the lid open: it won't go to sleep while this runs."
 echo "You can stop any time (press Control-C, or close this window) and double-click SETUP later to carry on."
 on_battery && say "This Mac is running on battery. Plug it in before you start."
-ask "Start downloading?" || finish
+[ -n "${KIT_YES:-}" ] || ask "Start downloading?" || finish
 # Keep the Mac awake (not the screen) until the download and checks are done. caffeinate runs in the
 # background so that Ctrl-C reaches the sync, which saves its progress, and this script carries on.
 awake=""
@@ -443,6 +590,8 @@ fi
 if [ $tested -eq 0 ] && [ $rc -eq 0 ]; then
   all_set
   [ "${KIT_HOME_SERVER:-}" = 1 ] && { home_server; finish; }
+  [ -n "${KIT_SHARE:-}" ] && share_home
+  [ -n "${KIT_YES:-}" ] && finish    # (nobody may be there to use it)
   if ask "Open the kit now?"; then
     [ -n "$APP" ] && { open -a "$APP"; exit 0; }
     exec bash "Open Tinfoil Kit.command"
@@ -453,6 +602,7 @@ if [ $tested -eq 0 ]; then
   say "Everything in the kit works, but some downloads didn't finish:"
   problems
   echo
+  [ -n "${KIT_SHARE:-}" ] && [ "${KIT_HOME_SERVER:-}" != 1 ] && share_home
   if [ "${KIT_HOME_SERVER:-}" = 1 ]; then
     home_server
     say "Run SETUP again later to get the rest."
