@@ -6,9 +6,9 @@
 #   .github/release.sh v1.2.0 NOTES.txt    sign and publish main as v1.2.0, with NOTES.txt as what's new
 #   .github/release.sh mac                 set up and try the Mac app's signing (once): it builds the app, Apple
 #                                          notarizes it, and a copy lands on the Desktop as if downloaded
-# Needs git, ssh-keygen, Go (brew install go) and GitHub's gh, signed in (brew install gh && gh auth login). And for the Mac download, the
-# Tinfoil Kit app: a Mac with Apple's command line tools, a Developer ID Application certificate in its keychain and
-# notarytool's password for it (docs/HANDOFF.md, "The Mac app").
+# Needs git, ssh-keygen, Go (brew install go) and GitHub's gh, signed in (brew install gh && gh auth login). The Mac
+# download, the Tinfoil Kit app, also needs Apple's command line tools, a Developer ID Application certificate in the
+# keychain and notarytool's password for it (docs/RELEASING.md, "Signing the Mac app").
 set -eu
 cd "$(dirname "$0")/.."
 KEY="${KIT_RELEASE_KEY:-$HOME/.ssh/tinfoilkit-release}"
@@ -22,7 +22,7 @@ if [ "${1:-}" = mac ]; then
   [ "$(uname -s)" = Darwin ] || die "the Mac app is built on a Mac"
   xcrun --find notarytool > /dev/null 2>&1 || die "needs Apple's command line tools: run  xcode-select --install"
   id="${KIT_MAC_SIGN:-$(mac_identity)}"
-  [ -n "$id" ] || die "this Mac's keychain has no Developer ID Application certificate. docs/HANDOFF.md, \"The Mac app\", says how to make one"
+  [ -n "$id" ] || die "this Mac's keychain has no Developer ID Application certificate. docs/RELEASING.md, \"Signing the Mac app\", says how to make one"
   echo "Signing with: $id"
   if ! mac_notary; then
     printf "The email of the Apple account in the developer program: "

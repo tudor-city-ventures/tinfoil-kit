@@ -161,7 +161,7 @@ Everything the kit keeps is listed in `data/kit.json`, your copy of the standard
 
 ## Contributing
 
-Bug reports and ideas are welcome as issues. A pull request needs an issue the maintainer has labeled `accepted` first: see [CONTRIBUTING](.github/CONTRIBUTING.md). Code rules, for people and their AI agents, are in [AGENTS.md](AGENTS.md). Design history is in [docs/HANDOFF.md](docs/HANDOFF.md).
+Bug reports and ideas are welcome as issues. A pull request needs an issue the maintainer has labeled `accepted` first: see [CONTRIBUTING](.github/CONTRIBUTING.md). Code rules, for people and their AI agents, are in [AGENTS.md](AGENTS.md). How it works inside, and why, is in [docs/DESIGN.md](docs/DESIGN.md).
 
 ## Built on
 
