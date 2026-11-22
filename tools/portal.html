@@ -664,19 +664,26 @@
         margin: 6px 0;
       }
       #dirSteps li small,
-      #nearbyList small {
+      #nearbyList small,
+      #pinList small {
         font: 12px var(--mono);
         color: var(--ink2);
       }
-      #nearbyList {
+      #nearbyList,
+      #pinList {
         margin: 0;
         padding: 0;
         list-style: none;
         font-size: 15px;
       }
-      #nearbyList li {
+      #nearbyList li,
+      #pinList li {
         padding: 8px 0;
         border-top: 1px solid var(--mute);
+      }
+      #pinList li:first-child {
+        padding-top: 0;
+        border-top: 0; /* the heading's rule is right above it */
       }
       /* MapLibre's own controls and popups, on the always-light map (its styles load after these) */
       #mapCanvas .maplibregl-ctrl-group:not(:empty) {
@@ -701,6 +708,36 @@
         padding: 0 10px;
         border: 1px solid #1c1f1a;
         font: 500 12px var(--mono);
+      }
+      /* what a place popup adds: coordinates, a pin's note, and its form; light in dark mode too, like the map */
+      #mapCanvas .coords {
+        margin: 6px 0 0;
+        font: 12px/1.6 var(--mono);
+        color: #3a3e36;
+      }
+      #mapCanvas .pin-note {
+        margin: 4px 0 0;
+        white-space: pre-wrap;
+      }
+      #mapCanvas button.plain.link {
+        color: #9a3a10;
+      }
+      #mapCanvas button.secondary {
+        color: #1c1f1a;
+        border-color: #1c1f1a;
+      }
+      #mapCanvas button.secondary:enabled:hover {
+        background: #eae6d8;
+      }
+      .pin-form input,
+      .pin-form textarea {
+        min-height: 40px;
+        margin: 8px 0 0;
+        padding: 6px 10px;
+        font: 15px/1.4 var(--sans);
+        color: #1c1f1a;
+        background: #fff;
+        border-color: #1c1f1a;
       }
 
       /* phones */
@@ -847,8 +884,8 @@
             <input
               type="search"
               id="placeQ"
-              aria-label="Search an address or place"
-              placeholder="Search an address or place"
+              aria-label="Search an address, place or coordinates"
+              placeholder="Address, place or coordinates"
               autocomplete="off"
             />
             <div id="placeResults" class="results" hidden></div>
@@ -869,6 +906,12 @@
             <h2>Nearest</h2>
             <div class="chips" id="nearbyChips"></div>
             <ul id="nearbyList"></ul>
+            <h2>Pins</h2>
+            <ul id="pinList"></ul>
+            <p class="note">
+              Click the map to see its coordinates or pin a place, like where the family meets. Pins are saved in this
+              browser.
+            </p>
             <p class="note" id="mapStatus"></p>
             <p class="note">
               Home: <span id="homeLabel"></span>.
@@ -910,6 +953,11 @@
             <b>Map</b> works like a simple Google Maps: search an address or place, get driving or walking directions,
             or find the nearest hospital, pharmacy, gas station and more. Your computer has no GPS, so set
             <b>home</b> (bottom of the map panel) to where you are.
+          </li>
+          <li>
+            Click anywhere on the map for its coordinates, directions there, or a <b>pin</b> with a note, like where the
+            family meets. Pins are saved in this browser, and search, directions and Ask find them by name. The search
+            box also takes coordinates, e.g. 40.7128, -74.0060 or 40°42'46"N 74°0'22"W.
           </li>
           <li>
             You can also ask in plain words on the Ask page, e.g. "How do I get to the nearest hospital?" or "Directions
@@ -1649,9 +1697,93 @@
           }
           return place;
         }
+        // Coordinates as GPS units, radio nets and paper maps write them: "40.7128, -74.006", "40.7128 N 74.006 W",
+        // "40°42'46"N 74°0'22"W", "N 40° 42.768' W 74° 0.36'". Latitude first, unless the letters say otherwise.
+        var COORD_NUM =
+          "(-?\\d{1,3}(?:\\.\\d+)?)\\s*(?:°\\s*(?:(\\d{1,2}(?:\\.\\d+)?)\\s*'\\s*(?:(\\d{1,2}(?:\\.\\d+)?)\\s*\"\\s*)?)?)?";
+        var ONE_COORD = "(?:([NSEW])\\s*" + COORD_NUM + "|" + COORD_NUM + "([NSEW])?)"; // a letter before or after, not both
+        var LATLON = new RegExp("^\\s*" + ONE_COORD + "(\\s*[,;]\\s*|\\s+)" + ONE_COORD + "\\s*$", "i");
         function parseLatLon(text) {
-          var m = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(text || "");
-          return m ? { lat: parseFloat(m[1]), lon: parseFloat(m[2]), name: m[1] + ", " + m[2], address: "" } : null;
+          var t = String(text || "")
+            .replace(/[º˚]/g, "°")
+            .replace(/[‘’′]/g, "'")
+            .replace(/[“”″]/g, '"')
+            .replace(/''/g, '"');
+          var m = LATLON.exec(t);
+          if (!m || (!/[.°]/.test(t) && !/[,;]/.test(m[9]))) return null; // "45 N 100 W" is a street address in a grid city
+          function part(g) {
+            // [letter before, deg, min, sec, deg, min, sec, letter after]
+            var pre = g[0] !== undefined,
+              deg = pre ? g[1] : g[4],
+              h = (pre ? g[0] : g[7] || "").toUpperCase(),
+              neg = deg.charAt(0) === "-";
+            if (h && neg) return null;
+            var v =
+              Math.abs(parseFloat(deg)) +
+              (parseFloat(pre ? g[2] : g[5]) || 0) / 60 +
+              (parseFloat(pre ? g[3] : g[6]) || 0) / 3600;
+            return { h: h, v: neg || h === "S" || h === "W" ? -v : v };
+          }
+          var a = part(m.slice(1, 9)),
+            b = part(m.slice(10, 18));
+          if (!a || !b) return null;
+          if ((a.h === "E" || a.h === "W") && b.h !== "E" && b.h !== "W") {
+            var x = a;
+            a = b;
+            b = x;
+          } // "74.006 W, 40.7128 N"
+          if (a.h === "E" || a.h === "W" || b.h === "N" || b.h === "S" || Math.abs(a.v) > 90 || Math.abs(b.v) > 180)
+            return null;
+          var lat = +a.v.toFixed(6),
+            lon = +b.v.toFixed(6);
+          return { lat: lat, lon: lon, name: fmtLatLon(lat, lon), address: "" };
+        }
+        function fmtLatLon(lat, lon) {
+          return lat.toFixed(5) + ", " + lon.toFixed(5);
+        } // 5 decimals: about a meter
+        function fmtDMS(lat, lon) {
+          function dms(v, pos, neg) {
+            var a = Math.round(Math.abs(v) * 3600),
+              d = Math.floor(a / 3600),
+              m = Math.floor((a % 3600) / 60),
+              s = a % 60;
+            return d + "\u00b0" + m + "\u2032" + s + "\u2033" + (v < 0 ? neg : pos);
+          }
+          return dms(lat, "N", "S") + " " + dms(lon, "E", "W");
+        }
+        // A pin the person saved, by its name: "meeting place", "our meeting place" and "The Meeting Place" all find "Meeting place".
+        function pinKey(text) {
+          return String(text || "")
+            .trim()
+            .toLowerCase()
+            .replace(/^(the|our|my)\s+/, "");
+        }
+        function findPin(pins, text) {
+          var k = pinKey(text);
+          return (
+            (k &&
+              (pins || []).filter(function (p) {
+                return pinKey(p.name) === k;
+              })[0]) ||
+            null
+          );
+        }
+        function pinPlace(p, origin) {
+          var place = {
+            name: p.name,
+            address: String(p.note || "")
+              .split("\n")[0]
+              .slice(0, 80),
+            lat: p.lat,
+            lon: p.lon,
+            kind: "pin",
+            id: p.id,
+          };
+          if (origin) {
+            place.distance_m = Math.round(haversine(origin, place));
+            place.direction = bearing(origin, place);
+          }
+          return place;
         }
         async function getJson(url, signal) {
           var r = await fetch(url, { signal: signal });
@@ -1673,6 +1805,17 @@
         async function searchPlaces(opts, query, limit) {
           var ll = parseLatLon(query);
           if (ll) return [ll];
+          var k = pinKey(query),
+            mine =
+              k.length < 2
+                ? []
+                : (opts.pins || [])
+                    .filter(function (p) {
+                      return pinKey(p.name).indexOf(k) >= 0;
+                    })
+                    .map(function (p) {
+                      return pinPlace(p, opts.home);
+                    });
           var u =
             opts.geoBase +
             "/api?q=" +
@@ -1682,10 +1825,18 @@
             "&lang=" +
             photonLang(opts.lang);
           if (opts.home) u += "&lat=" + opts.home.lat + "&lon=" + opts.home.lon + "&zoom=10&location_bias_scale=0.3";
-          var j = await getJson(u, opts.signal);
-          return (j.features || []).map(function (f) {
-            return placeFromFeature(f, opts.home);
-          });
+          var j;
+          try {
+            j = await getJson(u, opts.signal);
+          } catch (e) {
+            if (mine.length && e.name !== "AbortError") return mine;
+            throw e;
+          } // pins don't need address search
+          return mine.concat(
+            (j.features || []).map(function (f) {
+              return placeFromFeature(f, opts.home);
+            }),
+          );
         }
         async function resolvePlace(opts, text) {
           var t = String(text || "").trim();
@@ -1693,6 +1844,8 @@
             if (!opts.home) throw new Error("No home location set");
             return { name: opts.home.label || "Home", address: "", lat: opts.home.lat, lon: opts.home.lon };
           }
+          var pin = findPin(opts.pins, t);
+          if (pin) return pinPlace(pin);
           var hits = await searchPlaces(opts, t, 1);
           if (!hits.length) throw new Error("Couldn't find \"" + t + '" on the offline map');
           return hits[0];
@@ -1924,6 +2077,16 @@
             ", " +
             h.lon +
             "). " +
+            (opts.pins && opts.pins.length
+              ? "The user pinned these places, which the tools find by name: " +
+                opts.pins
+                  .slice(0, 30)
+                  .map(function (p) {
+                    return p.name;
+                  })
+                  .join(", ") +
+                ". "
+              : "") +
             "Always use the tools to look up places, distances and routes; never guess an address or a route. " +
             "Use " +
             (opts.units === "metric" ? "kilometres" : "miles") +
@@ -2056,6 +2219,9 @@
           fmtTime: fmtTime,
           placeFromFeature: placeFromFeature,
           parseLatLon: parseLatLon,
+          fmtLatLon: fmtLatLon,
+          fmtDMS: fmtDMS,
+          findPin: findPin,
           searchPlaces: searchPlaces,
           resolvePlace: resolvePlace,
           categoryFor: categoryFor,
@@ -2453,6 +2619,9 @@
             markers = [],
             homeMk = null,
             toPick = null;
+          var pins = loadPins(),
+            pinMarkers = [],
+            openPop = null;
           var svc = { geocoder: false, routing: false };
           var esc = Kit.escapeHtml;
           function units() {
@@ -2477,6 +2646,7 @@
               lang: KM.lang,
               signal: signal,
               label: KM.label,
+              pins: pins,
             };
           }
           function mapsUsable() {
@@ -2484,6 +2654,18 @@
           }
           function emptyFC() {
             return { type: "FeatureCollection", features: [] };
+          }
+          function labelsFC(places) {
+            return {
+              type: "FeatureCollection",
+              features: places.map(function (p) {
+                return {
+                  type: "Feature",
+                  geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+                  properties: { label: p.name },
+                };
+              }),
+            };
           }
           function b64buf(b64) {
             var bin = atob(b64),
@@ -2599,23 +2781,36 @@
                 layout: { "line-join": "round", "line-cap": "round" },
                 paint: { "line-color": "#d9531e", "line-width": 5 },
               });
-              map.addSource("labels", { type: "geojson", data: emptyFC() });
-              map.addLayer({
-                id: "result-labels",
-                type: "symbol",
-                source: "labels",
-                layout: {
-                  "text-field": ["get", "label"],
-                  "text-font": ["Noto Sans Medium"],
-                  "text-size": 13,
-                  "text-offset": [0, 0.8],
-                  "text-anchor": "top",
-                  "text-optional": true,
-                },
-                paint: { "text-color": "#1c1f1a", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+              [
+                ["pins", "pin-labels"],
+                ["labels", "result-labels"],
+              ].forEach(function (l) {
+                map.addSource(l[0], { type: "geojson", data: emptyFC() });
+                map.addLayer({
+                  id: l[1],
+                  type: "symbol",
+                  source: l[0],
+                  layout: {
+                    "text-field": ["get", "label"],
+                    "text-font": ["Noto Sans Medium"],
+                    "text-size": 13,
+                    "text-offset": [0, 0.8],
+                    "text-anchor": "top",
+                    "text-optional": true,
+                  },
+                  paint: { "text-color": "#1c1f1a", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+                });
+              });
+              map.on("click", function (e) {
+                var t = e.originalEvent.target,
+                  pin = t.closest("[data-pin]");
+                if (pin) return openPin(pin.dataset.pin);
+                if (t.closest(".maplibregl-marker") || map.getContainer().querySelector(".maplibregl-popup")) return; // that marker's popup, or this click closes one
+                openPoint(e.lngLat);
               });
               mapReady = true;
               drawHome();
+              drawPins();
               if (pending) {
                 var d = pending;
                 pending = null;
@@ -2644,6 +2839,16 @@
             );
             updateHomeLabel();
             drawHome();
+            renderPins();
+          }
+          function coordsHtml(p) {
+            return (
+              '<div class="coords">' +
+              Kit.fmtLatLon(p.lat, p.lon) +
+              ' <button type="button" class="plain link" data-act="copy">Copy</button><br>' +
+              Kit.fmtDMS(p.lat, p.lon) +
+              "</div>"
+            );
           }
           function placeHtml(p) {
             return (
@@ -2653,31 +2858,85 @@
               (p.address ? "<br>" + esc(p.address) : "") +
               (p.distance_m != null
                 ? "<br><small>" + dist(p.distance_m) + " " + p.direction + " (straight line)</small>"
-                : "")
+                : "") +
+              coordsHtml(p)
             );
           }
+          function buttons(list) {
+            // [action, label, secondary]
+            return list
+              .map(function (b) {
+                return (
+                  '<button type="button" data-act="' +
+                  b[0] +
+                  '"' +
+                  (b[2] ? ' class="secondary"' : "") +
+                  ">" +
+                  b[1] +
+                  "</button>"
+                );
+              })
+              .join("");
+          }
+          function btns(list) {
+            return '<div class="popup-btns">' + buttons(list) + "</div>";
+          }
+          function popupEl(html) {
+            var el = document.createElement("div");
+            el.innerHTML = html;
+            return el;
+          }
+          function copyText(text, b) {
+            function done() {
+              b.textContent = "Copied";
+            }
+            function fallback() {
+              // the home network is plain http, where browsers turn the clipboard API off
+              var ta = document.createElement("textarea");
+              ta.value = text;
+              ta.style.cssText = "position:fixed;opacity:0";
+              document.body.appendChild(ta);
+              ta.select();
+              try {
+                if (document.execCommand("copy")) done();
+              } catch (e) {}
+              ta.remove();
+            }
+            if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
+            else fallback();
+          }
+          // The buttons every place popup can have. more: handlers for a popup's own buttons.
+          function wireActs(el, p, close, more) {
+            el.querySelectorAll("button[data-act]").forEach(function (b) {
+              b.addEventListener("click", function () {
+                var a = b.dataset.act;
+                if (a === "copy") return copyText(Kit.fmtLatLon(p.lat, p.lon), b);
+                if (more && more[a]) return more[a]();
+                close();
+                if (a === "home") setHome(p);
+                else if (a === "to") {
+                  toPick = p;
+                  $("dirTo").value = p.name;
+                  runDirections();
+                } else if (a === "pin")
+                  editPin({ name: p.kind === "point" ? "" : p.name, note: p.address || "", lat: p.lat, lon: p.lon });
+              });
+            });
+          }
           function addMarker(p, color, withButtons) {
-            var pop = new maplibregl.Popup({ offset: 30 }).setHTML(
+            var el = popupEl(
               placeHtml(p) +
                 (withButtons
-                  ? '<div class="popup-btns"><button data-act="to">Directions here</button><button data-act="home">Set as home</button></div>'
+                  ? btns([
+                      ["to", "Directions here"],
+                      ["home", "Set as home"],
+                      ["pin", "Pin this place"],
+                    ])
                   : ""),
             );
-            pop.on("open", function () {
-              pop
-                .getElement()
-                .querySelectorAll("button[data-act]")
-                .forEach(function (b) {
-                  b.addEventListener("click", function () {
-                    if (b.dataset.act === "home") setHome(p);
-                    else {
-                      toPick = p;
-                      $("dirTo").value = p.name;
-                      runDirections();
-                    }
-                    pop.remove();
-                  });
-                });
+            var pop = new maplibregl.Popup({ offset: 30, maxWidth: "320px" }).setDOMContent(el);
+            wireActs(el, p, function () {
+              pop.remove();
             });
             var mk = new maplibregl.Marker({ color: color || "#d9531e" })
               .setLngLat([p.lon, p.lat])
@@ -2714,16 +2973,7 @@
               d.places.forEach(function (p) {
                 addMarker(p, "#d9531e", true);
               });
-              map.getSource("labels").setData({
-                type: "FeatureCollection",
-                features: d.places.map(function (p) {
-                  return {
-                    type: "Feature",
-                    geometry: { type: "Point", coordinates: [p.lon, p.lat] },
-                    properties: { label: p.name },
-                  };
-                }),
-              });
+              map.getSource("labels").setData(labelsFC(d.places));
               if (d.origin) pts.push(d.origin);
               fitTo(pts);
               if (d.places.length === 1) markers[0].togglePopup();
@@ -2750,6 +3000,194 @@
                   : [r.from, r.to],
               );
             }
+          }
+
+          /* Pins: places the person saved with a note, like where the family meets. Kept in this browser, like home;
+     search, directions and Ask find them by name. */
+          function loadPins() {
+            try {
+              var a = JSON.parse(stored("pins") || "[]");
+              if (Array.isArray(a))
+                return a.filter(function (p) {
+                  return p && p.id && p.name && isFinite(p.lat) && isFinite(p.lon);
+                });
+            } catch (e) {}
+            return [];
+          }
+          function pinById(id) {
+            return pins.filter(function (p) {
+              return p.id === id;
+            })[0];
+          }
+          function savePins() {
+            store("pins", JSON.stringify(pins));
+            drawPins();
+            renderPins();
+          }
+          function drawPins() {
+            if (!mapReady) return;
+            pinMarkers.forEach(function (m) {
+              m.remove();
+            });
+            pinMarkers = pins.map(function (p) {
+              var mk = new maplibregl.Marker({ color: "#1c1f1a", scale: 0.8 }).setLngLat([p.lon, p.lat]).addTo(map);
+              var el = mk.getElement();
+              el.dataset.pin = p.id;
+              el.title = p.name;
+              el.setAttribute("aria-label", "Pin: " + p.name);
+              return mk;
+            });
+            map.getSource("pins").setData(labelsFC(pins));
+          }
+          function renderPins() {
+            var home = getHome();
+            $("pinList").innerHTML = pins
+              .map(function (p) {
+                var note = String(p.note || "").split("\n")[0];
+                return (
+                  '<li><button type="button" class="plain" data-id="' +
+                  esc(p.id) +
+                  '">' +
+                  esc(p.name) +
+                  " <small>" +
+                  dist(Kit.haversine(home, p)) +
+                  (note ? " &middot; " + esc(note) : "") +
+                  "</small></button></li>"
+                );
+              })
+              .join("");
+            $("pinList")
+              .querySelectorAll("button[data-id]")
+              .forEach(function (b) {
+                b.addEventListener("click", function () {
+                  openPin(b.dataset.id, true);
+                });
+              });
+          }
+          // One popup of our own at a time: a clicked map point, a pin, or a pin being edited.
+          function showPop(p, offset, html, wire) {
+            if (openPop) openPop.remove();
+            var el = popupEl(html),
+              pop = (openPop = new maplibregl.Popup({ offset: offset, maxWidth: "320px" })
+                .setLngLat([p.lon, p.lat])
+                .setDOMContent(el)
+                .addTo(map));
+            wire(el, function () {
+              pop.remove();
+            });
+          }
+          function openPoint(ll) {
+            var lat = +ll.lat.toFixed(6),
+              lon = +ll.lng.toFixed(6),
+              p = { name: Kit.fmtLatLon(lat, lon), address: "", lat: lat, lon: lon, kind: "point" };
+            showPop(
+              p,
+              8,
+              "<b>Map point</b>" +
+                coordsHtml(p) +
+                btns([
+                  ["pin", "Pin this place"],
+                  ["to", "Directions here"],
+                  ["home", "Set as home"],
+                ]),
+              function (el, close) {
+                wireActs(el, p, close);
+              },
+            );
+          }
+          function openPin(id, fly) {
+            var p = pinById(id);
+            if (!p || !map) return;
+            if (fly) map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 14) });
+            showPop(
+              p,
+              28,
+              "<b>" +
+                esc(p.name) +
+                "</b>" +
+                (p.note ? '<div class="pin-note">' + esc(p.note) + "</div>" : "") +
+                coordsHtml(p) +
+                btns([
+                  ["to", "Directions here"],
+                  ["edit", "Edit", 1],
+                  ["del", "Delete", 1],
+                ]),
+              function (el, close) {
+                wireActs(el, { name: p.name, address: "", lat: p.lat, lon: p.lon }, close, {
+                  edit: function () {
+                    editPin(p);
+                  },
+                  del: function () {
+                    var row = el.querySelector(".popup-btns");
+                    row.insertAdjacentHTML("beforebegin", "<div>Delete this pin?</div>");
+                    row.innerHTML = buttons([
+                      ["yes", "Delete"],
+                      ["no", "Keep", 1],
+                    ]);
+                    row.querySelector("[data-act=yes]").addEventListener("click", function () {
+                      close();
+                      pins = pins.filter(function (x) {
+                        return x !== p;
+                      });
+                      savePins();
+                    });
+                    row.querySelector("[data-act=no]").addEventListener("click", function () {
+                      openPin(p.id);
+                    });
+                  },
+                });
+              },
+            );
+          }
+          function editPin(p) {
+            // a pin, or a new place to pin
+            showPop(
+              p,
+              p.id ? 28 : 8,
+              '<form class="pin-form"><b>' +
+                (p.id ? "Edit pin" : "New pin") +
+                "</b>" +
+                '<input aria-label="Pin name" placeholder="Name, e.g. Meeting place" maxlength="60" required value="' +
+                esc(p.name || "") +
+                '">' +
+                '<textarea aria-label="Note" placeholder="Note (optional)" rows="3" maxlength="500">' +
+                esc(p.note || "") +
+                "</textarea>" +
+                coordsHtml(p) +
+                btns([
+                  ["save", "Save"],
+                  ["cancel", "Cancel", 1],
+                ]).replace('type="button" data-act="save"', 'type="submit"') +
+                "</form>",
+              function (el, close) {
+                var f = el.querySelector("form"),
+                  name = f.querySelector("input"),
+                  note = f.querySelector("textarea");
+                wireActs(el, p, close, {
+                  cancel: function () {
+                    if (p.id) openPin(p.id);
+                    else close();
+                  },
+                });
+                f.addEventListener("submit", function (ev) {
+                  ev.preventDefault();
+                  if (!name.value.trim()) return;
+                  if (!p.id) {
+                    p = {
+                      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                      lat: p.lat,
+                      lon: p.lon,
+                    };
+                    pins.push(p);
+                  }
+                  p.name = name.value.trim();
+                  p.note = note.value.trim();
+                  savePins();
+                  openPin(p.id);
+                });
+                name.focus();
+              },
+            );
           }
 
           function renderRoute(r) {
@@ -2802,6 +3240,10 @@
                 "No directions: " + e.message + (svc.routing ? "" : " (the directions server isn't running)");
             }
           }
+          function showPlace(p) {
+            if (p.kind === "pin") openPin(p.id, true);
+            else show({ type: "places", places: [p] });
+          }
           var searchTimer = null,
             searchSeq = 0;
           async function doSearch(pickFirst) {
@@ -2817,7 +3259,7 @@
               if (seq !== searchSeq) return;
               if (pickFirst && places[0]) {
                 box.hidden = true;
-                show({ type: "places", places: [places[0]] });
+                showPlace(places[0]);
                 return;
               }
               box.innerHTML = places.length
@@ -2829,7 +3271,7 @@
                         '">' +
                         esc(p.name) +
                         "<small>" +
-                        esc(p.address || "") +
+                        esc((p.kind === "pin" ? "Pin" + (p.address ? ": " : "") : "") + (p.address || "")) +
                         (p.distance_m != null ? " &middot; " + dist(p.distance_m) : "") +
                         "</small></button>"
                       );
@@ -2840,7 +3282,7 @@
               box.querySelectorAll("button[data-i]").forEach(function (el) {
                 el.addEventListener("click", function () {
                   box.hidden = true;
-                  show({ type: "places", places: [places[+el.dataset.i]] });
+                  showPlace(places[+el.dataset.i]);
                 });
               });
             } catch (e) {
@@ -3024,6 +3466,7 @@
               setHome({ lat: c.lat, lon: c.lng, name: "Map point " + c.lat.toFixed(4) + ", " + c.lng.toFixed(4) });
             });
             updateHomeLabel();
+            renderPins();
             checkMapServices();
             setInterval(checkMapServices, 30000);
           }
