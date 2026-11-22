@@ -180,6 +180,11 @@ def regions_check():
               same("pbf", "photon")),
              ("a file that isn't Wikipedia", lambda d: d["languages"]["en"].update(zim="x_en_all_maxi"), lambda m: m == base),
              ("a size as text", lambda d: first(d)["mb"].update(tiles="1"), same("mb")),
+             ("a newer address database", lambda d: first(d).update(photon="north-america/usa/photon-db-usa-1.1-latest.tar.bz2"),
+              lambda m: first(m)["photon"] == "north-america/usa/photon-db-usa-1.1-latest.tar.bz2"),
+             ("addresses for a whole continent", lambda d: first(d).update(photon="europe/photon-db-europe-1.0-latest.tar.bz2",
+                                                                           addresses_wide=True),
+              lambda m: same("photon")(m) and "addresses_wide" not in first(m)),
              ("an unknown language", lambda d: first(d)["langs"].append("zz"), same("langs")),
              ("a new place", lambda d: d["regions"].append(dict(first(d), id="xx")), lambda m: m == base)]
     errs = []

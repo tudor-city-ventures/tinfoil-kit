@@ -82,7 +82,9 @@ jobs:
           kept = []
           def take(have, got, allowed, name):
               for k, good in allowed.items():
-                  if k in got and good(got[k]):
+                  if k == "photon" and got.get("addresses_wide") != have.get("addresses_wide"):
+                      kept.append(f"{name}: photon")    # a country's addresses switching to a continent's needs a person
+                  elif k in got and good(got[k]):
                       have[k] = got[k]
                   elif k in got:
                       kept.append(f"{name}: {k}")
