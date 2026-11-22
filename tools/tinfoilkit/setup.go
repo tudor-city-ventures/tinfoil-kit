@@ -292,7 +292,9 @@ func copyCode(src, dst string) error {
 // a kit from before app/, downloads/ and data/.
 var keepNames = []string{".git", ".kit", "bin", "installers", "library", "logs", "maps", "models", "INVENTORY.md"}
 
-// copyApp makes a copy of this kit's code as the app folder to: what a release has (no .git, downloads or data).
+// copyApp makes a copy of this kit's code as the app folder to: what a release has (no .git, downloads or data). A
+// git checkout's copy gets the checkout's commit in tools/commit, as git archive writes a release's, so ./kit update
+// there can tell whether a release is newer.
 func copyApp(root, to string) error {
 	if err := os.Mkdir(to, 0o755); err != nil {
 		return err
@@ -307,6 +309,11 @@ func copyApp(root, to string) error {
 			if err := copyCode(filepath.Join(appDir(root), n), filepath.Join(to, n)); err != nil {
 				return err
 			}
+		}
+	}
+	if exists(filepath.Join(root, ".git")) { // (only then: on a Mac without git, running it asks to install Xcode's tools)
+		if head, _, rc := output("git", "-C", root, "rev-parse", "HEAD"); rc == 0 && commitLine.Match(bytes.TrimSpace(head)) {
+			return os.WriteFile(filepath.Join(to, "tools", "commit"), append(bytes.TrimSpace(head), '\n'), 0o644)
 		}
 	}
 	return nil

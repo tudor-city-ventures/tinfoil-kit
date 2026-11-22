@@ -231,6 +231,45 @@ func TestPickModel(t *testing.T) {
 	}
 }
 
+// The AI server's list of models names each model's weights and vision projector, from the kit folder, and never the
+// speculative decoding draft beside them: left to scan the folder, llama-server took Gemma 4's, and aborted.
+func TestAIServer(t *testing.T) {
+	kit := t.TempDir()
+	dl := filepath.Join(kit, "downloads")
+	in := func(name string) string { return filepath.Join("downloads", "models", filepath.FromSlash(name)) }
+	for name, size := range map[string]int64{
+		"Gemma-4-E4B/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf": 5e9, "Gemma-4-E4B/mmproj-F16.gguf": 9e8,
+		"Gemma-4-E4B/mtp-gemma-4-E4B-it.gguf": 3e8, "Gemma-4-E4B/._gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf": 4096,
+		"Big/Big-Q4_K_M-00002-of-00002.gguf": 9e9, "Big/Big-Q4_K_M-00001-of-00002.gguf": 9e9,
+		"Own #1/own.gguf": 1e9, "Drafts/dflash-x.gguf": 1e8,
+	} {
+		os.MkdirAll(filepath.Join(kit, filepath.Dir(in(name))), 0o755)
+		f, _ := os.Create(filepath.Join(kit, in(name)))
+		f.Truncate(size) // sparse, so it takes no space
+		f.Close()
+	}
+	models := modelFolders(filepath.Join(dl, "models"))
+	if strings.Join(models, " ") != "Big Gemma-4-E4B" {
+		t.Fatalf("models: %v", models)
+	}
+	preset := filepath.Join(kit, "data", "presets.ini")
+	os.MkdirAll(filepath.Dir(preset), 0o755)
+	args := strings.Join(aiServer(kit, dl, preset, models, "Gemma-4-E4B", "4096", 8080, "http://127.0.0.1:8888"), " ")
+	got, _ := os.ReadFile(preset)
+	want := "version = 1\n\n[Big]\nmodel = " + in("Big/Big-Q4_K_M-00001-of-00002.gguf") + "\n\n[Gemma-4-E4B]\nmodel = " +
+		in("Gemma-4-E4B/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf") + "\nmmproj = " + in("Gemma-4-E4B/mmproj-F16.gguf") +
+		"\nload-on-startup = true\n"
+	if string(got) != want {
+		t.Errorf("presets.ini:\n%s\nwant:\n%s", got, want)
+	}
+	if args != "--models-preset "+preset+" --models-max 1 -c 4096 --host 127.0.0.1 --port 8080 --cors-origins http://127.0.0.1:8888" {
+		t.Errorf("args: %s", args)
+	}
+	if n := modelBytes(filepath.Join(dl, "models", "Gemma-4-E4B")); n != 5e9+9e8 {
+		t.Errorf("Gemma-4-E4B loads %d bytes", n)
+	}
+}
+
 // The library's go-between: 127.0.0.1 passed on to where the library listens (::1 in the kit; 127.0.0.2 here, which
 // every computer the tests run on has), every byte both ways, until the library stops.
 func TestForward(t *testing.T) {

@@ -172,7 +172,7 @@
       "id": "Gemma-4-26B-A4B",
       "type": "hf",
       "repo": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
-      "files": ["*-UD-Q4_K_XL.gguf", "mmproj-F16.gguf", "mtp-*.gguf"],
+      "files": ["*-UD-Q4_K_XL.gguf", "mmproj-F16.gguf"],
       "priority": 2,
       "note": "Third opinion (Google). Fast mixture-of-experts. Reads photos. ~15.7 GB"
     },
@@ -180,7 +180,7 @@
       "id": "Gemma-4-12B",
       "type": "hf",
       "repo": "unsloth/gemma-4-12B-it-qat-GGUF",
-      "files": ["*-UD-Q4_K_XL.gguf", "mmproj-F16.gguf", "mtp-*.gguf"],
+      "files": ["*-UD-Q4_K_XL.gguf", "mmproj-F16.gguf"],
       "priority": 2,
       "note": "Mid-size (Google): the AI for 16 to 24 GB laptops. Reads photos. ~7.2 GB"
     },
@@ -188,7 +188,7 @@
       "id": "Gemma-4-E4B",
       "type": "hf",
       "repo": "unsloth/gemma-4-E4B-it-qat-GGUF",
-      "files": ["*-UD-Q4_K_XL.gguf", "mmproj-F16.gguf", "mtp-*.gguf"],
+      "files": ["*-UD-Q4_K_XL.gguf", "mmproj-F16.gguf"],
       "priority": 1,
       "starter": true,
       "note": "Battery saver: small and light, the AI for 8 GB laptops. ~5.3 GB"

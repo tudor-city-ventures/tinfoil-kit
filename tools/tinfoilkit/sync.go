@@ -1004,6 +1004,29 @@ func sweepPartials(root string, state *obj, items []*item) {
 	}
 }
 
+// dropUnlisted deletes the files an item has that kit.json no longer lists for it, once all it does list are here, as
+// an update deletes an old version: Gemma 4's speculative decoding drafts (mtp-*.gguf), which the kit no longer uses.
+// items: this sync's plan.
+func dropUnlisted(root string, state *obj, items []*item) {
+	for _, it := range items {
+		files := stateItems(state).child(it.key()).child("files")
+		if it.kind != "files" || it.status != "ok" || len(it.files) == 0 || files == nil {
+			continue
+		}
+		listed := map[string]bool{}
+		for _, f := range it.files {
+			listed[f.name] = true
+		}
+		for _, name := range files.Keys() {
+			if !listed[name] {
+				os.Remove(filepath.Join(dlDir(root), filepath.FromSlash(it.dest), name))
+				files.del(name)
+				log("Removed " + name + " from " + it.id + ": kit.json no longer lists it.")
+			}
+		}
+	}
+}
+
 // dropReplacedWikipedias: a Wikipedia in a language or size ./kit region switched away from (up to 130 GB) goes once
 // kit.json's are in, and so does a smaller one that stood in for them (wikiStandIns). items: this sync's plan.
 func dropReplacedWikipedias(root string, state *obj, items []*item, cfg *obj) {

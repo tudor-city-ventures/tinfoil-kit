@@ -93,6 +93,9 @@ def check_kit(lib, ai):
         check("AI answers, every character intact", said == ANSWER, "" if said == ANSWER else ascii(said)[:300])
     except OSError as e:
         check("AI answers, every character intact", False, str(e))
+    # what each model runs with: never the speculative decoding draft beside the test model, as Gemma 4's crashed it
+    models = wait_for(f"http://127.0.0.1:{ai}/v1/models", 5)
+    check("AI leaves the draft beside the model alone", "model-draft" not in models, models[:300])
     check_map(page)
 
 

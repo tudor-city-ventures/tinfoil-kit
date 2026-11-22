@@ -66,10 +66,11 @@
       "type": "hf",
       "repo": "test/Tiny-GGUF",
       "files": [
-        "*-Q4_K_M.gguf"
+        "*-Q4_K_M.gguf",
+        "mtp-*.gguf"
       ],
       "priority": 1,
-      "note": "tiny test model"
+      "note": "tiny test model, with a speculative decoding draft beside it as kits that had Gemma 4's do: the AI must not load it"
     },
     {
       "id": "Two",
