@@ -1,0 +1,28 @@
+name: resolve pins
+on:
+  push:
+    branches: [claude/project-thread-tv5uk6]
+permissions: {}
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - if: false
+        uses: actions/checkout@v5
+      - if: false
+        uses: actions/setup-node@v5
+      - if: false
+        uses: actions/setup-python@v6
+      - if: false
+        uses: actions/upload-artifact@v5
+      - if: false
+        uses: actions/download-artifact@v5
+      - if: false
+        uses: actions/cache@v5
+      - if: false
+        uses: actions/github-script@v8
+      - if: false
+        uses: ossf/scorecard-action@v2.4.3
+      - if: false
+        uses: github/codeql-action/upload-sarif@v4
+      - run: echo resolved
