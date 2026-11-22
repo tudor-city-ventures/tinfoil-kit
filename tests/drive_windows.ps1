@@ -217,9 +217,12 @@ if (Test-Path $kit) { Remove-Item -Recurse -Force $kit }
 Get-Kit $dl -Maps
 # Answers: keep where it's for, this PC, how much if room is short (SETUP asks then), download, don't open it, close.
 $answers = @("", "2") + @(Get-RoomAnswer $dl $kit) + @("y", "n", "")
+$env:KIT_PART_MIN = "16384"    # so plan times the connection on the test model, and SETUP says how long all of it takes
 Invoke-Setup $dl "setup-windows-pc.log" $answers
+Remove-Item Env:KIT_PART_MIN
 Test-Said "setup-windows-pc.log" "SETUP" @("Step 1 of 3: where do you live", "Step 3 of 3: a small kit to try first",
-  "The try-it kit works. It's on this PC", "The rest of the kit is about",
+  "Checking how fast this connection is", "The whole kit is about", "The try-it kit works. It's on this PC",
+  "The rest of the kit is about",
   "open the kit's app folder and double-click SETUP-Windows.bat again: it asks what you want")
 if (-not (Test-Path "$kit\downloads\models\Two")) { Fail "the try-it kit didn't get its sample AI" }
 if (Test-Path "$kit\downloads\maps\routing") { Fail "the try-it kit got the map's roads, which come with the rest" }
