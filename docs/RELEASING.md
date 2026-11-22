@@ -64,18 +64,16 @@ After that every release builds and notarizes the app by itself.
 - The Developer ID certificate lasts five years; the Apple Developer Program renews yearly.
 - tinfoilkit.com renews yearly through Vercel.
 
-## Going public (once)
+## Launch (once)
 
-Each step needs the maintainer's go-ahead, because none can be quietly undone. Delete this section once it's done.
+The repo and tinfoilkit.com are public. What's left, in order. Each step needs the maintainer's go-ahead, because none can be quietly undone. Delete this section once it's done.
 
-1. A real `SETUP.command` run on a Mac with a real drive, and `./kit test` passes.
-2. Vercel Authentication on the `tinfoilkit` project is "all except custom domains" (or off), so the public sees tinfoilkit.com. Previews stay protected.
-3. Make the GitHub repo public. The site's GitHub buttons and llms.txt point at it. First delete the agents' leftover `claude/*` branches (everything is on `main`), and check that the history holds no personal email: `git log --format='%ae%n%ce' | sort -u`. Then turn on the settings below, all but the `main` ruleset's pull request rules (step 6). Several exist only for public repos, and the release protections must be on before step 4.
-4. Make the release key and the Mac app's signing (above), then publish v1.0.0. Until the repo is public and has a release, `./kit update` finds nothing and kits keep their version.
-5. Check the link-preview card (https://tinfoilkit.com/og.png) and that the kit builder loads `sources.json`.
-6. Switch to pull requests and review: add the pull request rules to the `main` ruleset (below) and update AGENTS.md's Workflow section. The ruleset ends direct pushes, including the weekly sizes and pins commits, so in the same step switch the commit jobs of `sizes.yml` and `pins.yml` to push a `bot/sizes` or `bot/pins` branch, open a pull request, run the required checks on it with `workflow_dispatch` (pull requests opened with the Actions token don't start workflows; dispatching `pr-gate.yml` skips `protected-files`, which counts as passing) and auto-merge it. That needs "Allow GitHub Actions to create and approve pull requests" and auto-merge turned on. Keep the ruleset at no required approvals while that setting is on, or a workflow could approve its own pull request.
-7. Tell search engines, once the repo is public so the site's GitHub links work: add tinfoilkit.com to Google Search Console and Bing Webmaster Tools (ChatGPT search and Copilot draw on Bing's index), verify it with a DNS record on Vercel, and submit https://tinfoilkit.com/sitemap.xml. Search Console will say the app markup can't get star ratings because the site has no reviews: expected, and never fill that in with made-up ratings.
-8. GitHub build attestations for the programs: `actions/attest-build-provenance` at a verified commit SHA, in a job listed in `WRITES` in `tests/actions_test.py` (it needs `id-token` and `attestations` write). A private repo would need GitHub Enterprise Cloud for them.
+1. Turn on the settings below, all but the `main` ruleset's pull request rules (step 4). The release protections must be on before step 3.
+2. A real `SETUP.command` run on a Mac with a real drive, and `./kit test` passes.
+3. Set up the Mac app's signing (above), then publish v1.0.0. Until then the website's download links 404, and `./kit update` finds nothing, so kits keep their version. The release key is made (its public half is in `tools/release-signers`): back it up as above before the first release.
+4. Switch to pull requests and review: add the pull request rules to the `main` ruleset (below) and update AGENTS.md's Workflow section. The ruleset ends direct pushes, including the weekly sizes and pins commits, so in the same step switch the commit jobs of `sizes.yml` and `pins.yml` to push a `bot/sizes` or `bot/pins` branch, open a pull request, run the required checks on it with `workflow_dispatch` (pull requests opened with the Actions token don't start workflows; dispatching `pr-gate.yml` skips `protected-files`, which counts as passing) and auto-merge it. That needs "Allow GitHub Actions to create and approve pull requests" and auto-merge turned on. Keep the ruleset at no required approvals while that setting is on, or a workflow could approve its own pull request.
+5. Tell search engines: add tinfoilkit.com to Google Search Console and Bing Webmaster Tools (ChatGPT search and Copilot draw on Bing's index), verify it with a DNS record on Vercel, and submit https://tinfoilkit.com/sitemap.xml. Search Console will say the app markup can't get star ratings because the site has no reviews: expected, and never fill that in with made-up ratings.
+6. GitHub build attestations for the programs: `actions/attest-build-provenance` at a verified commit SHA, in a job listed in `WRITES` in `tests/actions_test.py` (it needs `id-token` and `attestations` write).
 
 ## GitHub settings
 
@@ -93,12 +91,11 @@ The contribution policy and its reasons are in [CONTRIBUTING](../.github/CONTRIB
 - **Actions > General:**
   - Actions permissions: allow actions created by GitHub, plus `ossf/scorecard-action@*` (Scorecard), and tick "Require actions to be pinned to a full-length commit SHA". Every workflow already is; this makes GitHub refuse any that isn't.
   - Fork pull request workflows: the strictest approval option, so a person approves every outside contributor's run.
-  - Workflow permissions: read repository contents only, and "Allow GitHub Actions to create and approve pull requests" off until step 6.
-  - While the repo is private, "Fork pull request workflows in private repositories" must not send write tokens or secrets.
+  - Workflow permissions: read repository contents only, and "Allow GitHub Actions to create and approve pull requests" off until step 4.
   - Never add a self-hosted runner: on a public repo it runs strangers' code on that machine.
 - **Rules > Rulesets**
-  - Tag ruleset `releases` on `v*`: restrict creations, updates and deletions; bypass: Repository admin. Before the first release.
-  - Branch ruleset `main` on the default branch: restrict deletions and block force pushes from step 3 (direct pushes still work). With step 6, add: require a pull request (no approvals: the maintainer's agents open pull requests as the maintainer, who can't approve their own; conversations resolved), require the status checks `quick-gate`, `bash-3-2`, `site`, `sign-off`, `gate` (a feature shows itself working) and `protected-files`; bypass: Repository admin, for pull requests only. `e2e` isn't required because it only runs when the kit changes. `protected-files` fails outside pull requests that change workflows or release signing, so merging one takes the admin bypass, on purpose.
+  - Tag ruleset `releases` on `v*`: restrict creations, updates and deletions; bypass: Repository admin, always allow (`.github/release.sh` pushes the tag itself, not through a pull request). Before the first release.
+  - Branch ruleset `main` on the default branch: restrict deletions and block force pushes (direct pushes still work). With step 4, add: require a pull request (no approvals: the maintainer's agents open pull requests as the maintainer, who can't approve their own; conversations resolved), require the status checks `quick-gate`, `bash-3-2`, `site`, `sign-off`, `gate` (a feature shows itself working) and `protected-files`; bypass: Repository admin, for pull requests only. `e2e` isn't required because it only runs when the kit changes. `protected-files` fails outside pull requests that change workflows or release signing, so merging one takes the admin bypass, on purpose.
 - **Code security:** private vulnerability reporting (SECURITY.md sends reports there), Dependabot alerts and security updates, secret scanning with push protection, CodeQL default setup (it covers the workflows, the page's JavaScript, the Go program and the tests' Python).
 - **Collaborators:** to vouch for someone, add them with the Read role; the contribution gate skips collaborators. Anyone who needs more than two open pull requests goes on the limit's bypass list.
 - **Organization** (tudor-city-ventures): require two-factor authentication; base permission for members: Read; only owners install GitHub Apps. Installed apps reach this repo only if they need it (Claude and Vercel).

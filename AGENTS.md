@@ -41,7 +41,7 @@ Use the cheapest check that proves the change, and paste its output in the commi
 | Format and lint | `npm run lint` (`npm run fix` repairs), `ruff check . && ruff format --check .` (`ruff format . && ruff check --fix .` repairs), `tools/tinfoilkit/build.sh check` | After editing the page, the site, the tests or the program. The quick gate runs them when the tools are installed; CI always does |
 | Quick gate | `tests/check.sh` | Before every push. CI runs it on every push |
 | End to end | `tests/build_fixtures.sh` once, then `tests/run_all.sh` (Linux x86_64; needs GitHub and download.kiwix.org, which cloud sessions can't reach) | Changes to `tools/` or `kit.json`. CI runs it on those pushes |
-| Drive | The `drive test` workflow (`drive.yml`), run by hand at `main`: Actions > drive test > Run workflow (`only: windows-setup` skips the Mac). It sets a kit up on an exFAT disk on a Mac and on Windows, starts it on all three, and films each screen | Once the bulk of a change to `tools/`, `kit.json`, `mac/` or a launcher is done, before calling it finished. Not on every push: Mac minutes cost money while the repo is private. It also runs nightly when a file it covers changed, and every Monday |
+| Drive | The `drive test` workflow (`drive.yml`): it sets a kit up on an exFAT disk on a Mac and on Windows, starts it on all three, and films each screen. Pushes to `main` and the nightly run start it when a file it covers changed, and Monday's always runs. By hand: Actions > drive test > Run workflow at `main` (`only: windows-setup` skips the Mac) | Once the bulk of a change to `tools/`, `kit.json`, `mac/` or a launcher is in, before calling it finished: check that its run passed, or run it by hand if a newer push cancelled it |
 | Website | `python3 tests/site_test.py` (with `KIT_AXE=node_modules/axe-core/axe.min.js` it checks accessibility too) | Changes to `site/`. CI runs it on every push |
 | Real Mac | `./kit sync && ./kit test` on a real drive | Before a release, by the maintainer |
 
@@ -94,7 +94,7 @@ Workflows: actions pinned to a full commit SHA with the version as a comment; re
 
 ## Workflow
 
-Until launch, the maintainer's agents commit straight to `main` in small increments, with no pull requests or review. Run the quick gate before each push and check CI after. Pull requests come back once the site is live.
+Until the `main` ruleset requires pull requests ([RELEASING.md](docs/RELEASING.md#launch-once), step 4), the maintainer's agents commit straight to `main` in small increments, with no pull requests or review. Run the quick gate before each push and check CI after.
 
 ## Outside contributors
 
@@ -122,5 +122,5 @@ Cloud sessions can't reach library.kiwix.org, GitHub releases or most download h
 - Never run a real `./kit sync` in CI or a cloud session: it downloads about 300 GB. Use the mocks in `tests/`.
 - Vercel: touch only the `tinfoilkit` project in the tudor-city-ventures team. Never change other projects or team settings.
 - A release reaches every kit at its next SETUP (`./kit update`). Publish one only with the maintainer's OK, from a commit that passed CI and a real-Mac run, with `.github/release.sh` on the maintainer's Mac ([docs/RELEASING.md](docs/RELEASING.md)). Kits install only releases signed with a key in `tools/release-signers`, and that key never goes into GitHub or a workflow. Nor does the Developer ID certificate that signs the Mac app: it stays in that Mac's keychain.
-- Ask the maintainer before buying anything, before making the repo public, and before anything that can't be undone.
+- Ask the maintainer before buying anything and before anything that can't be undone.
 - If missing access blocks you (GitHub, Vercel, anything else), stop and say exactly what to grant. Don't work around it.

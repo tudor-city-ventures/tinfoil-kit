@@ -3,10 +3,9 @@ name: drive test
 # up on Windows from a download, onto the PC and onto a drive (tests/drive_windows.ps1). Each machine's screen is
 # filmed (tests/drive.py record), and the videos job links the videos from the run's page, for anyone checking how
 # the kit looks on a system they don't have.
-# By hand (Actions > drive test > Run workflow) once the bulk of a change is done. Nightly and on pushes only when
-# something it covers changed (the changes job), so site edits never start it; but Monday's nightly always runs,
-# since llama.cpp and kiwix-tools put out new builds (which the kit gets) with no change here. Pushes start it only
-# once the repo is public, since Mac minutes cost money while it's private.
+# On pushes and nightly only when something it covers changed (the changes job), so site edits never start it; but
+# Monday's nightly always runs, since llama.cpp and kiwix-tools put out new builds (which the kit gets) with no change
+# here. By hand (Actions > drive test > Run workflow) to test a commit again.
 run-name: drive test${{ inputs.only == 'windows-setup' && ', Windows setup only' || '' }}
 on:
   schedule:
@@ -14,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: Run just one part (windows-setup skips the Mac, so it costs no Mac minutes)
+        description: Run just one part (windows-setup skips the Mac)
         type: choice
         options: [all, windows-setup]
         default: all
@@ -27,7 +26,6 @@ permissions:
   contents: read
 jobs:
   changes:    # did a file the drive test covers change since the push before, or since the last green run?
-    if: github.event_name != 'push' || !github.event.repository.private
     runs-on: ubuntu-latest
     permissions:
       contents: read
