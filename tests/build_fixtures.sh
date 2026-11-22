@@ -161,8 +161,9 @@ print(max((v for v in re.findall(r"<version>([0-9.]+)</version>", sys.stdin.read
   G="$R/maven/com/graphhopper/graphhopper-web/11.1"
   cp "$DL/graphhopper-web-$ghv.jar" "$G/graphhopper-web-11.1.jar"
   sha1sum "$G/graphhopper-web-11.1.jar" | cut -d' ' -f1 > "$G/graphhopper-web-11.1.jar.sha1"
-  get https://download.geofabrik.de/europe/andorra-latest.osm.pbf "$DL/andorra-latest.osm.pbf"
-  cp "$DL/andorra-latest.osm.pbf" "$R/geofabrik/" && md5 "$R/geofabrik/andorra-latest.osm.pbf"
+  # Andorra's roads, from GraphHopper's own tests (Geofabrik answers GitHub's runners with 404s)
+  get https://raw.githubusercontent.com/graphhopper/graphhopper/master/core/files/andorra.osm.pbf "$DL/andorra.osm.pbf"
+  cp "$DL/andorra.osm.pbf" "$R/geofabrik/andorra-latest.osm.pbf" && md5 "$R/geofabrik/andorra-latest.osm.pbf"
   # pmtiles' own one-tile fixture, as every tile from zoom 0 to 5: one directory entry whose run covers them all
   mkdir -p "$R/protomaps"
   python3 - "$W/test_fixture_1.pmtiles" "$R/protomaps/build.pmtiles" <<'PY'
