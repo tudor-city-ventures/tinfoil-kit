@@ -36,6 +36,8 @@ flowchart TB
     library --> page
     maps --> page
     page["Kit page in your browser<br/>Ask, Map, Library, AI chat"]
+    start -.-> gate["Sharing, if on<br/>access code"]
+    gate -.-> phones["Phones and laptops<br/>on your home network"]
   end
   online --> folder --> offline
 ```
@@ -50,7 +52,7 @@ The first time, `SETUP.command` asks where the kit goes: an external drive (`<dr
 
 ### Using it (offline)
 
-`START-HERE.command` (`tools/launch.sh`; `START-HERE-Windows.bat` on Windows) starts these servers on your computer and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the computer's memory. `bash START-HERE.command --share` lets phones on the same Wi-Fi use it too.
+`START-HERE.command` (`tools/launch.sh`; `START-HERE-Windows.bat` on Windows) starts these servers on your computer and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the computer's memory. Every server listens only on 127.0.0.1, so nothing else on the network can reach them. Sharing, off by default, adds one more on the network.
 
 | Part | Program | Port | What it does |
 | --- | --- | --- | --- |
@@ -59,6 +61,7 @@ The first time, `SETUP.command` asks where the kit goes: an external drive (`<dr
 | Map | `pmtiles` | 8090 | Serves the map: street detail for your region (the US Northeast by default) and a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy (the whole US by default) |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
+| Sharing (off by default) | `tools/share.py` | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on, `--share` for one run |
 
 Photon and GraphHopper run on a Java that's in the kit. On Windows and Linux, only the AI and the library start for now.
 
@@ -118,6 +121,10 @@ Double-click `SETUP.command` again whenever you want the newest models, books an
 
 Double-click `UNINSTALL.command` in the kit folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. `bash UNINSTALL.command --yes` skips the question.
 
+## Home server
+
+A computer that stays on (Linux, or a Mac mini) can serve the kit to every phone and laptop at home, with no screen. `bash SETUP.command --home-server` sets it up as usual, then shares it on the home network behind an access code and starts it with the computer (a systemd user service on Linux, a LaunchAgent on a Mac). Phones open the address it shows and type the code, or scan its QR code. Programs can use the code as an API key for the AI's OpenAI-compatible API: `Authorization: Bearer <code>` at `http://<server>:8000/ai/v1`. Details: [GUIDE.md](GUIDE.md#a-home-server-advanced).
+
 ## Security
 
 The kit downloads programs and runs them on your computer, so here is what protects you and what doesn't. Report problems privately, as [SECURITY.md](.github/SECURITY.md) says.
@@ -126,7 +133,7 @@ The kit downloads programs and runs them on your computer, so here is what prote
 - **Downloads straight from their publishers,** over HTTPS (the list is in [THIRD-PARTY.md](THIRD-PARTY.md)). This project hosts none of them. A file whose publisher posts a checksum, as most do, is checked against it before it replaces the old version. Files without one, like the map tiles and fonts, rely on HTTPS alone.
 - **No telemetry.** No accounts, analytics or reports home, in the kit or on tinfoilkit.com. The kit goes online only when you run SETUP, `./kit sync` or `./kit update`, and then only to GitHub and the places it downloads from.
 - **No administrator password.** The kit runs as you, and starts only when you start it unless you set up a home server. UNINSTALL undoes everything setup did, except Apple's Command Line Tools, which other apps use too. The site's "What does setup change on my computer?" lists every change outside the kit folder.
-- **Servers on 127.0.0.1.** The AI, library and maps answer only your own computer. A website open in your browser while the kit runs could still reach them (DNS rebinding is one way) and get the same public books, maps and AI; Chrome blocks that, other browsers may not.
+- **Servers on 127.0.0.1.** The AI, library and maps answer only this computer. A website open while the kit runs can still reach them, as browsers allow: it could read the books and maps and use the AI as the kit page does (the map servers answer any page, and DNS rebinding opens the rest). Chrome asks your permission before a website reaches your computer's own servers; other browsers may not.
 - **Sharing is off until you turn it on.** Then one gate, on port 8000 by default, stands in front of everything: it asks for an 8-digit code, stops answering a device after 10 wrong tries in 10 minutes, and refuses addresses and names outside a home network, so other websites can't reach it. It's plain HTTP, so share on your own Wi-Fi or hotspot: anyone on a public network who watches the traffic could read the code.
 - **Readable code.** Python's standard library, shell scripts and one HTML page, with no packages to install and no build step. It's written with AI coding tools; the tests in `tests/` run it against mocks of every download source and server on every change.
 - **The repo.** Every GitHub Action is pinned to a commit and runs with a read-only token, except a few jobs that never run code from a pull request or a download. An outside pull request that touches the workflows, CODEOWNERS or the release key fails a check that only the maintainer can merge past.

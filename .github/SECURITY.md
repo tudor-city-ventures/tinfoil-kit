@@ -17,7 +17,7 @@ Please keep it private until the fix is out, or for 90 days after your report if
 ## What counts
 
 - Getting past the signature check in `./kit update` or the checksum checks in `./kit sync`, or anything either writes outside the kit folder.
-- Another computer or a website reaching the kit's servers, or getting past the sharing gate's access code.
+- Another computer reaching the kit's servers, a website getting more from them than the README's Security section says it can, or getting past the sharing gate's access code.
 - Running code through the kit page, a book or a map.
 - A source in `kit.json` serving something other than what it claims.
 - tinfoilkit.com, and this repo's GitHub Actions: anything that gets a change into `main` or a release without the maintainer.

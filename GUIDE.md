@@ -33,9 +33,11 @@ Nothing here needs the internet, an account, or an install.
     bigger models don't fit.
   - `Gemma-4-E4B`: small. Use it to **save battery**. On an 8 GB laptop the kit starts with it.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
-- **Share with family**: start with `bash START-HERE.command --share`. It prints an address that phones on the same
-  Wi-Fi or hotspot can open (turn on the Mac's hotspot if the router is down). If macOS asks whether to accept
-  incoming connections, click **Allow**.
+- **Share with family**: start with `bash START-HERE.command --share`. It shows an address, an access code and a QR
+  code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. No internet
+  needed: a router with power, or a phone's hotspot, is enough. Nobody without the code gets in. To share every time
+  the kit starts, run `./kit share on` once in the kit folder. If macOS asks whether to accept incoming connections,
+  click **Allow**.
 
 The AI can be wrong. Treat it like a well-read friend, not a doctor: check the sources, and get trained help whenever you can.
 
@@ -141,6 +143,8 @@ and the Library tab (no AI) uses almost nothing.
 - Terminal says "Operation not permitted": macOS is keeping it off the drive. Open **System Settings > Privacy &
   Security > Files and Folders**, turn on **Removable Volumes** under Terminal, and start again.
 - Logs are in the `logs` folder.
+- Phones can't open the shared address: they need the same Wi-Fi as the computer (a guest network often keeps
+  devices apart). `./kit share` shows the address and the access code again.
 - If a model won't load or is very slow, quit other apps (big models need most of a 32 GB Mac's memory), or use `Gemma-4-E4B`.
   Starting with `bash START-HERE.command --no-maps` frees about 5 GB by not starting the map servers.
 - Map says address search or directions are "not running": they take up to a minute to start. If they never do,
@@ -157,6 +161,27 @@ On a Windows PC, double-click `START-HERE-Windows.bat` (the drive must be exFAT)
 the AI is slow: use `Gemma-4-E4B`. The map works on the Mac only.
 Fedora 45 and later need one extra package for the AI: run `sudo dnf install openssl3-libs` while you still
 have internet. If the window says another library is missing, install that too.
+
+## A home server (advanced)
+
+A computer that stays on, like a Linux box or a Mac mini, can serve the kit to every phone and laptop at home. It
+needs no screen. Over SSH, in the unzipped download (or a `git clone`), run:
+
+```
+bash SETUP.command --home-server
+```
+
+and choose "This computer". It sets the kit up as usual, then shares it on the home network behind an access code
+and starts it whenever the computer starts. At the end it shows the address, the access code and a QR code;
+`./kit share` shows them again. Without the questions, in the kit folder: `./kit sync -y && ./kit test`, then
+`./kit share on` and `./kit autostart on`.
+
+- On Linux the kit runs as a systemd user service, from boot. On a Mac it starts when you log in, so turn on
+  automatic login. Keep it on the computer's own disk.
+- `./kit share new-code` makes a new code (every phone types it again), `./kit share off` stops sharing, and
+  `./kit autostart off` stops the kit starting by itself. UNINSTALL does both.
+- Another program already using port 8000: set `share_port` in `kit.json` to a free port.
+- In an outage the router needs power too, even with no internet: keep it and the server on a battery backup.
 
 ## What's where
 

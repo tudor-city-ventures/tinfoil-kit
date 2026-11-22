@@ -29,6 +29,8 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
   - CI also runs the sync test on Python 3.9 (via uv) and with bash 3.2 (the official `bash:3.2` image), the versions macOS ships.
 - Drive test (`drive.yml`, by hand and nightly; Travis chose nightly until launch, every kit change once public, and no run when the kit hasn't changed): the kit set up on a real exFAT disk on one of GitHub's Apple Silicon Macs, with the real llama.cpp and kiwix-tools builds, then started from that same drive on Windows and Linux. Details in section 4. It found that the launcher needed curl, which stock Ubuntu and Debian desktops don't have; it now falls back to bash's `/dev/tcp`. And Fedora 45 moved to OpenSSL 4, while llama.cpp's Linux build needs OpenSSL 3, so the AI needs `openssl3-libs` there (GUIDE says so).
 
+- Home server (Travis, 2026-11-22: "ship it in this version"): sharing on the home network behind an access code, and starting with the computer, for a Linux box or a Mac that stays on. `SETUP.command --home-server` (or `./kit share on` and `./kit autostart on`) does it headless. Every server now listens on 127.0.0.1 only, `--share` included; `tools/share.py` is the one way in from the network. Kept out of the everyday flow: an advanced section in GUIDE, README and llms.txt, and the site FAQ. Design in section 3, "Sharing and home servers". The drive test checks it on the Mac (LaunchAgent) and Linux (systemd), e2e drives it in a browser.
+
 **Waiting on Travis**
 - Whether tinfoilkit.com stays public before launch. The project's Vercel Authentication covers everything except custom domains, so the site is public there, and its GitHub buttons 404 until the repo is public. Hiding it means setting protection to all deployments; that needs his OK.
 - Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too, because scheduled workflows run from the default branch's copy of `.github/`. (Vercel deploys production from `main`; the sizes workflow checks out and pushes `main`.)
@@ -86,6 +88,7 @@ Written before the first Claude Code thread. The Status section above is current
 | `tools/kit.py` | Sync engine and CLI. Python 3.9+, standard library only; all HTTP goes through `curl` |
 | `tools/launch.sh` | Offline launcher. Must stay compatible with macOS's bash 3.2 |
 | `tools/portal.html` | The browser page. A single file; kiwix-serve serves it as its custom index |
+| `tools/share.py` | Sharing on the home network behind an access code, its QR code, and starting with the computer. Standard library only |
 | `START-HERE.command` | Double-click launcher for the Mac |
 | `START-HERE-Windows.bat` | Windows fallback. Must keep CRLF line endings |
 | `SETUP.command` | Double-click setup and update. Asks where the kit goes the first time |
@@ -106,6 +109,8 @@ After a sync, the kit folder also has `bin/`, `models/`, `library/`, `maps/`, `i
 - `./kit estimate`: the GB this kit.json needs, from the builder's sizes, offline.
 - `./kit drives [--json]`: the plugged-in drives with format, GB free and why one won't do. `--json` adds this computer's free space and what the kit needs.
 - `./kit place DEST`: move the kit to DEST (copy it to another disk) and print its new folder.
+- `./kit share [on|off|new-code] [--code CODE] [--qr]`: share the kit on the home network behind an access code (kit.json's `share_on_network`), and show the address, the code and a QR code.
+- `./kit autostart [on|off]`: start the kit whenever the computer starts (a systemd user service, or a LaunchAgent on a Mac).
 - Launcher: `bash START-HERE.command [--share] [--model=NAME] [--no-browser] [--no-maps]`.
 
 ### Updating the kit's own code (`./kit update`)
@@ -154,13 +159,27 @@ Why: a drive set up once kept its `tools/` and `kit.json` forever, so a source r
 
 - **Library:** kiwix-serve on port 8888, serving the library plus the portal page as `--customIndex`.
 - **AI:** llama-server on port 8080 in router mode: `--models-dir`, a `presets.ini` with `load-on-startup` for the default model, and `--models-max 1`.
-- **CORS:** the AI, map tiles and address search allow exactly one origin, the page at `http://127.0.0.1:<library port>`, so other web pages open on the computer can't read their answers (llama-server echoes `--cors-origins` back verbatim, so it must be one). Through the sharing gate everything is on the page's own address and needs none. That's also why the portal redirects `localhost` to `127.0.0.1`. GraphHopper (directions) always allows every origin and has no setting for it.
+- **CORS:** the AI, map tiles and address search allow exactly one origin, the page at `http://127.0.0.1:<library port>`, so other web pages open on the computer can't read their answers (llama-server echoes `--cors-origins` back verbatim, so it must be one). That's also why the portal redirects `localhost` to `127.0.0.1`. Sharing doesn't change it: other devices reach every server through the sharing gate, on the page's own address. GraphHopper (directions) always allows every origin and has no setting for it.
 - **Maps:** `pmtiles serve` on 8090, Photon on 2322 and GraphHopper on 8989, all run by the bundled Java. Their memory comes from `kit.json` (`geocoder_heap` 3g, `routing_heap` 2g). `--no-maps` skips them and saves about 5 GB.
-- **Sharing:** `--share` listens on all network interfaces so phones on the same Wi-Fi or hotspot can use the kit.
+- **Sharing:** every server listens on 127.0.0.1. With sharing on (`./kit share on`, or `--share` for one run) the launcher also starts `tools/share.py` on port 8000 for the home network, behind the access code, and prints the address, the code and a QR code. See "Sharing and home servers" below.
 - `caffeinate` keeps the Mac awake while the kit runs.
 - **First model:** the default, unless its files take more than 60% of memory; then the biggest model that fits, else the smallest. `--model=NAME` overrides. `KIT_MEMORY_MB` fakes the memory size for tests.
 - **Ports:** a server already on a port counts as the kit's only if it answers like one (the page's title, or `/v1/models` JSON). Otherwise the library or AI starts on the next free port, and the page's address carries it. Map ports are baked into the page at sync time, so they don't move.
 - It serves the page `./kit sync` built (`.kit/portal.html`, with the map inside) whenever it exists, and the bare template otherwise. The launcher never needs python, so a drive works on a Mac without the Command Line Tools. It doesn't need curl either: without it (stock Ubuntu and Debian), it checks its servers through bash's `/dev/tcp`. When a program on the drive won't run (say, a library Linux lacks), it prints the reason.
+
+### Sharing and home servers (`tools/share.py`)
+
+Why a gate: kiwix-serve, pmtiles, Photon and GraphHopper have no passwords, and the old `--share` put all of them on the network with `CORS *`. Now they stay on 127.0.0.1 and one small Python server (standard library, like kit.py) sits in front.
+
+- **Routes:** `/ai/` goes to llama-server, `/tiles/`, `/geocoder/` and `/routing/` to the map servers, everything else to kiwix-serve. llama-server's own chat page asks for its API at the root (`/v1/`, `/props`, `/models`, `/slots` and the rest in `AI_PATHS`), so those go to the AI too; the library has nothing there. The kit page gets `window.KIT_GATE` (the address and code) injected after `<head>`, and then asks the gate for the AI and the map instead of their ports. Answers stream through as they're written (chunked, `read1`). The servers' `Access-Control-*` headers are dropped.
+- **Access code:** 8 random digits in `.kit/share.json` (never kit.json, which people share) with a random key. A device types it once (or scans the QR code, whose link carries it) and gets a cookie: an HMAC of the code, `HttpOnly`, `SameSite=Lax`, a year. Programs send it as `Authorization: Bearer`. A new code (`./kit share new-code`) signs everyone out; the gate rereads the file when it changes. 10 wrong codes per 10 minutes per address, then 429.
+- **Who it answers:** only private source addresses (10/8, 172.16/12, 192.168/16, loopback, link-local, 100.64/10 for CGNAT and Tailscale), and only when the Host is an address, a bare name or a home network name (`.local`, `.lan`, `.home`, `.internal`, `.home.arpa` and a few more): a website can't point a name of its own at the kit (DNS rebinding). Plain HTTP, so it's for your own network, not a café's. IPv4 only.
+- **QR code:** its own encoder (byte mode, level M), checked bit for bit against Nayuki's qrcodegen and decoded with jsQR when written; `tests/share_test.py` pins three codes. In the terminal it's drawn with half blocks, in the page as SVG.
+- **Port:** `share_port`, 8000. If another program has it, the launcher takes the next free one for that run and says how to pin one; `./kit share` finds where the gate really is (`gate_port`, by its `Server: TinfoilKit` header).
+- **Starting with the computer:** Linux, a systemd user service (`Restart=always`) and `loginctl enable-linger` (tried without sudo, then with `sudo -n`) so it starts at boot; no root service, so it runs as the person. Mac: a LaunchAgent (`KeepAlive`), which starts at login, so a Mac server needs automatic login; macOS may refuse it for a kit on an external drive. `./kit share on|off` restarts the kit the computer started, unless nothing changed. UNINSTALL runs `./kit autostart off` first.
+- **SETUP --home-server** carries the flag in `KIT_HOME_SERVER`, since SETUP starts itself again after moving and updating the kit. At the end it runs `./kit share on`, `./kit autostart on` and `./kit share`, instead of asking to open the kit.
+- **Windows:** no sharing or autostart yet; `./kit share` says so. START-HERE-Windows.bat keeps every server on 127.0.0.1.
+- The launcher keeps a Linux computer awake with `systemd-inhibit` while it runs (`caffeinate` on a Mac).
 
 ### The browser page (`tools/portal.html`)
 
@@ -250,16 +269,18 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
 
 - **Quick gate (`check.sh`, every push):** compile and parse checks, shellcheck when installed, kit.json validity, `site/sources.json` freshness, CRLF on the Windows launcher, then:
   - `sync_test.py`: the real `kit.py` against `mock_remote.py` with tiny random files: downloads, a download that breaks and resumes, checksums, a second sync that does nothing, `verify --fix`, lost `state.json`, a "3 months later" update with planted leftovers, offline and Wi-Fi sign-in runs, and every ending of `SETUP.command` with a stand-in `./kit`, the launcher's first-model choice by memory, and its move off a port another program holds. Needs only python3 and curl, so it runs in cloud sessions.
+  - `share_test.py`: the gate against stand-in servers (access code, cookie, rate limit, routes, streaming, DNS rebinding, the QR code), `./kit share` and `./kit autostart` with a stand-in systemctl, and the launcher with sharing on.
   - `map_logic_test.js`: the page's `Kit` map code against a mock Photon, GraphHopper and tool-calling AI (`mock_services.py`).
 - **End to end (`build_fixtures.sh` then `run_all.sh`, CI on changes to the kit):** copies the kit onto a fake drive with real kiwix-serve and llama-server binaries, a tiny GGUF model and test ZIMs, then:
   - `plan` and `sync` (three entries are broken on purpose: sync must finish the rest, name them and exit 1), `verify`, `SETUP.command`, `search`;
-  - the launcher, then `portal_test.js`, `map_logic_test.js` and the Playwright UI tests (`ui_test.py`, `map_ui_test.py`), with axe on every tab in light and dark mode when `KIT_AXE` is set;
-  - `--no-maps`;
+  - the launcher with sharing on, then `portal_test.js`, `map_logic_test.js` and the Playwright UI tests (`ui_test.py`, `map_ui_test.py`), with axe on every tab in light and dark mode when `KIT_AXE` is set. `ui_test.py` also uses the kit as a phone on the network does: through the gate, with the access code, llama-server's chat page included;
+  - `./kit share off`, then `--no-maps`;
   - a "3 months later" update with a new catalog and new map builds, then `kit test` again.
 - **Drive (`drive.yml`, by hand, and nightly when the kit changed):** `build_fixtures.sh drive` adds the newest real llama.cpp and kiwix-tools builds for Mac, Windows and Linux to the mock internet, then `drive_test.sh` uses one disk image the whole way:
   - Mac (GitHub's macOS 26 on Apple Silicon): erase the image as exFAT, copy the kit on as Download ZIP leaves it (marked as from the internet, with `._` files), run `SETUP.command` with a stock PATH and `/bin/bash`, double-click `START-HERE.command` (Terminal, then Safari), check the page in WebKit, add Finder-style `._` files beside the books and the model, and eject.
   - Windows: mount the same drive as a VHD, double-click `START-HERE-Windows.bat`, check the page in Edge. macOS marks its `._` files hidden on exFAT, and the .bat's `for` skips hidden files, so they do no harm there.
-  - Linux: mount it as a desktop does (udisks2 options), start the kit on GitHub's Ubuntu (26.04 now), then in Ubuntu 24.04 and 22.04, Debian 12 and Fedora containers. 22.04 is the oldest the llama.cpp build runs on.
+  - Linux: mount it as a desktop does (udisks2 options), start the kit on GitHub's Ubuntu (26.04 now), then in Ubuntu 24.04 and 22.04, Debian 12 and Fedora containers. 22.04 is the oldest the llama.cpp build runs on. Then make it a home server (`./kit share on`, `./kit autostart on`: systemd and lingering) and check it from the machine's network address the way a phone does (`drive.py share`), and that UNINSTALL removes the service.
+  - Mac, second part: `SETUP.command --home-server` on this Mac; the LaunchAgent starts the kit, it's checked the same way, and UNINSTALL removes the agent.
   - Nightly and push runs start only when a file the test covers changed since the last green run (or the push before), so site edits never cost Mac minutes. Runs by hand always go.
   - Screenshots and logs are run artifacts. A run takes about 3 Mac minutes (about $0.25 with the other jobs while the repo is private; free once public).
   - Not covered: maps, real models on a real GPU, and the first-run prompts a person clicks through (Open Anyway for `SETUP.command`, Terminal's removable-volume permission, the Command Line Tools install).
