@@ -3,7 +3,8 @@
 
 Write tokens only where WRITES allows them, actions pinned to full commit SHAs from GitHub (plus Scorecard),
 no outsider-triggered events that run with a write token, no ${{ }} pasted into shell or script code, GitHub's
-own runners only, and no git credentials left behind. Usage: python3 tests/actions_test.py
+own runners only, and no git credentials left behind. Also that sizes.yml's commit job lets a weekly refresh change
+only sizes and checked download names in tools/regions.json. Usage: python3 tests/actions_test.py
 """
 import re
 import sys
@@ -16,7 +17,7 @@ WRITES = {
     ("pr-gate.yml", "gate"): {"issues", "pull-requests"},      # closes outside PRs without an accepted issue
     ("pr-gate.yml", "forms"): {"issues"},                      # closes outside issues filed without a form
     ("pr-gate.yml", "labels"): {"issues"},                     # creates the gate's labels, run by hand
-    ("sizes.yml", "commit"): {"contents"},                     # commits builder sizes; runs no kit code
+    ("sizes.yml", "commit"): {"contents"},                     # commits builder sizes and places; runs no kit code
     ("pins.yml", "commit"): {"contents"},                      # commits program pins; runs no kit code
     ("scorecard.yml", "analysis"): {"security-events", "id-token"},   # publishes the Scorecard results
 }
@@ -155,6 +156,37 @@ GATE_BAD = {
 }
 
 
+def regions_check():
+    """Runs sizes.yml's check on tools/regions.json with one change each: names and ids stay as committed."""
+    import copy, json, subprocess, tempfile, textwrap
+    root = WORKFLOWS.parent.parent
+    code = textwrap.dedent((WORKFLOWS / "sizes.yml").read_text().split("tools/regions.json <<'PY'\n", 1)[1]
+                           .split("\n          PY\n", 1)[0])
+    committed = root / "tools" / "regions.json"
+    base = json.loads(committed.read_text(encoding="utf-8"))
+    def first(d):
+        return d["regions"][0]
+    cases = [("new sizes", lambda d: first(d)["mb"].update(tiles=1), True),
+             ("a renamed place", lambda d: first(d).update(name="x"), False),
+             ("a command in an id", lambda d: first(d).update(id="us/x; sh"), False),
+             ("a new nickname", lambda d: first(d)["also"].append("x"), False),
+             ("a download elsewhere", lambda d: first(d).update(pbf="https://x/a-latest.osm.pbf"), False),
+             ("a path up", lambda d: first(d).update(pbf="../a-latest.osm.pbf"), False),
+             ("a file that isn't Wikipedia", lambda d: d["languages"]["en"].update(zim="x_en_all_maxi"), False),
+             ("a size as text", lambda d: first(d)["mb"].update(tiles="1"), False)]
+    errs = []
+    with tempfile.TemporaryDirectory() as t:
+        new = Path(t) / "regions.json"
+        for what, change, want in cases:
+            d = copy.deepcopy(base)
+            change(d)
+            new.write_text(json.dumps(d), encoding="utf-8")
+            got = subprocess.run([sys.executable, "-I", "-c", code, str(new), str(committed)], capture_output=True).returncode == 0
+            if got != want:
+                errs.append(f"sizes.yml {'refuses' if want else 'accepts'} {what} in regions.json")
+    return len(cases), errs
+
+
 def main():
     passed, failed = 0, 0
     for f in sorted(WORKFLOWS.glob("*.y*ml")):
@@ -168,6 +200,10 @@ def main():
         else:
             print(f"FAIL: the checks miss {what}")
             failed += 1
+    n, errs = regions_check()
+    for e in errs:
+        print(f"FAIL: {e}")
+    passed, failed = passed + n - len(errs), failed + len(errs)
     print(f"{failed} FAILED, {passed} passed" if failed else f"ALL {passed} PASSED")
     return 1 if failed else 0
 

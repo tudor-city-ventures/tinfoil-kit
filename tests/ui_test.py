@@ -141,6 +141,7 @@ with sync_playwright() as p:
         p3.on("response", lambda r: sent.append(f"{r.request.method} {r.status} {r.url}") if r.request.method != "GET" else None)
         p3.on("requestfinished", lambda r: pending.pop(r, None))
         p3.on("requestfailed", lambda r: pending.pop(r, None))
+        asked_with = ""
         try:
             p3.goto(share + "/ai/")
             box = p3.locator("textarea:visible, [contenteditable=true]:visible").first
@@ -156,6 +157,7 @@ with sync_playwright() as p:
                 else:
                     p3.keyboard.press("Enter")
             answered, why = reply.value.ok, reply.value.url
+            asked_with = reply.value.request.post_data or ""
             p3.wait_for_timeout(2000)
         except Exception as e:    # a timeout: say what was on screen and what was still loading
             answered = False
@@ -166,6 +168,8 @@ with sync_playwright() as p:
                    + " | sent: " + "; ".join(sent)[:300])
         p3.screenshot(path=os.path.join(SHOTS, "shot_share_ai_chat.png"))
         check("shared: AI chat answers through the gate", answered, why)
+        # tools/ai-chat.json, through llama-server's UI settings: the stock page asks with Ask's safety rules.
+        check("shared: AI chat asks with the kit's safety rules", "wild plant" in asked_with, asked_with[:300])
         # The page asks whether llama-server's own tools are on. They aren't, and the gate keeps them off.
         tools = p3.request.get(share + "/ai/tools")
         check("shared: llama-server's tools stay off", tools.status == 403 and "feature_disabled" in tools.text(),

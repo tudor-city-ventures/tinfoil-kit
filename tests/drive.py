@@ -54,6 +54,8 @@ def check_kit(lib, ai):
     check("library search", "Tourniquet" in found)
     models = wait_for(f"http://127.0.0.1:{ai}/v1/models", 90)
     check("AI lists the model", "Tiny" in models, models[:200])
+    props = wait_for(f"http://127.0.0.1:{ai}/props", 5)
+    check("AI chat's page gets the kit's safety rules", "wild plant" in props, props[:200])
     try:
         out = json.loads(fetch(f"http://127.0.0.1:{ai}/v1/chat/completions", {
             "model": "Tiny", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 8}, timeout=180))

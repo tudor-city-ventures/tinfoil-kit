@@ -113,6 +113,9 @@ call :free_port AI_PORT AI
   echo [!MODEL!]
   echo load-on-startup = true
 ) > "%KIT%\.kit\presets.ini"
+rem AI chat is llama-server's own page, so it gets the Ask tab's safety rules as its default system message.
+rem An environment variable, not a flag: a llama-server too old to know it ignores it instead of refusing to start.
+if exist "%KIT%\tools\ai-chat.json" set "LLAMA_ARG_UI_CONFIG_FILE=%KIT%\tools\ai-chat.json"
 rem Browsers accept exactly one allowed origin: the kit's page.
 start "" /b "%LLAMA%" --models-dir "%KIT%\models" --models-preset "%KIT%\.kit\presets.ini" --models-max 1 -c %CTX% --host 127.0.0.1 --port %AI_PORT% --cors-origins http://127.0.0.1:%LIB_PORT% > "%KIT%\logs\llama-server.log" 2>&1
 echo   Starting AI (loading !MODEL!)...
