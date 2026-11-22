@@ -124,7 +124,7 @@ kit.json lists everything. The default kit:
 To change it:
 
 - Skip an item: set "enabled": false on it in models, library or maps.
-- Just the essentials: `./kit essentials on` (30 to 50 GB). The kit works with them alone, and `./kit essentials off` gets the rest whenever there's room.
+- Just the essentials: `./kit essentials on` (30 to 50 GB). The kit works with them alone, and `./kit essentials off`, then `./kit sync -y`, gets the rest whenever there's room.
 - Skip the models this computer can't run: `./kit fit --skip`.
 - Run without the AI: set "enabled": false on every model, or pick No AI in the builder. The library and the map work as usual, Ask shows the best passages instead of an answer, and `./kit test` doesn't ask for a model.
 - Add a book: `./kit search WORDS` finds Kiwix books and prints a line to paste into library.
