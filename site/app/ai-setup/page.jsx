@@ -6,8 +6,10 @@ import Builder, {
   PlaceSelect,
   Preset,
   SetupText,
+  ShareBox,
   SizeSelect,
   Total,
+  WhereSelect,
   WikiSelect,
 } from "@/components/builder";
 import { CopyButton, Toast } from "@/components/copy";
@@ -245,7 +247,7 @@ export default function AISetup() {
                 <h2>Choose what goes in your kit.</h2>
                 <p style={{ fontSize: "18px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "680px" }}>
                   Pick what goes in and copy the prompt. Your picks ride along as SETUP's flags, like{" "}
-                  <code>--region texas --essentials</code>, so your AI asks only about the rest.
+                  <code>--essentials --region us/texas</code>, so your AI asks only about the rest.
                 </p>
               </div>
               <div className="where">
@@ -280,6 +282,20 @@ export default function AISetup() {
                 <Preset value="no-ai">No AI</Preset>
               </div>
               <Groups />
+              <div className="where">
+                <div className="field">
+                  <label htmlFor="where">Where will it live?</label>
+                  <WhereSelect />
+                </div>
+                <div className="field">
+                  <ShareBox />
+                </div>
+                <p className="hint" id="whereNote">
+                  An external drive goes with you and works on any computer. A home server is a computer that stays on,
+                  so the phones and laptops at home can use the kit through it, with an access code. Leave it unpicked
+                  and your AI asks.
+                </p>
+              </div>
               <div className="total" role="region" aria-label="Your kit">
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: "1 1 320px" }}>
                   <Total />

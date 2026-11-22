@@ -9,10 +9,14 @@ import glob
 import http.server
 import json
 import os
+import platform
 import re
+import shlex
+import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import threading
 
 from playwright.sync_api import sync_playwright
@@ -139,6 +143,57 @@ def until(page, script, timeout=3000):
 
 
 HYDRATED = "#getKit:has-text('Download for')"  # the page's script has run: Download knows this computer
+
+# The round trip: the kit builder's options, given to ./kit pick in a kit as it comes, make the kit the builder shows.
+# A kit with this commit's code and standard list, on a computer with the memory for the essentials' two AI models.
+REPO = os.path.join(SITE, "..")
+PLAT = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get(
+    (platform.system(), platform.machine())
+)
+PROGRAM = os.path.join(REPO, "tools", f"tinfoilkit-{PLAT}")
+TRIP = tempfile.mkdtemp(prefix="kit site test ")
+shutil.copytree(
+    os.path.join(REPO, "tools"), os.path.join(TRIP, "app", "tools"), ignore=shutil.ignore_patterns("tinfoilkit*")
+)
+if os.path.exists(PROGRAM):
+    shutil.copy(PROGRAM, os.path.join(TRIP, "app", "tools"))
+shutil.copy(os.path.join(REPO, "kit.json"), os.path.join(TRIP, "app", "kit.json"))
+os.makedirs(os.path.join(TRIP, "app", "site"))
+shutil.copy(os.path.join(SITE, "sources.json"), os.path.join(TRIP, "app", "site"))
+# SETUP hands these to ./kit pick; the rest of what the builder writes says where the kit goes and who shares it
+PICK = ("--recommended", "--essentials", "--everything", "--region", "--wikipedia", "--wikipedia-size", "--no-ai")
+PICK += ("--models", "--skip", "--add")
+SETUP_ONLY = ("--this-computer", "--share", "--home-server")
+
+
+def round_trip(line):
+    """What ./kit pick makes of the builder's line in a kit as it comes: the ids the builder's cards use for what it
+    gets (maps for any of the map's parts), and where the map is for. Or the error, when pick fails."""
+    data = os.path.join(TRIP, "data")
+    shutil.rmtree(data, ignore_errors=True)
+    os.makedirs(data)
+    shutil.copy(os.path.join(REPO, "kit.json"), data)
+    words, given = shlex.split(line), []
+    for w in words:
+        if w.startswith("--") and w not in SETUP_ONLY:
+            given.append(w)
+        elif not w.startswith("--") and given and given[-1].startswith("--"):
+            given.append(w)
+    run = functools.partial(
+        subprocess.run,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={**os.environ, "KIT_MEMORY_MB": str(64 * 1024)},
+    )
+    program = os.path.join(TRIP, "app", "tools", os.path.basename(PROGRAM))
+    picked = run([program, "--root", TRIP, "pick", *given])
+    if picked.returncode:
+        return None, picked.stdout + picked.stderr
+    items = json.loads(run([program, "--root", TRIP, "estimate", "--json"]).stdout)["items"]
+    region = json.load(open(os.path.join(data, "kit.json")))["maps"].get("region")
+    return sorted({"maps" if i.startswith("maps/") else i.split("/", 1)[1] for i in items}), region
+
 
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path=os.environ.get("KIT_CHROMIUM") or None)
@@ -457,7 +512,7 @@ with sync_playwright() as p:
             check(
                 "with nothing picked, the setup prompt leaves where you live to the AI",
                 "--region" not in stuck.inner_text("#setupText")
-                and "the recommended kit." in stuck.inner_text("#setupText"),
+                and "that's:\n--recommended --wikipedia-size all\n" in stuck.inner_text("#setupText"),
                 stuck.inner_text("#setupText")[-200:],
             )
             stuck.close()
@@ -531,7 +586,7 @@ with sync_playwright() as p:
             )
             check(
                 "the setup prompt gives the picks as SETUP's options: where you live, and the models still ticked",
-                line.startswith("--region bayern --wikipedia de --models ")
+                line.startswith("--recommended --region bayern --wikipedia de --wikipedia-size all --models ")
                 and gone not in line
                 and "Gemma-4-E4B" in line,
                 line,
@@ -549,14 +604,21 @@ with sync_playwright() as p:
             here = "--region bayern --wikipedia de"
             check(
                 "each preset, and a ticked or unticked book, become SETUP's options",
-                got["recommended"] == here
-                and got["essentials"] == here + " --essentials"
-                and got["no-ai"] == here + " --no-ai"
-                and got["everything"].startswith(here + " --add ")
-                and "gutenberg_en_all" in got["everything"]
-                and got["essentials without Wikipedia"] == here + " --essentials --skip wikipedia"
-                and got["no WikiMed"] == here + " --skip mdwiki_en_all_maxi",
+                got["recommended"] == f"--recommended {here} --wikipedia-size all"
+                and got["essentials"] == f"--essentials {here} --wikipedia-size top-text"
+                and got["no-ai"] == f"--recommended {here} --wikipedia-size all --no-ai"
+                and got["everything"] == f"--everything {here} --wikipedia-size all"
+                and got["essentials without Wikipedia"] == f"--essentials {here} --skip wikipedia"
+                and got["no WikiMed"] == f"--recommended {here} --wikipedia-size all --skip mdwiki_en_all_maxi",
                 str(got),
+            )
+            page.click("[data-preset=essentials]")
+            note = page.text_content("#aiNote") if page.is_visible("#aiNote") else ""
+            page.click("[data-preset=recommended]")
+            check(
+                "Essentials says the kit takes the AI the computer runs plus the smallest, and only Essentials does",
+                "the AI your computer runs plus the smallest" in note and not page.is_visible("#aiNote"),
+                note,
             )
             page.click("[data-preset=recommended]")
             # How much of Wikipedia: the sizes Kiwix makes in that language. A preset sets one, and one that isn't the
@@ -587,8 +649,8 @@ with sync_playwright() as p:
             line = options()
             prompt = page.evaluate("navigator.clipboard.readText()")
             check(
-                "a size that isn't the preset's goes in SETUP's options, and the prompt says it in words",
-                line == here + " --wikipedia-size top-text"
+                "Wikipedia's size goes in SETUP's options, and the prompt says it in words",
+                line == f"--recommended {here} --wikipedia-size top-text"
                 and "want Wikipedia in German, best 50,000 articles, text only." in prompt,
                 line,
             )
@@ -605,8 +667,8 @@ with sync_playwright() as p:
             choose(page, "#wikiSize", re.compile(r"^All, with pictures \("))
             line = options()
             check(
-                "just the essentials with all of Wikipedia: it's added, in that size",
-                line == here + " --essentials --wikipedia-size all --add wikipedia",
+                "just the essentials with all of Wikipedia: the size says so",
+                line == f"--essentials {here} --wikipedia-size all",
                 line,
             )
             page.click("[data-preset=recommended]")
@@ -653,20 +715,88 @@ with sync_playwright() as p:
                 [t.split("\n")[0] for t in page.locator(".nearby li").all_inner_texts()] == ["Austria"]
                 and "for Germany: Bayern and Austria, with address search for all of Germany (not Austria)." in maps_why
                 and maps_card.locator(".size").inner_text() != one_place
-                and line.startswith("--region bayern,austria --wikipedia de")
+                and line.startswith("--recommended --region bayern,austria --wikipedia de")
                 and "I live in Germany: Bayern, with Austria on my map too, and want Wikipedia in German" in prompt,
                 maps_why + " " + line,
             )
-            page.locator(".where").screenshot(path=os.path.join(SHOTS, "site_place_picker.png"))
+            page.locator(".where").first.screenshot(path=os.path.join(SHOTS, "site_place_picker.png"))
             page.click(".nearby button[aria-label='Remove Austria']")
             focus = page.evaluate("document.activeElement.id")
             line = options()
             check(
                 "a place nearby comes off again, and the keyboard goes back to Places nearby",
                 page.locator(".nearby li").count() == 0
-                and line.startswith("--region bayern --wikipedia de")
+                and line.startswith("--recommended --region bayern --wikipedia de")
                 and focus == "nearby",
                 f"{line} (focus: {focus})",
+            )
+
+            # Where it lives, and sharing: SETUP's options for them, and the prompt says them in words
+            choose(page, "#where", "This computer")
+            line, prompt = options(), page.evaluate("navigator.clipboard.readText()")
+            computer = line.endswith(" --this-computer") and "It goes on this computer." in prompt
+            choose(page, "#where", "A home server: this computer, shared at home")
+            line = options()
+            server = (
+                line.endswith(" --this-computer --home-server")
+                and page.get_attribute("#share", "data-state") == "checked"
+                and page.is_disabled("#share")
+            )
+            choose(page, "#where", "An external drive (recommended)")
+            page.click("#share")
+            line, prompt = options(), page.evaluate("navigator.clipboard.readText()")
+            check(
+                "where it lives and sharing become SETUP's options, and the AI adds the drive's path",
+                computer
+                and server
+                and line.endswith(" --share")
+                and "--this-computer" not in line
+                and "add --drive with my drive's path once you've checked it" in prompt
+                and "shared with the phones and laptops at home" in prompt,
+                line,
+            )
+            page.locator(".where").nth(1).screenshot(path=os.path.join(SHOTS, "site_where_it_lives.png"))
+            page.click("#share")
+
+            # Every option the builder writes is one SETUP takes, and ./kit pick makes the builder's kit from them
+            setup_opts = set(re.findall(r"^#\s+(--[\w-]+)", open(os.path.join(REPO, "SETUP.command")).read(), re.M))
+            while page.locator("button.more", has_text="Show all").count():  # every card, to read every tick
+                page.locator("button.more", has_text="Show all").first.click()
+            ticked = "[...document.querySelectorAll('.card:not(.off)')].map(c => c.dataset.id).sort()"
+            trips, unknown = {}, set()
+
+            def trip(label):
+                line = options()
+                unknown.update(w for w in shlex.split(line) if w.startswith("--") and w not in setup_opts)
+                got, region = round_trip(line) if os.path.exists(PROGRAM) else (None, "no program")
+                want = page.evaluate(ticked)
+                places = re.search(r"--region (\S+)", line).group(1).split(",")  # (one place is a string in kit.json)
+                ok = got == want and region == (places[0] if len(places) == 1 else places)
+                trips[label] = "" if ok else f"{line}: kit {got} for {region}, builder {want}"
+
+            for preset in ("recommended", "essentials", "no-ai", "everything"):
+                page.click(f"[data-preset={preset}]")
+                trip(preset)
+            choose(page, "#wikiSize", re.compile(r"^All, with pictures \("))
+            trip("essentials with all of Wikipedia")
+            page.locator(".card", has_text="Wikipedia in German").locator("[role=checkbox]").click()
+            trip("essentials without Wikipedia")
+            page.click("[data-preset=recommended]")
+            choose(page, "#wikiLang", re.compile(r"^German and English \("))
+            choose(page, "#nearby", "Austria", group="Near Germany: Bayern")
+            model = json.load(open(os.path.join(SITE, "kit.json")))["models"][1]["id"]
+            for card in ("mdwiki_en_all_maxi", "gutenberg_en_all", model):
+                page.locator(f".card[data-id='{card}'] [role=checkbox]").click()
+            trip("two languages, a place nearby, a book and a model unticked, a big book ticked")
+            check(
+                "every option the builder writes is one SETUP takes",
+                not unknown and os.path.exists(PROGRAM),
+                f"{sorted(unknown)} (program: {PROGRAM})",
+            )
+            check(
+                "the round trip: ./kit pick makes the kit the builder shows from its options, for each preset and change",
+                not any(trips.values()),
+                "; ".join(f"{k}: {v}" for k, v in trips.items() if v),
             )
 
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}_ai_setup.png"), full_page=True)

@@ -577,6 +577,22 @@ html:not(.js) .fig {
   line-height: 1.45;
   color: var(--ink2);
 }
+.where .share {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  font: 500 16px var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.group .hint {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink2);
+}
 .group {
   display: flex;
   flex-direction: column;

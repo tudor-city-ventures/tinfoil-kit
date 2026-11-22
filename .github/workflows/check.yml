@@ -54,6 +54,8 @@ jobs:
         working-directory: site
       - run: pip install playwright && playwright install --with-deps chromium
       - run: npm ci --ignore-scripts    # axe-core, for the accessibility checks, from package.json
+      # the kit's own program, which the test gives the kit builder's options to (Go fetches the version build.sh pins)
+      - run: tools/tinfoilkit/build.sh
       - run: python3 tests/site_test.py
         env:
           KIT_AXE: node_modules/axe-core/axe.min.js

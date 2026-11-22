@@ -31,7 +31,7 @@ const SIZES = [
   ["top-intros", "top_mini", "Best 50,000 articles, opening paragraphs"],
 ];
 const EDITIONS = ["top_mini", "top_nopic", "top_maxi", "all_mini", "all_nopic", "all_maxi"]; // smallest first
-const WIKI_PRESET = { essentials: "top-text" }; // the size a preset takes, else all (wikiPreset in tools/tinfoilkit/kit.go)
+const WIKI_PRESET = { essentials: "top-text" }; // the size a preset takes, else all: the essentials' stand-in (standIns in tools/tinfoilkit/kit.go)
 // The US has whole states (ids like us/texas) and a few areas of several (us-northeast): the areas get their own section, on top.
 const US_AREAS = "Groups of US states",
   US_STATES = "US states";
@@ -228,13 +228,17 @@ function reducer(state, a) {
       return withWiki({ ...state, chosen: true }, a.wiki);
     case "size":
       return { ...withWiki(state, state.wiki, a.size), preset: null };
+    case "where":
+      return { ...state, where: a.where };
+    case "share":
+      return { ...state, share: a.on };
     default:
       throw new Error(a.type);
   }
 }
 
 // chosen: the person picked where they live (until then the AI asks). nearby: places they added to the map. from: the
-// preset their picks started from.
+// preset their picks started from. where: where the kit goes (drive, computer or server), once they pick it.
 const START = {
   data: null,
   failed: false,
@@ -246,6 +250,8 @@ const START = {
   preset: "recommended",
   from: "recommended",
   chosen: false,
+  where: null,
+  share: false,
   open: {},
 };
 const Kit = createContext(null);
@@ -437,6 +443,41 @@ export function SizeSelect() {
   );
 }
 
+// Where the kit goes: SETUP's --drive (the AI adds the path), --this-computer, or --home-server too.
+export function WhereSelect() {
+  const { state, dispatch } = use(Kit);
+  return (
+    <Select value={state.where ?? ""} onValueChange={(v) => dispatch({ type: "where", where: v })}>
+      <SelectTrigger id="where" aria-describedby="whereNote">
+        <SelectValue placeholder="Choose one" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="drive">An external drive (recommended)</SelectItem>
+        <SelectItem value="computer">This computer</SelectItem>
+        <SelectItem value="server">A home server: this computer, shared at home</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+// Sharing with the phones and laptops at home (--share), which a home server always does.
+export function ShareBox() {
+  const { state, dispatch } = use(Kit);
+  const server = state.where === "server";
+  return (
+    <label className="share" htmlFor="share">
+      <Checkbox
+        id="share"
+        checked={server || state.share}
+        disabled={server}
+        onCheckedChange={(checked) => dispatch({ type: "share", on: checked === true })}
+        aria-describedby="whereNote"
+      />
+      Share it with the phones and laptops at home
+    </label>
+  );
+}
+
 export function Preset({ value, children }) {
   const { state, dispatch } = use(Kit);
   return (
@@ -463,6 +504,10 @@ export function Groups() {
       </div>
     );
   }
+  // Just the essentials take the AI this computer runs and the smallest, as the kit does: these two on 32 GB or more
+  const ai = cards.filter((s) => s.group === "AI models");
+  const fitsAI =
+    state.from === "essentials" && ai.every((s) => !!state.picked[s.id] === s.presets.includes("essentials"));
   return (
     <div id="groups" style={style}>
       {[...new Set(cards.map((s) => s.group))].map((group) => {
@@ -475,9 +520,15 @@ export function Groups() {
               <span>{group}</span>
               <span>{`${on.length} of ${items.length} · ${gb(bytes).replace("~", "")}`}</span>
             </h3>
+            {group === "AI models" && fitsAI && (
+              <p className="hint" id="aiNote">
+                Essentials gets the AI your computer runs plus the smallest: these two on a computer with 32 GB of
+                memory or more, a smaller one on less.
+              </p>
+            )}
             <div className="cards">
               {(state.open[group] ? items : items.slice(0, VISIBLE)).map((s) => (
-                <label className={state.picked[s.id] ? "card" : "card off"} key={s.id}>
+                <label className={state.picked[s.id] ? "card" : "card off"} key={s.id} data-id={s.id}>
                   <Checkbox
                     className="mt-0.5"
                     checked={!!state.picked[s.id]}
@@ -525,12 +576,13 @@ export function Total() {
   );
 }
 
-// The picks as SETUP's options: the preset they started from (the recommended kit, or just the essentials), with
-// --skip and --add for what's different.
+// The picks as SETUP's options, one for each of the builder's settings: the preset they started from (No AI is the
+// recommended kit without the models), where they live and Wikipedia, what's different from the preset, where the kit
+// goes and whether it's shared. ./kit pick makes the same kit from them (tests/site_test.py checks it does).
 function setupOptions(state, cards) {
-  const base = state.from === "essentials" ? "essentials" : "recommended";
+  const preset = state.from === "no-ai" ? "recommended" : state.from;
   const on = (s) => !!state.picked[s.id];
-  const inBase = (s) => s.presets.includes(base);
+  const inBase = (s) => s.presets.includes(preset);
   const ids = (list) => list.map((s) => s.id);
   const wiki = cards.filter((s) => WIKI.test(s.id));
   const langs = wiki.filter(on).map((s) => s.id.split("_")[1]);
@@ -540,28 +592,34 @@ function setupOptions(state, cards) {
   const add = ids(rest.filter((s) => !inBase(s) && on(s)));
   if (wiki.some(inBase) && !langs.length) skip.unshift("wikipedia");
   if (!wiki.some(inBase) && langs.length) add.unshift("wikipedia");
-  const region = [state.place, ...state.nearby].map((r) => r.id).join(",");
-  const opts = state.chosen
-    ? ["--region " + region, "--wikipedia " + (langs.length ? langs : state.wiki).join(",")]
-    : [];
-  if (base === "essentials") opts.push("--essentials");
-  // Wikipedia's size, when it isn't the preset's. Just the essentials bring the best articles' text until the size
-  // picked is in, so another size comes with them only when Wikipedia is added.
-  if (langs.length && state.size !== nearestSize(state.data.regions, state.wiki, WIKI_PRESET[base] || "all")) {
-    opts.push("--wikipedia-size " + state.size);
-    if (base === "essentials" && !add.includes("wikipedia")) add.unshift("wikipedia");
+  const opts = ["--" + preset];
+  if (state.chosen) {
+    opts.push("--region " + [state.place, ...state.nearby].map((r) => r.id).join(","));
+    opts.push("--wikipedia " + (langs.length ? langs : state.wiki).join(","));
   }
+  if (langs.length) opts.push("--wikipedia-size " + state.size);
   if (!models.some(on)) opts.push("--no-ai");
   else if (models.some((s) => on(s) !== inBase(s))) opts.push("--models " + ids(models.filter(on)).join(","));
   if (skip.length) opts.push("--skip " + skip.join(","));
   if (add.length) opts.push("--add " + add.join(","));
+  if (state.where === "computer" || state.where === "server") opts.push("--this-computer");
+  if (state.where === "server") opts.push("--home-server");
+  else if (state.share) opts.push("--share");
   return opts;
 }
+
+// Where the kit goes, in words for the prompt
+const WHERE = {
+  drive: "on an external drive",
+  computer: "on this computer",
+  server: "on this computer, as a home server for the phones and laptops here",
+};
 
 function setupPrompt(state, cards) {
   const opts = setupOptions(state, cards);
   const gbs = Math.round(cards.filter((s) => state.picked[s.id]).reduce((t, s) => t + (s.bytes || 0), 0) / 1e9);
   const r = state.chosen && state.place;
+  const shared = state.share && state.where !== "server";
   return (
     INSTALL_PROMPT +
     `\n\nI already picked what goes in with the kit builder on tinfoilkit.com. It comes to about ${gbs} GB` +
@@ -571,10 +629,13 @@ function setupPrompt(state, cards) {
         `, and want Wikipedia in ${langName(state.data.regions, state.wiki)}, ` +
         SIZES.find((s) => s[0] === state.size)[2].toLowerCase()
       : "") +
-    (opts.length
-      ? `. In the setup command, that's:\n${opts.join(" ")}\nUse those options as they are. `
-      : ", the recommended kit. ") +
-    "Tell me if it won't fit, and ask me only about the rest."
+    (state.where
+      ? `. It goes ${WHERE[state.where]}` + (shared ? ", shared with the phones and laptops at home" : "")
+      : "") +
+    (shared && !state.where ? ". I want it shared with the phones and laptops at home" : "") +
+    `. In the setup command, that's:\n${opts.join(" ")}\nUse those options as they are` +
+    (state.where === "drive" ? ", and add --drive with my drive's path once you've checked it" : "") +
+    ". Tell me if it won't fit, and ask me only about the rest."
   );
 }
 
