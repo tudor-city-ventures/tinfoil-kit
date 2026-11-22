@@ -15,6 +15,8 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 - `./kit update` (Travis chose to build it before launch): `SETUP.command` first installs the newest GitHub release of the kit's code and keeps each drive's kit.json changes. Design in section 3. It does nothing until the repo is public and has a release (launch day, step 5).
 - Ready for outside contributors: CONTRIBUTING, SECURITY, the code of conduct, issue forms, a PR template and CODEOWNERS are in `.github/`, out of sight on drives. Outside pull requests need an open issue labeled `accepted`, and `pr-gate.yml` closes the rest (members, collaborators and past contributors skip it). Fork PRs need DCO sign-off (the `sign-off` job in `check.yml`). Workflow tokens are read-only except in the sizes refresh and the gate. GitHub's own settings go on at launch (step 4).
 - Launch-day checklist: see section 7.
+- Install anywhere (Travis, 2026-11-21): SETUP's first run asks "An external drive" or "This Mac", lists the drives with format and free space (`./kit drives`), and moves the unzipped kit to `<drive>/TinfoilKit` or `~/TinfoilKit` (`./kit place`; a git checkout stays put, and is copied to another disk). The home folder, not Documents, so iCloud's Desktop & Documents sync never uploads it. On the computer's own disk sync leaves 50 GB free (`keep_free_gb_this_computer`) and excludes the folder from Time Machine. `UNINSTALL.command` deletes the kit folder and its downloads after a typed "delete" (`--yes` for agents), stops the kit first, and touches nothing else. `./kit estimate` gives the GB a kit.json needs, offline, from the builder's sizes. No update interval anywhere (Travis): people update whenever, and a second SETUP run says it's an update.
+- Installer research (2026-11-21): macOS 15 dropped the Control-click way past Gatekeeper; a double-clicked script needs one trip to System Settings > Privacy & Security > Open Anyway, and scripts can't be notarized. Only a Developer ID signed and notarized app opens with no prompt, which needs the Apple Developer Program ($99 a year). Until then the free path stays the ZIP plus that one approval, with SETUP doing everything else in plain words.
 - Second thread (robustness, tests, accessibility):
   - Sync tells the truth: it exits 1 when anything failed or couldn't be looked up, stops with one message when offline or behind a Wi-Fi sign-in page, and never resumes a half-download of an older version into a new file. Leftover half-downloads of old versions are cleaned up.
   - `SETUP.command` says "All set" only when everything finished and passed, lists what didn't finish otherwise, handles Ctrl-C, and rejects FAT32 and NTFS drives up front. (Sync already lifts the downloaded-from-internet mark from the launchers, so `START-HERE.command` opens without a Gatekeeper prompt in an outage.)
@@ -84,9 +86,11 @@ Written before the first Claude Code thread. The Status section above is current
 | `tools/portal.html` | The browser page. A single file; kiwix-serve serves it as its custom index |
 | `START-HERE.command` | Double-click launcher for the Mac |
 | `START-HERE-Windows.bat` | Windows fallback. Must keep CRLF line endings |
-| `GUIDE.md` | Printable guide that lives on the drive |
+| `SETUP.command` | Double-click setup and update. Asks where the kit goes the first time |
+| `UNINSTALL.command` | Double-click removal of the kit folder, after a typed `delete` |
+| `GUIDE.md` | Printable guide that lives in the kit folder |
 
-After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `installers/`, `logs/`, `INVENTORY.md`, and `.kit/` (which holds `state.json`, caches, partial downloads and the built `portal.html`).
+After a sync, the kit folder also has `bin/`, `models/`, `library/`, `maps/`, `installers/`, `logs/`, `INVENTORY.md`, and `.kit/` (which holds `state.json`, caches, partial downloads and the built `portal.html`).
 
 ### Commands
 
@@ -97,6 +101,9 @@ After a sync, the drive also has `bin/`, `models/`, `library/`, `maps/`, `instal
 - `./kit search WORDS`: search the Kiwix catalog for more books to add.
 - `./kit test [--model NAME]`: start every server offline and check that each one answers.
 - `./kit update [--force]`: install the newest release of the kit's own code, keeping kit.json changes. `--force` reinstalls the current one.
+- `./kit estimate`: the GB this kit.json needs, from the builder's sizes, offline.
+- `./kit drives [--json]`: the plugged-in drives with format, GB free and why one won't do. `--json` adds this computer's free space and what the kit needs.
+- `./kit place DEST`: move the kit to DEST (copy it to another disk) and print its new folder.
 - Launcher: `bash START-HERE.command [--share] [--model=NAME] [--no-browser] [--no-maps]`.
 
 ### Updating the kit's own code (`./kit update`)

@@ -10,7 +10,8 @@ The repo root is the kit itself, so cloning it onto a drive or into `~/TinfoilKi
 | --- | --- |
 | `kit.json` | Single source of truth: settings, runtimes, models, maps, library, extras |
 | `kit` | Wrapper for `python3 tools/kit.py --root <kit folder>` |
-| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`) |
+| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`, `estimate`, `drives`, `place`) |
+| `SETUP.command`, `UNINSTALL.command` | Double-click setup and update: the first run asks for a drive or this computer and moves the kit there (`drives`, `place`), then every run does `update`, `sync`, `test`. Removal deletes the kit folder after a typed `delete` |
 | `tools/launch.sh` | Offline launcher, starts every server |
 | `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests |
 | `GUIDE.md` | Printable guide that lives in the kit folder |

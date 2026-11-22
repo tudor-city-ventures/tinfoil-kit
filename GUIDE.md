@@ -1,15 +1,16 @@
 # Tinfoil Kit
 
 An offline AI assistant, a searchable library (Wikipedia, medical guides, repair manuals,
-survival books) and offline maps with address search and directions. It all runs from this drive with no internet.
-Print this page and keep it with the drive.
+survival books) and offline maps with address search and directions. It all runs from one folder with no internet,
+on your computer or on an external drive. Print this page and keep it handy (with the drive, if the kit is on one).
 
 ---
 
 ## In an outage: start it
 
-1. Plug the drive into the Mac (Apple Silicon, ideally 32 GB memory). Plug the Mac into power if you can.
-2. Open the drive in Finder and **double-click `START-HERE.command`**.
+1. If the kit is on a drive, plug it into the Mac (Apple Silicon, ideally 32 GB memory). Plug the Mac into power if you can.
+2. Open the kit folder and **double-click `START-HERE.command`**. On a drive, it's the `TinfoilKit` folder on the drive.
+   On the Mac, in Finder choose **Go > Home** and open **TinfoilKit**.
    - If macOS won't open it: open Terminal and type `bash ` (with a space), drag `START-HERE.command` into the
      window, and press Return. That always works.
 3. A browser tab opens. **Keep the Terminal window open** while you use it. Closing it stops everything.
@@ -57,9 +58,11 @@ under `"maps"` (see its notes), then run `./kit sync`.
 spoken directions) or offline areas in Google Maps or Apple Maps. A phone has GPS; this laptop doesn't.
 The kit's map is the backup, and it's handy for planning on a big screen and for the AI questions.
 
-## Every 2 to 3 months: update it (while you still have internet)
+## Update it (whenever you like, while you have internet)
 
-Double-click `SETUP.command`. Or open Terminal in the kit folder (drag the `TinfoilKit` folder onto the
+There's no schedule. Double-click `SETUP.command` in the kit folder. It gets the newest version of the kit itself,
+with any models and books added since, then the newest editions of everything, checks every file, and starts it all
+once offline to make sure it works. Or open Terminal in the kit folder (drag the `TinfoilKit` folder onto the
 Terminal icon) and run:
 
 ```
@@ -68,7 +71,8 @@ Terminal icon) and run:
 ./kit test      # starts everything briefly and confirms it works
 ```
 
-Either way it is safe to stop (Ctrl-C or close the window) and re-run; it picks up where it left off. A normal update gets the
+Either way it is safe to stop (Ctrl-C or close the window) and re-run; it picks up where it left off, and the kit
+keeps working with what it has meanwhile. A normal update gets the
 newest version of the kit itself, new library editions, the latest AI engine, any re-released models and fresh map data (rebuilding the
 directions network takes 10 to 40 minutes). Then pull the plug on Wi-Fi and open the kit once for real.
 
@@ -76,12 +80,12 @@ Other commands:
 
 ```
 ./kit plan            # preview what sync would do (changes nothing)
-./kit status          # what's on the drive and when it was last updated
+./kit status          # what's in the kit and when it was last updated
 ./kit verify          # re-check every file for corruption (add --fix to remove bad ones, then sync)
 ./kit search medical  # find more books to add
 ```
 
-## Changing what's on the drive
+## Changing what's in the kit
 
 Everything the kit keeps is listed in **`kit.json`** (open it in any text editor):
 
@@ -95,22 +99,30 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
 
 ## First-time setup
 
-1. Format the drive in Disk Utility: **exFAT** if you want a Windows or Linux PC to be able to read it
-   (recommended for an emergency drive), **APFS** if it will only ever be used with Macs.
-   Many new drives come as exFAT already. FAT32 (files over 4 GB don't fit) and NTFS (Macs can't write to it)
-   won't work; SETUP checks. Always eject the drive before unplugging, especially with exFAT.
-2. Copy the `TinfoilKit` folder onto the drive. (From GitHub: **Code > Download ZIP**, unzip it, and rename the
-   `tinfoilkit-main` folder to `TinfoilKit`.)
-3. Double-click **`SETUP.command`** in that folder. It checks the drive, downloads everything (about 280 to
-   330 GB the first time, a few hours; maps are 20 to 30 GB of that), then starts each part offline to check
-   it answers. Leave the Mac plugged in. If you stop it, double-click it again and it picks up where it left off.
-   If it ends with "some downloads didn't finish", the kit already works with what it has: double-click
-   `SETUP.command` again later and it fetches the rest.
-   - If macOS says it can't be opened because it's from the internet: open **System Settings > Privacy &
-     Security**, scroll down and click **Open Anyway**. You only do this once.
-   - If macOS asks whether Terminal may access files on a removable volume, say yes.
-   - If it asks to install the Command Line Tools, say yes, then double-click `SETUP.command` again.
-4. Turn off Wi-Fi and double-click `START-HERE.command`.
+1. Download the kit (on GitHub: **Code > Download ZIP**) and double-click the ZIP to unzip it.
+2. Double-click **`SETUP.command`** in the unzipped folder. macOS says it can't check it for malware: click
+   **Done**, open **System Settings > Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
+   If it asks to install the Command Line Tools, click **Install**; SETUP waits, then carries on.
+3. SETUP asks where the kit should go, and moves it there for you:
+   - **An external drive**: keep it somewhere safe and plug it in when you need it, into any Mac or a Windows or
+     Linux PC. It goes in a `TinfoilKit` folder on the drive. The drive must be **exFAT** (recommended: Windows and
+     Linux can read it too) or **APFS** (Macs only). Many new drives come as exFAT. FAT32 (files over 4 GB don't
+     fit) and NTFS (Macs can't write to it) won't work; SETUP says so and shows how to erase the drive as exFAT.
+     Always eject the drive before unplugging, especially with exFAT. If macOS asks whether Terminal may access
+     files on a removable volume, say yes.
+   - **This Mac**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder, leaves 50 GB free
+     for the Mac, and stays out of Time Machine backups.
+4. It downloads everything (about 280 to 330 GB the first time, a few hours; maps are 20 to 30 GB of that), then
+   starts each part offline to check it answers. Leave the Mac plugged in; it stays awake while this runs. If you
+   stop it, double-click `SETUP.command` in the kit's folder again and it picks up where it left off. If it ends
+   with "some downloads didn't finish", the kit already works with what it has: run SETUP again later for the rest.
+5. Turn off Wi-Fi and double-click `START-HERE.command`.
+
+## Removing it
+
+Double-click `UNINSTALL.command` in the kit folder. It shows what it will delete and how much space that frees, and
+deletes the kit and everything it downloaded only after you type `delete`. The files don't go to the Trash. On a
+drive, nothing else on the drive is touched.
 
 Optional: `brew install aria2` makes downloads faster.
 
@@ -149,8 +161,10 @@ have internet. If the window says another library is missing, install that too.
 |---|---|
 | `START-HERE.command` | Starts everything (Mac, Linux) |
 | `START-HERE-Windows.bat` | Starts everything (Windows fallback) |
+| `SETUP.command` | Sets the kit up, and updates it whenever you like (needs internet) |
+| `UNINSTALL.command` | Removes the kit and everything it downloaded |
 | `kit`, `kit.json` | Update tool and the list of what to keep |
-| `INVENTORY.md` | What's on the drive right now, with versions |
+| `INVENTORY.md` | What's in the kit right now, with versions |
 | `library/` | The books (`.zim` files) |
 | `models/` | The AI models (`.gguf` files) |
 | `maps/` | Map tiles, the address database, the road network for directions, and the map display code |

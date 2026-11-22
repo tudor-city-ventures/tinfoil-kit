@@ -2,13 +2,13 @@
 
 # Tinfoil Kit
 
-An offline kit for when the internet goes down. One external SSD holds:
+An offline kit for when the internet goes down. One folder, on your computer or an external SSD, holds:
 
 - **Local AI** (llama.cpp) that answers from the library and cites its sources.
 - **An offline library** (Kiwix): Wikipedia, medical references, repair guides, preparedness manuals.
 - **Offline maps** with address search, driving and walking directions, and "nearest hospital".
 
-Plug in the drive, double-click `START-HERE.command` (`START-HERE-Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library and Map tabs. No internet, account or install needed.
+Open the kit folder (or plug in the drive it's on), double-click `START-HERE.command` (`START-HERE-Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library and Map tabs. No internet, account or install needed.
 
 ![The Ask tab](docs/screenshots/shot_ask.png)
 
@@ -19,7 +19,7 @@ The whole kit is one folder. Put it on an external drive to grab and go, or on y
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 300}}}%%
 flowchart TB
-  subgraph online["Online, every 2-3 months"]
+  subgraph online["Online, whenever you update"]
     direction TB
     releases["Tinfoil Kit releases<br/>the kit's own code"] --> setup
     publishers["Publishers' downloads<br/>AI models, books,<br/>maps, programs"] --> setup
@@ -42,7 +42,7 @@ flowchart TB
 
 ### Setting up (online)
 
-`SETUP.command` runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl):
+The first time, `SETUP.command` asks where the kit goes: an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free and stays out of Time Machine). `./kit drives` lists the drives with their format and free space, and `./kit place` moves the kit there. Then, that time and every time after, it runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl):
 
 1. **Update** (`./kit update`): installs the kit's own code from the newest Tinfoil Kit release on GitHub, keeping your changes to `kit.json`.
 2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in [kit.json](kit.json) and downloads only what changed. Downloads resume after a break, every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
@@ -71,7 +71,8 @@ The kit page (`tools/portal.html`) is one HTML file with no build step. Each syn
 
 ```text
 TinfoilKit/
-├── SETUP.command           set up or refresh (online)
+├── SETUP.command           set up, or update whenever you like (online)
+├── UNINSTALL.command       remove the kit and everything it downloaded
 ├── START-HERE.command      start the kit offline (Mac, Linux)
 ├── START-HERE-Windows.bat  start the kit offline (Windows)
 ├── GUIDE.md                the printable guide
@@ -91,27 +92,31 @@ The repo is the kit, so `site/` (the website), `tests/` and `docs/` come along, 
 ## Requirements
 
 - A modern laptop or desktop: a Mac with Apple Silicon, or a Windows or Linux PC. Built around 32 GB of memory; the small model runs on 8-16 GB.
-- An external SSD with room for the kit. The first sync downloads about 300 GB.
+- Room for the kit: the first sync downloads about 300 GB. On the computer's own disk it leaves 50 GB free. An external SSD lets you grab it and go.
 
 For now, setup and the map need a Mac. On Windows and Linux the kit runs the library and the AI. A nightly test sets the kit up on a Mac and starts it on all three.
 
 ## Set up
 
-Copy this folder onto the drive (**Code > Download ZIP** on GitHub, unzip, and rename `tinfoilkit-main` to `TinfoilKit`) and double-click `SETUP.command`. It checks the drive, downloads everything and tests it. Or from Terminal:
+Download the kit (**Code > Download ZIP** on GitHub), unzip it, and double-click `SETUP.command` in the unzipped folder. macOS asks once before it opens a script from the internet: open **System Settings > Privacy & Security** and click **Open Anyway**. SETUP asks whether the kit goes on an external drive or on this Mac, moves it there, downloads everything and tests it. Or from Terminal:
 
 ```sh
-git clone https://github.com/tudor-city-ventures/tinfoilkit /Volumes/<drive>/TinfoilKit
-cd /Volumes/<drive>/TinfoilKit
+git clone https://github.com/tudor-city-ventures/tinfoilkit ~/TinfoilKit    # or /Volumes/<drive>/TinfoilKit
+cd ~/TinfoilKit
 ./kit plan    # preview what will download
 ./kit sync    # download everything (a few hours)
 ./kit test    # start every server offline and check it answers
 ```
 
-Then turn Wi-Fi off and double-click `START-HERE.command`. [GUIDE.md](GUIDE.md) is the printable guide that lives on the drive.
+Then turn Wi-Fi off and double-click `START-HERE.command`. [GUIDE.md](GUIDE.md) is the printable guide that lives in the kit folder.
 
-## Keep it fresh
+## Update
 
-Double-click `SETUP.command` (or run `./kit update`, `./kit sync` and then `./kit test`) every two to three months. It updates the kit's own code, then downloads only what changed (see [How it works](#how-it-works)).
+Double-click `SETUP.command` again whenever you want the newest models, books and maps, or run `./kit update`, `./kit sync` and then `./kit test`. There's no schedule. It installs the kit's newest version first, so models and sources added to the kit since then arrive too, and then downloads only what changed (see [How it works](#how-it-works)). If an update is cut off, the kit keeps working with what it has.
+
+## Remove
+
+Double-click `UNINSTALL.command` in the kit folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. `bash UNINSTALL.command --yes` skips the question.
 
 ## Customize
 
