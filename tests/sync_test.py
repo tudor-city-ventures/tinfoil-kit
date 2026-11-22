@@ -861,11 +861,8 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     # ./kit space: whether the kit, or just its essentials, fits on a disk and leaves 10% of the computer's (5% of a
     # drive's) free. A made-up 1000 GB disk, a kit of 300 GB and essentials of 40 GB.
-    import importlib.util
     import types
-    spec = importlib.util.spec_from_file_location("kitpy", TESTS.parent / "tools" / "kit.py")
-    kp = sys.modules["kitpy"] = importlib.util.module_from_spec(spec)    # dataclasses look the module up
-    spec.loader.exec_module(kp)
+    saved = kp.estimate_gb, kp.on_this_computer, kp.shutil
     kp.estimate_gb = lambda root, cfg, essentials=None: 40 if essentials else 300
     for computer, free, full, ess in ((True, 500, "fits", "fits"), (True, 380, "tight", "fits"), (True, 320, "no", "fits"),
                                       (True, 130, "no", "tight"), (True, 80, "no", "no"), (False, 340, "tight", "fits"),
@@ -875,6 +872,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         sp = kp.space_at(work / "nowhere" / "TinfoilKit", work, {"settings": {}})
         check(f"kit space: {free} GB free of 1000 on {'this computer' if computer else 'a drive'}: kit {full}, essentials {ess}",
               (sp["full"], sp["essentials"]) == (full, ess), json.dumps(sp))
+    kp.estimate_gb, kp.on_this_computer, kp.shutil = saved
 
     # The kit builder's No AI preset switches every model off: ./kit test doesn't ask for one
     noai = work / "noai"
