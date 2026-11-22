@@ -1,6 +1,7 @@
 """Smoke test the website: serve site/ locally, drive the kit builder in headless Chromium.
 usage: python3 tests/site_test.py   (needs: pip install playwright && playwright install chromium)
 Set KIT_AXE to axe-core's axe.min.js (npm i axe-core) to also check accessibility."""
+import datetime
 import functools
 import http.server
 import json
@@ -205,6 +206,12 @@ with sync_playwright() as p:
     robots = home.request.get(URL + "robots.txt").text()
     check("robots.txt lets every crawler in and names the sitemap", "User-agent: *" in robots and "Disallow" not in robots
           and f"Sitemap: {canonical}sitemap.xml" in robots)
+    # security.txt (RFC 9116) tells researchers where to report; it must be renewed before it expires
+    sectxt = home.request.get(URL + ".well-known/security.txt").text()
+    expires = re.search(r"^Expires: (\d{4}-\d\d-\d\d)", sectxt, re.M)
+    check("security.txt names the private report form and isn't within 30 days of expiring (bump its Expires)",
+          "Contact: https://github.com/tudor-city-ventures/tinfoilkit/security/advisories/new" in sectxt and expires
+          and datetime.date.fromisoformat(expires.group(1)) - datetime.date.today() > datetime.timedelta(days=30))
     locs = re.findall(r"<loc>(.*?)</loc>", home.request.get(URL + "sitemap.xml").text())
     check("sitemap.xml lists the canonical address", locs == [canonical], str(locs))
     ld = [json.loads(t) for t in home.eval_on_selector_all("script[type='application/ld+json']", "s => s.map(e => e.textContent)")]

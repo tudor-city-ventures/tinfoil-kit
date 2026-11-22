@@ -125,6 +125,30 @@ Double-click `UNINSTALL.command` in the kit folder. It says what it will delete 
 
 A computer that stays on (Linux, or a Mac mini) can serve the kit to every phone and laptop at home, with no screen. `bash SETUP.command --home-server` sets it up as usual, then shares it on the home network behind an access code and starts it with the computer (a systemd user service on Linux, a LaunchAgent on a Mac). Phones open the address it shows and type the code, or scan its QR code. Programs can use the code as an API key for the AI's OpenAI-compatible API: `Authorization: Bearer <code>` at `http://<server>:8000/ai/v1`. Details: [GUIDE.md](GUIDE.md#a-home-server-advanced).
 
+## Security
+
+The kit downloads programs and runs them on your computer, so here is what protects you and what doesn't. Report problems privately, as [SECURITY.md](.github/SECURITY.md) says.
+
+- **Signed updates.** `./kit update` installs new code only if the maintainer's release key signed it, checked against `tools/release-signers` in the copy you already have. That key never goes near GitHub, so someone who broke into the GitHub account or its Actions still couldn't ship an update your kit accepts. A new key arrives only in a release the old one signed.
+- **Downloads straight from their publishers,** over HTTPS (the list is in [THIRD-PARTY.md](THIRD-PARTY.md)). This project hosts none of them. A file whose publisher posts a checksum, as most do, is checked against it before it replaces the old version. Files without one, like the map tiles and fonts, rely on HTTPS alone.
+- **No telemetry.** No accounts, analytics or reports home, in the kit or on tinfoilkit.com. The kit goes online only when you run SETUP, `./kit sync` or `./kit update`, and then only to GitHub and the places it downloads from.
+- **No administrator password.** The kit runs as you, and starts only when you start it unless you set up a home server. UNINSTALL undoes everything setup did, except Apple's Command Line Tools, which other apps use too. The site's "What does setup change on my computer?" lists every change outside the kit folder.
+- **Servers on 127.0.0.1.** The AI, library and maps answer only your own computer. A website open in your browser while the kit runs could still reach them (DNS rebinding is one way) and get the same public books, maps and AI; Chrome blocks that, other browsers may not.
+- **Sharing is off until you turn it on.** Then one gate, on port 8000 by default, stands in front of everything: it asks for an 8-digit code, stops answering a device after 10 wrong tries in 10 minutes, and refuses addresses and names outside a home network, so other websites can't reach it. It's plain HTTP, so share on your own Wi-Fi or hotspot: anyone on a public network who watches the traffic could read the code.
+- **Readable code.** Python's standard library, shell scripts and one HTML page, with no packages to install and no build step. It's written with AI coding tools; the tests in `tests/` run it against mocks of every download source and server on every change.
+- **The repo.** Every GitHub Action is pinned to a commit and runs with a read-only token, except a few jobs that never run code from a pull request or a download. An outside pull request that touches the workflows, CODEOWNERS or the release key fails a check that only the maintainer can merge past.
+- **What it can't protect against:** a publisher hacked at the source, since its checksum comes from the same place as the file; someone with your unlocked computer or drive, since the kit isn't encrypted (use FileVault, BitLocker or an encrypted drive for that); and an AI answer that's wrong, so check its sources.
+
+To check a release before running it, download its `tinfoilkit-TAG.tar.gz` and `.sig` (the **Code > Download ZIP** button is protected by HTTPS alone) and run:
+
+```sh
+ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release \
+  -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz
+# and that it's exactly the tagged code, from a clone of this repo:
+git archive --format=tar --prefix=tinfoilkit-TAG/ TAG | shasum -a 256
+gunzip -c tinfoilkit-TAG.tar.gz | shasum -a 256
+```
+
 ## Customize
 
 Everything the kit keeps is listed in [kit.json](kit.json). Set `"enabled": false` to skip an item, or find more books with `./kit search WORDS`.

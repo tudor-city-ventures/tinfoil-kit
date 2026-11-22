@@ -45,9 +45,12 @@ function Invoke-Cmd($line, $log, $answers) {
 # SETUP-Windows.bat with these answers, one per line, as if typed. Its own Python, not this one, runs the kit.
 function Invoke-Setup($dir, $log, $answers) {
   Invoke-Cmd "`"$dir\SETUP-Windows.bat`"" $log $answers
-  Get-Content "$logs\$log", "$logs\$log.err" | Select-String "PASS|FAIL|All set|Moved|Copied|Removed|Problems|^  - |^  [0-9]  " |
+  Get-Content "$logs\$log", "$logs\$log.err" | Select-String "PASS|FAIL|All set|Moved|Copied|Removed|Problems|^  - |^  [0-9]+  [A-Za-z]" |
     Select-Object -Last 30 | ForEach-Object { $_.Line }
-  if (-not (Select-String -Quiet -Path "$logs\$log" -Pattern "All set")) { Fail "SETUP didn't end with All set (logs\$log)" }
+  if (-not (Select-String -Quiet -Path "$logs\$log" -Pattern "All set")) {
+    Fail "SETUP didn't end with All set (logs\$log)"
+    Get-Content "$logs\$log", "$logs\$log.err" -Tail 40
+  }
 }
 
 function Stop-Kit($kit, $proc) {
@@ -61,7 +64,11 @@ function Test-Kit($kit, $name) {
   Step "double-click START-HERE-Windows.bat in $kit"
   $p = Start-Process "$kit\START-HERE-Windows.bat" -WorkingDirectory $kit -PassThru
   python "$tests\drive.py" check 8888 8080
-  if ($LASTEXITCODE -ne 0) { Fail "the kit $name after a double-click" }
+  if ($LASTEXITCODE -ne 0) {
+    Fail "the kit $name after a double-click"
+    netstat -ano | Select-String "LISTENING" | Select-String ":8[0-9]{3} "
+    foreach ($f in "kiwix-serve.log", "llama-server.log") { "--- $f"; Get-Content "$kit\logs\$f" -Tail 15 -ErrorAction SilentlyContinue }
+  }
   Stop-Kit $kit $p
   Copy-Item -Recurse "$kit\logs" "$logs\$($name -replace '\W', '-')-logs" -ErrorAction SilentlyContinue
 }
