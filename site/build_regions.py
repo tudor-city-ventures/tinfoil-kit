@@ -96,16 +96,22 @@ def fetch(url, cache, name, timeout=900):
     return data
 
 
+failed_in_a_row = [0]
+
+
 def head(url):
-    """A file's size, asking again when the server is busy (Geofabrik turns away many requests at once)."""
-    for attempt in range(5):
+    """A file's size, asking again when the server is busy, but not once it keeps saying no."""
+    for attempt in range(1 if failed_in_a_row[0] > 10 else 4):
         try:
-            return kit.content_length(kit.http_head(url))
+            size = kit.content_length(kit.http_head(url))
+            failed_in_a_row[0] = 0
+            return size
         except kit.HttpError as e:
             err = e
             if re.search(r"error: 40[34]", str(e)):
                 break
-            time.sleep(3 * (attempt + 1))
+            time.sleep(2 * (attempt + 1))
+    failed_in_a_row[0] += 1
     warn(f"{url}: {err}")
     return None
 
@@ -114,6 +120,27 @@ def sizes(urls):
     """HEAD a few URLs at a time: their sizes, or None."""
     with concurrent.futures.ThreadPoolExecutor(3) as ex:
         return dict(zip(urls, ex.map(head, urls)))
+
+
+PAGE_SIZE = re.compile(r'href="([^"]+-latest\.osm\.pbf)">\[\.osm\.pbf\]</a></td>\s*<td[^>]*>\(\s*([\d.,]+)\s*(?:&nbsp;)?\s*([KMGT]?)i?B\s*\)')
+
+
+def page_sizes(pages):
+    """The sizes Geofabrik's pages list next to each extract: one page per region with parts, instead of asking
+    for every file (Geofabrik turns away a crowd of requests)."""
+    out, read = {}, 0
+    for page in pages:
+        try:
+            html = kit.http_get(page, timeout=60).decode(errors="replace")
+            read += 1
+        except kit.HttpError as e:
+            warn(f"{page}: {e}")
+            continue
+        folder = page.rsplit("/", 1)[0] + "/"
+        for href, num, unit in PAGE_SIZE.findall(html):
+            out[folder + href] = int(float(num.replace(",", "")) * {"": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}[unit])
+        time.sleep(0.3)
+    return out, read
 
 
 def codes(value):
@@ -288,7 +315,17 @@ def main():
         if u and not (u.startswith(GEOFABRIK) and PBF_PATH.match(u[len(GEOFABRIK):])):
             warn(f"{i}: unexpected download address {u}; left out")
             pbf_url[i] = ""
-    pbf_size = sizes([u for i, u in pbf_url.items() if u and i not in SKIP])
+    wanted = [u for i, u in pbf_url.items() if u and i not in SKIP]
+    pages = [GEOFABRIK + "index.html"] + [pbf_url[i][:-len("-latest.osm.pbf")] + ".html" for i in feats
+                                          if kids.get(i) and pbf_url[i] and i not in SKIP]
+    t = time.time()
+    pbf_size, read = page_sizes(pages)
+    print(f"Geofabrik's pages: {read} of {len(pages)} read, sizes for {sum(u in pbf_size for u in wanted)} of {len(wanted)} extracts "
+          f"in {time.time() - t:.0f} s", flush=True)
+    rest = [u for u in wanted if u not in pbf_size]
+    pbf_size.update(sizes(rest))
+    print(f"Asked for the other {len(rest)}: {sum(pbf_size.get(u) is not None for u in rest)} answered "
+          f"({time.time() - t:.0f} s so far)", flush=True)
     size = {i: pbf_size.get(u) for i, u in pbf_url.items()}
 
     picked = []
