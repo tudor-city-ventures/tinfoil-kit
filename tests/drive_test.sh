@@ -140,6 +140,7 @@ mac() {
   echo "signature changed (build.sh verify says so of the Mac app's copy)"
   [ -f "$W/programs/tinfoilkit-macos-arm64" ] || "$ROOT/tools/tinfoilkit/build.sh" "$W/programs" || fail "the kit's own program didn't build"
   f="$W/programs/tinfoilkit-macos-arm64"
+  chmod +x "$W"/programs/tinfoilkit-*    # an Actions artifact keeps no file modes
   cp "$f" "$W/program-signed" && codesign --force --options runtime --sign - "$W/program-signed"
   cmp -s "$f" "$W/program-signed" && fail "codesign left the program as it was, so this didn't test compare"
   same="$("$f" compare "$f" "$W/program-signed")"

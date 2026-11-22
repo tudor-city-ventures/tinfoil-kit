@@ -602,6 +602,17 @@ pathlib.Path(str(out) + ".aria2").unlink()
           "code moves, into app, and the folders stay",
           rc == 0 and (flat / "app" / "tools" / "kit.py").is_file() and (flat / "data" / "kit.json").is_file()
           and all((flat / d).is_dir() for d in ("models", "maps")) and not (flat / "downloads").exists(), out)
+    whole = work / "whole"    # all of a release's code at its top: every part of it is code, so nothing stays beside app
+    whole.mkdir()
+    tar = subprocess.run(["git", "-C", str(TESTS.parent), "archive", "HEAD"], capture_output=True)
+    if tar.returncode == 0:
+        subprocess.run(["tar", "-x", "-C", str(whole)], input=tar.stdout, check=True)
+        shutil.rmtree(whole / "tools")    # this code, not the last commit's
+        shutil.copytree(TESTS.parent / "tools", whole / "tools", ignore=shutil.ignore_patterns("tinfoilkit-*", "__pycache__"))
+        rc, out = kit("status", root=whole)
+        left = sorted(p.name for p in whole.iterdir())
+        check("all of a release's code at a folder's top moves into app, so the folder holds just the kit's folders",
+              rc == 0 and left == ["app", "data"], f"{left}\n{out}")
 
     # Three months later. Plant leftovers an interrupted sync could have left behind:
     # a book download from an older edition, a model download of the old file under the same name,

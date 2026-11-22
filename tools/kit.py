@@ -4485,7 +4485,7 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
 # there (state.json's kit_files); a copy of a git checkout has the rest of the repository too.
 OLD_CODE = {"kit", "kit.cmd", "SETUP.command", "SETUP-Windows.bat", "UNINSTALL.command", "UNINSTALL-Windows.bat",
             "Open Tinfoil Kit.command", "Open Tinfoil Kit for Windows.bat", "GUIDE.md", "README.md", "THIRD-PARTY.md",
-            "LICENSE", ".gitattributes", ".gitignore", "tools", "site", "tests", "docs", "mac", ".github", "AGENTS.md",
+            "LICENSE", ".gitattributes", ".gitignore", ".claude", "tools", "site", "tests", "docs", "mac", ".github", "AGENTS.md",
             "CLAUDE.md", "package.json", "package-lock.json", "eslint.config.mjs"}
 DOWNLOADED = ("bin", "models", "library", "maps", "installers", "INVENTORY.md")
 
