@@ -11,18 +11,44 @@ step "python compiles"
 run python3 -m py_compile tests/*.py site/*.py
 
 step "bash parses"
-SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command mac/app.sh mac/build.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles tools/tinfoilkit/build.sh)
+SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command mac/app.sh mac/build.sh tools/tinfoilkit/build.sh
+  .github/release.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/env.sh
+  tests/fakes/java tests/fakes/pmtiles)
 for f in "${SH[@]}"; do run bash -n "$f"; done
 
 step "shellcheck"
 if command -v shellcheck >/dev/null; then
-  run shellcheck -S error "${SH[@]}"
+  run shellcheck -S warning "${SH[@]}"
 else
   echo "skipped (not installed)"
 fi
 
 step "kit.json is valid"
 run python3 -c "import json,sys; [json.load(open(f)) for f in sys.argv[1:]]" kit.json tools/pins.json tools/ai-chat.json tests/drive_kit.json tests/drive_kit_maps.json
+
+step "text files end with a newline and have no trailing spaces (.editorconfig)"
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  run python3 - <<'PY'
+import subprocess, sys
+bad = []
+for f in subprocess.run(["git", "ls-files", "-z"], capture_output=True, check=True).stdout.decode().split("\0"):
+    if not f or f == "site/app/fonts/OFL.txt":  # third-party text, kept as published
+        continue
+    try:
+        data = open(f, "rb").read()
+    except OSError:  # deleted, not yet committed
+        continue
+    if not data or b"\0" in data:  # empty, or not text
+        continue
+    lines = data.split(b"\n")
+    if lines[-1]:
+        bad.append(f"{f}: no newline at the end")
+    bad += [f"{f}:{n}: trailing spaces" for n, line in enumerate(lines[:-1], 1) if line.rstrip(b"\r")[-1:].isspace()]
+sys.exit("\n".join(bad) if bad else 0)
+PY
+else
+  echo "skipped (not a git checkout)"
+fi
 
 step "site data matches kit.json and tools/regions.json"
 run python3 -c "
@@ -45,8 +71,8 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
   run sh -c 'git check-attr export-subst tools/commit | grep -q ": set$"'
   # and carry the kit's own files only: no tests, docs, website (besides the two site files the kit reads) or Mac app
   run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -Ev "^(site/|site/kit.json|site/sources.json)$" | grep -E "^(tests|docs|\.github|site|mac)/"'
-  # and none of the developer tools (package.json's)
-  run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -E "(^|/)(package(-lock)?\.json|eslint\.config\.mjs|node_modules/)"'
+  # and none of the developer tools or their settings
+  run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -E "(^|/)(package(-lock)?\.json|eslint\.config\.mjs|node_modules/|\.editorconfig)"'
 else
   echo "skipped (not a git checkout)"
 fi

@@ -20,3 +20,4 @@ tools/commit export-subst
 /package.json export-ignore
 /package-lock.json export-ignore
 /eslint.config.mjs export-ignore
+/.editorconfig export-ignore

@@ -1,0 +1,25 @@
+# Editor settings for Tinfoil Kit (https://editorconfig.org). tests/check.sh checks the whitespace rules; gofmt,
+# Prettier and ruff format each language (AGENTS.md, "Verify").
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.{go,mod}]
+indent_style = tab
+
+[*.py]
+indent_size = 4
+
+# cmd misreads anything but CRLF and plain ASCII
+[*.{bat,cmd}]
+end_of_line = crlf
+
+# third-party text, kept as published
+[site/app/fonts/OFL.txt]
+trim_trailing_whitespace = false

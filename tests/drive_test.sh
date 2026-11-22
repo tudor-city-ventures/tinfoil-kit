@@ -36,6 +36,7 @@ kit_logs() { # KIT LOG...
 # A kit folder holds its app, downloads and data folders, and nothing else of its own.
 three_folders() { # KIT
   local top
+  # shellcheck disable=SC2010  # just the names, hidden ones too, for one comparison and a message
   top="$(ls -A "$1" | grep -vE '^(\._.*|\.DS_Store)$' | tr '\n' ' ')"
   [ "$top" = "app data downloads " ] || fail "$1 holds $top, not just app, data and downloads"
 }
@@ -267,6 +268,7 @@ mac() {
 
   step "the app, with that drive unplugged: it asks for it. Set Up a New Kit copies the kit out of the app and"
   echo "opens its SETUP in Terminal: here, SETUP --home-server with answers. This Mac; it moves the kit to"
+  # shellcheck disable=SC2088  # the words a person reads, not a path
   echo "~/TinfoilKit, sets it up, shares it on the home network and has the Mac start it"
   kit="$HOME/TinfoilKit" agent="$HOME/Library/LaunchAgents/com.tinfoilkit.kit.plist"
   rm -rf "$kit"

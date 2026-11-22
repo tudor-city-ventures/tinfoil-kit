@@ -1,3 +1,6 @@
+# shellcheck shell=bash
+# The mock internet's addresses (tests/mock_remote.py on port 19000), for the end-to-end and drive tests: every
+# remote endpoint the kit uses can be pointed elsewhere by its KIT_* variable.
 export KIT_KIWIX_CATALOG="http://127.0.0.1:19000/catalog/v2/entries?count=-1"
 export KIT_KIWIX_RELEASES="http://127.0.0.1:19000/release/{product}/"
 export KIT_GITHUB_API="http://127.0.0.1:19000"

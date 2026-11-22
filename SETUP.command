@@ -609,9 +609,9 @@ before_download() {
 }
 awake=""
 
-# ./kit sync with these options, then start everything offline and check that it answers. Sets rc and tested.
+# ./kit sync, then start everything offline and check that it answers. Sets rc and tested.
 get() {
-  ./kit sync --yes "$@"
+  ./kit sync --yes
   rc=$?
   if [ $rc -eq 130 ]; then
     say "Stopped. Everything downloaded so far is kept. Double-click SETUP again to carry on where it left off."
