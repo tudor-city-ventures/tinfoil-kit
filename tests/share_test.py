@@ -3,9 +3,11 @@ and ./kit autostart, and the launcher with sharing on. Stand-in servers play the
 Needs only python3, so it runs in the quick gate and in cloud sessions.
 usage: python3 tests/share_test.py
 """
+import contextlib
 import hashlib
 import http.client
 import http.server
+import io
 import json
 import os
 import shutil
@@ -334,6 +336,46 @@ try:
         odd = Path("/tmp/a kit 100% $HOME")
         check("systemd service: a folder with spaces, % and $ survives systemd's quoting",
               f'"{str(odd).replace("%", "%%").replace("$", "$$")}/tools/launch.sh"' in share.systemd_unit(odd))
+
+    # ------------------------------------------------------------------------- Windows: the Startup folder
+    # What share.py writes there and reads back. The drive test runs the real thing on Windows.
+    win, said, started = work / "Tinfoil Kit 100% café", io.StringIO(), []
+    win.mkdir()
+    saved = os.environ.get("APPDATA")
+    share.WINDOWS, os.environ["APPDATA"] = True, str(work / "Roaming")
+    os.startfile = started.append    # Windows runs the new entry, which starts the kit now
+    try:
+        with contextlib.redirect_stdout(said):
+            rc = share.autostart(win, "on")
+        entry = work / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "Tinfoil Kit.cmd"
+        text = entry.read_bytes().decode("utf-8") if entry.exists() else ""
+        bat = str(win / "START-HERE-Windows.bat").replace("%", "%%")
+        check("Windows: ./kit autostart on puts START-HERE-Windows.bat in the Startup folder, minimized, no browser",
+              rc == 0 and f'if exist "{bat}" start "Tinfoil Kit" /min "{bat}" --no-browser\r\n' in text, text)
+        check("Windows: the Startup entry is CRLF and UTF-8, for a folder named in any language",
+              text.count("\n") == text.count("\r\n") and "chcp 65001" in text and "café" in text)
+        check("Windows: ./kit autostart on starts the kit now too", started == [str(entry)], str(started))
+        check("Windows: and says it starts as you sign in", "whenever you sign in" in said.getvalue(), said.getvalue())
+        check("Windows: reads the entry back, % and all, in any case",
+              share.autostart_state(win) == "on" and share.autostart_state(Path(str(win).upper())) == "on")
+        check("Windows: another kit folder's entry is another's", share.autostart_state(work / "elsewhere") == "other")
+        check("Windows: a sharing change doesn't restart the kit (which window Windows started can't be told)",
+              share.restart_if_autostarted(win) is False)
+        check("Windows: kit commands are .\\kit.cmd", share.kit_cmd("share on") == ".\\kit.cmd share on"
+              and ".\\kit.cmd autostart off" in text)
+        check("Windows: no .local name", share.local_name() == "")
+        with contextlib.redirect_stdout(io.StringIO()):
+            share.autostart(work / "elsewhere", "off")
+            kept = entry.exists()
+            share.autostart(win, "off")
+        check("Windows: ./kit autostart off removes this kit's entry, and only this kit's", kept and not entry.exists())
+    finally:
+        share.WINDOWS = False
+        del os.startfile
+        if saved is None:
+            os.environ.pop("APPDATA", None)
+        else:
+            os.environ["APPDATA"] = saved
 
     # ------------------------------------------------------------------------- the launcher with sharing on
     fake = work / "fake-kiwix-serve"

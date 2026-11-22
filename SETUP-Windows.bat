@@ -3,12 +3,16 @@ rem Double-click me (Windows) to set up Tinfoil Kit, and again whenever you want
 rem The first time, it asks whether the kit goes on an external drive or on this PC, says how much fits there, and
 rem copies it there. Then it's kit update, sync and test (the first time, the essentials come first), as
 rem SETUP.command does on a Mac or Linux.
+rem A home server, a PC that stays on: SETUP-Windows.bat --home-server, in a terminal. At the end it shares the kit
+rem on the home network behind an access code, and starts it whenever you sign in to this PC. It goes in the
+rem environment, KIT_HOME_SERVER, since this script starts itself again after moving or updating the kit.
 rem The kit's tools run on Python. SETUP gets python.org's own build from nuget.org (about 15 MB, once), checks it
 rem against the checksum below, and keeps it in %LOCALAPPDATA%\TinfoilKit, outside the kit folder, so the kit can
 rem move. UNINSTALL-Windows.bat removes it. KIT_PYTHON_URL: get the same file from there instead (tests).
 rem cmd reads this file a line at a time while it runs, and kit update can replace it, so each line that hands
 rem over to a new copy of SETUP also ends this one.
 setlocal EnableExtensions EnableDelayedExpansion
+for %%a in (%*) do if /i "%%~a"=="--home-server" set "KIT_HOME_SERVER=1"
 cd /d "%~dp0"
 set "KIT=%CD%"
 set "NAME=TinfoilKit"
@@ -112,7 +116,12 @@ if "%TESTED%"=="0" (
   echo Everything in the kit works, but some downloads didn't finish:
   call :problems
   echo(
-  echo You can use the kit now: double-click START-HERE-Windows.bat. Double-click SETUP again later to get the rest.
+  if defined KIT_HOME_SERVER (
+    call :home_server
+    echo Run SETUP again later to get the rest.
+  ) else (
+    echo You can use the kit now: double-click START-HERE-Windows.bat. Double-click SETUP again later to get the rest.
+  )
   call :finish 1
 )
 echo(
@@ -125,7 +134,8 @@ call :finish 1
 call :where_kit
 echo(
 echo All set. Tinfoil Kit is !WHERE!, in !KIT!
-if "!WHERE!"=="on this PC" (
+rem (a home server starts by itself: home_server says so)
+if not defined KIT_HOME_SERVER if "!WHERE!"=="on this PC" (
   echo In an outage: in File Explorer, open that folder and double-click START-HERE-Windows.bat. No internet needed.
 ) else (
   echo In an outage: plug in the drive, open its !KIT:~3! folder and double-click START-HERE-Windows.bat. No internet needed.
@@ -136,8 +146,19 @@ echo   GUIDE.md               a short guide. Print it and keep it handy.
 echo   SETUP-Windows.bat      double-click it again whenever you want the newest AI models, books and maps (needs internet).
 echo   UNINSTALL-Windows.bat  removes the kit and everything it downloaded.
 start "" explorer.exe "%KIT%"
+if defined KIT_HOME_SERVER (call :home_server & call :finish 0)
 call :ask "Open the kit now?" && (del "%OUT%" 2>nul & call "%KIT%\START-HERE-Windows.bat" & exit 0)
 call :finish 0
+
+rem Phones and laptops on the home network open the kit with its access code, and it starts as you sign in.
+:home_server
+echo(
+echo Home server: sharing the kit on your home network, and starting it whenever you sign in to this PC.
+call :kit share on >nul
+call :kit autostart on
+echo(
+call :kit share
+goto :eof
 
 rem kit sync with these options, then start everything offline and check that it answers. Sets RC and TESTED.
 :get
@@ -516,10 +537,13 @@ goto :eof
 del "%KIT%\.kit-write-test" 2>nul
 goto :eof
 
-rem The kit's programs hold their files open, and Windows won't replace an open file: stop them before updating.
+rem The kit's programs hold their files open, and Windows won't replace an open file: stop them before updating. They
+rem run from its bin folder, and sharing runs its tools\share.py; the START-HERE window that started them goes too.
 :stop_kit
 set "TK_BIN=%KIT%\bin\"
-powershell -NoProfile -Command "$p = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:TK_BIN, [StringComparison]::OrdinalIgnoreCase) }); if ($p.Count) { 'The kit is running. Stopping it, so its files can be updated...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
+set "TK_GATE=%KIT%\tools\share.py"
+set "TK_START=%KIT%\START-HERE-Windows.bat"
+powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:TK_BIN, $k) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and $c.IndexOf($env:TK_GATE, $k) -ge 0) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'The kit is running. Stopping it, so its files can be updated...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 goto :eof
 
 rem The list of what failed, from the newest sync log: the sync's own copy has scrolled far up by now.

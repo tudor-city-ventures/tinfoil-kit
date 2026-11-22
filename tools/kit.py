@@ -1809,7 +1809,7 @@ def prepare_folder(root: Path) -> None:
     if sys.platform == "win32":
         # A kit unzipped from a download is marked "from the internet", and Windows warns before it runs a marked
         # script. Lift the mark from the kit's own scripts and tools (an exFAT drive can't hold it anyway).
-        for p in [*root.glob("*.bat"), *(root / "tools").glob("*")]:
+        for p in [*root.glob("*.bat"), *root.glob("*.cmd"), *(root / "tools").glob("*")]:
             with contextlib.suppress(OSError):
                 os.remove(f"{p}:Zone.Identifier")
         return
@@ -3307,8 +3307,6 @@ def set_setting(root: Path, key: str, value: Any) -> None:
 
 
 def cmd_share(root: Path, args: argparse.Namespace) -> None:
-    if os.name == "nt":
-        die("Sharing on the home network works on a Mac or Linux for now. On Windows the kit is for this PC.")
     share = share_tools()
     s = load_config(root)["settings"]
     port, on = int(s.get("share_port", 8000)), s.get("share_on_network") is True
@@ -3331,13 +3329,14 @@ def cmd_share(root: Path, args: argparse.Namespace) -> None:
         set_setting(root, "share_on_network", True)
         on = True
         log("Sharing is on: phones and laptops on your home network need the access code.")
+        start = "START-HERE-Windows.bat" if share.WINDOWS else "START-HERE.command"
         log("The kit restarted with sharing on." if share.restart_if_autostarted(root) else
-            "Start the kit to share it (START-HERE.command), or restart it if it's running.")
+            f"Start the kit to share it ({start}), or restart it if it's running.")
     elif args.action == "new-code":
         log("New access code. Phones and laptops that used the old one need this one now.")
     if not on:
-        log("Sharing is off: only this computer can open the kit. ./kit share on lets phones and laptops on\n"
-            "your home network open it too, once they type an access code.")
+        log(f"Sharing is off: only this computer can open the kit. {share.kit_cmd('share on')} lets phones and\n"
+            "laptops on your home network open it too, once they type an access code.")
         return
     log("")
     log(share.banner(root, port, args.qr or sys.stdout.isatty()))
@@ -3347,11 +3346,15 @@ def cmd_share(root: Path, args: argparse.Namespace) -> None:
 
 
 def cmd_autostart(root: Path, args: argparse.Namespace) -> None:
-    if os.name == "nt":
-        die("Starting the kit with the computer works on a Mac or Linux for now.")
-    rc = share_tools().autostart(root, args.action or "status")
-    if rc == 0 and args.action == "on" and load_config(root)["settings"].get("share_on_network") is not True:
-        log("Sharing is off, so only this computer can use the kit. ./kit share on lets your phones and laptops in.")
+    share = share_tools()
+    rc = share.autostart(root, args.action or "status")
+    if rc == 0 and args.action == "on":
+        if load_config(root)["settings"].get("share_on_network") is not True:
+            log(f"Sharing is off, so only this computer can use the kit. {share.kit_cmd('share on')} lets your phones "
+                "and laptops in.")
+        elif share.WINDOWS:    # the first time Python listens on the network
+            log("If Windows asks whether Python may use the network, allow it, or phones and laptops can't reach\n"
+                "the kit.")
     sys.exit(rc)
 
 

@@ -1,5 +1,6 @@
 * text=auto eol=lf
 *.bat text eol=crlf
+*.cmd text eol=crlf
 *.png binary
 # Archives of the kit (a release, or Code > Download ZIP) stamp KIT_COMMIT in kit.py with their commit.
 tools/kit.py export-subst

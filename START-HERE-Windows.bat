@@ -1,9 +1,17 @@
 @echo off
 rem Double-click me (Windows) to start Tinfoil Kit: the library, the AI and the map, then the kit's page in a
 rem browser. No internet needed. Close this window to stop everything. tools\launch.sh does the same on a Mac or Linux.
+rem   --share       also serve phones and laptops on the home network, behind the access code (this time only;
+rem                 kit.cmd share on turns it on for good: kit.json's share_on_network)
+rem   --no-browser  don't open the browser (how Windows starts the kit as you sign in, after kit.cmd autostart on)
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 set "KIT=%CD%"
+set "SHARE=" & set "NO_BROWSER="
+for %%a in (%*) do (
+  if /i "%%~a"=="--share" set "SHARE=1"
+  if /i "%%~a"=="--no-browser" set "NO_BROWSER=1"
+)
 title Tinfoil Kit
 if not exist "%KIT%\logs\" mkdir "%KIT%\logs"
 if not exist "%KIT%\.kit\" mkdir "%KIT%\.kit"
@@ -16,6 +24,9 @@ call :setting GEO_PORT geocoder_port 2322
 call :setting ROUTE_PORT routing_port 8989
 call :setting GEO_HEAP geocoder_heap 3g
 call :setting ROUTE_HEAP routing_heap 2g
+call :setting SHARE_PORT share_port 8000
+call :setting SHARE_ON share_on_network false
+if /i "%SHARE_ON%"=="true" set "SHARE=1"
 call :find KIWIX kiwix-tools kiwix-serve.exe
 call :find LLAMA llama.cpp llama-server.exe
 call :find PMTILES pmtiles pmtiles.exe
@@ -55,6 +66,9 @@ call :ours "http://127.0.0.1:%AI_PORT%/v1/models" "\"data\"" && (
 rem --- maps: tiles, address search, directions
 set "MAPS="
 if exist "%KIT%\maps\" call :start_maps
+rem --- sharing on the home network: tools\share.py asks for the access code, then hands requests to the servers
+set "GATE=" & set "SHARE_OK=0"
+if defined SHARE call :start_share
 
 rem Wait for the library and the AI to answer.
 set "LIB_OK=0" & set "AI_OK=0" & set "AI_ON="
@@ -66,6 +80,8 @@ if not defined CURL (
 )
 if defined CURL for /l %%i in (1,1,60) do if !LIB_OK!==0 call :ours "http://127.0.0.1:%LIB_PORT%/" "Tinfoil Kit" && (set "LIB_OK=1") || ping -n 2 127.0.0.1 >nul
 if defined CURL if defined AI_ON for /l %%i in (1,1,30) do if !AI_OK!==0 call :ours "http://127.0.0.1:%AI_PORT%/v1/models" "\"data\"" && (set "AI_OK=1") || ping -n 2 127.0.0.1 >nul
+if defined GATE if defined CURL for /l %%i in (1,1,10) do if !SHARE_OK!==0 call :ours "http://127.0.0.1:!SHARE_PORT!/" "Tinfoil Kit" && (set "SHARE_OK=1") || ping -n 2 127.0.0.1 >nul
+if defined GATE if not defined CURL set "SHARE_OK=1"
 
 set "URL=http://127.0.0.1:%LIB_PORT%/?model=%MODEL%&ai=%AI_PORT%"
 echo(
@@ -82,8 +98,15 @@ echo   Open:     !URL!
 echo   AI chat:  http://127.0.0.1:!AI_PORT!/
 if defined MAPS echo   Maps:     on the Map tab of the page above
 echo(
+if !SHARE_OK!==1 (
+  "!PY!" "!KIT!\tools\share.py" banner --root "!KIT!\." --port !SHARE_PORT!
+  echo(
+) else if defined GATE (
+  echo   Sharing:  NOT running ^(see logs\share.log^)
+  echo(
+)
 echo   Keep this window open. Close it to stop everything.
-if !LIB_OK!==1 start "" "!URL!"
+if !LIB_OK!==1 if not defined NO_BROWSER start "" "!URL!"
 rem Out of the kit folder, so nothing here holds it open (UNINSTALL-Windows.bat can delete it).
 cd /d "%TEMP%"
 :wait
@@ -95,7 +118,7 @@ rem ----------------------------------------------------------------------------
 rem start /b: the servers share this window, so closing it stops them all.
 
 :start_library
-call :free_port LIB_PORT library
+call :free_port LIB_PORT "the library"
 set "PORTAL=%KIT%\.kit\portal.html"
 rem The page ./kit sync builds has the map inside; the bare template has none.
 if not exist "%PORTAL%" set "PORTAL=%KIT%\tools\portal.html"
@@ -106,7 +129,7 @@ echo   Starting library (%BOOKS% books)...
 goto :eof
 
 :start_ai
-call :free_port AI_PORT AI
+call :free_port AI_PORT "the AI"
 (
   echo version = 1
   echo(
@@ -139,6 +162,29 @@ if defined JAVA if defined GH_JAR if exist "%KIT%\maps\routing\graph-cache\prope
   set "MAPS=!MAPS! directions"
 )
 if defined MAPS echo   Starting maps:!MAPS! (address search and directions take up to a minute)...
+goto :eof
+
+:start_share
+call :python
+if not defined PY (
+  echo   Sharing needs Python. Run SETUP-Windows.bat once while online: it gets it.
+  goto :eof
+)
+call :ours "http://127.0.0.1:%SHARE_PORT%/" "Tinfoil Kit" && (
+  echo   Sharing already on, on port %SHARE_PORT%.
+  set "SHARE_OK=1"
+  goto :eof
+)
+set "WANT=%SHARE_PORT%"
+call :free_port SHARE_PORT sharing
+if not "%SHARE_PORT%"=="%WANT%" echo   For an address that stays the same, set share_port in kit.json to a free port.
+set "MAP_PORTS="
+if exist "%KIT%\maps\" set "MAP_PORTS=--tiles %TILES_PORT% --geocoder %GEO_PORT% --routing %ROUTE_PORT%"
+set "PYTHONUTF8=1"
+start "" /b "%PY%" "%KIT%\tools\share.py" serve --root "%KIT%\." --port %SHARE_PORT% --library %LIB_PORT% --ai %AI_PORT% %MAP_PORTS% > "%KIT%\logs\share.log" 2>&1
+set "GATE=1"
+echo   Starting sharing on the home network...
+echo   If Windows asks whether Python may use the network, allow it, or phones and laptops can't reach the kit.
 goto :eof
 
 rem ---------------------------------------------------------------------------- helpers
@@ -211,6 +257,14 @@ for %%f in ("%~1\*.gguf") do (
 )
 goto :eof
 
+rem Python for sharing: the one SETUP-Windows.bat got, or else this PC's own, 3.9 or newer. (Windows' stand-in
+rem python.exe only offers to install one from the Store.)
+:python
+set "PY="
+for /d %%d in ("%LOCALAPPDATA%\TinfoilKit\python-*") do if /i not "%%~xd"==".partial" if exist "%%d\tools\python.exe" set "PY=%%d\tools\python.exe"
+if not defined PY for /f "delims=" %%p in ('python -c "import sys; print(sys.executable * (sys.version_info >= (3, 9)))" 2^>nul') do if exist "%%p" set "PY=%%p"
+goto :eof
+
 rem Does this address answer with this text? (is the kit's own server already running there?)
 :ours
 if not defined CURL exit /b 1
@@ -234,6 +288,6 @@ set /a "P+=1"
 goto free_port_next
 :free_port_done
 if !P!==!%~1! goto :eof
-echo   Another program is using port !%~1!, so the %~2 uses !P!.
+echo   Another program is using port !%~1!, so %~2 uses !P!.
 set "%~1=!P!"
 goto :eof

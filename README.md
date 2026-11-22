@@ -50,7 +50,7 @@ The first time, SETUP asks where you live (a US state or a country), which sets 
 2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in [kit.json](kit.json) and downloads only what changed. Programs are the exception: each version of the kit names the exact build of each one it installs (`tools/pins.json`), so a new AI engine arrives with a kit update. A big book can wait for its next edition: Wikipedia (115 GB) keeps the one it has until it's a year old (`refresh_days` in kit.json). Downloads resume after a break, every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
 3. **Check** (`./kit test`): starts every server offline and checks that each one answers.
 
-Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build from nuget.org (about 15 MB, checked against its SHA-256) and keeps it in `%LOCALAPPDATA%\TinfoilKit`, outside the kit. A Mac's python3 only offers to install Apple's Command Line Tools (several GB) until they're installed, so on a Mac without them `SETUP.command` gets a standalone Python from python-build-standalone on GitHub (about 25 MB, checked against its SHA-256) and keeps it in `~/Library/Application Support/TinfoilKit`, outside the kit (its symlinks wouldn't fit on exFAT). The kit on a drive doesn't need either: START-HERE uses only the programs in the kit.
+Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build from nuget.org (about 15 MB, checked against its SHA-256) and keeps it in `%LOCALAPPDATA%\TinfoilKit`, outside the kit. A Mac's python3 only offers to install Apple's Command Line Tools (several GB) until they're installed, so on a Mac without them `SETUP.command` gets a standalone Python from python-build-standalone on GitHub (about 25 MB, checked against its SHA-256) and keeps it in `~/Library/Application Support/TinfoilKit`, outside the kit (its symlinks wouldn't fit on exFAT). The kit on a drive doesn't need either: START-HERE uses only the programs in the kit (sharing on the home network also needs Python).
 
 ### Using it (offline)
 
@@ -63,7 +63,7 @@ Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build 
 | Map | `pmtiles` | 8090 | Serves the map: street detail where you live (a US state, a country, or part of a big one) and a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy (the whole US by default) |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
-| Sharing (off by default) | `tools/share.py` | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on, `--share` for one run |
+| Sharing (off by default) | `tools/share.py` | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on (`.\kit.cmd share on` on Windows), `--share` for one run |
 
 Photon and GraphHopper run on a Java that's in the kit. The kit has each program for Macs, Windows PCs and Linux PCs, so a drive set up on one starts on all three.
 
@@ -84,7 +84,8 @@ TinfoilKit/
 ├── UNINSTALL-Windows.bat
 ├── GUIDE.md                the printable guide
 ├── INVENTORY.md            what's installed, with versions and sizes
-├── kit, kit.json, tools/   the kit's code and its list of downloads
+├── kit, kit.cmd            the kit's command line (kit.cmd on Windows)
+├── kit.json, tools/        its list of downloads, and its code
 ├── bin/                    programs: llama.cpp, Kiwix, Java, the map servers
 ├── models/                 AI models
 ├── library/                books (.zim files)
@@ -101,7 +102,7 @@ The repo is the kit, so `site/` (the website), `tests/` and `docs/` come along, 
 - A modern laptop or desktop: a Mac with Apple Silicon, or a Windows or Linux PC. Built around 32 GB of memory; the small model runs on 8-16 GB.
 - Room for the kit: the first sync downloads about 300 GB. On the computer's own disk it leaves 50 GB free. An external SSD lets you grab it and go.
 
-A nightly test sets the kit up on a Mac and on Windows, from a download onto the computer and onto an exFAT drive, and starts the Mac's drive on Windows and Linux. On Windows it also builds and serves a small real map.
+A nightly test sets the kit up on a Mac and on Windows, from a download onto the computer and onto an exFAT drive, and starts the Mac's drive on Windows and Linux. On Windows it also builds and serves a small real map, and on all three it shares the kit as a home server.
 
 ## Set up
 
@@ -133,7 +134,7 @@ Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit
 
 ## Home server
 
-A computer that stays on (Linux, or a Mac mini) can serve the kit to every phone and laptop at home, with no screen. `bash SETUP.command --home-server` sets it up as usual, then shares it on the home network behind an access code and starts it with the computer (a systemd user service on Linux, a LaunchAgent on a Mac). Phones open the address it shows and type the code, or scan its QR code. Programs can use the code as an API key for the AI's OpenAI-compatible API: `Authorization: Bearer <code>` at `http://<server>:8000/ai/v1`. Details: [GUIDE.md](GUIDE.md#a-home-server-advanced).
+A computer that stays on (Linux, a Mac mini or a Windows PC) can serve the kit to every phone and laptop at home. `bash SETUP.command --home-server` (`.\SETUP-Windows.bat --home-server` on Windows) sets it up as usual, then shares it on the home network behind an access code and starts it with the computer (a systemd user service on Linux, from boot; a LaunchAgent on a Mac or the Startup folder on Windows, once you log in). Phones open the address it shows and type the code, or scan its QR code. Programs can use the code as an API key for the AI's OpenAI-compatible API: `Authorization: Bearer <code>` at `http://<server>:8000/ai/v1`. Details: [GUIDE.md](GUIDE.md#a-home-server-advanced).
 
 ## Security
 
