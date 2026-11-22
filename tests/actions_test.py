@@ -14,6 +14,7 @@ WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
 # The only jobs that get a write token, and what each may write. Anything else is read-only.
 WRITES = {
     ("pr-gate.yml", "gate"): {"issues", "pull-requests"},      # closes outside PRs without an accepted issue
+    ("pr-gate.yml", "forms"): {"issues"},                      # closes outside issues filed without a form
     ("pr-gate.yml", "labels"): {"issues"},                     # creates the gate's labels, run by hand
     ("sizes.yml", "commit"): {"contents"},                     # commits builder sizes; runs no kit code
     ("pins.yml", "commit"): {"contents"},                      # commits program pins; runs no kit code
@@ -22,9 +23,10 @@ WRITES = {
 # Actions from GitHub itself and OpenSSF's Scorecard, at a full commit SHA: a tag can be moved to new code.
 ALLOWED = re.compile(r"^(actions/[\w.-]+|github/codeql-action/[\w.-]+|ossf/scorecard-action)@[0-9a-f]{40}$")
 # Events an outsider can fire that run this repo's workflows with a write token and secrets.
-PRIVILEGED = {"pull_request_target", "workflow_run", "issue_comment", "pull_request_review",
+PRIVILEGED = {"pull_request_target", "workflow_run", "issues", "issue_comment", "pull_request_review",
               "pull_request_review_comment", "discussion", "discussion_comment"}
-GATE = "pr-gate.yml"    # the one pull_request_target workflow: GitHub's API through github-script, nothing else
+GATE = "pr-gate.yml"    # the one workflow those may start: GitHub's API through github-script, nothing else
+GATE_EVENTS = {"pull_request_target", "issues"}
 
 
 def parse(text):
@@ -89,12 +91,12 @@ def problems(name, text):
     events = {p[1] for p, _, _, _ in nodes if len(p) > 1 and p[0] == "on"}
     events |= {e for p, v, _, _ in nodes if p == ("on",) for e in re.findall(r"[\w-]+", v)}
     for e in sorted(events & PRIVILEGED):
-        if not (e == "pull_request_target" and name == GATE):
+        if not (e in GATE_EVENTS and name == GATE):
             errs.append(f"triggers on {e}, which runs with a write token on outsiders' input")
-    if "pull_request_target" in events:
+    if events & GATE_EVENTS:
         for p, v, _, n in nodes:
             if p[-1] == "uses" and not v.startswith("actions/github-script@"):
-                errs.append(f"line {n}: {v} in a pull_request_target workflow; use the API through github-script")
+                errs.append(f"line {n}: {v} in the gate, which strangers trigger; use the API through github-script")
         if re.search(r"head\.sha|head\.ref|head_ref|refs/pull/", text):
             errs.append("a pull_request_target workflow names the pull request's code; it must never fetch or run it")
 
@@ -135,6 +137,7 @@ BAD = {
     "issue_comment": JOB.replace("on: push", "on:\n  issue_comment:") + "      - run: true\n",
     "workflow_run": JOB.replace("on: push", "on: [push, workflow_run]") + "      - run: true\n",
     "pull_request_target outside the gate": JOB.replace("on: push", "on:\n  pull_request_target:") + "      - run: true\n",
+    "issues outside the gate": JOB.replace("on: push", "on:\n  issues:\n    types: [opened]") + "      - run: true\n",
     "an expression in run": JOB + "      - run: |\n          echo hi\n          echo \"${{ github.event.issue.title }}\"\n",
     "an expression in a one-line run": JOB + "      - run: echo ${{ inputs.words }}\n",
     "an expression in script": JOB + "      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8\n"
@@ -147,6 +150,8 @@ GATE_BAD = {
                             f"    steps:\n      - uses: {PIN}\n        with:\n          persist-credentials: false\n",
     "fetching the pull request in the gate": "permissions: {}\non:\n  pull_request_target:\njobs:\n  gate:\n"
                                              "    runs-on: ubuntu-latest\n    steps:\n      - run: git fetch origin refs/pull/1/head\n",
+    "checkout in the gate's issue job": f"permissions: {{}}\non:\n  issues:\njobs:\n  forms:\n    runs-on: ubuntu-latest\n"
+                                        f"    steps:\n      - uses: {PIN}\n        with:\n          persist-credentials: false\n",
 }
 
 

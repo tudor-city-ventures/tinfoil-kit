@@ -54,7 +54,7 @@ const m = { exports: {} };
 new Function("module", "exports", h.split("<script>")[1].split("</script>")[0])(m, m.exports);
 if (typeof m.exports.isMapQuestion !== "function") throw new Error("Kit not exported");'
 
-step "pull request gate"
+step "contribution gate"
 out=$(node tests/pr_gate_test.js 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1

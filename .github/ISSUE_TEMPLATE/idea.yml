@@ -1,10 +1,17 @@
 name: Idea or change
-description: Something to add or change, including a new library, map or model source
-labels: [enhancement]
+description: Something to add or change, including a new library, map or model source, or a fix to the website or the guide
+labels: [enhancement, needs-triage]
 body:
-  - type: markdown
+  - type: checkboxes
+    id: first
     attributes:
-      value: If the maintainer wants it, they'll label this issue `accepted`. Wait for that before you open a pull request; others are closed automatically.
+      label: Before you start
+      description: If the maintainer wants it, they'll label this issue `accepted`. Wait for that before you open a pull request; others are closed automatically.
+      options:
+        - label: I searched the open and closed issues, and this isn't one of them.
+          required: true
+        - label: I read [CONTRIBUTING](https://github.com/tudor-city-ventures/tinfoilkit/blob/main/.github/CONTRIBUTING.md).
+          required: true
   - type: textarea
     id: what
     attributes:
@@ -16,7 +23,7 @@ body:
     id: details
     attributes:
       label: Details
-      description: For a library source, its exact name from `./kit search WORDS` and its rough size. Links and anything else that helps.
+      description: For a library source, its exact name from `./kit search WORDS` and its rough size. For the website or the guide, the page and the fix. Links and anything else that helps.
   - type: dropdown
     id: pr
     attributes:
@@ -26,10 +33,13 @@ body:
         - No, I'm suggesting it
     validations:
       required: true
-  - type: checkboxes
-    id: checks
+  - type: dropdown
+    id: ai
     attributes:
-      label: Before you send it
+      label: AI use
+      description: Did an AI tool write any of this?
       options:
-        - label: I searched the open issues and this isn't one of them.
-          required: true
+        - "No"
+        - Yes, and I checked every word
+    validations:
+      required: true
