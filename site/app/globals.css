@@ -853,7 +853,7 @@ footer a {
 footer a:hover {
   color: #f2a878;
 }
-/* The three versions of the site, one for each way in, each a page of its own */
+/* The two versions of the site, one for each way in, each a page of its own */
 .versions {
   background: var(--ink);
 }
@@ -1003,9 +1003,6 @@ dialog.dl::backdrop {
 .dl-list li.mine {
   background: var(--paper2);
 }
-.dl-list li.mine .btn {
-  background: #e4672f;
-}
 .dl-list b {
   display: block;
   font-size: 18px;
@@ -1014,11 +1011,6 @@ dialog.dl::backdrop {
   font-size: 15px;
   line-height: 1.4;
   color: var(--ink2);
-}
-.dl-list .btn {
-  min-height: 44px;
-  font-size: 15px;
-  padding: 0 16px;
 }
 .dl p.dl-fine {
   font-size: 14px;
@@ -1058,45 +1050,6 @@ dialog.dl::backdrop {
 .dl b {
   color: var(--ink);
 }
-.dl-back {
-  align-self: flex-start;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--ink);
-  border-radius: 4px;
-  background: transparent;
-  font: 500 14px var(--mono);
-  color: var(--ink);
-  cursor: pointer;
-}
-.dl-back:hover {
-  background: var(--paper2);
-}
-.dl-distros {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.dl-distros li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  align-items: baseline;
-  font-size: 15px;
-  color: var(--ink2);
-}
-.dl-distros span {
-  min-width: 150px;
-}
-.dl code {
-  font: 13px/1.6 var(--mono);
-  background: var(--paper2);
-  padding: 2px 6px;
-  overflow-wrap: anywhere;
-}
 .dl-row {
   display: flex;
   flex-wrap: wrap;
@@ -1121,76 +1074,6 @@ dialog.dl::backdrop {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--ink);
-}
-.dl-cmd {
-  margin: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--ink);
-  background: var(--paper2);
-  font: 13px/1.6 var(--mono);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-/* what the Mac shows, drawn small, so it's familiar when it appears */
-.mock {
-  margin-top: 12px;
-  font:
-    12px/1.35 -apple-system,
-    BlinkMacSystemFont,
-    "Helvetica Neue",
-    sans-serif;
-  color: #1d1d1f;
-}
-.mac-alert {
-  width: 230px;
-  max-width: 100%;
-  box-sizing: border-box;
-  padding: 16px 14px 14px;
-  border-radius: 14px;
-  background: #ececec;
-  border: 1px solid #c4c4c4;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-.mac-alert b {
-  color: #1d1d1f;
-  font-size: 13px;
-}
-.mbtn {
-  display: block;
-  align-self: stretch;
-  padding: 5px 10px;
-  border-radius: 7px;
-  background: #fff;
-  border: 1px solid #c4c4c4;
-  text-align: center;
-}
-.mbtn.blue {
-  background: #0058d0;
-  border-color: #0058d0;
-  color: #fff;
-}
-.mock .hit {
-  outline: 3px solid var(--signal);
-  outline-offset: 2px;
-}
-.mac-pane {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  max-width: 440px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #fff;
-  border: 1px solid #c4c4c4;
-}
-.mac-pane .mbtn {
-  align-self: auto;
-  flex: none;
 }
 .faq div[itemprop="text"] {
   max-width: 760px;
@@ -1278,6 +1161,27 @@ code {
   text-transform: uppercase;
   vertical-align: 3px;
   color: var(--signal-text);
+}
+/* The downloads, until they come: a quiet tag, and a button that can't be pressed */
+.soon {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid var(--ink2);
+  border-radius: 3px;
+  font: 600 11px/1.4 var(--mono);
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink2);
+}
+.btn:disabled {
+  border-style: dashed;
+  color: var(--ink2);
+  background: transparent;
+  cursor: default;
+}
+.dl .dl-ai {
+  align-self: flex-start;
 }
 /* My AI installs it: what your AI does, beside a sketch of its window */
 .example {
@@ -1525,7 +1429,7 @@ pre.code {
 @media (max-width: 600px) {
   .versions .wrap {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
   .versions a {
     padding: 4px 6px;

@@ -24,13 +24,12 @@ export const metadata = {
 
 export const viewport = { themeColor: "#F3F0E6" };
 
-// Before the page draws: mark that scripts run (the CSS uses it), and send old links on to where their part moved. The
-// agent version was /?for=agent (Vercel redirects that too); the kit builder and the prompts went to /ai-setup.
+// Before the page draws: mark that scripts run (the CSS uses it), and send old links to the agent version on to
+// /agents. It was /?for=agent (Vercel redirects that too), and its instructions were at #instructions.
 const early = `(function (d, l) {
   d.classList.add("js");
   if (l.pathname !== "/") return;
   if (new URLSearchParams(l.search).get("for") === "agent" || l.hash === "#instructions") l.replace("/agents");
-  else if (l.hash === "#builder" || l.hash === "#prompts") l.replace("/ai-setup" + l.hash);
 })(document.documentElement, location);`;
 
 export default function RootLayout({ children }) {

@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// The three versions of the site, one for each way in. Each is a page of its own, so search engines rank them apart.
+// The two versions of the site, one for each way in. Each is a page of its own, so search engines rank them apart.
 const VERSIONS = [
-  ["/", "I'll install it"],
-  ["/ai-setup", "My AI installs it"],
+  ["/", "My AI installs it"],
   ["/agents", "I'm an AI"],
 ];
 

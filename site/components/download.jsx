@@ -1,38 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { copyText, selectNode } from "@/components/copy";
 import { INSTALL_PROMPT } from "@/components/prompts";
 
-const RELEASES = "https://github.com/tudor-city-ventures/tinfoil-kit/releases";
+// The downloads are coming soon: the Mac's waits for Apple to sign and notarize the Mac app (docs/RELEASING.md). Until
+// then they show, marked coming soon, and setup is the command an AI gives: it downloads the same kit with curl, so
+// neither macOS nor Windows marks it as downloaded from the internet and stops it.
 const DOWNLOADS = [
-  {
-    os: "mac",
-    name: "Mac",
-    detail: "Apple silicon (M1 or newer)",
-    note: "For Macs with Apple silicon (M1 or newer).",
-    file: "TinfoilKit-Mac.zip",
-  },
+  { os: "mac", name: "Mac", detail: "Apple silicon (M1 or newer)", shell: "Terminal" },
   {
     os: "windows",
     name: "Windows",
     detail: "Windows 10 or 11, Intel or AMD (x64)",
-    note: "For Windows 10 or 11 PCs with Intel or AMD chips. Experimental for now.",
-    file: "TinfoilKit-Windows.zip",
+    shell: "PowerShell",
     experimental: true,
   },
   {
     os: "linux",
     name: "Linux",
     detail: "Ubuntu, Debian, Fedora, Arch and others, Intel or AMD (x64)",
-    note: "For Linux PCs with Intel or AMD chips. Experimental for now.",
-    file: "TinfoilKit.tar.gz",
+    shell: "a terminal",
     experimental: true,
   },
 ];
-// Windows and Linux are experimental until they've had the Mac's testing on real computers.
-const EXPERIMENTAL = "experimental for now: it's tested less than on a Mac, so expect rough edges.";
 
 function detectOS() {
   const ua = navigator.userAgent; // iPads ask for the desktop site as a Mac, but have a touch screen
@@ -44,21 +35,18 @@ function detectOS() {
 }
 
 // Set up with your AI opens a dialog with the setup prompt to copy into any AI chat. Before the script runs, it goes to
-// the prompts on the My AI installs it page.
+// the prompts further down the page. onClick runs first, as when the downloads dialog closes to make way.
 let openSetup = null;
-export function SetupLink(props) {
-  return <a {...props} href="/ai-setup#prompts" aria-haspopup="dialog" onClick={(e) => openSetup && openSetup(e)} />;
-}
-
-// A download link in the copy: the dialog that lists every computer's, this one's first.
-let openDownloads = null;
-export function DownloadLink(props) {
+export function SetupLink({ onClick, ...props }) {
   return (
     <a
       {...props}
-      href={`${RELEASES}/latest`}
+      href="#prompts"
       aria-haspopup="dialog"
-      onClick={(e) => openDownloads && openDownloads(e)}
+      onClick={(e) => {
+        if (onClick) onClick(e);
+        if (openSetup) openSetup(e);
+      }}
     />
   );
 }
@@ -133,7 +121,7 @@ function SetupDialog({ phone }) {
           </ol>
           <p className="dl-fine">
             Want to choose what goes in first? Use the{" "}
-            <a href="/ai-setup#builder" onClick={close}>
+            <a href="#builder" onClick={close}>
               kit builder
             </a>
             . Want to check the code before you run it?{" "}
@@ -148,99 +136,69 @@ function SetupDialog({ phone }) {
   );
 }
 
-// The hero's two ways in, Download and Set up with your AI, with "or" between them. Download gets this computer's file,
-// All downloads lists them all, and once a download starts the dialog says what to click next. Before the script runs,
-// it opens the release page, which lists every file. On the home page, Set up with your AI goes to the My AI installs it
-// page; there, lead="ai" puts it first and it opens the prompt. The children are the hero's other links, beside the
-// buttons.
-export default function Download({ lead = "download", children }) {
+// The hero's way in, Set up with your AI, then "or" and this computer's download, which is coming soon. All downloads
+// lists the three, each coming soon, with the way in that works now. The children are the hero's other links.
+export default function Download({ children }) {
   const dialog = useRef(null);
   const [os, setOS] = useState("");
-  const [view, setView] = useState("all");
   useEffect(() => {
     if (dialog.current.showModal) setOS(detectOS()); // the user agent is only known here, after the server's HTML
   }, []);
   const mine = DOWNLOADS.find((d) => d.os === os);
   const list = mine ? [mine, ...DOWNLOADS.filter((d) => d !== mine)] : DOWNLOADS;
-
-  function show(next) {
+  const close = () => dialog.current.close();
+  function showAll() {
     if (!dialog.current.showModal) return;
-    flushSync(() => setView(next));
-    if (!dialog.current.open) dialog.current.showModal();
+    dialog.current.showModal();
     dialog.current.querySelector(".dl-box").scrollTop = 0;
   }
-  useEffect(() => {
-    openDownloads = (e) => {
-      if (!dialog.current.showModal) return;
-      e.preventDefault();
-      show("all");
-    };
-    return () => {
-      openDownloads = null;
-    };
-  });
-  function get(e) {
-    if (mine) return show(mine.os); // the download starts, and the dialog says what to click
-    if (!dialog.current.showModal) return; // the release page lists every file
-    e.preventDefault();
-    show("all");
-  }
-
-  const getKit = (
-    <a
-      className={lead === "ai" ? "btn" : "btn primary"}
-      id="getKit"
-      href={mine ? `${RELEASES}/latest/download/${mine.file}` : `${RELEASES}/latest`}
-      onClick={get}
-    >
-      {mine ? `Download for ${mine.name}` : "Download free"}
-    </a>
-  );
-  const askAI =
-    lead === "ai" ? (
-      <SetupLink className="btn primary" id="askAI">
-        Set up with your AI
-      </SetupLink>
-    ) : (
-      <a className="btn" id="askAI" href="/ai-setup">
-        Set up with your AI
-      </a>
-    );
   return (
     <>
       <div className="ctas">
-        {lead === "ai" ? askAI : getKit}
+        <SetupLink className="btn primary" id="askAI">
+          Set up with your AI
+        </SetupLink>
         <span className="or">or</span>
-        {lead === "ai" ? getKit : askAI}
+        <button type="button" className="btn" id="getKit" disabled>
+          {mine ? `Download for ${mine.name}` : "Download"} <em className="soon">Coming soon</em>
+        </button>
         {children}
       </div>
       <p className="cta-note">
-        <span id="getFor">{mine ? mine.note : "For Macs, and for Windows and Linux PCs (experimental for now)."}</span>{" "}
-        <button type="button" className="all-dl" id="allDl" aria-haspopup="dialog" onClick={() => show("all")}>
+        <span id="getFor">
+          Paste one prompt into ChatGPT, Claude or any AI chat. It asks what you want, then gives you one command to
+          paste into {mine ? mine.shell : "your terminal"}.
+          {mine && mine.experimental ? ` On ${mine.name}, the kit is experimental for now.` : ""}
+        </span>{" "}
+        <button type="button" className="all-dl" id="allDl" aria-haspopup="dialog" onClick={showAll}>
           All downloads
         </button>
       </p>
-      {lead === "ai" ? <SetupDialog phone={os === "phone"} /> : null}
+      <SetupDialog phone={os === "phone"} />
       <dialog
         id="downloads"
         className="dl"
         aria-labelledby="dlTitle"
         ref={dialog}
-        onClick={(e) => e.target === dialog.current && dialog.current.close()}
+        onClick={(e) => e.target === dialog.current && close()}
       >
         <div className="dl-box">
           <div className="dl-head">
             <h2 id="dlTitle">Download Tinfoil Kit</h2>
-            <button type="button" className="dl-x" aria-label="Close" onClick={() => dialog.current.close()}>
+            <button type="button" className="dl-x" aria-label="Close" onClick={close}>
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 5l14 14M19 5L5 19" stroke="currentColor" strokeWidth="2.5" />
               </svg>
             </button>
           </div>
-          <div data-view="all" hidden={view !== "all"}>
+          <div className="dl-body">
             <p className="dl-phone" hidden={os !== "phone"}>
-              Tinfoil Kit runs on a laptop or desktop, not on a phone or tablet. Open this page on your computer to
-              download it.
+              Tinfoil Kit runs on a laptop or desktop, not on a phone or tablet. Open this page on your computer to set
+              it up.
+            </p>
+            <p>
+              Downloads you double-click are coming soon. Until then, your AI sets the kit up with one command, on all
+              three.
             </p>
             <ul className="dl-list">
               {list.map((d) => (
@@ -252,112 +210,17 @@ export default function Download({ lead = "download", children }) {
                     </b>
                     <span>{d.detail}</span>
                   </div>
-                  <a
-                    className="btn"
-                    data-get={d.os}
-                    href={`${RELEASES}/latest/download/${d.file}`}
-                    onClick={() => show(d.os)}
-                  >
-                    Download for {d.name}
-                  </a>
+                  <em className="soon">Coming soon</em>
                 </li>
               ))}
             </ul>
+            <SetupLink className="btn primary dl-ai" onClick={close}>
+              Set up with your AI
+            </SetupLink>
             <p className="dl-fine">
-              It's the same kit on all three, and a kit on an exFAT drive starts on any of them. Every version, and the
-              source code: <a href={RELEASES}>GitHub releases</a>.
+              It's the same kit on all three, and a kit on an exFAT drive starts on any of them. Windows and Linux are
+              experimental for now: they're tested less than the Mac, so expect rough edges.
             </p>
-          </div>
-          <div data-view="mac" hidden={view !== "mac"}>
-            <p>Your download has started. Here's what to click.</p>
-            <ol className="dl-steps">
-              <li>
-                Open your Downloads folder. Safari unzips the download into the <b>Tinfoil Kit</b> app by itself. In
-                another browser, double-click <b>TinfoilKit-Mac.zip</b> first.
-              </li>
-              <li>
-                Double-click <b>Tinfoil Kit</b>. Your Mac asks whether to open an app from the internet: click{" "}
-                <b>Open</b>.
-                <div className="mock mac-alert" aria-hidden="true">
-                  <img src="/icon.svg" width="32" height="32" alt="" />
-                  <b>“Tinfoil Kit” is an app downloaded from the Internet. Are you sure you want to open it?</b>
-                  <span>Apple checked it for malicious software and none was detected.</span>
-                  <span className="mbtn">Cancel</span>
-                  <span className="mbtn hit">Open</span>
-                </div>
-              </li>
-              <li>
-                It offers to move itself to your Applications folder, where you'll look for it in an outage: click{" "}
-                <b>Move to Applications</b>. Then click <b>Set Up</b>.
-              </li>
-            </ol>
-            <p>
-              Setup runs in a Terminal window. It asks where you live, and whether the kit goes on this Mac or an
-              external drive, with what fits on each. If your Mac asks whether Terminal may use files on a removable
-              volume, click Allow. Then it says how long the downloads take on your connection, gets a small kit to try,
-              about 10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes.
-              To get the rest, click <b>Update</b> in the app. In an outage, open Tinfoil Kit from Applications.
-            </p>
-            <button type="button" className="dl-back" onClick={() => show("all")}>
-              All downloads
-            </button>
-          </div>
-          <div data-view="windows" hidden={view !== "windows"}>
-            <p>Your download has started. Tinfoil Kit on Windows is {EXPERIMENTAL} Here's what to click.</p>
-            <ol className="dl-steps">
-              <li>
-                In your Downloads folder, right-click <b>TinfoilKit-Windows</b>, choose <b>Extract All</b>, then{" "}
-                <b>Extract</b>.
-              </li>
-              <li>
-                In the new TinfoilKit folder, open <b>app</b> and double-click <b>SETUP-Windows</b>.
-              </li>
-              <li>
-                If Windows says it protected your PC, click <b>More info</b>, then <b>Run anyway</b>. It only asks once.
-              </li>
-            </ol>
-            <p>
-              SETUP then asks where you live and whether the kit goes on this PC or an external drive, with what fits on
-              each. Then it says how long the downloads take on your connection, gets a small kit to try, about
-              10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes. To get
-              the rest, double-click <b>SETUP-Windows</b> again.
-            </p>
-            <button type="button" className="dl-back" onClick={() => show("all")}>
-              All downloads
-            </button>
-          </div>
-          <div data-view="linux" hidden={view !== "linux"}>
-            <p>
-              Your download has started. Tinfoil Kit on Linux is {EXPERIMENTAL} In a terminal, install curl if it's
-              missing:
-            </p>
-            <ul className="dl-distros">
-              <li>
-                <span>Ubuntu, Debian, Mint</span>
-                <code>sudo apt install curl</code>
-              </li>
-              <li>
-                <span>Fedora</span>
-                <code>sudo dnf install curl openssl3-libs</code>
-              </li>
-              <li>
-                <span>Arch, Manjaro</span>
-                <code>sudo pacman -S curl</code>
-              </li>
-            </ul>
-            <p>Then unpack the kit and start SETUP:</p>
-            <pre className="dl-cmd">
-              {"cd ~/Downloads && tar -xf TinfoilKit.tar.gz && bash TinfoilKit/app/SETUP.command"}
-            </pre>
-            <p>
-              It asks where you live, and whether the kit goes on this computer or an external drive, with what fits on
-              each. Then it says how long the downloads take on your connection, gets a small kit to try, about
-              10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes, and
-              how to get it.
-            </p>
-            <button type="button" className="dl-back" onClick={() => show("all")}>
-              All downloads
-            </button>
           </div>
         </div>
       </dialog>

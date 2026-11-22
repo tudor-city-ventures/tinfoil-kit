@@ -18,7 +18,7 @@ SETUP does all of it (update, plan, sync, test), and `--yes` asks nothing:
     bash ~/TinfoilKit/app/SETUP.command --yes
     & "$HOME\TinfoilKit\app\SETUP-Windows.bat" --yes
 
-On a drive: `bash /Volumes/NAME/TinfoilKit/app/SETUP.command --yes`, or `E:\TinfoilKit\app\SETUP-Windows.bat --yes`. Double-clicking SETUP does the same, as does Update in the Mac app.
+On a drive: `bash /Volumes/NAME/TinfoilKit/app/SETUP.command --yes`, or `E:\TinfoilKit\app\SETUP-Windows.bat --yes`. Double-clicking SETUP does the same.
 
 Step by step, in the app folder:
 
@@ -36,7 +36,7 @@ In a git checkout, `git pull` replaces `./kit update`.
 - `./kit plan` marks each item ok, NEW, UPDATE, later or ERROR. later is a big book keeping the edition it has until its refresh_days pass: Wikipedia keeps its edition for a year.
 - `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit works with what it has meanwhile.
 - `./kit test` exits 0 when every part starts offline and answers. If not, see the tinfoil-status skill.
-- Only what changed downloads. A newer download of the kit (a new ZIP, or a new Mac app) finds this kit and updates it, so nothing downloads twice.
+- Only what changed downloads. A newer download of the kit finds this kit and updates it, so nothing downloads twice.
 
 ## Choices along the way
 

@@ -52,8 +52,8 @@ export default function Agents() {
           <p className="lede">
             You're helping someone set up Tinfoil Kit. Everything you need is below, the same markdown as{" "}
             <a href="/llms.txt">tinfoilkit.com/llms.txt</a>: what it runs on, how it works, what to ask, the one command
-            to hand over, and how to update, fix and remove it. Not an AI? <a href="/ai-setup">My AI installs it</a> has
-            a prompt to paste into yours.
+            to hand over, and how to update, fix and remove it. Not an AI? <a href="/">My AI installs it</a> has a
+            prompt to paste into yours.
           </p>
           <div className="prompt">
             <div className="bar">

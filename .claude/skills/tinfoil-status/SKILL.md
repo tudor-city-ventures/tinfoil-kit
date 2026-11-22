@@ -43,7 +43,7 @@ The logs are in data/logs: sync-*.log for downloads, llama-server.log for the AI
 
 ## Open it
 
-- Mac: open the Tinfoil Kit app, or double-click Open Tinfoil Kit.command in the app folder, or run `bash "Open Tinfoil Kit.command"`.
+- Mac: double-click Open Tinfoil Kit.command in the app folder, or run `bash "Open Tinfoil Kit.command"`.
 - Windows: double-click Open Tinfoil Kit for Windows.bat in the app folder, or run `& ".\Open Tinfoil Kit for Windows.bat"`.
 - Linux: `bash "Open Tinfoil Kit.command"`.
 

@@ -14,8 +14,7 @@ external drive. Print this page and keep it handy (with the drive, if the kit is
    `TinfoilKit` in your home folder, then `app` (Mac: in Finder choose **Go > Home**. Windows: in File Explorer, your
    user folder, `C:\Users\<you>`).
 3. Start it:
-   - **Mac**: open the **Tinfoil Kit** app if this Mac has it (in Applications, or search for it with Spotlight).
-     Otherwise double-click **`Open Tinfoil Kit.command`**. If macOS won't open it, open Terminal and type `bash ` (with
+   - **Mac**: double-click **`Open Tinfoil Kit.command`**. If macOS won't open it, open Terminal and type `bash ` (with
      a space), drag `Open Tinfoil Kit.command` into the window, and press Return. That always works.
    - **Windows**: double-click **`Open Tinfoil Kit for Windows.bat`**. If Windows says it protected your PC, click
      **More info**, then **Run anyway**.
@@ -97,11 +96,11 @@ backup, and it's handy for planning on a big screen and for the AI questions.
 
 ## Update it (whenever you like, while you have internet)
 
-There's no schedule. Click **Update** in the Mac app, or double-click `SETUP.command` in the kit's app folder
-(`SETUP-Windows.bat` on Windows; on Linux, `bash SETUP.command`). It gets the newest version of the kit itself, with any
-models and books added since, then the newest editions of everything, checks every file, and starts it all once offline
-to make sure it works. Or open a terminal in the app folder (Mac: drag the `app` folder onto the Terminal icon; Windows:
-right-click the folder, **Open in Terminal**) and run these (on Windows, `.\kit.cmd` in place of `./kit`):
+There's no schedule. Double-click `SETUP.command` in the kit's app folder (`SETUP-Windows.bat` on Windows; on Linux,
+`bash SETUP.command`). It gets the newest version of the kit itself, with any models and books added since, then the
+newest editions of everything, checks every file, and starts it all once offline to make sure it works. Or open a
+terminal in the app folder (Mac: drag the `app` folder onto the Terminal icon; Windows: right-click the folder, **Open
+in Terminal**) and run these (on Windows, `.\kit.cmd` in place of `./kit`):
 
 ```
 ./kit update    # gets the newest signed version of the kit itself, keeping your kit.json changes
@@ -115,10 +114,10 @@ released with (the AI engine and the rest), new library editions, any re-release
 the directions network takes 10 to 40 minutes). Wikipedia is the exception: at up to 127 GB, it keeps the edition it has
 until that one is a year old. Then pull the plug on Wi-Fi and open the kit once for real.
 
-A newer download of the kit (a new ZIP, or a new Mac app) finds this kit and updates it, so nothing it has downloads
-again. SETUP shows what's new before anything downloads: say no, and the kit keeps working with what it has. You can
-also delete the kit's `app` folder any time and put a new download's `app` folder in its place: what the kit downloaded
-(`downloads`) and your settings, notes and pins (`data`) stay as they are.
+A newer download of the kit finds this kit and updates it, so nothing it has downloads again. SETUP shows what's new
+before anything downloads: say no, and the kit keeps working with what it has. You can also delete the kit's `app`
+folder any time and put a new download's `app` folder in its place: what the kit downloaded (`downloads`) and your
+settings, notes and pins (`data`) stay as they are.
 
 Other commands:
 
@@ -147,21 +146,16 @@ new in the kit's own list (`app/kit.json`).
 
 ## First-time setup
 
-1. Download the kit from **tinfoilkit.com**, which picks the file for your computer, and open it: on a Mac, Safari
-   unzips it into the **Tinfoil Kit** app (in another browser, double-click the ZIP). On Windows, right-click it and
-   choose **Extract All**. On Linux, run `tar -xf TinfoilKit.tar.gz`.
-2. Start SETUP:
-   - **Mac**: double-click **Tinfoil Kit** and click **Open** when macOS asks about an app from the internet. It offers
-     to move itself to Applications: say yes. Then click **Set Up**, and SETUP starts in a Terminal window.
-   - **Windows**: double-click **`SETUP-Windows.bat`** in the TinfoilKit folder's `app` folder. If Windows says it
-     protected your PC, click **More info**, then **Run anyway**.
-   - **Linux**: open a terminal in `TinfoilKit/app` and run `bash SETUP.command`. It needs curl.
-3. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works too).
+1. On **tinfoilkit.com**, click **Set up with your AI**, copy the prompt into ChatGPT, Claude or any AI chat, and answer
+   its questions. It gives you one command to paste into Terminal on a Mac (press Cmd-Space, type Terminal) or
+   PowerShell on Windows (open Start, type PowerShell). The command downloads the kit and starts SETUP, which asks
+   whatever the command didn't answer (with `--yes`, nothing). Downloads you double-click are coming soon.
+2. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works too).
    That sets the maps' area, directions, address search and home, and offers Wikipedia in your language. Then it asks
    for places nearby to put on the map too, like the state next door: type one at a time, and press Return when that's
    all. Then it asks how much of Wikipedia: all of it (127 GB in English, with pictures), or just the best 50,000
    articles (7 GB with pictures, 3 GB as text).
-4. SETUP says which AI model this computer can run, and asks before downloading any that are too big for it. Then it
+3. SETUP says which AI model this computer can run, and asks before downloading any that are too big for it. Then it
    asks where the kit should go, says how much room each place has, and moves the kit there for you. If all of it won't
    fit, or would leave less than about 10% of the computer's disk (5% of a drive) free, it says so and offers just the
    essentials: the AI, the medical, preparedness and repair books, the map, and Wikipedia's best articles as text.
@@ -172,19 +166,20 @@ new in the kit's own list (`app/kit.json`).
      unplugging, especially with exFAT. If macOS asks whether Terminal may access files on a removable volume, say yes.
    - **This computer**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder and leaves 50 GB free
      for the computer. On a Mac what it downloads stays out of Time Machine backups; your settings don't.
-5. Before it downloads, it times your connection for a few seconds and says how long the kit to try and all of it take.
+4. Before it downloads, it times your connection for a few seconds and says how long the kit to try and all of it take.
    It gets a small kit to try first (about 10 GB: a small AI, a few medical and how-to books, and your area's map),
    starts each part offline to check it answers, and offers to open it. Turn off Wi-Fi and try it: from then on, the kit
    works. It also says how big the rest is and how long it takes on your connection.
-6. When you're ready for the rest, start SETUP again (or click **Update** in the Mac app). It asks what you want in the
-   kit, the same choices as the kit builder on tinfoilkit.com, shows what that comes to and how long it takes, then gets
-   it (about 200 to 300 GB for the recommended kit; from about 20 GB for just the essentials to about 900 GB for
-   everything), showing the time left as it goes, and checks again. Then it removes the try-it files you didn't pick.
-   Leave the laptop plugged in; it stays awake while this runs, and the kit works the whole time. If you stop it, start
-   SETUP in the kit's app folder again and it picks up where it left off. If it ends with "some downloads didn't
-   finish", the kit already works with what it has: run SETUP again later for the rest. With just the essentials, a
-   later SETUP offers the rest once there's room. `./kit essentials off` asks for it any time.
-7. Turn off Wi-Fi and start the kit (see the top of this page).
+5. When you're ready for the rest, start SETUP again: run the command its last message gave, or double-click it in the
+   kit's app folder. Unless you picked already, it asks what you want in the kit, the same choices as the kit builder on
+   tinfoilkit.com. Then it shows what that comes to and how long it takes, gets it (about 200 to 300 GB for the
+   recommended kit; from about 20 GB for just the essentials to about 900 GB for everything), showing the time left as
+   it goes, and checks again. Then it removes the try-it files you didn't pick. Leave the laptop plugged in; it stays
+   awake while this runs, and the kit works the whole time. If you stop it, start SETUP in the kit's app folder again
+   and it picks up where it left off. If it ends with "some downloads didn't finish", the kit already works with what it
+   has: run SETUP again later for the rest. With just the essentials, a later SETUP offers the rest once there's room.
+   `./kit essentials off` asks for it any time.
+6. Turn off Wi-Fi and start the kit (see the top of this page).
 
 In a terminal, SETUP takes every answer as an option, and with `--yes` it asks nothing: for example
 `bash SETUP.command --region texas --this-computer --yes` (on Windows, `.\SETUP-Windows.bat` with the same options) gets
@@ -195,11 +190,10 @@ on the home network.
 
 ## Removing it
 
-Click **Remove** in the Mac app, or double-click `UNINSTALL.command` in the kit's app folder (`UNINSTALL-Windows.bat` on
-Windows; on Linux, `bash UNINSTALL.command`). It shows what it will delete and how much space that frees, and deletes
-the kit and everything it downloaded, your notes and pins too, only after you type `delete`. The files don't go to the
-Trash. To keep your notes, copy `data/notes.txt` somewhere else first. On a drive, nothing else on the drive is touched.
-To remove the Mac app too, drag it from Applications to the Trash.
+Double-click `UNINSTALL.command` in the kit's app folder (`UNINSTALL-Windows.bat` on Windows; on Linux,
+`bash UNINSTALL.command`). It shows what it will delete and how much space that frees, and deletes the kit and
+everything it downloaded, your notes and pins too, only after you type `delete`. The files don't go to the Trash. To
+keep your notes, copy `data/notes.txt` somewhere else first. On a drive, nothing else on the drive is touched.
 
 ## Power
 
