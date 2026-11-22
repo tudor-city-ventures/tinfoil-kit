@@ -12,7 +12,7 @@ W="$KIT_TEST_WORK" R="$KIT_TEST_WORK/remote" L="$KIT_TEST_WORK/logs"
 mkdir -p "$L"
 D="$W/drive/TinfoilKit" A="$W/drive/TinfoilKit/app"    # the kit folder, and its code as a release has it
 
-cleanup() { pkill -f tools/launch.sh; pkill -f "Open Tinfoil Kit"; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; pkill -f "share.py serve";
+cleanup() { pkill -f 'tools/launch.sh|tools/tinfoilkit-'; pkill -f "Open Tinfoil Kit"; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; pkill -f "share.py serve";
             pkill -f "mock_services.py (tiles|photon|graphhopper|llama)"; }
 main() {
 cleanup 2>/dev/null
@@ -59,6 +59,11 @@ step "search";  ./kit search test | head -2
 step "share on the home network"; ./kit share on --code 13572468 | head -2
 step "launcher"; (timeout 900 bash "Open Tinfoil Kit.command" --no-browser > "$L/launch.out" 2>&1 &); sleep 12
 grep -E "Library:|AI:|Maps|home network|Access code" "$L/launch.out"
+# With the kit's own program built (e2e.yml builds it), the launcher hands over to it.
+if [ -f tools/tinfoilkit-linux-x64 ]; then
+  pgrep -f "tools/tinfoilkit-linux-x64 open" > /dev/null && echo "ok: the kit's own program runs it" ||
+    echo "FAIL: the launcher didn't hand over to the kit's own program"
+fi
 finder_files_left "the launcher"
 # What a phone on the home network opens: this machine's network address, from the launcher's message.
 KIT_SHARE_URL="$(sed -n 's/.*open \(http:[^ ]*\) on a phone.*/\1/p' "$L/launch.out" | head -1)"

@@ -1507,31 +1507,32 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           rc == rc2 == 0 and not gone.exists() and not gone2.exists(), out + out2)
 
     def running_kit():
-        """A kit whose AI server is running (a stand-in that sleeps), removed with --yes."""
+        """A kit whose AI server and own program are running (stand-ins that sleep), removed with --yes."""
         gone = work / "gone" / "TinfoilKit"
         shutil.rmtree(gone.parent, ignore_errors=True)
-        srv = gone / "downloads" / "bin" / "llama.cpp-test" / "llama-server"
-        srv.parent.mkdir(parents=True)
-        srv.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(300)\n")
-        srv.chmod(0o755)
-        proc = subprocess.Popen([str(srv)])
-        (gone / "app" / "tools").mkdir(parents=True)
+        procs = []
+        for srv in (gone / "downloads" / "bin" / "llama.cpp-test" / "llama-server", gone / "app" / "tools" / "tinfoilkit-test"):
+            srv.parent.mkdir(parents=True, exist_ok=True)
+            srv.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(300)\n")
+            srv.chmod(0o755)
+            procs.append(subprocess.Popen([str(srv)]))
         shutil.copy(TESTS.parent / "UNINSTALL.command", gone / "app")
         (gone / "app" / "kit").write_text("#!/bin/bash\n")
         (gone / "app" / "tools" / "kit.py").write_text("# kit\n")
         time.sleep(0.5)
         p = subprocess.run(["bash", str(gone / "app" / "UNINSTALL.command"), "--yes"], capture_output=True, text=True, timeout=60,
                            stdin=subprocess.DEVNULL, env={**os.environ, "HOME": str(work)})
-        try:
-            proc.wait(timeout=10)
-            stopped = True
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            stopped = False
+        stopped = True
+        for proc in procs:
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                stopped = False
         return p.returncode, p.stdout, gone, stopped
 
     rc, out, gone, stopped = running_kit()
-    check("UNINSTALL --yes: no question, stops the kit's running programs, removes it all",
+    check("UNINSTALL --yes: no question, stops the kit's running servers and its own program, removes it all",
           rc == 0 and stopped and not gone.exists() and "Stopping the kit" in out and "Press Return" not in out, out)
 
     # The launcher's first model, by the computer's memory. A stand-in for a running kit answers on both

@@ -66,8 +66,10 @@ fi
 
 # A home server starts the kit with the computer (./kit autostart): undo that, which also stops it.
 ./kit autostart off >/dev/null 2>&1
-# Stop the kit if it's running (its programs run from its downloads), so nothing holds its files open.
-pids="$(ps -axo pid=,command= 2>/dev/null | awk -v a="$KIT/downloads/bin/" -v b="$KIT/bin/" 'index($0, a) || index($0, b) {print $1}')"
+# Stop the kit if it's running (its servers run from its downloads, the kit's own program and the sharing gate from
+# its app folder), so nothing holds its files open or answers once it's gone.
+pids="$(ps -axo pid=,command= 2>/dev/null | awk -v a="$KIT/downloads/bin/" -v b="$KIT/bin/" -v c="$KIT/app/tools/" \
+  'index($0, a) || index($0, b) || index($0, c) {print $1}')"
 if [ -n "$pids" ]; then
   echo "Stopping the kit, which is running..."
   # shellcheck disable=SC2086

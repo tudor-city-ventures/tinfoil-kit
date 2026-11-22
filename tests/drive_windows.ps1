@@ -34,14 +34,16 @@ if (-not $Drive) {
 }
 
 # The kit as a browser leaves a download that File Explorer unzipped: in Downloads, every file marked as from the
-# internet. The website's has the code in TinfoilKit\app; GitHub's Download ZIP (-Flat) has it all in one folder.
-# Its kit.json is the test kit, put in the folder the way one from the website's builder goes in.
+# internet. The website's has the code in TinfoilKit\app, with the kit's own program for each computer in its tools
+# (drive.yml builds them); GitHub's Download ZIP (-Flat) has the code alone, all in one folder. Its kit.json is the
+# test kit, put in the folder the way one from the website's builder goes in.
 function Get-Kit($dir, [switch]$Maps, [switch]$Flat) {
   if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
   New-Item -ItemType Directory -Force (Split-Path $dir) | Out-Null
   $prefix = (Split-Path -Leaf $dir) + $(if ($Flat) { "/" } else { "/app/" })
   git -C $root archive --format=zip "--prefix=$prefix" -o "$work\kit.zip" HEAD
   Expand-Archive "$work\kit.zip" (Split-Path $dir)
+  if (-not $Flat) { Copy-Item "$work\programs\tinfoilkit-*" "$dir\app\tools" }
   $kitjson = @("$tests\drive.py", "kitjson", "$(Get-Code $dir)\kit.json") + @(if ($Maps) { "maps" })
   python @kitjson
   Get-ChildItem -Recurse -File $dir | ForEach-Object {
@@ -101,9 +103,10 @@ function Get-RoomAnswer($dir, $place) {
   if ($room[0] -eq "tight") { "2" } elseif ($room[0] -ne "fits") { "1" }
 }
 
-# The kit's servers, its sharing gate, and the Open Tinfoil Kit windows that started them.
+# The kit's servers, its sharing gate, the kit's own program, and the Open Tinfoil Kit windows that started them.
 function Stop-Kit($kit, $proc) {
-  Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$kit\downloads\bin\", "OrdinalIgnoreCase") } | Stop-Process -Force
+  Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith("$kit\downloads\bin\", "OrdinalIgnoreCase") -or
+    $_.Path.StartsWith("$kit\app\tools\", "OrdinalIgnoreCase")) } | Stop-Process -Force
   $mine = "$kit\app\tools\share.py", "$kit\app\Open Tinfoil Kit for Windows.bat"
   Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and ($mine | Where-Object { $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }) } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
@@ -119,6 +122,14 @@ function Test-Share($kit, $address, $code) {
     Fail "sharing on the home network ($kit)"
     "--- share.log"; Get-Content "$kit\data\logs\share.log" -Tail 15 -ErrorAction SilentlyContinue
   }
+}
+
+# Open Tinfoil Kit for Windows.bat hands over to the kit's own program when the kit has it, as a release's does.
+function Test-Program($kit, $what) {
+  $exe = "$kit\app\tools\tinfoilkit-windows-x64.exe"
+  if (-not (Test-Path $exe)) { "($what has no tinfoilkit-windows-x64.exe, as GitHub's Download ZIP doesn't: the script runs it)"; return }
+  if (Get-Process | Where-Object { $_.Path -ieq $exe }) { "The kit's own program runs $what" }
+  else { Fail "Open Tinfoil Kit for Windows.bat didn't hand over to the kit's own program in $what" }
 }
 
 # Double-click Open Tinfoil Kit for Windows.bat, check the library, the AI and any map, stop it. -Share: with --share, which needs Python
@@ -139,6 +150,7 @@ function Test-Kit($kit, $name, [switch]$Share) {
       if (Test-Path "$kit\data\logs\$f") { "--- $f"; Get-Content "$kit\data\logs\$f" -Tail 15 }
     }
   }
+  Test-Program $kit $name
   if ($Share) {
     for ($i = 0; $i -lt 60 -and -not (Test-Path "$kit\data\.kit\share.json"); $i++) { Start-Sleep 1 }    # the gate makes the code
     $ip = python -c "import sys; sys.path.insert(0, sys.argv[1]); import share; print(share.lan_ips()[0])" "$kit\app\tools"
@@ -173,6 +185,7 @@ if ($Drive) {
   $p = Start-Process "$kit\app\Open Tinfoil Kit for Windows.bat" -WorkingDirectory "$kit\app" -PassThru
   python "$tests\drive.py" check 8888 8080
   if ($LASTEXITCODE -ne 0) { Fail "the kit on the drive after a double-click" }
+  Test-Program $kit "the kit on the drive"
   Start-Sleep 5
   try {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
@@ -261,6 +274,7 @@ if (-not ((Get-Content $startup -Raw -ErrorAction SilentlyContinue) -like "*`"$k
   Fail "SETUP --home-server didn't set the kit to start as you sign in ($startup)"
 }
 Test-Share $kit $address $code    # the kit Windows started from the Startup folder, minimized
+Test-Program $kit "the kit Windows started"
 $out = & "$kit\app\kit.cmd" autostart
 "kit.cmd autostart: $out"
 if ($LASTEXITCODE -ne 0 -or -not ("$out" -match "starts when you sign in")) { Fail "kit.cmd autostart doesn't say the kit starts as you sign in" }
@@ -371,9 +385,11 @@ if (-not (Test-Path "$kit\downloads\models\Tiny")) { Fail "the kit isn't set up 
 if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
 Invoke-Uninstall $kit "uninstall-windows-cmd.log"
 
-# A kit on a drive opened on a PC that never ran SETUP: sharing it needs Python, and this PC's own does.
+# A kit on a drive opened on a PC that never ran SETUP: sharing it needs Python, and this PC's own does. (The kit's
+# own program shares it with no Python, so it's left out here, as GitHub's Download ZIP leaves it out.)
 Step "a kit ./kit sync got, with no SETUP: Open Tinfoil Kit for Windows.bat --share on this PC's own Python"
 Get-Kit $dl
+Remove-Item "$dl\app\tools\tinfoilkit-*"
 Get-ChildItem -Recurse -File $dl | Unblock-File    # no SETUP here to do it, and Open Tinfoil Kit starts with a double-click
 python "$dl\app\tools\kit.py" --root $dl sync --yes *> "$logs\sync-windows-own-python.log"
 "exit $LASTEXITCODE"

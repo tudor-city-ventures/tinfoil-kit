@@ -2,7 +2,8 @@
 # The drive test: the kit on a real exFAT disk, set up on a Mac, then plugged into Windows and Linux.
 # CI runs it nightly and on demand (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive.
 #   tests/drive_test.sh mac     erase a disk image as exFAT the way Disk Utility does, build the Mac app, unzip
-#                               the kit as a download leaves it, run its SETUP against the mock internet and
+#                               the kit as a download leaves it (with the kit's own program, tools/tinfoilkit-*,
+#                               which the launchers hand over to), run its SETUP against the mock internet and
 #                               pick the drive (the try-it kit), run SETUP again from the drive for the rest (it
 #                               builds a small real map there: Andorra's), delete the kit's app folder and run a new
 #                               download's SETUP, which puts its own there, double-click Open Tinfoil Kit, check
@@ -41,15 +42,17 @@ three_folders() { # KIT
 # The kit's servers, gone before the next kit starts: a map server still answering would stand in for the next one's.
 SERVERS='llama-server|kiwix-serve|pmtiles serve|graphhopper-web|photon-'
 stop_kit() {
-  pkill -f tools/launch.sh; sleep 1; pkill -f "$SERVERS"
+  pkill -f 'tools/launch.sh|tools/tinfoilkit-'; sleep 1; pkill -f "$SERVERS"
   for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "$SERVERS" > /dev/null || break; sleep 1; done
 } 2>/dev/null
 
 # The kit as Safari leaves a download: a TinfoilKit folder with the app folder in it, every file marked as from the
-# internet. Its standard list (app/kit.json) is the test kit's; with maps, a map too.
+# internet. Its standard list (app/kit.json) is the test kit's; with maps, a map too. Like a release's download, it
+# has the kit's own program for each computer in its tools (drive.yml builds them; else tools/tinfoilkit/build.sh).
 download_kit() { # KIT [maps]
   rm -rf "$1" && mkdir -p "$1/app"
   git -C "$ROOT" archive HEAD | tar -xf - -C "$1/app"
+  cp "$W"/programs/tinfoilkit-* "$1/app/tools/"
   python3 "$TESTS/drive.py" kitjson "$1/app/kit.json" ${2:-}
   xattr -r -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$1"
 }
@@ -107,6 +110,12 @@ share_check() { # KIT
   python3 "$TESTS/drive.py" share "$addr" "$code" 8888 8080 || fail "the kit shared on the home network"
 }
 
+# Fails unless the kit's own program is what runs the kit: the launchers hand over to it.
+program_runs() { # PROGRAM WHAT [CONTAINER]
+  if [ -n "${3:-}" ]; then docker top "$3" | grep -q "tools/$1 open"; else pgrep -f "tools/$1 open" > /dev/null; fi &&
+    echo "The kit's own program ($1) runs $2" || fail "$2: the launcher didn't hand over to the kit's own program ($1)"
+}
+
 # The Mac app, run the way a test can answer its questions (KIT_APP_ANSWERS): from this shell, which macOS lets use
 # the drive, rather than through open. Waits for it to quit, up to SECONDS (it stays open while the kit runs).
 run_app() { # LOG SECONDS [VAR=VALUE...]
@@ -118,7 +127,7 @@ run_app() { # LOG SECONDS [VAR=VALUE...]
 }
 
 mac() {
-  local img="$W/drive.img" vol=/Volumes/TINFOIL disk kit src mock f much
+  local img="$W/drive.img" vol=/Volumes/TINFOIL disk kit src mock f much same
   local py="$HOME/Library/Application Support/TinfoilKit"    # SETUP's Python for a Mac without one, and the app's notes
   local app="$HOME/Applications/Tinfoil Kit.app"
   step "a 4 GB disk, erased as exFAT the way Disk Utility does"
@@ -127,9 +136,24 @@ mac() {
   disk=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount "$img" | awk 'NR == 1 {print $1}')
   diskutil eraseDisk ExFAT TINFOIL GPT "$disk" || { fail "erase $disk"; return; }
 
+  step "the kit's own program, signed again the way Apple's signing does it: tinfoilkit compare finds only the"
+  echo "signature changed (build.sh verify says so of the Mac app's copy)"
+  [ -f "$W/programs/tinfoilkit-macos-arm64" ] || "$ROOT/tools/tinfoilkit/build.sh" "$W/programs" || fail "the kit's own program didn't build"
+  f="$W/programs/tinfoilkit-macos-arm64"
+  cp "$f" "$W/program-signed" && codesign --force --options runtime --sign - "$W/program-signed"
+  cmp -s "$f" "$W/program-signed" && fail "codesign left the program as it was, so this didn't test compare"
+  same="$("$f" compare "$f" "$W/program-signed")"
+  echo "$same"
+  [ "$same" = "the same apart from the code signature" ] || fail "tinfoilkit compare: $same"
+  printf 'x' | dd of="$W/program-signed" bs=1 seek=4096 conv=notrunc 2> /dev/null    # one byte of its code changed
+  same="$("$f" compare "$f" "$W/program-signed")"
+  [ "$same" = "different" ] || fail "tinfoilkit compare called a changed program \"$same\""
+
   step "the Mac app, built from this commit and signed ad hoc, in Applications as it puts itself"
-  rm -rf "$app" "$W/app"
-  git -C "$ROOT" archive --format=tar --prefix=TinfoilKit/ HEAD | gzip -n > "$W/app-kit.tar.gz"
+  rm -rf "$app" "$W/app" "$W/app-kit" && mkdir -p "$W/app-kit/TinfoilKit"
+  git -C "$ROOT" archive HEAD | tar -xf - -C "$W/app-kit/TinfoilKit"
+  cp "$W"/programs/tinfoilkit-* "$W/app-kit/TinfoilKit/tools/"
+  tar -czf "$W/app-kit.tar.gz" -C "$W/app-kit" TinfoilKit    # a release's archive, which mac/build.sh takes
   if "$ROOT/mac/build.sh" "$W/app-kit.tar.gz" "$W/app" > "$L/mac_app_build.log" 2>&1; then
     tail -1 "$L/mac_app_build.log"
     mkdir -p "${app%/*}" && ditto "$W/app/Tinfoil Kit.app" "$app"
@@ -194,6 +218,7 @@ mac() {
   step "double-click Open Tinfoil Kit.command: Terminal runs it, and it opens the page in Safari"
   open "$kit/app/Open Tinfoil Kit.command"
   python3 "$TESTS/drive.py" check 8888 8080 || { fail "the kit after a double-click"; kit_logs "$kit" tiles.log geocoder.log routing.log; }
+  program_runs tinfoilkit-macos-arm64 "the kit on the drive"
   sleep 5
   screencapture -x "$SHOTS/mac-desktop.png" 2> /dev/null || echo "(no desktop screenshot here)"
 
@@ -204,7 +229,7 @@ mac() {
 
   step "a second address on this Mac's loopback: kiwix-serve keeps only the last one, so it says 127.0.0.1 \"is not"
   echo "available on this system\". Double-click Open Tinfoil Kit.command: the library listens on ::1, and the"
-  echo "launcher forwards 127.0.0.1 to it, on the kit's own Python"
+  echo "kit's own program forwards 127.0.0.1 to it"
   stop_kit
   sudo ifconfig lo0 alias 127.0.0.2 up
   open "$kit/app/Open Tinfoil Kit.command"
@@ -220,6 +245,7 @@ mac() {
     rm -f "$py/last-kit"
     run_app mac_app.log 0 KIT_APP_ANSWERS=0
     python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit the app started (logs/mac_app.log)"
+    program_runs tinfoilkit-macos-arm64 "the kit the app started"
     sleep 3
     screencapture -x "$SHOTS/mac-app.png" 2> /dev/null
     kill -TERM "$APP_PID"
@@ -271,6 +297,7 @@ mac() {
 
   step "the Mac started the kit by itself, shared on its network behind the access code"
   python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit the Mac started"
+  program_runs tinfoilkit-macos-arm64 "the kit the Mac started"
   share_check "$kit"
   cp -R "$kit/data/logs" "$L/mac-home-logs" 2> /dev/null
 
@@ -313,6 +340,7 @@ linux() {
   tr -d '\r' < "$L/home-server.log"
   loginctl show-user "$USER" --property=Linger | grep -q yes || fail "the kit won't start at boot: lingering is off"
   python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit systemd started"
+  program_runs tinfoilkit-linux-x64 "the kit systemd started"
   share_check "$kit"
   cp -R "$kit/data/logs" "$L/linux-drive-logs" 2> /dev/null
 
@@ -348,6 +376,7 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
     window "$name: bash \"Open Tinfoil Kit.command\"" docker logs -f kit
   fi
   python3 "$TESTS/drive.py" check 8888 8080 || { fail "$name"; ok=0; }
+  program_runs tinfoilkit-linux-x64 "$name" ${img:+kit}
   if [ -z "$img" ] && [ "$ok" = 1 ]; then
     step "the page in Chrome"
     if python3 -c "import playwright" 2> /dev/null; then

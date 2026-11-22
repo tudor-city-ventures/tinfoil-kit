@@ -92,6 +92,14 @@ jobs:
           name: mock-internet
           path: tests/work/remote
           retention-days: 1
+      # The kit's own program for each computer, built once: the kits the Mac and Windows set up carry it, as a
+      # release's download does.
+      - run: tools/tinfoilkit/build.sh tests/work/programs
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: programs
+          path: tests/work/programs
+          retention-days: 1
 
   mac:
     needs: fixtures
@@ -112,6 +120,10 @@ jobs:
         with:
           name: mock-internet
           path: tests/work/remote
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: programs
+          path: tests/work/programs
       - name: Set up the drive, start the kit, use the page; then a home server, and uninstall (filmed)
         run: python3 tests/drive.py record mac -- tests/drive_test.sh mac
       - id: made
@@ -193,6 +205,10 @@ jobs:
         with:
           name: mock-internet
           path: tests/work/remote
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: programs
+          path: tests/work/programs
       - name: Unzip the kit in Downloads, double-click SETUP-Windows.bat, Open Tinfoil Kit for Windows.bat, UNINSTALL-Windows.bat (filmed)
         shell: pwsh
         run: |
