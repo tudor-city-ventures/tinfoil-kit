@@ -1,5 +1,6 @@
 import Builder, { CopySetup, Groups, PlaceSelect, Preset, SetupText, SizeSelect, Total, WikiSelect } from '@/components/builder';
 import { CopyButton, Toast } from '@/components/copy';
+import Demo from '@/components/demo';
 import Download, { DownloadLink, SetupLink } from '@/components/download';
 import Header from '@/components/header';
 import Hero from '@/components/hero';
@@ -139,6 +140,16 @@ export default function Home() {
                 <p>Plug the drive into any Mac, Windows or Linux computer and open Tinfoil Kit. The AI, the library and the maps work with no internet.</p>
               </li>
             </ol>
+          </div>
+        </section>
+        <section id="demo" className="band" data-for="human">
+          <div className="wrap section">
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <p className="kicker">Try it</p>
+              <h2>See what you get.</h2>
+              <p style={{ fontSize: "18px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "720px" }}>Tinfoil Kit opens in your browser like a website, but it all runs on your laptop, with no internet. Ask a sample question, plan a route or browse the library. The demo's answers were written ahead of time.</p>
+            </div>
+            <Demo />
           </div>
         </section>
         <section id="builder" className="wrap section" data-for="human">
