@@ -1780,19 +1780,25 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     rc, out = kit("test", root=noai)
     check("test: a kit with every model off doesn't ask for one", "models present" not in out and "without the AI" in out, out)
 
-    # Another program on the library's port (the mock internet, here): the library starts on the next one.
+    # Another program on the library's port (the mock internet, here): the library starts on the next one. The fake
+    # library quits soon after the launcher's first look, which ends the launcher, however slow the computer is.
     fake = work / "fake-kiwix-serve"
     fake.write_text(f"""#!{sys.executable}
 import http.server, sys, threading
 if "--port" not in sys.argv:
     sys.exit(0)
+def stop(after):
+    t = threading.Timer(after, server.shutdown)
+    t.daemon = True
+    t.start()
 class Page(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200); self.end_headers(); self.wfile.write(b"<title>Tinfoil Kit</title>")
+        stop(2)
     def log_message(self, *a):
         pass
 server = http.server.HTTPServer(("127.0.0.1", int(sys.argv[sys.argv.index("--port") + 1])), Page)
-threading.Timer(3, server.shutdown).start()
+stop(30)
 server.serve_forever()
 """)
     fake.chmod(0o755)
