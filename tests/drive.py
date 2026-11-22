@@ -397,7 +397,6 @@ def typed_windows(log, todo, cmd):
     """The same in Windows' pseudo console (pip install pywinpty), for a .bat file: CMD is the file and its
     arguments. set /p reads what's typed there as it does from a keyboard."""
     import ctypes
-    import shutil
     k32 = ctypes.windll.kernel32
     handle, mode = k32.GetStdHandle(-11), ctypes.c_uint32()
     if k32.GetConsoleMode(handle, ctypes.byref(mode)):    # so this window draws the colors and moves it's sent
