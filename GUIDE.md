@@ -91,6 +91,10 @@ editions, any re-released models and fresh map data (rebuilding the
 directions network takes 10 to 40 minutes). Wikipedia is the exception: at 115 GB, it keeps the edition it has
 until that one is a year old. Then pull the plug on Wi-Fi and open the kit once for real.
 
+A newer download of the kit (a new ZIP, or a new Mac app) finds this kit and updates it, so nothing it has
+downloads again. SETUP shows what's new before anything downloads: say no, and the kit keeps working with what it
+has.
+
 Other commands:
 
 ```
@@ -132,10 +136,10 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
    it asks where the kit should go, says how much room each place has, and moves the kit there for you. If all of
    it won't fit, or would leave less than about 10% of the computer's disk (5% of a drive) free, it says so and
    offers just the essentials: the AI, the medical, preparedness and repair books, and the map.
-   - **An external drive**: keep it somewhere safe and plug it in when you need it, into any Mac, Windows PC or
-     Linux PC. It goes in a `TinfoilKit` folder on the drive. The drive should be **exFAT**, which all three can use.
-     Many new drives come as exFAT. FAT32 won't work (files over 4 GB don't fit), and SETUP shows how to erase the
-     drive as exFAT. APFS works on Macs only, and NTFS on Windows and Linux only.
+   - **An external drive** (recommended): it goes with you. Plug it into any Mac, Windows PC or Linux PC, and keep
+     it somewhere safe. It goes in a `TinfoilKit` folder on the drive. The drive should be **exFAT**, which all
+     three can use. Many new drives come as exFAT. FAT32 won't work (files over 4 GB don't fit), and SETUP shows how
+     to erase the drive as exFAT. APFS works on Macs only, and NTFS on Windows and Linux only.
      Always eject the drive before unplugging, especially with exFAT. If macOS asks whether Terminal may access
      files on a removable volume, say yes.
    - **This computer**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder and leaves 50 GB

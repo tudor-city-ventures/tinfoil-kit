@@ -26,6 +26,9 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      not (or -). --json adds this computer's free space and what the kit needs.
   place DEST         Put the kit at DEST (a TinfoilKit folder at the top of a drive or in the home
                      folder), ready to set up there. Prints its folder. SETUP.command uses it.
+  kits               Kits set up before, in the home folder or on a drive plugged in (besides this
+                     one), the one synced last first: folder, where, GB, last sync. A new download's
+                     SETUP.command carries on with that kit, so nothing it has downloads again.
   space PATH         Whether the kit, or just its essentials, fits at PATH (a kit folder, or where one
                      would go) and leaves 10% of the computer's disk, or 5% of a drive, free.
   essentials [on|off]
@@ -1103,21 +1106,26 @@ def starter_items(items: List[Item]) -> List[Item]:
 
 
 def drop_samples(root: Path, state: Dict[str, Any], cfg: Dict[str, Any]) -> None:
-    """Once a full sync has everything, the try-it kit's samples go: what it had that kit.json doesn't switch on."""
-    for item in items_from_config(cfg):
-        v = state["items"].get(item.key)
-        if item.enabled or item.cfg.get("starter") is not True or not v or "files" not in v:
+    """Once a full sync has everything, the try-it kit's samples go: what a try-it sync downloaded (marked "sample"
+    in state.json) that kit.json doesn't switch on. What it does switch on stays for good."""
+    on = {i.key for i in items_from_config(cfg) if i.enabled}
+    for key, v in list(state["items"].items()):
+        if not v.get("sample"):
             continue
+        if key in on or "files" not in v:
+            del v["sample"]
+            continue
+        ident = key.split("/", 1)[1]
         try:
             for name in v["files"]:
                 (root / v["dest"] / name).unlink(missing_ok=True)
         except OSError as e:    # open in the kit, on Windows: the next sync tries again
-            log(f"Couldn't remove {item.id} from the try-it kit yet ({e.strerror}). The next sync will.")
+            log(f"Couldn't remove {ident} from the try-it kit yet ({e.strerror}). The next sync will.")
             continue
         with contextlib.suppress(OSError):
             (root / v["dest"]).rmdir()    # a model's own folder, once it's empty
-        del state["items"][item.key]
-        log(f"Removed {item.id}: the try-it kit had it, and it isn't in your picks.")
+        del state["items"][key]
+        log(f"Removed {ident}: the try-it kit had it, and it isn't in your picks.")
 
 
 def build_plan(root: Path, cfg: Dict[str, Any], state: Dict[str, Any], only: List[str],
@@ -1720,6 +1728,37 @@ def matches(path: Path, f: RemoteFile, expected: Dict[str, str]) -> Optional[str
     return got["sha256"] if all(got[a] == v for a, v in expected.items()) else None
 
 
+def adopt(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, final: Path, expected: Dict[str, str],
+          cfg: Dict[str, Any]) -> Optional[str]:
+    """f, if the kit has it in another folder of the same kind, say under an item an older version of the kit called
+    something else: moved here rather than downloaded again. Returns its SHA-256. Another switched-on item's
+    files stay where they are."""
+    top = root / Path(item.dest).parts[0]
+    if not expected or not top.is_dir():
+        return None
+    theirs = {(root / i.dest).resolve() for i in items_from_config(cfg) if i.enabled and i.key != item.key}
+    for p in [top / f.name] + [d / f.name for d in sorted(top.iterdir()) if d.is_dir()]:
+        if p == final or not p.is_file() or p.parent.resolve() in theirs:
+            continue
+        got = matches(p, f, expected)
+        if not got:
+            continue
+        try:
+            os.replace(p, final)
+        except OSError:    # open in the kit, on Windows: download it instead
+            continue
+        for key, v in list(state["items"].items()):
+            if root / v.get("dest", "") == p.parent and p.name in v.get("files", {}):
+                del v["files"][p.name]
+                if not v["files"]:
+                    del state["items"][key]
+        with contextlib.suppress(OSError):
+            p.parent.rmdir()    # (once it's empty)
+        log(f"    moved it here from {p.parent.relative_to(root).as_posix()}, rather than downloading it again")
+        return got
+    return None
+
+
 def install_files(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, Any], force: bool) -> int:
     dest = root / item.dest
     dest.mkdir(parents=True, exist_ok=True)
@@ -1733,8 +1772,9 @@ def install_files(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, 
             new_files[f.name] = old_files[f.name]
             continue
         expected = expected_digests(f)
-        # already here (copied by hand, state lost, or a sync stopped before saving): keep it if it checks out
-        have = matches(final, f, expected)
+        # already here (copied by hand, state lost, or a sync stopped before saving), or somewhere else in the kit:
+        # keep it if it checks out
+        have = matches(final, f, expected) or adopt(root, state, item, f, final, expected, cfg)
         if have:
             new_files[f.name] = {"size": final.stat().st_size, "sha256": have, "verified": True}
             continue
@@ -2262,6 +2302,7 @@ def prepare_folder(root: Path) -> None:
 
 KIT_FOLDER = "TinfoilKit"    # at the top of a drive, or in the home folder
 THIS = "this Mac" if sys.platform == "darwin" else "this PC" if sys.platform == "win32" else "this computer"
+RETURN = "Enter" if sys.platform == "win32" else "Return"    # the key that ends an answer
 
 
 def drive_bases() -> List[Path]:
@@ -2445,6 +2486,30 @@ def place_kit(root: Path, dest: Path) -> Tuple[Path, str]:
         return dest, f"Copied the kit to {where}: {dest}. Use that copy from now on."
     shutil.rmtree(root, ignore_errors=True)    # the download isn't needed now that the kit is in its place
     return dest, f"Moved the kit to {where}: {dest}"
+
+
+def other_kits(root: Path) -> List[Dict[str, Any]]:
+    """Kits set up before, in the home folder or on a drive plugged in, other than this one: the one synced last
+    first. A new download of the kit carries on with one of these rather than set up a second."""
+    places = [Path.home() / KIT_FOLDER] + [Path(d["path"]) / KIT_FOLDER for d in list_drives() if d["has_kit"]]
+    with contextlib.suppress(OSError):    # the Mac app remembers the kit it opened last
+        last = (Path.home() / "Library" / "Application Support" / "TinfoilKit" / "last-kit").read_text().strip()
+        if last:
+            places.insert(0, Path(last))
+    found, seen = [], {root.resolve()}
+    for k in places:
+        try:
+            if k.resolve() in seen:
+                continue
+            seen.add(k.resolve())
+            state = json.loads((k / ".kit" / "state.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        items = state.get("items") if isinstance(state, dict) else None
+        if (k / "tools" / "kit.py").is_file() and isinstance(items, dict) and items:
+            found.append({"path": str(k), "where": where_is(k), "bytes": sum(drive_bytes(v) for v in items.values()),
+                          "last_sync": str(state.get("last_sync") or "")})
+    return sorted(found, key=lambda k: k["last_sync"], reverse=True)
 
 
 def drive_bytes(rec: Dict[str, Any]) -> int:
@@ -2888,8 +2953,12 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
         try:
             for n, item in enumerate(todo, 1):
                 log(f"\n[{n}/{len(todo)}] {item.key}  ({item.version})")
+                was = state["items"].get(item.key)
+                sample = bool(was.get("sample")) if was else starter    # (a try-it sync's new items are samples)
                 try:
                     done_bytes += installer_for(item)(root, item, state, cfg, args.force)
+                    if sample and item.key in state["items"]:
+                        state["items"][item.key]["sample"] = True
                 except Exception as e:    # one bad item mustn't end a sync that runs for hours
                     failures.append((item.key, str(e) or type(e).__name__))
                     log(f"    FAILED: {failures[-1][1]}")
@@ -3337,7 +3406,7 @@ def ask_picks(root: Path) -> None:
         log(f"  {n}  {name}: {what}. About {gb(preset(key))} GB.")
     log(f"  {len(PRESETS) + 1}  Choose each part")
     while True:
-        print("\nType a number, or press Return for 1: ", end="", flush=True)
+        print(f"\nType a number, or press {RETURN} for 1: ", end="", flush=True)
         said = read_line()
         if said in [str(n) for n in range(1, len(PRESETS) + 2)] or not said:
             break
@@ -3356,7 +3425,7 @@ def ask_picks(root: Path) -> None:
                 log(f"  {i:>3}  [{'x' if picked[s['id']] else ' '}] {s.get('title', s['id'])} ({fmt_size(s.get('bytes'))})")
             took = eta(root, gb(picked) * GB)
             log(f"\nIn all: about {gb(picked)} GB{', ' + took if took else ''}.")
-            print("Type numbers to switch them on or off (like 3 12), or press Return when it's right: ", end="", flush=True)
+            print(f"Type numbers to switch them on or off (like 3 12), or press {RETURN} when it's right: ", end="", flush=True)
             said = read_line()
             if not said:
                 break
@@ -3701,6 +3770,11 @@ def cmd_place(root: Path, args: argparse.Namespace) -> None:
     if said:
         print(f"\n{said}", file=sys.stderr)
     print(new)
+
+
+def cmd_kits(root: Path, args: argparse.Namespace) -> None:
+    for k in other_kits(root):
+        print("\t".join([k["path"], k["where"], str(math.ceil(k["bytes"] / GB)), k["last_sync"][:10] or "-"]))
 
 
 def cmd_search(root: Path, args: argparse.Namespace) -> None:
@@ -4184,6 +4258,7 @@ def main() -> None:
                    "that takes (tab-separated)")
     p = sub.add_parser("drives", help="the plugged-in drives the kit could go on")
     p.add_argument("--json", action="store_true", help="with this computer's free space and what the kit needs")
+    sub.add_parser("kits", help="kits set up before, in the home folder or on a drive plugged in")
     p = sub.add_parser("place", help="put the kit at DEST, a TinfoilKit folder on a drive or in the home folder")
     p.add_argument("dest")
     p = sub.add_parser("space", help="whether the kit, or just its essentials, fits at PATH with room to spare")
@@ -4224,7 +4299,7 @@ def main() -> None:
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
-                "drives": cmd_drives, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials, "starter": cmd_starter,
+                "drives": cmd_drives, "kits": cmd_kits, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials, "starter": cmd_starter,
                 "fit": cmd_fit, "pick": cmd_pick, "share": cmd_share, "autostart": cmd_autostart, "pins": cmd_pins, "region": cmd_region}
     if args.cmd not in commands:
         ap.print_help()

@@ -265,12 +265,14 @@ pathlib.Path(str(out) + ".aria2").unlink()
     check("aria2c: a full-length download it hadn't finished is resumed, not taken as done",
           rc == 0 and same("models/Two/Two-Q4_K_M.gguf", "hf/two/Two-Q4_K_M.gguf") and not record.exists(), out)
 
-    def served(name):
-        """The stretches of a file the mock internet sent since the last look, leaving out asking for its size."""
+    def served(name=None):
+        """The stretches of a file (or of any) the mock internet sent since the last look, leaving out asking for
+        its size."""
         log = R / "served.log"
         lines = log.read_text().splitlines() if log.exists() else []
         log.write_text("")
-        return [(int(a), int(b)) for n, a, b in (x.split() for x in lines) if n == name and int(b) - int(a) > 1]
+        return [(int(a), int(b)) if name else (n, int(a), int(b)) for n, a, b in (x.split() for x in lines)
+                if name in (None, n) and int(b) - int(a) > 1]
 
     # Several connections at once, each with its own part of the file. Ctrl-C partway keeps what arrived, and a record
     # of which parts that was; the next sync fetches only the rest.
@@ -413,6 +415,38 @@ pathlib.Path(str(out) + ".aria2").unlink()
     rc, out = kit("sync", "-y")
     check("lost state: files on the drive are checked and kept, not downloaded again",
           rc == 0 and out.count("found ") == 5 and "downloading" not in out, out)
+
+    # A kit an older version set up. Its state.json has fewer keys; it calls the model Tiny, where kit.json now says
+    # Tiny-Mini; and it has a book that's switched off now, which the try-it kit lists. The new version downloads none
+    # of it again: the model moves to its new folder, and the book stays.
+    old = work / "old" / "TinfoilKit"
+    shutil.copytree(TESTS.parent / "tools", old / "tools")
+    (old / "models" / "Tiny").mkdir(parents=True)
+    (old / "library").mkdir()
+    shutil.copy(R / "hf/tiny/Tiny-Q4_K_M.gguf", old / "models" / "Tiny")
+    for z in ("testmed_en_all_maxi_2026-01.zim", "testsurvival_en_2026-02.zim"):
+        shutil.copy(R / "zim" / z, old / "library")
+
+    def had(version, dest, *names):
+        return {"version": version, "dest": dest,
+                "files": {n: {"size": (old / dest / n).stat().st_size, "sha256": sha(old / dest / n)} for n in names}}
+    (old / ".kit").mkdir()
+    (old / ".kit" / "state.json").write_text(json.dumps({"version": 1, "last_sync": "2026-01-01T00:00:00", "items": {
+        "models/Tiny": had("1", "models/Tiny", "Tiny-Q4_K_M.gguf"),
+        "library/testmed_en_all_maxi": had("2026-01", "library", "testmed_en_all_maxi_2026-01.zim"),
+        "library/testsurvival_en": had("2026-02", "library", "testsurvival_en_2026-02.zim")}}))
+    (old / "kit.json").write_text(json.dumps({"settings": cfg["settings"], "models": [
+        {"id": "Tiny-Mini", "type": "hf", "repo": "test/Tiny-GGUF", "files": ["*-Q4_K_M.gguf"], "priority": 1}],
+        "library": [{"zim": "testmed_en_all_maxi", "enabled": False, "starter": True}, {"zim": "testsurvival_en"}]}))
+    served()
+    rc, out = kit("sync", "-y", root=old)
+    sent = served()
+    st = json.loads((old / ".kit" / "state.json").read_text())
+    check("a kit an older version set up: nothing downloads again, a renamed model moves to its new folder, and a book "
+          "that's switched off stays", rc == 0 and not sent and "moved it here from models/Tiny" in out
+          and (old / "models/Tiny-Mini/Tiny-Q4_K_M.gguf").exists() and not (old / "models/Tiny").exists()
+          and sorted(st["items"]) == ["library/testmed_en_all_maxi", "library/testsurvival_en", "models/Tiny-Mini"]
+          and (old / "library/testmed_en_all_maxi_2026-01.zim").exists(), out + str(sent))
 
     # Three months later. Plant leftovers an interrupted sync could have left behind:
     # a book download from an older edition, a model download of the old file under the same name,
@@ -763,7 +797,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
         return "\t".join(map(str, v))
     roomy = space("fits", "fits", 900, 1000, 400, 100, 50)
     stand_in = """#!/bin/bash
-case "$1" in drives|place|region|pick) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
+case "$1" in drives|kits|place|region|pick) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
 echo "$*" >> args.log
 c="$1"; case " $* " in *" --essentials "*) c="$1-essentials";; esac
 case "$1" in essentials|starter) c="$1-$2";; esac
@@ -842,6 +876,22 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("SETUP after that: says it's an update, and how to update next time",
           rc == 0 and "TINFOIL KIT UPDATE" in out and "TINFOIL KIT SETUP" not in out and "Step 3 of 3: start everything" in out
           and "whenever you want the newest AI models" in out and calls == update_calls, out)
+
+    # A new download of SETUP, where a kit was set up before: it updates that one, without asking anything else first
+    kits_home = work / "kits home"
+    before = kit_folder(kits_home / "TinfoilKit")
+    (before / ".kit").mkdir()
+    (before / ".kit" / "state.json").write_text(json.dumps({"last_sync": "2026-11-01T10:00:00", "items": {
+        "library/big": {"dest": "library", "files": {"big.zim": {"size": 5 * 10**9}}}}}))
+    new = kit_folder(work / "kits download" / "TinfoilKit")
+    p = subprocess.run(["bash", str(new / "SETUP.command")], input="\n\ny\nn\n\n", capture_output=True, text=True, timeout=60,
+                       env={**os.environ, "HOME": str(kits_home), "KIT_DRIVES": str(work / "no drives"), "SPACE": roomy,
+                            "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0"})
+    calls = (before / "calls.log").read_text().split()[1::2] if (before / "calls.log").exists() else []
+    check("SETUP from a new download, with a kit set up before: it updates that kit, so nothing it has downloads again",
+          p.returncode == 0 and f"There's a Tinfoil Kit on this computer already: {before} (5 GB, last updated 2026-11-01)."
+          in p.stdout and "TINFOIL KIT UPDATE" in p.stdout and "where should the kit go" not in p.stdout
+          and calls == update_calls and not (new / "calls.log").is_file(), p.stdout + p.stderr)
 
     def try_kit(**settings):
         c = json.loads((TESTS.parent / "kit.json").read_text())

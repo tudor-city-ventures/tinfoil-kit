@@ -45,8 +45,8 @@ while [ $# -gt 0 ]; do
         --add) export KIT_ADD="$2" ;;
       esac
       shift ;;
-    -h|--help) grep '^#   -' SETUP.command | cut -c5-; exit 0 ;;
-    *) { echo "SETUP: there's no $1. It takes:"; grep '^#   -' SETUP.command | cut -c5-; } >&2; exit 2 ;;
+    -h|--help) grep '^#   [- ]' SETUP.command | cut -c5-; exit 0 ;;
+    *) { echo "SETUP: there's no $1. It takes:"; grep '^#   [- ]' SETUP.command | cut -c5-; } >&2; exit 2 ;;
   esac
   shift
 done
@@ -364,6 +364,20 @@ put_kit() {
   exec bash "$new/SETUP.command" --placed
 }
 
+# A new download of the kit, where one was set up before: SETUP carries on with that one, so what it has stays and
+# only what's new downloads, rather than setting up a second kit. --this-computer or --drive says where instead.
+other_kit() {
+  local k where gb when
+  [ -z "${KIT_PLACE:-}" ] || return 0
+  IFS=$'\t' read -r k where gb when < <(./kit kits 2>/dev/null)
+  [ -n "$k" ] || return 0
+  say "There's a Tinfoil Kit on $where already: $k ($gb GB$([ "$when" = - ] || echo ", last updated $when"))."
+  echo "SETUP can update that one: everything it has stays, and only what's new downloads."
+  ask "Update it?" || { echo "Then this sets up another kit."; return 0; }
+  cd "$k" || exit 1
+  exec bash "$k/SETUP.command"
+}
+
 # First run only: ask where the kit should live, then carry on from there.
 place() {
   step "where should the kit go?"
@@ -378,8 +392,8 @@ place() {
   say "All of the kit is about $(gb "$NEED"). Just the essentials (the AI, the medical, preparedness and repair"
   echo "books, and the map) are about $(gb "$NEED_ESS")."
   echo
-  echo "  1  An external drive"
-  echo "     Keep it somewhere safe and plug it in when you need it: into any Mac, or a Windows or Linux PC."
+  echo "  1  An external drive (recommended)"
+  echo "     It goes with you: plug it into any Mac, or a Windows or Linux PC, and keep it somewhere safe."
   if [ $MAC = 1 ]; then echo "  2  This Mac"; else echo "  2  This computer"; fi
   echo "     Nothing to plug in. Its disk has $(gb "$FREE") free of $(gb "$TOTAL"): $(room_note)."
   choose "Type 1 or 2, then press Return:" 2
@@ -509,6 +523,7 @@ if [ "${1:-}" != "--updated" ]; then
       step "the kit is $(where_kit), in $KIT"
       [ -n "${KIT_PLACE:-}" ] && [ "$(given_dest)" != "$KIT" ] && echo "It stays there: --this-computer and --drive choose where a new kit goes."
     else
+      other_kit
       KIT_STEPS=3; goes_on && KIT_STEPS=4
       pick_region first; place
     fi
