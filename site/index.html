@@ -44,7 +44,7 @@
       "isAccessibleForFree": true,
       "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
       "license": "https://opensource.org/license/mit",
-      "downloadUrl": "https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip",
+      "downloadUrl": "https://github.com/tudor-city-ventures/tinfoilkit/releases/latest",
       "sameAs": "https://github.com/tudor-city-ventures/tinfoilkit",
       "image": "https://tinfoilkit.com/og.png"
     }
@@ -206,15 +206,47 @@ html:not(.js) .readas{display:none}
 .readas button:hover{border-color:var(--paper)}
 .readas button[aria-pressed=true]{background:var(--paper);color:var(--ink);border-color:var(--paper)}
 .cta-note{font:13px/1.5 var(--mono);color:var(--ink2)}
-.first-run{font:13px/1.5 var(--mono);color:var(--ink2);margin-top:-12px;max-width:560px}
-.first-run summary{cursor:pointer;list-style:none;padding:12px 0;color:var(--ink);font-weight:500}
-.first-run summary::-webkit-details-marker{display:none}
-.first-run summary::before{content:"+";display:inline-block;width:1.8em;color:var(--signal-text);font-weight:600}
-.first-run[open] summary::before{content:"\2212"}
-.first-run ol{list-style:none;counter-reset:step;margin:0;padding-left:1.8em;display:flex;flex-direction:column;gap:6px}
-.first-run li{counter-increment:step;position:relative}
-.first-run li::before{content:counter(step) ".";position:absolute;left:-1.8em;color:var(--signal-text)}
-.first-run p{margin:12px 0 6px;padding-left:1.8em}.first-run b{color:var(--ink);font-weight:500}
+.all-dl{min-height:24px;padding:0;border:0;background:none;font:inherit;color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.all-dl:hover{color:var(--signal-text)}
+html:not(.js) .all-dl{display:none}
+dialog.dl{width:min(620px,calc(100% - 32px));max-width:none;max-height:none;margin:auto;padding:0;border:var(--rule);border-radius:4px;background:var(--paper);color:var(--ink);box-shadow:6px 6px 0 var(--ink);overflow:visible}
+dialog.dl::backdrop{background:rgba(28,31,26,.6)}
+.dl-box{max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px);overflow:auto}
+.dl-head{position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 8px 8px 20px;border-bottom:var(--rule);background:var(--paper2)}
+.dl-head h2{margin:0;font:600 14px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.dl-x{display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:4px;background:transparent;color:var(--ink);cursor:pointer}
+.dl-x:hover{background:var(--paper)}
+.dl [data-view]{padding:20px;display:flex;flex-direction:column;gap:16px}
+.dl [hidden]{display:none}
+.dl p{margin:0;font-size:16px;line-height:1.5;color:var(--ink2)}
+.dl-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.dl-list li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 16px;border:var(--rule);padding:14px 16px}
+.dl-list li.mine{background:var(--paper2)}
+.dl-list li.mine .btn{background:#E4672F}
+.dl-list b{display:block;font-size:18px}
+.dl-list span{font-size:15px;line-height:1.4;color:var(--ink2)}
+.dl-list .btn{min-height:44px;font-size:15px;padding:0 16px}
+.dl p.dl-fine{font-size:14px}
+.dl-steps{margin:0;padding:0;list-style:none;counter-reset:step;display:flex;flex-direction:column;gap:16px}
+.dl-steps li{counter-increment:step;position:relative;padding-left:38px;font-size:16px;line-height:1.5;color:var(--ink2)}
+.dl-steps li::before{content:counter(step);position:absolute;left:0;top:0;width:26px;height:26px;box-sizing:border-box;border:2px solid var(--ink);border-radius:50%;display:grid;place-items:center;font:600 13px var(--mono);color:var(--ink)}
+.dl b{color:var(--ink)}
+.dl-back{align-self:flex-start;min-height:44px;padding:0 16px;border:1px solid var(--ink);border-radius:4px;background:transparent;font:500 14px var(--mono);color:var(--ink);cursor:pointer}
+.dl-back:hover{background:var(--paper2)}
+.dl-distros{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.dl-distros li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-size:15px;color:var(--ink2)}
+.dl-distros span{min-width:150px}
+.dl code{font:13px/1.6 var(--mono);background:var(--paper2);padding:2px 6px;overflow-wrap:anywhere}
+.dl-cmd{margin:0;padding:12px 14px;border:1px solid var(--ink);background:var(--paper2);font:13px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+/* what the Mac shows, drawn small, so it's familiar when it appears */
+.mock{margin-top:12px;font:12px/1.35 -apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;color:#1d1d1f}
+.mac-alert{width:230px;max-width:100%;box-sizing:border-box;padding:16px 14px 14px;border-radius:14px;background:#ececec;border:1px solid #c4c4c4;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.mac-alert b{color:#1d1d1f;font-size:13px}
+.mbtn{display:block;align-self:stretch;padding:5px 10px;border-radius:7px;background:#fff;border:1px solid #c4c4c4;text-align:center}
+.mbtn.blue{background:#0058d0;border-color:#0058d0;color:#fff}
+.mock .hit{outline:3px solid var(--signal);outline-offset:2px}
+.mac-pane{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;max-width:440px;padding:10px 12px;border-radius:8px;background:#fff;border:1px solid #c4c4c4}
+.mac-pane .mbtn{align-self:auto;flex:none}
 .faq div[itemprop=text]{max-width:760px}
 .faq ul{margin:0 0 20px;padding-left:22px;font-size:17px;line-height:1.55;color:var(--ink2);display:flex;flex-direction:column;gap:6px}
 .faq table{border-collapse:collapse;margin:0 0 20px;width:100%;font-size:16px;line-height:1.45}
@@ -279,26 +311,11 @@ Menu</button>
 <h1>The internet's down.<br> Your AI isn't.</h1>
 <p class="lede">An opinionated, easy-to-install local AI with the world's knowledge built in. Ask anything, look up first aid, fix a leak, find the nearest hospital.</p>
 <div class="ctas">
-<a class="btn primary" href="https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip">Download free</a>
+<a class="btn primary" id="getKit" href="https://github.com/tudor-city-ventures/tinfoilkit/releases/latest">Download free</a>
 <a class="btn" href="https://github.com/tudor-city-ventures/tinfoilkit">View on GitHub</a>
 <a class="star" href="https://github.com/tudor-city-ventures/tinfoilkit"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2L14.6 9L21.9 9.4L16.2 14L18.1 21L12 17L5.9 21L7.8 14L2.1 9.4L9.4 9z" fill="currentColor"/></svg>Star on GitHub</a>
 </div>
-<p class="cta-note">Then unzip it and double-click SETUP, or SETUP-Windows on Windows. It asks whether the kit goes on your laptop or an external drive, and shows what fits on each.</p>
-<details class="first-run">
-<summary>First time? Here's what to click.</summary>
-<p><b>On a Mac</b></p>
-<ol>
-<li>Double-click SETUP. When macOS says it can't verify it, click Done.</li>
-<li>Open System Settings &gt; Privacy &amp; Security, scroll down and click Open Anyway. You only do this once.</li>
-<li>If it asks whether Terminal may use files on a removable volume, click Allow.</li>
-</ol>
-<p><b>On Windows</b></p>
-<ol>
-<li>Right-click the ZIP, choose Extract All, then double-click SETUP-Windows in the new folder.</li>
-<li>If Windows says it protected your PC, click More info, then Run anyway.</li>
-</ol>
-<p><b>On Linux</b>, run <code>bash SETUP.command</code> in a terminal. It needs python3 and curl.</p>
-</details>
+<p class="cta-note"><span id="getFor">For Mac, Windows and Linux.</span> <button type="button" class="all-dl" id="allDl" aria-haspopup="dialog">All downloads</button></p>
 </div>
 <figure class="fig viz">
 <canvas role="img" aria-label="A dotted globe spins up and streams into a drive until the drive holds the whole kit. Then the Wi-Fi goes off, the globe goes dark, and the drive lights up what it holds: Wikipedia, AI models, maps and guides."></canvas>
@@ -482,6 +499,95 @@ View the code on GitHub</a>
 <span class="fine">Provided as is, with no warranty, and not medical advice. Not affiliated with Apple, Wikipedia, Kiwix or any source named here; their names are their owners' trademarks. <a href="https://github.com/tudor-city-ventures/tinfoilkit/blob/main/THIRD-PARTY.md">Third-party licenses</a>.</span>
 </div>
 </footer>
+
+<dialog id="downloads" class="dl" aria-labelledby="dlTitle">
+<div class="dl-box">
+<div class="dl-head"><h2 id="dlTitle">Download Tinfoil Kit</h2><button type="button" class="dl-x" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="2.5"/></svg></button></div>
+<div data-view="all">
+<p class="dl-phone" hidden>Tinfoil Kit runs on a laptop or desktop, not on a phone or tablet. Open this page on your computer to download it.</p>
+<ul class="dl-list">
+<li data-os="mac" data-note="For Macs with Apple silicon (M1 or newer)."><div><b>Mac</b><span>Apple silicon (M1 or newer)</span></div><a class="btn" data-get="mac" href="https://github.com/tudor-city-ventures/tinfoilkit/releases/latest/download/TinfoilKit-Mac.zip">Download for Mac</a></li>
+<li data-os="windows" data-note="For Windows 10 or 11 PCs with Intel or AMD chips."><div><b>Windows</b><span>Windows 10 or 11, Intel or AMD (x64)</span></div><a class="btn" data-get="windows" href="https://github.com/tudor-city-ventures/tinfoilkit/releases/latest/download/TinfoilKit-Windows.zip">Download for Windows</a></li>
+<li data-os="linux" data-note="For Linux PCs with Intel or AMD chips."><div><b>Linux</b><span>Ubuntu, Debian, Fedora, Arch and others, Intel or AMD (x64)</span></div><a class="btn" data-get="linux" href="https://github.com/tudor-city-ventures/tinfoilkit/releases/latest/download/TinfoilKit.tar.gz">Download for Linux</a></li>
+</ul>
+<p class="dl-fine">It's the same kit on all three, and a kit on an exFAT drive starts on any of them. Intel Macs can't run it. Every version, and the source code: <a href="https://github.com/tudor-city-ventures/tinfoilkit/releases">GitHub releases</a>.</p>
+</div>
+<div data-view="mac" hidden>
+<p>Your download has started. Here's what to click.</p>
+<ol class="dl-steps">
+<li>Open your Downloads folder. Safari unzips the download into a <b>TinfoilKit</b> folder by itself. In another browser, double-click <b>TinfoilKit-Mac.zip</b> first.</li>
+<li>In the TinfoilKit folder, double-click <b>SETUP</b>.</li>
+<li>Your Mac says Apple could not verify it, as it does for anything from outside the App Store. Click <b>Done</b>, not Move to Trash.
+<div class="mock mac-alert" aria-hidden="true"><svg width="32" height="28" viewBox="0 0 34 30"><path d="M17 1.5L32.5 28.5H1.5z" fill="#F5C518" stroke="#B8900E" stroke-width="1.5" stroke-linejoin="round"/><path d="M17 10v9" stroke="#1d1d1f" stroke-width="3" stroke-linecap="round"/><circle cx="17" cy="24" r="1.8" fill="#1d1d1f"/></svg><b>&ldquo;SETUP.command&rdquo; Not Opened</b><span>Apple could not verify &ldquo;SETUP.command&rdquo; is free of malware that may harm your Mac or compromise your privacy.</span><span class="mbtn blue">Move to Trash</span><span class="mbtn hit">Done</span></div></li>
+<li>Open <b>System Settings</b>, click <b>Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>. Enter your password, then click Open Anyway once more. Your Mac only asks this once.
+<div class="mock mac-pane" aria-hidden="true"><span>&ldquo;SETUP.command&rdquo; was blocked to protect your Mac.</span><span class="mbtn hit">Open Anyway</span></div></li>
+</ol>
+<p>SETUP then asks where you live, and whether the kit goes on this Mac or an external drive, with what fits on each. If your Mac asks whether Terminal may use files on a removable volume, click Allow. The essentials come first, so the kit works long before the rest arrives over the next few hours.</p>
+<button type="button" class="dl-back">All downloads</button>
+</div>
+<div data-view="windows" hidden>
+<p>Your download has started. Here's what to click.</p>
+<ol class="dl-steps">
+<li>In your Downloads folder, right-click <b>TinfoilKit-Windows</b>, choose <b>Extract All</b>, then <b>Extract</b>.</li>
+<li>In the new TinfoilKit folder, double-click <b>SETUP-Windows</b>.</li>
+<li>If Windows says it protected your PC, click <b>More info</b>, then <b>Run anyway</b>. It only asks once.</li>
+</ol>
+<p>SETUP then gets the Python the kit's tools run on (about 15&nbsp;MB), and asks where you live and whether the kit goes on this PC or an external drive, with what fits on each. The essentials come first, so the kit works long before the rest arrives over the next few hours.</p>
+<button type="button" class="dl-back">All downloads</button>
+</div>
+<div data-view="linux" hidden>
+<p>Your download has started. In a terminal, install python3 and curl if they're missing:</p>
+<ul class="dl-distros">
+<li><span>Ubuntu, Debian, Mint</span><code>sudo apt install python3 curl</code></li>
+<li><span>Fedora</span><code>sudo dnf install python3 curl openssl3-libs</code></li>
+<li><span>Arch, Manjaro</span><code>sudo pacman -S python curl</code></li>
+</ul>
+<p>Then unpack the kit and start SETUP:</p>
+<pre class="dl-cmd">cd ~/Downloads &amp;&amp; tar -xf TinfoilKit.tar.gz &amp;&amp; bash TinfoilKit/SETUP.command</pre>
+<p>It asks where you live, and whether the kit goes on this computer or an external drive, with what fits on each.</p>
+<button type="button" class="dl-back">All downloads</button>
+</div>
+</div>
+</dialog>
+
+<script>
+// Download: the hero button gets this computer's file, All downloads lists them all, and once a download starts the
+// dialog says what to click next. Without script, the button opens the release page, which lists every file.
+(function () {
+  var dlg = document.getElementById("downloads"), get = document.getElementById("getKit");
+  if (!dlg.showModal) return;
+  var ua = navigator.userAgent;   // iPads ask for the desktop site as a Mac, but have a touch screen
+  var os = /iPhone|iPad|iPod|Android/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "phone"
+    : /Windows/.test(ua) ? "windows" : /Macintosh/.test(ua) ? "mac" : /Linux|X11/.test(ua) && !/CrOS/.test(ua) ? "linux" : "";
+  var mine = dlg.querySelector("[data-os=" + (os || "none") + "]");
+  function show(view) {
+    dlg.querySelectorAll("[data-view]").forEach(function (v) { v.hidden = v.getAttribute("data-view") !== view; });
+    if (!dlg.open) dlg.showModal();
+    dlg.querySelector(".dl-box").scrollTop = 0;
+  }
+  if (mine) {
+    var a = mine.querySelector("[data-get]");
+    get.href = a.href;
+    get.textContent = a.textContent;
+    document.getElementById("getFor").textContent = mine.getAttribute("data-note");
+    mine.classList.add("mine");
+    mine.parentNode.insertBefore(mine, mine.parentNode.firstChild);
+  }
+  dlg.querySelector(".dl-phone").hidden = os !== "phone";
+  get.addEventListener("click", function (e) {
+    if (mine) return show(os);
+    e.preventDefault();
+    show("all");
+  });
+  document.getElementById("allDl").addEventListener("click", function () { show("all"); });
+  dlg.querySelectorAll("[data-get]").forEach(function (a) {
+    a.addEventListener("click", function () { show(a.getAttribute("data-get")); });
+  });
+  dlg.querySelectorAll(".dl-back").forEach(function (b) { b.addEventListener("click", function () { show("all"); }); });
+  dlg.querySelector(".dl-x").addEventListener("click", function () { dlg.close(); });
+  dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });   // a click on the dimmed page
+})();
+</script>
 
 <script>
 (function () {

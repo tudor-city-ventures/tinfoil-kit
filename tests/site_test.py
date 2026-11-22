@@ -213,6 +213,54 @@ with sync_playwright() as p:
         page.click(".readas [data-reader=human]")
         check(f"{name}: Human switches back", page.is_visible(".hero h1") and page.is_visible(".fig") and "for=" not in page.url)
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}.png"), full_page=True)
+    # Download: the button gets this computer's file, and the dialog says what to click next. GitHub's answer is
+    # stood in for here: an attachment, as its release files come, so the page stays put.
+    def attach(route):
+        route.fulfill(status=200, headers={"Content-Type": "application/octet-stream",
+                      "Content-Disposition": "attachment; filename=" + route.request.url.rsplit("/", 1)[1]}, body=b"kit")
+    REL = "https://github.com/tudor-city-ventures/tinfoilkit/releases/latest/download/"
+    FILES = {"mac": "TinfoilKit-Mac.zip", "windows": "TinfoilKit-Windows.zip", "linux": "TinfoilKit.tar.gz"}
+    UAS = {"mac": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15",
+           "windows": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+           "linux": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"}
+    VIEWS = "[...document.querySelectorAll('#downloads [data-view]')].filter(v => !v.hidden).map(v => v.dataset.view)"
+    for os_, ua in UAS.items():
+        ctx = b.new_context(user_agent=ua, accept_downloads=True, viewport={"width": 1280, "height": 900})
+        pg, errs = ctx.new_page(), []
+        pg.on("pageerror", lambda e: errs.append(str(e)))
+        pg.route("https://github.com/**", attach)
+        pg.goto(URL)
+        label, href = pg.inner_text("#getKit"), pg.get_attribute("#getKit", "href")
+        with pg.expect_download() as dl:
+            pg.click("#getKit")
+        check(f"{os_}: Download gets {FILES[os_]} and says what to click next", label.startswith("Download for ")
+              and href == REL + FILES[os_] and dl.value.suggested_filename == FILES[os_] and pg.url == URL
+              and pg.evaluate("document.getElementById('downloads').open") and pg.evaluate(VIEWS) == [os_] and not errs,
+              f"{label}, {href}, {pg.evaluate(VIEWS)}, {errs}")
+        if os_ == "mac":
+            check("mac: the steps show the warning macOS gives, and the fallback past it",
+                  "Open Anyway" in pg.inner_text("#downloads") and pg.is_visible("#downloads .mac-alert .hit"))
+            pg.locator("#downloads").screenshot(path=os.path.join(SHOTS, "site_download_mac.png"))
+            axe(pg, "download steps for a Mac")
+            pg.click("#downloads [data-view=mac] .dl-back")
+            links = pg.evaluate("[...document.querySelectorAll('.dl-list li')].map(l => l.dataset.os + ' ' + l.querySelector('a').href)")
+            check("All downloads lists every computer's file, this one's first",
+                  links == [f"{o} {REL}{FILES[o]}" for o in ("mac", "windows", "linux")] and pg.evaluate(VIEWS) == ["all"], str(links))
+            pg.keyboard.press("Escape")
+            check("Escape closes the dialog", not pg.evaluate("document.getElementById('downloads').open"))
+        ctx.close()
+    ctx = b.new_context(**p.devices["iPhone 15"])
+    pg = ctx.new_page()
+    pg.goto(URL)
+    pg.click("#getKit")
+    check("phone: Download lists every computer's file and says it runs on a laptop",
+          pg.evaluate("document.getElementById('downloads').open") and pg.evaluate(VIEWS) == ["all"]
+          and pg.is_visible(".dl-phone") and pg.inner_text("#getKit") == "Download free")
+    box = pg.locator("#downloads").bounding_box()
+    check("phone: the dialog fits the screen", box and box["x"] >= 0 and box["x"] + box["width"] <= 393, str(box))
+    axe(pg, "All downloads on a phone")
+    pg.screenshot(path=os.path.join(SHOTS, "site_download_all_phone.png"))
+    ctx.close()
     deep = b.new_page()        # a shared link opens the version it names
     deep.goto(URL + "?for=agent")
     deep.wait_for_selector("#agentDoc b", timeout=5000)
