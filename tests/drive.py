@@ -4,7 +4,8 @@
   drive.py share ADDRESS CODE LIB_PORT AI_PORT
                                     the kit shared on the home network, as a phone there finds it at ADDRESS
   drive.py vhd IMAGE                add a VHD footer to a raw disk image, so Windows can mount the drive a Mac made
-  drive.py kitjson FILE             write the test kit's kit.json, as the website's builder makes one
+  drive.py kitjson FILE [maps]      write the test kit's kit.json, as the website's builder makes one; with maps,
+                                    also the map of Monaco, with the real map programs for Windows
 """
 import http.client
 import json
@@ -122,12 +123,18 @@ def check_share(address, code, lib, ai):
             check(f"the {name} server doesn't answer on the network itself", True)
 
 
-def kit_json(out):
-    """The test kit: the real Mac, Windows and Linux programs (no maps), the tiny model and two test books."""
+def kit_json(out, maps=False):
+    """The test kit: the real Mac, Windows and Linux programs, the tiny model and two test books. The map's programs
+    are the Windows ones only, since that's all the mock internet has, and its roads are Monaco's (small and real)."""
     tests = Path(__file__).resolve().parent
     t = json.loads((tests / "drive_kit.json").read_text(encoding="utf-8"))
     k = json.loads((tests.parent / "kit.json").read_text(encoding="utf-8"))
-    t["runtimes"] = [r for r in k["runtimes"] if not r.get("requires")]
+    t["runtimes"] = [r for r in k["runtimes"] if not r.get("requires")
+                     or maps and not r["id"].endswith(("-macos-arm64", "-linux-x64"))]
+    if maps:
+        t["maps"] = {**k["maps"], "label": "Monaco", "home": {"lat": 43.7384, "lon": 7.4246, "zoom": 14, "label": "Monaco"},
+                     "detail_bbox": [7.405, 43.723, 7.44, 43.752], "world_maxzoom": 2, "detail_maxzoom": 5,
+                     "routing_osm_pbf": "http://127.0.0.1:19000/geofabrik/monaco-latest.osm.pbf"}
     t["models"] = [m for m in t["models"] if m["id"] == "Tiny"]
     t["library"] = [z for z in t["library"] if z["zim"] in ("testmed_en_all_maxi", "testsurvival_en")]
     t["settings"].update(library_port=8888, ai_port=8080)
@@ -182,7 +189,7 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["vhd"] and len(sys.argv) == 3:
         add_vhd_footer(sys.argv[2])
         sys.exit(0)
-    if sys.argv[1:2] == ["kitjson"] and len(sys.argv) == 3:
-        kit_json(sys.argv[2])
+    if sys.argv[1:2] == ["kitjson"] and len(sys.argv) in (3, 4):
+        kit_json(sys.argv[2], sys.argv[3:] == ["maps"])
         sys.exit(0)
     sys.exit(__doc__)
