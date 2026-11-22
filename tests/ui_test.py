@@ -5,6 +5,7 @@ the kit the way a phone on the home network does: through the gate, with the acc
 With KIT_VIDEO (tests/drive.py record sets it), the page is in a window and goes at a person's pace for the drive
 test's videos: typing, pausing on answers, and also opening a source, AI chat, the map and Help."""
 import os
+import subprocess
 import sys
 from playwright.sync_api import sync_playwright
 from drive import note
@@ -61,6 +62,20 @@ def popup(page, sel, then):
         print(f"(video only: {sel} didn't show: {str(e).splitlines()[0]})")
 
 
+def front(exe):
+    """In the video on a Mac: the browser opens behind the app in front (Safari, with the page Open Tinfoil Kit opened),
+    and only Launch Services brings an app forward. Only if it lists the browser as running: else open starts another."""
+    app = exe[:exe.index(".app/") + 4] if ".app/" in exe else os.path.join(os.path.dirname(exe), "Playwright.app")
+    try:
+        listed = subprocess.run(["lsappinfo", "list"], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        listed = ""
+    if os.path.realpath(app) in listed:
+        subprocess.run(["open", "-a", app], timeout=10)
+    else:
+        print(f"(video only: {app} isn't listed as running, so it may stay behind)")
+
+
 def chat(tab):
     """llama-server's chat page: type a message with real keys (its editor ignores text set directly), send it."""
     box = tab.locator("textarea:visible, [contenteditable=true]:visible").first
@@ -91,6 +106,9 @@ with sync_playwright() as p:
         probe.close()
         size, phone_height = {"width": min(1100, w - 40), "height": min(900, h - 110)}, min(844, h - 110)
     page = b.new_page(viewport=size)
+    if VIDEO and sys.platform == "darwin" and BROWSER == "webkit":
+        page.bring_to_front()
+        front(p.webkit.executable_path)
     errors = []
     page.on("console", lambda m: errors.append(m.text + " @ " + str(m.location)) if m.type == "error" else None)
     page.on("pageerror", lambda e: errors.append(str(e)))
