@@ -63,13 +63,13 @@ need_python() {
   done
 }
 
-# Lists the drives (./kit drives: folder, format, GB free, and why it won't do, or -) and sets VOL to the one
+# Lists the drives (./kit drives: folder, format, GB free, why it won't do or -, and name) and sets VOL to the one
 # picked. Returns 1 when the person would rather use this Mac.
 pick_drive() {
   local paths fmts frees whys p f g w n i
   while :; do
     paths=(); fmts=(); frees=(); whys=()
-    while IFS=$'\t' read -r p f g w; do
+    while IFS=$'\t' read -r p f g w _; do
       paths+=("$p"); fmts+=("$f"); frees+=("$g"); whys+=("$w")
     done < <(./kit drives 2>/dev/null)
     say "Which drive?"

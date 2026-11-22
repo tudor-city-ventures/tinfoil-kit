@@ -1545,14 +1545,38 @@ def drive_bases() -> List[Path]:
     """Where plugged-in drives show up (KIT_DRIVES: that folder instead, for tests)."""
     if os.environ.get("KIT_DRIVES"):
         return [Path(os.environ["KIT_DRIVES"])]
+    if sys.platform == "win32":
+        return []    # drive letters instead: win_drives()
     if sys.platform == "darwin":
         return [Path("/Volumes")]
     user = os.environ.get("USER", "")
     return [Path("/media", user), Path("/run/media", user)] if user else []
 
 
+def win_volume(path: Path) -> Tuple[str, str]:
+    """A Windows drive's label and format ("exFAT", "NTFS", "FAT32"), or "" for what can't be read."""
+    import ctypes
+    letter = os.path.splitdrive(os.path.abspath(path))[0]
+    label, fs = ctypes.create_unicode_buffer(261), ctypes.create_unicode_buffer(261)
+    if not ctypes.windll.kernel32.GetVolumeInformationW(letter + "\\", label, 261, None, None, None, fs, 261):
+        return "", ""
+    return label.value, fs.value
+
+
+def win_drives() -> List[Path]:
+    """The drive letters of disks plugged into this PC, internal or USB, but not the one with the home folder.
+    No network drives or CD drives, nor disks Windows can't read (locked by BitLocker, or empty card readers)."""
+    import ctypes
+    k32, home = ctypes.windll.kernel32, os.path.splitdrive(str(Path.home()))[0].upper()
+    mask = k32.GetLogicalDrives()
+    roots = [Path(f"{chr(65 + i)}:\\") for i in range(26) if mask >> i & 1 and f"{chr(65 + i)}:" != home]
+    return [r for r in roots if k32.GetDriveTypeW(str(r)) in (2, 3) and win_volume(r)[1]]    # removable, fixed
+
+
 def drive_format(path: Path) -> str:
     """A drive's format as the system names it ("ExFAT", "MS-DOS (FAT32)", "exfat", "vfat"...), or "" if unknown."""
+    if sys.platform == "win32":
+        return win_volume(path)[1]
     if sys.platform == "darwin":
         try:
             info = plistlib.loads(subprocess.run(["diskutil", "info", "-plist", str(path)],
@@ -1588,9 +1612,9 @@ def list_drives() -> List[Dict[str, Any]]:
     if it can't. Drives that can't be written to (installer disk images, backups) are left out, unless their format is
     the reason, so SETUP can say why those won't do. In /Volumes the Mac's own disk is a link to /."""
     found = []
-    for base in drive_bases():
+    for base in drive_bases() or [None]:
         try:
-            folders = sorted(base.iterdir())
+            folders = sorted(base.iterdir()) if base else win_drives() if sys.platform == "win32" else []
         except OSError:
             continue
         for v in folders:
@@ -1604,13 +1628,17 @@ def list_drives() -> List[Dict[str, Any]]:
                 free = shutil.disk_usage(v).free
             except OSError:
                 continue
-            found.append({"path": str(v), "name": v.name, "format": fs or "unknown", "free_bytes": free,
+            found.append({"path": str(v), "name": drive_name(v), "format": fs or "unknown", "free_bytes": free,
                           "problem": problem or None, "has_kit": (v / KIT_FOLDER / "kit").is_file()})
     return found
 
 
 def drive_name(path: Path) -> str:
     """The name of the drive a folder is on."""
+    if sys.platform == "win32" and not os.environ.get("KIT_DRIVES"):
+        letter = os.path.splitdrive(os.path.abspath(path))[0]
+        label = win_volume(path)[0]
+        return f"{label} ({letter})" if label else letter
     for base in drive_bases():
         try:
             return path.relative_to(base).parts[0]
@@ -1750,7 +1778,7 @@ class Lock:
 
     def __enter__(self) -> "Lock":
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.fh = open(self.path, "w")
+        self.fh = open(self.path, "a")    # not "w": Windows won't empty a file another sync has locked
         try:
             if os.name == "nt":
                 import msvcrt
@@ -2094,7 +2122,7 @@ def cmd_drives(root: Path, args: argparse.Namespace) -> None:
     drives = list_drives()
     if not args.json:
         for d in drives:
-            print("\t".join([d["path"], d["format"], str(d["free_bytes"] // GB), d["problem"] or "-"]))
+            print("\t".join([d["path"], d["format"], str(d["free_bytes"] // GB), d["problem"] or "-", d["name"]]))
         return
     cfg, home = load_config(root), Path.home()
     print(json.dumps({
