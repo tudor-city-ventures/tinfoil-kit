@@ -36,8 +36,9 @@ The whole kit is one folder, TinfoilKit, used in two ways:
 | Map | pmtiles | 8090 | Serves the map: street detail for a region, plus a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes |
+| Sharing (off by default) | tools/share.py | 8000 | Lets phones and laptops on the home network in with the access code, and passes their requests to the servers above |
 
-Photon and GraphHopper run on a Java that's in the kit.
+Photon and GraphHopper run on a Java that's in the kit. Every server listens only on 127.0.0.1; sharing is the one way in from the network.
 
 - Ask: the AI turns the question into short searches, kiwix-serve searches every book, and the AI answers from the top articles with numbered sources. With the AI off, Ask shows the best passages. Map questions ("nearest pharmacy", "directions to the hospital") go to three map tools instead (search places, find nearby, get directions), and the answer shows on the Map tab.
 - The kit page (tools/portal.html) is one HTML file. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
@@ -67,7 +68,7 @@ Help the person pick one. It's the same kit folder each way; only its place and 
 
 1. This Mac, at ~/TinfoilKit. Nothing to buy or plug in, it's always with the laptop, and the internal disk is usually faster. It needs the kit's size plus 50 GB free. If the Mac is lost or breaks, the kit goes with it. Keep it in the home folder, not in Desktop or Documents, which iCloud may sync. Sync keeps it out of Time Machine backups.
 2. An external drive, at /Volumes/<drive>/TinfoilKit. It survives the Mac breaking, works on another Mac, and, formatted exFAT, starts the AI and the library on a Windows or Linux PC. It keeps the Mac's disk free. It needs an SSD with room for the kit plus 25 GB.
-3. A home server: either of the above on a Mac that stays on (a Mac mini, or a laptop on its charger), started with `bash START-HERE.command --share`. Phones, tablets and other computers on the same Wi-Fi or hotspot open the address it prints, and so can anyone else on that network. In an outage the router still needs power, even with no internet: a small battery backup keeps it on.
+3. A home server: the kit on a computer that stays on (a Linux box, a Mac mini, or a laptop on its charger), shared with every phone and laptop at home behind an access code. See "A home server" below. In an outage the router still needs power, even with no internet: a small battery backup keeps it on.
 
 Recommend a drive when the Mac is short of space or the person wants a kit they can grab and go. Recommend this Mac when it has room and the person wants nothing extra to carry. If neither has room, turn items off (step 3 below). Let the person choose.
 
@@ -143,12 +144,27 @@ Download https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/ma
 ## Use it
 
 - Double-click START-HERE.command, or run `bash START-HERE.command`. It opens http://127.0.0.1:8888. Keep its Terminal window open: closing it stops everything.
-- Options: `--share` lets other devices on the same network open it (it prints the address), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in models/), `--no-browser` skips opening the browser. If macOS asks whether to accept incoming connections, click Allow.
+- Options: `--share` lets phones and laptops on the same network open it with an access code (it prints the address, the code and a QR code), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in models/), `--no-browser` skips opening the browser. If macOS asks whether to accept incoming connections, click Allow.
 - Ask answers from the books and cites them. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station.
 - Models: pick one on the Ask page. The first answer after switching takes up to a minute while it loads.
 - Map: set home first, since a laptop has no GPS (Set as home on a search result, or Set home to the map center). For actually driving, a phone with offline maps and GPS is better; the kit's map is for planning and for the AI's map questions.
 - Power: a big model drains a laptop battery in a couple of hours of steady use. Gemma 4 E4B saves battery, and the Library tab uses almost nothing.
 - Windows: double-click START-HERE-Windows.bat on the exFAT drive. Linux: `bash START-HERE.command`. The AI and the library start; the map needs a Mac for now. Fedora 45 and later need `sudo dnf install openssl3-libs` for the AI, installed while there's still internet.
+
+## A home server
+
+For a computer that stays on, with or without a screen. Set the kit up on the computer's own disk as above (`./kit place ~/TinfoilKit`, `./kit sync -y`, `./kit test`), then, in the kit folder:
+
+    ./kit share on       # share it on the home network behind an access code: prints the address, the code and a QR code
+    ./kit autostart on   # start it now, and whenever the computer starts
+
+- `bash SETUP.command --home-server` does the setup and then both. It asks its questions in the terminal, so as an agent, run the commands instead.
+- Phones and laptops open the address, like http://192.168.1.20:8000, and type the 8-digit code once; the QR code includes it. `./kit share` shows them again. `./kit share new-code` replaces the code and signs every device out. `./kit share off` stops sharing.
+- How it works: tools/share.py listens on the network on port 8000 (`share_port` in kit.json), asks for the code, and passes requests on: /ai/ to the AI, /tiles/, /geocoder/ and /routing/ to the map, everything else to the library. It answers only devices with home network addresses, turns away names that aren't this computer's, and allows 10 wrong codes per 10 minutes from each device.
+- Programs can use the code as an API key: `Authorization: Bearer CODE` with the OpenAI-compatible API at http://ADDRESS:8000/ai/v1.
+- Linux: autostart is a systemd user service (`systemctl --user status tinfoil-kit`) that starts at boot once lingering is on (`sudo loginctl enable-linger $USER`; the kit tries it and says if it needs you). Mac: a LaunchAgent that starts when the person logs in, so turn on automatic login on a Mac that's a server, and keep the kit on its own disk.
+- `./kit autostart off` stops it starting by itself; UNINSTALL does that too. Windows can't share the kit or start it with the computer yet.
+- The traffic is plain HTTP inside the home network: share it on the person's own Wi-Fi or hotspot, not a public one.
 
 ## Update it
 
