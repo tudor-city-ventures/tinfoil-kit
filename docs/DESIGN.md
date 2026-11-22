@@ -181,7 +181,7 @@ kiwix-serve, pmtiles, Photon and GraphHopper have no passwords, so they stay on 
 - **Models:** `Inkling-2-Mini` (the default), `Qwen3.8-27B`, `Gemma-4-26B-A4B`, `Gemma-4-12B` (for 16 to 24 GB of memory) and `Gemma-4-E4B` (small and fast). llama.cpp's nightly builds are used (`llama_cpp_channel`), since its stable releases lag behind new models. MTP draft files are matched at the repo's top level first, because the `MTP/` subfolder has duplicates.
 - **Library:** about 40 ZIM files, by priority: medical (WikiMed, MedlinePlus, CDC Travelers' Health, military medicine, LibreTexts medicine), preparedness (Ready.gov, Urban Prepper, Learning Self-Reliance, post-disaster, water treatment, food, knots), repair (iFixit, CD3WD, US Army publications, Stack Exchange sites), and reference (Wikipedia with images, about 127 GB in English, or a smaller size; Wiktionary, Wikibooks, Wikivoyage, Wikiversity, LibreTexts). Off by default: Survivor Library, Khan Academy, all of Project Gutenberg.
 - **Extras:** the Kiwix macOS app, a backup way to read the books, and Ollama's installer (off by default).
-- **First sync:** about 280–330 GB for the default list. The weekly `refresh builder sizes` workflow lists any source that stops resolving.
+- **First sync:** from about 20 GB (just the essentials) to about 900 GB (everything); 200–300 GB for the recommended kit, depending on the AI models the computer runs and the map (`./kit estimate`). The weekly `refresh builder sizes` workflow lists any source that stops resolving.
 
 ## The Mac app
 

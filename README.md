@@ -97,7 +97,7 @@ The repo is the app folder, so `site/` (the website), `tests/` and `docs/` come 
 ## Requirements
 
 - A modern laptop or desktop: a Mac with Apple Silicon, or a Windows or Linux PC (x64). Windows and Linux are experimental for now: they're tested less than the Mac, so expect rough edges. Built around 32 GB of memory; the small model runs on 8-16 GB.
-- Room for the kit: the first sync downloads about 300 GB. On the computer's own disk it leaves 50 GB free. An external SSD lets you grab it and go.
+- Room for the kit: from about 20 GB for just the essentials to about 900 GB for everything, and 200 to 300 GB for the recommended kit, depending on the AI models the computer runs and the map. On the computer's own disk it leaves 50 GB free. An external SSD lets you grab it and go.
 
 A nightly test sets the kit up on a Mac and on Windows, from a download onto the computer and onto an exFAT drive, and starts the Mac's drive on Windows and Linux. On Windows it also builds and serves a small real map, and on all three it shares the kit as a home server.
 

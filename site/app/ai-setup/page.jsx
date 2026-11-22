@@ -39,7 +39,7 @@ export const metadata = pageMetadata({
 const STEPS = [
   [
     "Buy an external SSD",
-    "A portable USB SSD with room for the kit, about 300 GB, formatted exFAT so it starts on a Mac, Windows or Linux. Or use the computer's own disk.",
+    "A portable USB SSD with room for the kit, from about 20 GB for just the essentials to about 900 GB for everything, formatted exFAT so it starts on a Mac, Windows or Linux. Or use the computer's own disk.",
   ],
   [
     "Have your AI set it up",
@@ -62,7 +62,12 @@ const jsonLd = {
       url: PAGE,
       about: APP,
       tool: [{ "@type": "HowToTool", name: "An AI chat or coding agent, such as ChatGPT or Claude" }],
-      supply: [{ "@type": "HowToSupply", name: "An external SSD with room for the kit, about 300 GB (optional)" }],
+      supply: [
+        {
+          "@type": "HowToSupply",
+          name: "An external SSD with room for the kit, from about 20 GB for just the essentials to about 900 GB for everything (optional)",
+        },
+      ],
       step: STEPS.map(([name, text], i) => ({
         "@type": "HowToStep",
         position: i + 1,
@@ -166,8 +171,8 @@ export default function AISetup() {
                 <b>01 · GET A DRIVE</b>
                 <h3>{STEPS[0][0]}</h3>
                 <p>
-                  A portable USB SSD with room for the kit, about 300&nbsp;GB. Formatted exFAT, the same drive starts on
-                  a Mac, Windows or Linux.
+                  A portable USB SSD with room for the kit: from about 20&nbsp;GB for just the essentials to about
+                  900&nbsp;GB for everything. Formatted exFAT, the same drive starts on a Mac, Windows or Linux.
                 </p>
                 <small>No drive? It can go on your computer's own disk instead.</small>
               </li>

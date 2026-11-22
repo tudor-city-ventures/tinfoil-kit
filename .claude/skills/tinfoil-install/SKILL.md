@@ -19,7 +19,7 @@ An external drive is the best place: formatted exFAT, it plugs into any Mac, Win
 
 If the kit's code is already on the computer (a download, or a git checkout), `./kit drives --json` in its app folder (`.\kit.cmd drives --json` on Windows) lists every drive with path, format, free_bytes, problem, has_kit and space: "fits", "tight" or "no", for all of it and for the essentials.
 
-- Room: about 300 GB for all of it, or 35 to 55 GB for the essentials, plus 25 GB to spare.
+- Room: from about 20 GB for just the essentials to about 900 GB for everything (the recommended kit is 200 to 300 GB), plus 25 GB to spare.
 - Format: exFAT works on all three, best on a GUID partition map (MBR works too). APFS and Mac OS Extended work only on a Mac, a Mac can't write to NTFS, and FAT32 can't hold files over 4 GB.
 - Wrong format: the drive needs erasing as exFAT, which deletes everything on it. Make sure it's the right drive, and get the person's explicit yes. Mac: Disk Utility > View > Show All Devices, select the drive itself (the top line), Erase, ExFAT, GUID Partition Map. Windows: File Explorer, right-click the drive, Format, exFAT, Start.
 - No drive: ask whether they have one to plug in, or want to get one, before suggesting this computer. On this computer the kit goes in ~/TinfoilKit and needs its size plus 50 GB free.
@@ -31,7 +31,7 @@ One or two questions at a time. For each, say what it's for and roughly how big 
 1. Their computer: a Mac with Apple Silicon, or a Windows or Linux PC on x64 (Intel Macs and ARM PCs can't run it), its memory and free space. If you can run commands, look instead of asking, with commands that only read: `system_profiler SPHardwareDataType` and `df -h ~` on a Mac; `Get-CimInstance Win32_ComputerSystem | Select-Object SystemType, TotalPhysicalMemory` and `Get-PSDrive C` on Windows; `uname -m`, `free -g` and `df -h ~` on Linux. Windows and Linux are experimental for now: tell them, so rough edges don't surprise them.
 2. Where it lives: the drive, this computer, or a home server (see the tinfoil-home-server skill).
 3. Where they live, for the map (`--region`), and any places nearby they want on it too, Wikipedia's languages (`--wikipedia`), and how much of Wikipedia (`--wikipedia-size`): all of it (127 GB in English) or just the best 50,000 articles (7 GB, or 2.7 GB as text).
-4. Where to start: the recommended kit (`--recommended`, about 300 GB), just the essentials (`--essentials`, 35 to 55 GB, for when space is short) or everything (`--everything`).
+4. Where to start: the recommended kit (`--recommended`, 200 to 300 GB), just the essentials (`--essentials`, 20 to 45 GB, for when space is short) or everything (`--everything`, about 900 GB, the huge collections too). The AI the computer runs and the map make the difference within each.
 5. The AI: the one their computer runs (the default), none (`--no-ai`), or exact models (`--models`).
 6. The library, group by group. The huge collections are off unless added (`--add`).
 7. Sharing with the phones and laptops at home behind an access code (`--share`), or a home server (`--home-server`).
@@ -45,8 +45,9 @@ First tell them how long the downloads take. Find their internet speed: on a Mac
 | What downloads | Size | 10 Mbps | 100 Mbps | 500 Mbps |
 | --- | --- | --- | --- | --- |
 | The kit to try | about 10 GB | 2 hours | 15 minutes | 3 minutes |
-| Just the essentials | 35 to 55 GB | 8 to 12 hours | about an hour | 10 to 15 minutes |
-| All of it | about 300 GB | about 3 days | 7 hours | 1.5 hours |
+| Just the essentials | 20 to 45 GB | 4.5 to 10 hours | 30 minutes to an hour | 5 to 15 minutes |
+| The recommended kit | 200 to 300 GB | 2 to 3 days | 4.5 to 7 hours | 1 to 1.5 hours |
+| Everything | about 900 GB | 8 days | 20 hours | 4 hours |
 
 The command gets just the kit to try, unless it has `--no-pause` or `--home-server`, which go straight on to the rest: then say how long all of it takes too. SETUP also times the connection before it downloads anything, says how long it takes, and shows the time left as it goes.
 
