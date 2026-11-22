@@ -34,9 +34,9 @@ body:
     id: steps
     attributes:
       label: Steps
-      description: What you did, one step per line, starting from SETUP or START-HERE.
+      description: What you did, one step per line, starting from SETUP or Open Tinfoil Kit.
       placeholder: |
-        1. Double-clicked START-HERE.command
+        1. Double-clicked Open Tinfoil Kit.command
         2. Opened the Map tab and searched for an address
     validations:
       required: true
@@ -51,7 +51,7 @@ body:
     id: output
     attributes:
       label: Output
-      description: The error, or the last lines SETUP, START-HERE or `./kit` printed. The kit's `logs` folder has the rest.
+      description: The error, or the last lines SETUP, Open Tinfoil Kit or `./kit` printed. The kit's `logs` folder has the rest.
       render: shell
     validations:
       required: true

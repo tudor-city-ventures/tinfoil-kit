@@ -13,11 +13,11 @@ on your computer or on an external drive. Print this page and keep it handy (wit
 2. Open the kit folder: on a drive, the `TinfoilKit` folder on the drive. On the computer itself, `TinfoilKit` in
    your home folder (Mac: in Finder choose **Go > Home**. Windows: in File Explorer, your user folder, `C:\Users\<you>`).
 3. Start it:
-   - **Mac**: double-click **`START-HERE.command`**. If macOS won't open it, open Terminal and type `bash ` (with a
-     space), drag `START-HERE.command` into the window, and press Return. That always works.
-   - **Windows**: double-click **`START-HERE-Windows.bat`**. If Windows says it protected your PC, click
+   - **Mac**: double-click **`Open Tinfoil Kit.command`**. If macOS won't open it, open Terminal and type `bash ` (with a
+     space), drag `Open Tinfoil Kit.command` into the window, and press Return. That always works.
+   - **Windows**: double-click **`Open Tinfoil Kit for Windows.bat`**. If Windows says it protected your PC, click
      **More info**, then **Run anyway**.
-   - **Linux**: open a terminal in the folder and run `bash START-HERE.command`.
+   - **Linux**: open a terminal in the folder and run `bash "Open Tinfoil Kit.command"`.
 4. A browser tab opens. **Keep the kit's window open** while you use it. Closing it stops everything.
 
 Nothing here needs the internet, an account, or an install.
@@ -38,8 +38,8 @@ Nothing here needs the internet, an account, or an install.
     bigger models don't fit.
   - `Gemma-4-E4B`: small. Use it to **save battery**. On an 8 GB laptop the kit starts with it.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
-- **Share with family**: start with `bash START-HERE.command --share` (on Windows, `.\START-HERE-Windows.bat --share`
-  in a terminal in the kit folder). It shows an address, an access code and a QR code. Phones and laptops on the same
+- **Share with family**: start with `bash "Open Tinfoil Kit.command" --share` (on Windows, `& ".\Open Tinfoil Kit for Windows.bat" --share`
+  in PowerShell in the kit folder). It shows an address, an access code and a QR code. Phones and laptops on the same
   Wi-Fi open the address and type the code, or scan the QR code. No internet needed, only a Wi-Fi network: your
   router on a battery backup, a small battery-powered travel router, or a phone's hotspot (an iPhone's may not turn on
   without cell service). Nobody without the code gets in. To share every time the kit starts, run `./kit share on`
@@ -114,9 +114,10 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
 
 ## First-time setup
 
-1. Download the kit (on GitHub: **Code > Download ZIP**) and unzip it: on a Mac, double-click the ZIP. On
-   Windows, right-click it and choose **Extract All**.
-2. Start SETUP in the unzipped folder:
+1. Download the kit from **tinfoilkit.com**, which picks the file for your computer, and open it: on a Mac, Safari
+   unzips it into a TinfoilKit folder (in another browser, double-click the ZIP). On Windows, right-click it and
+   choose **Extract All**. On Linux, run `tar -xf TinfoilKit.tar.gz`.
+2. Start SETUP in the TinfoilKit folder:
    - **Mac**: double-click **`SETUP.command`**. macOS says it can't check it for malware: click **Done**, open
      **System Settings > Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
      On a Mac without Python, it first gets one for the kit's tools (about 25 MB, once).
@@ -171,7 +172,7 @@ and the Library tab (no AI) uses almost nothing.
   network (**Settings > Network & internet**, then the Wi-Fi's properties), and if Python was refused, allow it in
   **Windows Security > Firewall & network protection > Allow an app through firewall**, ticking **Private**.
 - If a model won't load or is very slow, quit other apps (big models need most of a 32 GB laptop's memory), or use `Gemma-4-E4B`.
-  Starting with `bash START-HERE.command --no-maps` frees about 5 GB by not starting the map servers.
+  Starting with `bash "Open Tinfoil Kit.command" --no-maps` frees about 5 GB by not starting the map servers.
 - Map says address search or directions are "not running": they take up to a minute to start. If they never do,
   see `logs/geocoder.log` and `logs/routing.log`. If `./kit test` fails on address search with a "lock" error in
   `logs/test-geocoder.log`, the exFAT format is the cause: reformat the drive as APFS and copy the kit back.
@@ -213,10 +214,10 @@ Windows).
 
 | Folder / file | What it is |
 |---|---|
-| `START-HERE.command` | Starts everything (Mac, Linux) |
+| `Open Tinfoil Kit.command` | Starts everything (Mac, Linux) |
 | `SETUP.command` | Sets the kit up, and updates it whenever you like (needs internet) |
 | `UNINSTALL.command` | Removes the kit and everything it downloaded |
-| `START-HERE-Windows.bat`, `SETUP-Windows.bat`, `UNINSTALL-Windows.bat` | The same three, for Windows |
+| `Open Tinfoil Kit for Windows.bat`, `SETUP-Windows.bat`, `UNINSTALL-Windows.bat` | The same three, for Windows |
 | `kit` (`kit.cmd` on Windows), `kit.json` | Update tool and the list of what to keep |
 | `INVENTORY.md` | What's in the kit right now, with versions |
 | `library/` | The books (`.zim` files) |

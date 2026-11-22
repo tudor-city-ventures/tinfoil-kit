@@ -55,20 +55,20 @@ goto finish0
 
 :delete
 rem Stop the kit if it's running, so nothing holds its files open: its programs run from its bin folder, sharing runs
-rem its tools\share.py, and the START-HERE window that started them goes too.
+rem its tools\share.py, and the Open Tinfoil Kit window that started them goes too.
 set "TK_BIN=%KIT%\bin\"
 set "TK_GATE=%KIT%\tools\share.py"
-set "TK_START=%KIT%\START-HERE-Windows.bat"
+set "TK_START=%KIT%\Open Tinfoil Kit for Windows.bat"
 powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:TK_BIN, $k) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and $c.IndexOf($env:TK_GATE, $k) -ge 0) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'Stopping the kit, which is running...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 rem And Windows no longer starts it as you sign in (kit.cmd autostart on), if this is the kit it starts.
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Tinfoil Kit.cmd"
-if exist "%STARTUP%" findstr /i /c:"%KIT%\START-HERE-Windows.bat" "%STARTUP%" >nul && del "%STARTUP%"
+if exist "%STARTUP%" findstr /i /c:"%KIT%\Open Tinfoil Kit for Windows.bat" "%STARTUP%" >nul && del "%STARTUP%"
 echo Deleting... (a few hundred GB can take a minute)
 rd /s /q "%KIT%" 2>nul
 if exist "%KIT%\" (
   echo(
   echo Some files couldn't be deleted. What's left is in !KIT!.
-  echo Close any window that's using the kit ^(START-HERE or SETUP^) and run this again, or delete the folder in File Explorer.
+  echo Close any window that's using the kit ^(Open Tinfoil Kit or SETUP^) and run this again, or delete the folder in File Explorer.
   goto finish1
 )
 rd /s /q "%LOCALAPPDATA%\TinfoilKit" 2>nul

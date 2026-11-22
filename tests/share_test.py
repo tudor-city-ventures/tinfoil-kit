@@ -349,8 +349,8 @@ try:
             rc = share.autostart(win, "on")
         entry = work / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "Tinfoil Kit.cmd"
         text = entry.read_bytes().decode("utf-8") if entry.exists() else ""
-        bat = str(win / "START-HERE-Windows.bat").replace("%", "%%")
-        check("Windows: ./kit autostart on puts START-HERE-Windows.bat in the Startup folder, minimized, no browser",
+        bat = str(win / "Open Tinfoil Kit for Windows.bat").replace("%", "%%")
+        check("Windows: ./kit autostart on puts Open Tinfoil Kit for Windows.bat in the Startup folder, minimized, no browser",
               rc == 0 and f'if exist "{bat}" start "Tinfoil Kit" /min "{bat}" --no-browser\r\n' in text, text)
         check("Windows: the Startup entry is CRLF and UTF-8, for a folder named in any language",
               text.count("\n") == text.count("\r\n") and "chcp 65001" in text and "café" in text)

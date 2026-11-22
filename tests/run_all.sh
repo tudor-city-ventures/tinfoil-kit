@@ -12,7 +12,7 @@ W="$KIT_TEST_WORK" R="$KIT_TEST_WORK/remote" L="$KIT_TEST_WORK/logs"
 mkdir -p "$L"
 D="$W/drive/TinfoilKit"
 
-cleanup() { pkill -f tools/launch.sh; pkill -f START-HERE; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; pkill -f "share.py serve";
+cleanup() { pkill -f tools/launch.sh; pkill -f "Open Tinfoil Kit"; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; pkill -f "share.py serve";
             pkill -f "mock_services.py (tiles|photon|graphhopper|llama)"; }
 main() {
 cleanup 2>/dev/null
@@ -20,7 +20,7 @@ pkill -f mock_remote.py; sleep 0.5; (python3 "$TESTS/mock_remote.py" 19000 > "$L
 rm -f "$R/STATE_V2"; touch "$R/FLAKY"
 touch -d "2026-11-20 12:00" "$R/geofabrik/us-northeast-latest.osm.pbf" "$R/photon/north-america/usa/photon-db-usa-1.3-latest.tar.bz2"
 rm -rf "$W/drive" && mkdir -p "$D"
-cp -a "$ROOT"/{kit,kit.json,START-HERE.command,SETUP.command,START-HERE-Windows.bat,GUIDE.md,tools} "$D/"
+cp -a "$ROOT"/{kit,kit.json,"Open Tinfoil Kit.command",SETUP.command,"Open Tinfoil Kit for Windows.bat",GUIDE.md,tools} "$D/"
 cp "$TESTS/drive_kit_maps.json" "$D/kit.json"
 . "$TESTS/env.sh"
 cd "$D" || exit 1
@@ -57,7 +57,7 @@ grep -E "PASS|FAIL|up to date|All set" "$L/setup.log" | tail -12
 finder_files_left "./kit test"; finder_files
 step "search";  ./kit search test | head -2
 step "share on the home network"; ./kit share on --code 13572468 | head -2
-step "launcher"; (timeout 900 bash START-HERE.command --no-browser > "$L/launch.out" 2>&1 &); sleep 12
+step "launcher"; (timeout 900 bash "Open Tinfoil Kit.command" --no-browser > "$L/launch.out" 2>&1 &); sleep 12
 grep -E "Library:|AI:|Maps|home network|Access code" "$L/launch.out"
 finder_files_left "the launcher"
 # What a phone on the home network opens: this machine's network address, from the launcher's message.
@@ -73,7 +73,7 @@ step "portal UI";    run_test portal_ui 240 python3 "$TESTS/ui_test.py"
 step "map UI";       run_test map_ui 400 python3 "$TESTS/map_ui_test.py"
 cleanup 2>/dev/null
 step "share off"; ./kit share off | head -1
-step "launcher --no-maps"; (timeout 60 bash START-HERE.command --no-browser --no-maps > "$L/launch2.out" 2>&1 &); sleep 8
+step "launcher --no-maps"; (timeout 60 bash "Open Tinfoil Kit.command" --no-browser --no-maps > "$L/launch2.out" 2>&1 &); sleep 8
 grep -q "Starting maps" "$L/launch2.out" && echo "FAIL: maps started" || echo "ok: no map servers"
 grep -q "home network" "$L/launch2.out" && echo "FAIL: still shared after ./kit share off" || echo "ok: not shared"
 pgrep -f "mock_services.py (tiles|photon|graphhopper)" >/dev/null && echo "FAIL: map process running"

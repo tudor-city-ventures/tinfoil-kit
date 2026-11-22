@@ -44,6 +44,13 @@ trap '[ -n "${pushed:-}" ] || git tag -d "$TAG" > /dev/null' EXIT
 # git archive is reproducible: anyone can rebuild the tar from the tag and compare (gzip output can vary by version).
 git archive --format=tar --prefix="tinfoilkit-$TAG/" "$TAG" | gzip -n -9 > "$asset"
 ssh-keygen -Y sign -f "$KEY" -n "$NS" "$asset"
+# What the website's download buttons and llms.txt fetch (releases/latest/download/NAME): the same kit files from the
+# same tag, in a folder called TinfoilKit; the tar.gz is for Linux and the command line. Not signed, since they're
+# only a first install: ./kit update takes the signed archive.
+git archive --format=zip --prefix=TinfoilKit/ "$TAG" > "$out/TinfoilKit-Mac.zip"
+cp "$out/TinfoilKit-Mac.zip" "$out/TinfoilKit-Windows.zip"
+git archive --format=tar --prefix=TinfoilKit/ "$TAG" | gzip -n -9 > "$out/TinfoilKit.tar.gz"
+downloads=("$out/TinfoilKit-Mac.zip" "$out/TinfoilKit-Windows.zip" "$out/TinfoilKit.tar.gz")
 # Drives on the last release check this one with that release's keys, so a key change needs both to accept it.
 for ref in "$TAG" $prev; do
   git show "$ref:tools/release-signers" > "$out/signers" 2> /dev/null || continue
@@ -56,6 +63,7 @@ echo "Ready: $TAG, $(git log -1 --format='%h %s' "$sha")"
 echo "  $asset and .sig"
 echo "  tar SHA-256 $(gunzip -c "$asset" | shasum -a 256 | cut -d' ' -f1)"
 echo "  (rebuild it: git archive --format=tar --prefix=tinfoilkit-$TAG/ $TAG | shasum -a 256)"
+echo "  downloads for the website: TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, TinfoilKit.tar.gz"
 echo "What's new:"
 sed 's/^/  /' "$NOTES"
 echo
@@ -66,6 +74,6 @@ read -r answer
 [ "$answer" = "$TAG" ] || die "not published"
 git push -q origin "$TAG"
 pushed=1
-gh release create "$TAG" --verify-tag --title "Tinfoil Kit $TAG" --notes-file "$NOTES" "$asset" "$asset.sig" \
-  || die "the tag is on GitHub but the release isn't. Finish with: gh release create $TAG --verify-tag --notes-file $NOTES $asset $asset.sig"
+gh release create "$TAG" --verify-tag --title "Tinfoil Kit $TAG" --notes-file "$NOTES" "$asset" "$asset.sig" "${downloads[@]}" \
+  || die "the tag is on GitHub but the release isn't. Finish with: gh release create $TAG --verify-tag --notes-file $NOTES $asset $asset.sig ${downloads[*]}"
 echo "Published $TAG."

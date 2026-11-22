@@ -9,12 +9,12 @@ step "python compiles"
 run python3 -m py_compile tools/kit.py tools/share.py tests/*.py site/*.py
 
 step "bash parses"
-SH="kit START-HERE.command SETUP.command UNINSTALL.command tools/launch.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles"
-for f in $SH; do run bash -n "$f"; done
+SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command tools/launch.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles)
+for f in "${SH[@]}"; do run bash -n "$f"; done
 
 step "shellcheck"
 if command -v shellcheck >/dev/null; then
-  run shellcheck -S error $SH
+  run shellcheck -S error "${SH[@]}"
 else
   echo "skipped (not installed)"
 fi

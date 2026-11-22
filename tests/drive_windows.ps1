@@ -1,8 +1,8 @@
 # The drive test's Windows setup: SETUP-Windows.bat from a fresh download, against the mock internet, the way
 # a person double-clicking it would answer. First onto this PC (~\TinfoilKit), then onto an exFAT drive. Each
-# time START-HERE-Windows.bat must serve the library and the AI, and UNINSTALL-Windows.bat must remove it all. On this
+# time Open Tinfoil Kit for Windows.bat must serve the library and the AI, and UNINSTALL-Windows.bat must remove it all. On this
 # PC, SETUP-Windows.bat --home-server must share it on the home network, behind the access code, and set it to start
-# as you sign in. Last, ./kit sync builds a small real map with the real map programs, and START-HERE-Windows.bat
+# as you sign in. Last, ./kit sync builds a small real map with the real map programs, and Open Tinfoil Kit for Windows.bat
 # --share must serve it, on this PC's own Python.
 # CI runs it (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive, in tests\work\remote.
 $ErrorActionPreference = "Stop"
@@ -64,10 +64,10 @@ function Get-RoomAnswer($dir, $place) {
   if ($room[0] -eq "tight") { "2" } elseif ($room[0] -ne "fits") { "1" }
 }
 
-# The kit's servers, its sharing gate, and the START-HERE windows that started them.
+# The kit's servers, its sharing gate, and the Open Tinfoil Kit windows that started them.
 function Stop-Kit($kit, $proc) {
   Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$kit\bin\", "OrdinalIgnoreCase") } | Stop-Process -Force
-  $mine = "$kit\tools\share.py", "$kit\START-HERE-Windows.bat"
+  $mine = "$kit\tools\share.py", "$kit\Open Tinfoil Kit for Windows.bat"
   Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and ($mine | Where-Object { $c.IndexOf($_, "OrdinalIgnoreCase") -ge 0 }) } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   if ($proc) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
@@ -84,15 +84,15 @@ function Test-Share($kit, $address, $code) {
   }
 }
 
-# Double-click START-HERE-Windows.bat, check the library and the AI, stop it. -Share: with --share, which needs Python
+# Double-click Open Tinfoil Kit for Windows.bat, check the library and the AI, stop it. -Share: with --share, which needs Python
 # and gets this PC's own when SETUP's isn't there.
 function Test-Kit($kit, $name, [switch]$Share) {
   if ($Share) {
-    Step "START-HERE-Windows.bat --share in $kit"
-    $p = Start-Process "$kit\START-HERE-Windows.bat" -ArgumentList "--share" -WorkingDirectory $kit -PassThru
+    Step "Open Tinfoil Kit for Windows.bat --share in $kit"
+    $p = Start-Process "$kit\Open Tinfoil Kit for Windows.bat" -ArgumentList "--share" -WorkingDirectory $kit -PassThru
   } else {
-    Step "double-click START-HERE-Windows.bat in $kit"
-    $p = Start-Process "$kit\START-HERE-Windows.bat" -WorkingDirectory $kit -PassThru
+    Step "double-click Open Tinfoil Kit for Windows.bat in $kit"
+    $p = Start-Process "$kit\Open Tinfoil Kit for Windows.bat" -WorkingDirectory $kit -PassThru
   }
   python "$tests\drive.py" check 8888 8080
   if ($LASTEXITCODE -ne 0) {
@@ -110,7 +110,7 @@ function Test-Kit($kit, $name, [switch]$Share) {
   Copy-Item -Recurse "$kit\logs" "$logs\$($name -replace '\W', '-')-logs" -ErrorAction SilentlyContinue
 }
 
-# The map servers START-HERE-Windows.bat started: street-level tiles, and directions across Andorra. There's no
+# The map servers Open Tinfoil Kit for Windows.bat started: street-level tiles, and directions across Andorra. There's no
 # small real address database to test Photon with, so the test kit's Photon is a stand-in that Java must have tried.
 function Test-Map($kit) {
   try {
@@ -127,7 +127,7 @@ function Test-Map($kit) {
     "PASS  directions across Andorra: $([math]::Round($route.paths[0].distance)) m in $($route.paths[0].instructions.Count) steps"
   } else { Fail "directions didn't answer"; Get-Content "$kit\logs\routing.log" -Tail 20 -ErrorAction SilentlyContinue }
   if (Select-String -Quiet -Path "$kit\logs\geocoder.log" -Pattern "jarfile") { "PASS  address search: Java ran Photon's jar" }
-  else { Fail "START-HERE didn't start Photon"; Get-Content "$kit\logs\geocoder.log" -Tail 10 -ErrorAction SilentlyContinue }
+  else { Fail "Open Tinfoil Kit didn't start Photon"; Get-Content "$kit\logs\geocoder.log" -Tail 10 -ErrorAction SilentlyContinue }
 }
 
 function Invoke-Uninstall($kit, $log) {
@@ -150,7 +150,7 @@ foreach ($said in "Step 1 of 4: where do you live", "The essentials work", "Step
 }
 if (-not (Test-Path "$kit\models")) { Fail "the kit isn't set up in $kit" }
 if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
-foreach ($f in "START-HERE-Windows.bat", "SETUP-Windows.bat", "UNINSTALL-Windows.bat") {
+foreach ($f in "Open Tinfoil Kit for Windows.bat", "SETUP-Windows.bat", "UNINSTALL-Windows.bat") {
   if (Get-Item -LiteralPath "$kit\$f" -Stream Zone.Identifier -ErrorAction SilentlyContinue) { Fail "$f is still marked as from the internet" }
 }
 Test-Kit $kit "this PC"
@@ -169,7 +169,7 @@ $said -split "`n" | Select-String "Home server|home network|Access code|sign in"
 $address = if ($said -match "open (http://[0-9.]+:[0-9]+) on a phone") { $Matches[1] }
 $code = if ($said -match "Access code: ([0-9 ]+)") { $Matches[1] -replace " ", "" }
 if (-not ($address -and $code)) { Fail "SETUP --home-server didn't show the address and the access code" }
-if (-not ((Get-Content $startup -Raw -ErrorAction SilentlyContinue) -like "*`"$kit\START-HERE-Windows.bat`" --no-browser*")) {
+if (-not ((Get-Content $startup -Raw -ErrorAction SilentlyContinue) -like "*`"$kit\Open Tinfoil Kit for Windows.bat`" --no-browser*")) {
   Fail "SETUP --home-server didn't set the kit to start as you sign in ($startup)"
 }
 Test-Share $kit $address $code    # the kit Windows started from the Startup folder, minimized
@@ -218,7 +218,7 @@ Dismount-DiskImage -ImagePath $vhd | Out-Null
 Step "the map: ./kit sync builds Andorra's with the real pmtiles, Java and GraphHopper for Windows"
 Get-Kit $dl
 python "$tests\drive.py" kitjson "$dl\kit.json" maps
-Get-ChildItem -Recurse -File $dl | Unblock-File    # no SETUP here to do it, and START-HERE starts with a double-click
+Get-ChildItem -Recurse -File $dl | Unblock-File    # no SETUP here to do it, and Open Tinfoil Kit starts with a double-click
 python "$dl\tools\kit.py" --root $dl sync --yes *> "$logs\sync-windows-map.log"
 "exit $LASTEXITCODE"
 Get-Content "$logs\sync-windows-map.log" | Select-String "map|road|GraphHopper|address|FAIL|failed|rror" |

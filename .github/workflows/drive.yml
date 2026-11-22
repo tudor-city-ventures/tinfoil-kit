@@ -55,7 +55,7 @@ jobs:
             *) base="" ;;    # by hand: always
           esac
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2> /dev/null &&
-             git diff --quiet "$base" HEAD -- tools kit kit.json SETUP.command START-HERE.command UNINSTALL.command '*.bat' \
+             git diff --quiet "$base" HEAD -- tools kit kit.json SETUP.command 'Open Tinfoil Kit.command' UNINSTALL.command '*.bat' \
                'tests/drive*' 'tests/make_*.py' tests/build_fixtures.sh tests/env.sh tests/mock_remote.py tests/ui_test.py \
                .github/workflows/drive.yml \
                ':(exclude)tools/pins.json'    # the test's kits take the mock's own builds, never the pinned ones
@@ -145,7 +145,7 @@ jobs:
         with:
           name: drive
           path: tests/work
-      - name: Plug in the drive the Mac made and double-click START-HERE-Windows.bat
+      - name: Plug in the drive the Mac made and double-click Open Tinfoil Kit for Windows.bat
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force tests/work/logs, tests/work/shots | Out-Null
@@ -159,7 +159,7 @@ jobs:
           $kit = "$($part.DriveLetter):\TinfoilKit"
           "The drive is $($part.DriveLetter):"
           Get-ChildItem -Force "$kit\library", "$kit\models" -Recurse | ForEach-Object { "$($_.Mode)  $($_.FullName)" }
-          Start-Process -FilePath "$kit\START-HERE-Windows.bat" -WorkingDirectory $kit
+          Start-Process -FilePath "$kit\Open Tinfoil Kit for Windows.bat" -WorkingDirectory $kit
           python tests/drive.py check 8888 8080
           $checked = $LASTEXITCODE
           Start-Sleep 5
@@ -195,7 +195,7 @@ jobs:
         with:
           name: mock-internet
           path: tests/work/remote
-      - name: Unzip the kit in Downloads, double-click SETUP-Windows.bat, START-HERE-Windows.bat, UNINSTALL-Windows.bat
+      - name: Unzip the kit in Downloads, double-click SETUP-Windows.bat, Open Tinfoil Kit for Windows.bat, UNINSTALL-Windows.bat
         shell: pwsh
         run: tests/drive_windows.ps1
       - if: always()
