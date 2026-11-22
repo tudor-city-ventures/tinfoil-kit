@@ -1,27 +1,62 @@
 name: refresh builder sizes
 # Asks every source for its current size (./kit plan --json downloads nothing) and commits
 # site/sources.json when it changed, so the website's kit builder stays accurate.
+# Only the commit job can write to the repo, and it runs none of the kit's code: the build job, which talks to
+# every download host, has a read-only token and hands its result over as an artifact.
 on:
   schedule:
     - cron: "17 6 * * 1"
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  sizes:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: main     # a scheduled run starts on the default branch; the site deploys from main
-      - run: ./kit plan --json > /tmp/plan.json
+          persist-credentials: false
+      - run: ./kit plan --json > "$RUNNER_TEMP/plan.json"
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - name: list sources that couldn't be resolved (they would fail in a real sync too)
-        run: python3 -c "import json; [print(k, '->', v['error']) for k, v in json.load(open('/tmp/plan.json')).items() if v['error']]"
-      - run: python3 site/build_sources.py /tmp/plan.json
-      - run: |
+        run: python3 -c "import json, sys; [print(k, '->', v['error']) for k, v in json.load(open(sys.argv[1])).items() if v['error']]" "$RUNNER_TEMP/plan.json"
+      - run: python3 site/build_sources.py "$RUNNER_TEMP/plan.json"
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: sizes
+          path: site/sources.json
+          retention-days: 1
+
+  commit:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: sizes
+          path: ${{ runner.temp }}/sizes
+      - name: commit the new sizes, and nothing else
+        env:
+          NEW: ${{ runner.temp }}/sizes/sources.json
+        run: |
+          python3 -I - "$NEW" site/sources.json <<'PY'
+          import json, sys
+          new, old = (json.load(open(p)) for p in sys.argv[1:])
+          def rest(d):    # everything but the sizes
+              return {**d, "sources": [{k: v for k, v in s.items() if k not in ("bytes", "estimated")} for s in d["sources"]]}
+          ok = rest(new) == rest(old) and all(type(s["bytes"]) is int and type(s["estimated"]) is bool for s in new["sources"])
+          sys.exit(0 if ok else "The new sources.json changes more than sizes, so it isn't committed. Run build_sources.py by hand.")
+          PY
+          cp "$NEW" site/sources.json
           git diff --quiet site/ && { echo "no change"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
