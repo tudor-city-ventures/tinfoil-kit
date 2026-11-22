@@ -47,11 +47,16 @@ else
   echo "skipped (not a git checkout)"
 fi
 
-step "Windows scripts keep CRLF and plain ASCII (cmd misreads anything else)"
+step "Windows scripts keep CRLF and plain ASCII (cmd misreads anything else), and each goto and call has its label"
 run python3 -c "
-import glob, sys
+import glob, re, sys
 bad = [f for f in glob.glob('*.bat') + glob.glob('*.cmd') for d in [open(f, 'rb').read()] if d.count(b'\n') != d.count(b'\r\n') or not d.isascii()]
-sys.exit(f'not CRLF and ASCII: {bad}' if bad else 0)"
+for f in glob.glob('*.bat') + glob.glob('*.cmd'):
+    code = [l.strip() for l in open(f, encoding='ascii', errors='replace') if not re.match(r'\s*rem\b', l, re.I)]
+    labels = [l[1:].split()[0].lower() for l in code if l.startswith(':') and len(l) > 1]
+    used = {m.lower() for l in code for m in re.findall(r'(?i)\b(?:goto\s+:?|call\s+:)([\w-]+)', l)} - {'eof'}
+    bad += [f'{f}: no label :{x}' for x in sorted(used - set(labels))] + [f'{f}: label :{x} twice' for x in sorted({x for x in labels if labels.count(x) > 1})]
+sys.exit(f'{bad}' if bad else 0)"
 
 step "page script parses"
 run node -e '

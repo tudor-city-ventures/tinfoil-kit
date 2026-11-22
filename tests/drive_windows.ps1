@@ -1,5 +1,6 @@
 # The drive test's Windows setup: SETUP-Windows.bat from a fresh download, against the mock internet, the way
-# a person double-clicking it would answer. First onto this PC (~\TinfoilKit), then onto an exFAT drive. Each
+# a person double-clicking it would answer. First onto this PC (~\TinfoilKit), then onto an exFAT drive, then onto
+# the drive again with the one command an AI hands over (--drive, --yes and more), which must ask nothing. Each
 # time Open Tinfoil Kit for Windows.bat must serve the library and the AI, and UNINSTALL-Windows.bat must remove it all. On this
 # PC, SETUP-Windows.bat --home-server must share it on the home network, behind the access code, and set it to start
 # as you sign in. Last, ./kit sync builds a small real map with the real map programs, and Open Tinfoil Kit for Windows.bat
@@ -238,6 +239,25 @@ Test-Kit $kit "the drive"
 Step "UNINSTALL-Windows.bat --yes on the drive: the kit goes, and nothing else on the drive"
 Invoke-Uninstall $kit "uninstall-windows-drive.log"
 if (-not (Test-Path "${letter}:\keep-me.txt")) { Fail "UNINSTALL deleted something else on the drive" }
+
+Step "SETUP-Windows.bat --help, and an option it doesn't have"
+Get-Kit $dl
+$help = & "$dl\SETUP-Windows.bat" --help
+if ($LASTEXITCODE -ne 0 -or -not ($help -match "^--drive PATH")) { Fail "SETUP-Windows.bat --help didn't list its options (exit $LASTEXITCODE)"; $help }
+& "$dl\SETUP-Windows.bat" --nope > $null
+if ($LASTEXITCODE -ne 2) { Fail "SETUP-Windows.bat --nope should stop with exit 2, not $LASTEXITCODE" }
+Step "SETUP-Windows.bat --drive ${letter}: --models Tiny --share --yes: the one command an AI hands over, and no questions"
+$out = Invoke-Setup $dl "setup-windows-yes.log" @("") "--drive ${letter}: --models Tiny --share --yes"
+$out
+if (-not ($out -contains "exit 0")) { Fail "SETUP --yes didn't end with exit 0" }
+foreach ($said in "What goes in it:", "Sharing: phones and laptops", "Access code") {
+  if (-not (Select-String -Quiet -SimpleMatch -Path "$logs\setup-windows-yes.log" -Pattern $said)) { Fail "SETUP --yes didn't say `"$said`"" }
+}
+if (Select-String -Quiet -Path "$logs\setup-windows-yes.log" -Pattern "\[Y/n\]|\[y/N\]|Type (1|a number)|Press Enter") { Fail "SETUP --yes asked something" }
+if (-not (Test-Path "$kit\models")) { Fail "the kit isn't set up on the drive, at $kit" }
+if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
+Test-Kit $kit "the drive, set up with --yes"
+Invoke-Uninstall $kit "uninstall-windows-yes.log"
 Dismount-DiskImage -ImagePath $vhd | Out-Null
 
 Step "the map: ./kit sync builds Andorra's with the real pmtiles, Java, Photon and GraphHopper for Windows"

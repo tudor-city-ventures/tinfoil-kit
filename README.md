@@ -112,7 +112,7 @@ Download the kit from [tinfoilkit.com](https://tinfoilkit.com). Its button picks
 - **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat` in the TinfoilKit folder. If Windows says it protected your PC, click **More info**, then **Run anyway**.
 - **Linux:** run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command` in a terminal. It needs python3 and curl.
 
-SETUP asks where you live and whether the kit goes on an external drive or on this computer, says how much room each has, moves it there, downloads the essentials and tests them, then gets the rest and tests again. Every answer can also be given up front, so one command sets it up without asking anything: `bash TinfoilKit/SETUP.command --region texas --this-computer --yes`. `--help` lists the options: a drive, just the essentials, which AI models and books, sharing on the home network.
+SETUP asks where you live and whether the kit goes on an external drive or on this computer, says how much room each has, moves it there, downloads the essentials and tests them, then gets the rest and tests again. Every answer can also be given up front, so one command sets it up without asking anything: `bash TinfoilKit/SETUP.command --region texas --this-computer --yes` (`.\TinfoilKit\SETUP-Windows.bat` with the same options on Windows). `--help` lists the options: a drive, just the essentials, which AI models and books, sharing on the home network.
 
 Or from a terminal on a Mac or Linux:
 
