@@ -157,8 +157,9 @@ GATE_BAD = {
 
 
 def regions_check():
-    """Runs sizes.yml's check on tools/regions.json with one change each: names and ids stay as committed."""
-    import copy, json, subprocess, tempfile, textwrap
+    """Runs sizes.yml's merge of a new tools/regions.json, one change at a time: sizes and checked downloads come
+    through, ids, names and anything else don't."""
+    import copy, json, shutil, subprocess, tempfile, textwrap
     root = WORKFLOWS.parent.parent
     code = textwrap.dedent((WORKFLOWS / "sizes.yml").read_text().split("tools/regions.json <<'PY'\n", 1)[1]
                            .split("\n          PY\n", 1)[0])
@@ -166,25 +167,35 @@ def regions_check():
     base = json.loads(committed.read_text(encoding="utf-8"))
     def first(d):
         return d["regions"][0]
-    cases = [("new sizes", lambda d: first(d)["mb"].update(tiles=1), True),
-             ("a renamed place", lambda d: first(d).update(name="x"), False),
-             ("a command in an id", lambda d: first(d).update(id="us/x; sh"), False),
-             ("a new nickname", lambda d: first(d)["also"].append("x"), False),
-             ("a download elsewhere", lambda d: first(d).update(pbf="https://x/a-latest.osm.pbf"), False),
-             ("a path up", lambda d: first(d).update(pbf="../a-latest.osm.pbf"), False),
-             ("a file that isn't Wikipedia", lambda d: d["languages"]["en"].update(zim="x_en_all_maxi"), False),
-             ("a size as text", lambda d: first(d)["mb"].update(tiles="1"), False)]
+    def same(*keys):
+        return lambda m: all(first(m)[k] == first(base)[k] for k in keys)
+    cases = [("nothing new", lambda d: None, lambda m: m == base),
+             ("new sizes", lambda d: first(d)["mb"].update(tiles=1), lambda m: first(m)["mb"]["tiles"] == 1),
+             ("a renamed place, with new sizes", lambda d: first(d).update(name="x", mb={"tiles": 1}),
+              lambda m: first(m)["name"] == first(base)["name"] and first(m)["mb"] == {"tiles": 1}),
+             ("a command in an id", lambda d: first(d).update(id="us/x; sh"), lambda m: m == base),
+             ("a new nickname and home", lambda d: first(d).update(also=["x"], home={"label": "x"}), same("also", "home")),
+             ("a download elsewhere", lambda d: first(d).update(pbf="https://x/a-latest.osm.pbf"), same("pbf")),
+             ("a path up", lambda d: first(d).update(pbf="../a-latest.osm.pbf", photon="a//photon-db-x-1.0-latest.tar.bz2"),
+              same("pbf", "photon")),
+             ("a file that isn't Wikipedia", lambda d: d["languages"]["en"].update(zim="x_en_all_maxi"), lambda m: m == base),
+             ("a size as text", lambda d: first(d)["mb"].update(tiles="1"), same("mb")),
+             ("an unknown language", lambda d: first(d)["langs"].append("zz"), same("langs")),
+             ("a new place", lambda d: d["regions"].append(dict(first(d), id="xx")), lambda m: m == base)]
     errs = []
     with tempfile.TemporaryDirectory() as t:
-        new = Path(t) / "regions.json"
-        for what, change, want in cases:
+        new, out = Path(t) / "new.json", Path(t) / "regions.json"
+        for what, change, holds in cases:
             d = copy.deepcopy(base)
             change(d)
             new.write_text(json.dumps(d), encoding="utf-8")
-            got = subprocess.run([sys.executable, "-I", "-c", code, str(new), str(committed)], capture_output=True).returncode == 0
-            if got != want:
-                errs.append(f"sizes.yml {'refuses' if want else 'accepts'} {what} in regions.json")
-    return len(cases), errs
+            shutil.copy(committed, out)
+            ran = subprocess.run([sys.executable, "-I", "-c", code, str(new), str(out)], capture_output=True).returncode == 0
+            if not (ran and holds(json.loads(out.read_text(encoding="utf-8")))):
+                errs.append(f"sizes.yml's regions.json merge gets {what} wrong")
+        if out.read_bytes() != committed.read_bytes():
+            errs.append("sizes.yml writes regions.json in another layout than build_regions.py")
+    return len(cases) + 1, errs
 
 
 def pins_check():
