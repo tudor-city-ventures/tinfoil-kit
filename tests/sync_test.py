@@ -604,8 +604,8 @@ pathlib.Path(str(out) + ".aria2").unlink()
           and all((flat / d).is_dir() for d in ("models", "maps")) and not (flat / "downloads").exists(), out)
     whole = work / "whole"    # all of a release's code at its top: every part of it is code, so nothing stays beside app
     whole.mkdir()
-    tar = subprocess.run(["git", "-C", str(TESTS.parent), "archive", "HEAD"], capture_output=True)
-    if tar.returncode == 0:
+    tar = shutil.which("git") and subprocess.run(["git", "-C", str(TESTS.parent), "archive", "HEAD"], capture_output=True)
+    if tar and tar.returncode == 0:    # not in CI's bash 3.2 container, which has no git
         subprocess.run(["tar", "-x", "-C", str(whole)], input=tar.stdout, check=True)
         shutil.rmtree(whole / "tools")    # this code, not the last commit's
         shutil.copytree(TESTS.parent / "tools", whole / "tools", ignore=shutil.ignore_patterns("tinfoilkit-*", "__pycache__"))
