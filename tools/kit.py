@@ -2417,6 +2417,8 @@ def set_setting(root: Path, key: str, value: Any) -> None:
 
 
 def cmd_share(root: Path, args: argparse.Namespace) -> None:
+    if os.name == "nt":
+        die("Sharing on the home network works on a Mac or Linux for now. On Windows the kit is for this PC.")
     share = share_tools()
     s = load_config(root)["settings"]
     port, on = int(s.get("share_port", 8000)), s.get("share_on_network") is True
@@ -2433,12 +2435,14 @@ def cmd_share(root: Path, args: argparse.Namespace) -> None:
         log("The kit restarted without it." if share.restart_if_autostarted(root) else
             "If the kit is running, close its window and start it again.")
         return
-    if args.action == "on":
+    if args.action == "on" and on:
+        log("Sharing is already on.")
+    elif args.action == "on":
         set_setting(root, "share_on_network", True)
         on = True
-        log("Sharing on your home network is on. Phones and laptops there need the access code to get in.")
+        log("Sharing is on: phones and laptops on your home network need the access code.")
         log("The kit restarted with sharing on." if share.restart_if_autostarted(root) else
-            "Start the kit (START-HERE.command), or close its window and start it again if it's running.")
+            "Start the kit to share it (START-HERE.command), or restart it if it's running.")
     elif args.action == "new-code":
         log("New access code. Phones and laptops that used the old one need this one now.")
     if not on:
@@ -2453,6 +2457,8 @@ def cmd_share(root: Path, args: argparse.Namespace) -> None:
 
 
 def cmd_autostart(root: Path, args: argparse.Namespace) -> None:
+    if os.name == "nt":
+        die("Starting the kit with the computer works on a Mac or Linux for now.")
     rc = share_tools().autostart(root, args.action or "status")
     if rc == 0 and args.action == "on" and load_config(root)["settings"].get("share_on_network") is not True:
         log("Sharing is off, so only this computer can use the kit. ./kit share on lets your phones and laptops in.")

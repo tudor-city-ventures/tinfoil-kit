@@ -238,7 +238,10 @@ if [ "$SHARE" = 1 ]; then
     say "  Sharing already on, on port $SHARE_PORT."; SHARE_OK=1
   else
     if taken "$SHARE_PORT"; then
-      p="$(free_port "$SHARE_PORT")"; say "  Another program is using port $SHARE_PORT, so sharing uses $p."; SHARE_PORT="$p"
+      p="$(free_port "$SHARE_PORT")"
+      say "  Another program is using port $SHARE_PORT, so sharing uses $p. For an address that stays the same, set"
+      say "  share_port in kit.json to a free port."
+      SHARE_PORT="$p"
     fi
     GARGS=(--root "$KIT" --port "$SHARE_PORT" --library "$LIB_PORT" --ai "$AI_PORT")
     [ "$NO_MAPS" = 0 ] && GARGS+=(--tiles "$TILES_PORT" --geocoder "$GEO_PORT" --routing "$ROUTE_PORT")
