@@ -99,11 +99,7 @@ export default function Home() {
               </a>
             </Download>
           </div>
-          <Hero
-            label={
-              "A dotted globe spins up and streams into a drive until the drive holds the whole kit. Then the Wi-Fi goes off, the globe goes dark, and the drive lights up what it holds: Wikipedia, AI models, maps and guides."
-            }
-          />
+          <Hero />
         </section>
         <section id="how" className="how">
           <div className="wrap section">

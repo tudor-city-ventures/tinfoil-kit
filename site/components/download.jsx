@@ -148,10 +148,11 @@ function SetupDialog({ phone }) {
   );
 }
 
-// The hero's two ways in, Download and Set up with your AI, with "or" between them: lead="ai" puts the AI first. Download
-// gets this computer's file, All downloads lists them all, and once a download starts the dialog says what to click
-// next. Before the script runs, it opens the release page, which lists every file. The children are the hero's other
-// links, beside the buttons.
+// The hero's two ways in, Download and Set up with your AI, with "or" between them. Download gets this computer's file,
+// All downloads lists them all, and once a download starts the dialog says what to click next. Before the script runs,
+// it opens the release page, which lists every file. On the home page, Set up with your AI goes to the My AI installs it
+// page; there, lead="ai" puts it first and it opens the prompt. The children are the hero's other links, beside the
+// buttons.
 export default function Download({ lead = "download", children }) {
   const dialog = useRef(null);
   const [os, setOS] = useState("");
@@ -195,11 +196,16 @@ export default function Download({ lead = "download", children }) {
       {mine ? `Download for ${mine.name}` : "Download free"}
     </a>
   );
-  const askAI = (
-    <SetupLink className={lead === "ai" ? "btn primary" : "btn"} id="askAI">
-      Set up with your AI
-    </SetupLink>
-  );
+  const askAI =
+    lead === "ai" ? (
+      <SetupLink className="btn primary" id="askAI">
+        Set up with your AI
+      </SetupLink>
+    ) : (
+      <a className="btn" id="askAI" href="/ai-setup">
+        Set up with your AI
+      </a>
+    );
   return (
     <>
       <div className="ctas">
@@ -214,7 +220,7 @@ export default function Download({ lead = "download", children }) {
           All downloads
         </button>
       </p>
-      <SetupDialog phone={os === "phone"} />
+      {lead === "ai" ? <SetupDialog phone={os === "phone"} /> : null}
       <dialog
         id="downloads"
         className="dl"

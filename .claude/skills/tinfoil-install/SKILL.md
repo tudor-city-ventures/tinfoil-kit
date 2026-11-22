@@ -28,7 +28,7 @@ If the kit's code is already on the computer (a download, or a git checkout), `.
 
 One or two questions at a time. For each, say what it's for and roughly how big it is, and recommend what suits their computer.
 
-1. Their computer: a Mac with Apple Silicon, or a Windows or Linux PC on x64 (Intel Macs and ARM PCs can't run it), its memory and free space. Windows and Linux are experimental for now: tell them, so rough edges don't surprise them.
+1. Their computer: a Mac with Apple Silicon, or a Windows or Linux PC on x64 (Intel Macs and ARM PCs can't run it), its memory and free space. If you can run commands, look instead of asking, with commands that only read: `system_profiler SPHardwareDataType` and `df -h ~` on a Mac; `Get-CimInstance Win32_ComputerSystem | Select-Object SystemType, TotalPhysicalMemory` and `Get-PSDrive C` on Windows; `uname -m`, `free -g` and `df -h ~` on Linux. Windows and Linux are experimental for now: tell them, so rough edges don't surprise them.
 2. Where it lives: the drive, this computer, or a home server (see the tinfoil-home-server skill).
 3. Where they live, for the map (`--region`), and any places nearby they want on it too, Wikipedia's languages (`--wikipedia`), and how much of Wikipedia (`--wikipedia-size`): all of it (127 GB in English) or just the best 50,000 articles (7 GB, or 2.7 GB as text).
 4. The AI: the one their computer runs (the default), none (`--no-ai`), or exact models (`--models`).

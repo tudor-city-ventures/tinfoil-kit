@@ -245,19 +245,17 @@ with sync_playwright() as p:
         if name == "desktop":
             page.context.grant_permissions(["clipboard-read", "clipboard-write"])
             page.evaluate("navigator.clipboard.writeText('')")
-            page.click("#askAI")
-            opened = page.evaluate("document.getElementById('aiSetup').open") and not page.is_visible(
-                "#aiSetup .dl-phone"
-            )
-            page.click("#copyHero")
-            page.wait_for_selector("#copyHero:text-is('Copied')", timeout=5000)
+            nav = b.new_page(viewport=vp)
+            nav.goto(URL)
+            nav.wait_for_selector(HYDRATED)
+            nav.click("#askAI")
+            nav.wait_for_url(URL + "ai-setup", timeout=5000)
             check(
-                "Set up with your AI shows the setup prompt, and Copy copies it",
-                opened
-                and page.evaluate("navigator.clipboard.readText()") == page.text_content("#heroPrompt")
-                and page.text_content("#heroPrompt").startswith("I want to set up Tinfoil Kit"),
+                "Set up with your AI on the home page goes to My AI installs it, not a popup",
+                nav.url == URL + "ai-setup" and page.locator("#aiSetup").count() == 0,
+                nav.url,
             )
-            page.keyboard.press("Escape")
+            nav.close()
             # Step 2 is the download; the small print offers the AI setup page instead
             steps = page.locator("#how .how-steps h3").all_inner_texts()
             page.click("#how .how-steps li:nth-child(2) > a")
@@ -336,6 +334,28 @@ with sync_playwright() as p:
             and page.inner_text(".ctas .btn.primary") == "Set up with your AI",
             between,
         )
+        page.locator(".fig canvas").scroll_into_view_if_needed()
+        inked = until(page, f"{INKED} > 5000 && {INKED}") or page.evaluate(INKED)
+        check(
+            f"{name}: AI setup page has the home page's headline and its animation",
+            page.text_content(".hero h1").startswith("The internet's down.") and inked > 5000,
+            f"{inked} inked pixels",
+        )
+        found = dict(zip(page.locator(".chat dt").all_inner_texts(), page.locator(".chat dd").all_inner_texts()))
+        check(
+            f"{name}: the chat shows the AI finding the Mac's chip and memory and the external drive",
+            list(found) == ["Mac", "Drive"]
+            and "Apple M" in found["Mac"]
+            and "GB of memory" in found["Mac"]
+            and "exFAT" in found["Drive"]
+            and "free" in found["Drive"],
+            str(found),
+        )
+        check(
+            f"{name}: the AI setup page says don't trust, verify",
+            page.text_content("#trust .kicker").strip() == "Don't trust, verify",
+            page.text_content("#trust .kicker"),
+        )
         text = page.inner_text("body")
         named = [w for w in ("LLM", "llama.cpp", "GGUF", "ZIM", "PMTiles", "SHA256SUMS", "127.0.0.1") if w not in text]
         check(f"{name}: the AI setup page names the parts, for technical readers", not named, ", ".join(named))
@@ -355,15 +375,30 @@ with sync_playwright() as p:
                 page.evaluate("navigator.clipboard.readText()").startswith("I want to set up Tinfoil Kit"),
             )
             page.evaluate("navigator.clipboard.writeText('')")
+            page.click("#askAI")
+            opened = page.evaluate("document.getElementById('aiSetup').open") and not page.is_visible(
+                "#aiSetup .dl-phone"
+            )
+            page.click("#copyHero")
+            page.wait_for_selector("#copyHero:text-is('Copied')", timeout=5000)
+            check(
+                "Set up with your AI shows the setup prompt, and Copy copies it",
+                opened
+                and page.evaluate("navigator.clipboard.readText()") == page.text_content("#heroPrompt")
+                and page.text_content("#heroPrompt").startswith("I want to set up Tinfoil Kit"),
+            )
+            page.keyboard.press("Escape")
+            page.evaluate("navigator.clipboard.writeText('')")
             steps = page.locator("#how .how-steps h3").all_inner_texts()
             page.click("#how a[href='/ai-setup#prompts']")
             page.click("#copyHero")
             page.wait_for_selector("#copyHero:text-is('Copied')", timeout=5000)
             check(
-                "AI setup page: paste the prompt, answer its questions, run one command; step 1 opens the prompt",
+                "AI setup page: buy an external SSD, have your AI set it up, use it anywhere; step 2 opens the prompt",
                 len(steps) == 3
-                and "prompt" in steps[0]
-                and "command" in steps[2]
+                and "external SSD" in steps[0]
+                and "AI" in steps[1]
+                and "any computer" in steps[2]
                 and page.evaluate("navigator.clipboard.readText()") == page.text_content("#installPrompt"),
                 str(steps),
             )
@@ -755,6 +790,8 @@ with sync_playwright() as p:
     axe(pg, "All downloads on a phone")
     pg.screenshot(path=os.path.join(SHOTS, "site_download_all_phone.png"))
     pg.keyboard.press("Escape")
+    pg.goto(URL + "ai-setup")
+    pg.wait_for_selector("#downloads .dl-phone:not([hidden])", state="attached")
     pg.click("#askAI")
     check("phone: Set up with your AI says to do it on the computer", pg.is_visible("#aiSetup .dl-phone"))
     box = pg.locator("#aiSetup").bounding_box()

@@ -13,6 +13,7 @@ import Builder, {
 import { CopyButton, Toast } from "@/components/copy";
 import Download, { SetupLink } from "@/components/download";
 import Header from "@/components/header";
+import Hero from "@/components/hero";
 import { AUDIT_PROMPT, INSTALL_PROMPT, OWN_PROMPT } from "@/components/prompts";
 import { APP, Footer, JsonLd, pageMetadata, Question, REPO, SITE } from "@/components/site";
 
@@ -35,16 +36,16 @@ export const metadata = pageMetadata({
 
 const STEPS = [
   [
-    "Paste the prompt",
-    "Into ChatGPT, Claude, Gemini or a coding agent. It reads llms.txt, the kit's instructions for AI agents.",
+    "Buy an external SSD",
+    "A portable USB SSD with room for the kit, about 300 GB, formatted exFAT so it starts on a Mac, Windows or Linux. Or use the computer's own disk.",
   ],
   [
-    "Answer its questions",
-    "Which drive and its format, your computer and its memory, where you live, and what goes in the kit.",
+    "Have your AI set it up",
+    "Paste the prompt into ChatGPT, Claude or a coding agent. It reads llms.txt, checks the computer and the drive, asks what goes in the kit, and gives you one command: a small kit to try first, then the rest.",
   ],
   [
-    "Run the one command",
-    "It downloads the latest release and runs SETUP with your answers as flags: a small kit to try first, then the rest.",
+    "Use it on any computer",
+    "Plug the drive into any Mac, Windows or Linux computer and open Tinfoil Kit. It all runs locally, with no internet.",
   ],
 ];
 
@@ -127,13 +128,14 @@ export default function AISetup() {
           <div className="hero-copy">
             <p className="kicker">Free&nbsp;· Open source&nbsp;· MIT</p>
             <h1>
-              Let your AI
-              <br /> set it up.
+              The internet's down.
+              <br /> Your AI isn't.
             </h1>
             <p className="lede">
               Tinfoil Kit is a local LLM with Wikipedia and maps built in, all offline, in one folder on your laptop or
               an external SSD. Paste one prompt into ChatGPT, Claude or your coding agent: it reads the kit's{" "}
-              <a href="/llms.txt">llms.txt</a>, asks what you want, and hands you one command to run.
+              <a href="/llms.txt">llms.txt</a>, checks your computer and drive, asks what you want, and hands you one
+              command to run.
             </p>
             <Download lead="ai">
               <a className="star" href={REPO}>
@@ -147,66 +149,92 @@ export default function AISetup() {
               </a>
             </Download>
           </div>
-          <figure className="chat">
-            <figcaption>Your AI chat</figcaption>
-            <ol>
-              <li className="you">
-                <b>You</b>I want to set up Tinfoil Kit… Its instructions for AI assistants are at
-                https://tinfoilkit.com/llms.txt. Read them first.
-              </li>
-              <li>
-                <b>Your AI</b>Done. First, is a drive plugged in, and how is it formatted? And how much memory does your
-                computer have?
-              </li>
-              <li className="you">
-                <b>You</b>A 1&nbsp;TB SSD called Kit, exFAT. A Mac with 32&nbsp;GB.
-              </li>
-              <li className="gap">Where you live, Wikipedia, what to leave out…</li>
-              <li>
-                <b>Your AI</b>Paste this into Terminal. It gets a small kit to try first; when it works, I'll give you
-                the command for the rest.
-                <code>{COMMAND}</code>
-              </li>
-            </ol>
-          </figure>
+          <Hero />
         </section>
         <section id="how" className="how">
           <div className="wrap section">
             <div className="head-row">
-              <h2>How your AI sets it up</h2>
+              <h2>How it works</h2>
               <p className="mono" style={{ fontSize: "14px", color: "var(--ink2)" }}>
-                It asks. You run one command.
+                Your AI sets it up. You run one command.
               </p>
             </div>
             <ol className="how-steps">
               <li>
-                <b>01 · PASTE</b>
+                <b>01 · GET A DRIVE</b>
                 <h3>{STEPS[0][0]}</h3>
                 <p>
-                  Into ChatGPT, Claude, Gemini or a coding agent like Claude Code or Codex. It reads llms.txt, the kit's
-                  instructions for AI agents: how it works, every option, and what to check first.
+                  A portable USB SSD with room for the kit, about 300&nbsp;GB. Formatted exFAT, the same drive starts on
+                  a Mac, Windows or Linux.
                 </p>
-                <SetupLink>Get the prompt</SetupLink>
+                <small>No drive? It can go on your computer's own disk instead.</small>
               </li>
               <li>
-                <b>02 · ANSWER</b>
+                <b>02 · TELL YOUR AI</b>
                 <h3>{STEPS[1][0]}</h3>
                 <p>
-                  Which drive, and whether it's exFAT. Your computer and its memory, which decides the model. Where you
-                  live, Wikipedia's languages and size, and what to leave out.
+                  Paste the prompt into ChatGPT, Claude or a coding agent like Claude Code or Codex. It reads llms.txt,
+                  checks your computer and the drive, asks what you want, and gives you one command to run.
                 </p>
-                <small>A coding agent can check the drive and the memory itself, with commands that only read.</small>
+                <SetupLink>Get the prompt</SetupLink>
+                <small>
+                  A 10&nbsp;GB kit to try comes first. Once it works, your AI gives you the command for the rest.
+                </small>
               </li>
               <li>
-                <b>03 · RUN</b>
+                <b>03 · PLUG IN ANYWHERE</b>
                 <h3>{STEPS[2][0]}</h3>
                 <p>
-                  It downloads the latest release and runs SETUP with your answers as flags. A 10&nbsp;GB kit to try
-                  comes first; once it works, your AI gives you the command for the rest.
+                  Plug the drive into any Mac, Windows or Linux computer and open Tinfoil Kit. The LLM, the library and
+                  the maps run on 127.0.0.1, with no internet.
                 </p>
-                <small>Your AI hands you the command instead of running it, so you see exactly what runs.</small>
+                <small>Windows and Linux are experimental for now.</small>
               </li>
             </ol>
+            <div className="example">
+              <div className="example-copy">
+                <p className="kicker">What it looks like</p>
+                <h3>Your AI checks first, then asks.</h3>
+                <p>
+                  A coding agent reads llms.txt, then looks at your computer and drives with commands that only read:
+                  the chip and memory, which decide the model, and the drive's format and free space. It asks only what
+                  it can't see, like where you live, and hands you the command. A chat AI that can't reach your computer
+                  asks you instead.
+                </p>
+              </div>
+              <figure className="chat">
+                <figcaption>Your AI agent</figcaption>
+                <ol>
+                  <li className="you">
+                    <b>You</b>I want to set up Tinfoil Kit… Its instructions for AI assistants are at
+                    https://tinfoilkit.com/llms.txt. Read them first.
+                  </li>
+                  <li>
+                    <b>Your AI</b>Read them. I looked at your Mac and its drives, with commands that only read:
+                    <dl>
+                      <div>
+                        <dt>Mac</dt>
+                        <dd>MacBook Air, Apple M4, 32&nbsp;GB of memory</dd>
+                      </div>
+                      <div>
+                        <dt>Drive</dt>
+                        <dd>Kit, a 1&nbsp;TB external SSD: exFAT, 998&nbsp;GB free</dd>
+                      </div>
+                    </dl>
+                    Your Mac runs the default AI, Inkling 2 Mini, and all of the kit fits on Kit. Where do you live?
+                  </li>
+                  <li className="you">
+                    <b>You</b>Austin, Texas.
+                  </li>
+                  <li className="gap">Wikipedia, places nearby, what to leave out…</li>
+                  <li>
+                    <b>Your AI</b>Paste this into Terminal. It gets a small kit to try first; when it works, I'll give
+                    you the command for the rest.
+                    <code>{COMMAND}</code>
+                  </li>
+                </ol>
+              </figure>
+            </div>
           </div>
         </section>
         <section id="builder" className="band">
@@ -373,7 +401,7 @@ export default function AISetup() {
           <div className="wrap">
             <div style={{ flex: "1 1 520px", display: "flex", flexDirection: "column", gap: "16px" }}>
               <p className="kicker" style={{ color: "#E0884F" }}>
-                Verify, don't trust
+                Don't trust, verify
               </p>
               <h2>Signed, pinned and rebuildable.</h2>
               <p>

@@ -1263,7 +1263,31 @@ code {
   vertical-align: 3px;
   color: var(--signal-text);
 }
-/* My AI installs it: the hero's chat, a sketch of what happens in your AI's window */
+/* My AI installs it: what your AI does, beside a sketch of its window */
+.example {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px 56px;
+  align-items: center;
+  margin-top: 28px;
+}
+.example-copy {
+  flex: 1 1 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.example-copy h3 {
+  font-size: clamp(26px, 3.4vw, 36px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.example-copy p {
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--ink2);
+  max-width: 520px;
+}
 .chat {
   flex: 1 1 480px;
   min-width: 0;
@@ -1323,6 +1347,27 @@ code {
   background: none;
   font: 13px var(--mono);
   color: var(--ink2);
+}
+.chat dl {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 3px;
+  background: var(--paper2);
+  font: 13px/1.5 var(--mono);
+}
+.chat dl div {
+  display: flex;
+  gap: 10px;
+}
+.chat dt {
+  flex: 0 0 6ch;
+  font-weight: 600;
+  color: var(--olive);
+}
+.chat dd {
+  margin: 0;
 }
 .chat code {
   display: block;

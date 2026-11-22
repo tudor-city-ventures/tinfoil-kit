@@ -6,12 +6,15 @@ import { loadJSON } from "@/lib/data";
 // The hero figure: a dotted globe spins up and streams down into the drive, the Wi-Fi drops, and the drive lights up what it holds.
 // Drawn on a canvas each frame from a 12-second timeline, so it can pause, hold a still frame, and stop when off screen.
 // It runs outside React: start() owns the canvas and the button's aria-pressed, and returns the function that stops it.
-export default function Hero({ label }) {
+export default function Hero() {
   const fig = useRef(null);
   useEffect(() => start(fig.current), []);
   return (
     <figure className="fig viz" ref={fig}>
-      <canvas role="img" aria-label={label} />
+      <canvas
+        role="img"
+        aria-label="A dotted globe spins up and streams into a drive until the drive holds the whole kit. Then the Wi-Fi goes off, the globe goes dark, and the drive lights up what it holds: Wikipedia, AI models, maps and guides."
+      />
       <button type="button" className="viz-toggle" aria-label="Pause the animation" aria-pressed="false">
         <span className="viz-state" aria-hidden="true">
           <svg width="10" height="10" viewBox="0 0 10 10">
