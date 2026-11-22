@@ -530,7 +530,10 @@ with sync_playwright() as p:
     demo.goto(URL + "#demo")
     demo.wait_for_selector(".kd")
     chip("ask", "Treat a burn")
-    demo.wait_for_timeout(300)
+    for _ in range(40):    # with motion, this answer takes about 6 seconds
+        if demo.inner_text(progress).startswith("Done"):
+            break
+        demo.wait_for_timeout(50)
     check("reduced motion: the demo answers at once", demo.inner_text(progress) == "Done in 11s. Sources are listed below.", demo.inner_text(progress))
     demo.click("#kd-tab-map")
     edges = """(() => { const m = document.querySelector('#kd-map .kd-mcanvas').getBoundingClientRect();
