@@ -10,9 +10,10 @@ The repo root is the kit itself, so cloning it onto a drive or into `~/TinfoilKi
 | --- | --- |
 | `kit.json` | Single source of truth: settings, runtimes, models, maps, library, extras |
 | `kit` | Wrapper for `python3 tools/kit.py --root <kit folder>` |
-| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`, `estimate`, `drives`, `place`) |
+| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`, `estimate`, `drives`, `place`, `share`, `autostart`) |
 | `SETUP.command`, `UNINSTALL.command` | Double-click setup and update: the first run asks for a drive or this computer and moves the kit there (`drives`, `place`), then every run does `update`, `sync`, `test`. Removal deletes the kit folder after a typed `delete` |
 | `tools/launch.sh` | Offline launcher, starts every server |
+| `tools/share.py` | Sharing on the home network (off by default): the gate on port 8000 that asks for the access code and passes requests to the servers, its QR code, and starting the kit with the computer (systemd user service, LaunchAgent). `SETUP.command --home-server` turns both on |
 | `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests |
 | `GUIDE.md` | Printable guide that lives in the kit folder |
 | `tests/` | Mocks of every download source and map server, logic, UI and end-to-end tests |
@@ -42,6 +43,7 @@ Visual changes to the page or the site come with screenshots.
 - No symlinks anywhere: drives are exFAT.
 - `.bat` files keep CRLF line endings and plain ASCII.
 - Every remote endpoint stays overridable by a `KIT_*` env var (see `tests/env.sh`), so tests can point at mocks.
+- Every server listens on 127.0.0.1 only. The one way in from the network is `tools/share.py`, behind the access code.
 - Workflows: actions pinned to a full commit SHA with the version as a comment, read-only tokens except the jobs `WRITES` lists in `tests/actions_test.py`, values into `run:` and `script:` only through `env:`, GitHub's runners only, no secrets, and `pull_request_target` only in `pr-gate.yml`, which never touches the pull request's code. The quick gate checks it.
 - Delete an old version only after the new one verifies.
 - Comments explain why, not history. Keep the number of files small.
