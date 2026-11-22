@@ -10,7 +10,8 @@ The repo root is the kit itself, so cloning it onto a drive or into `~/TinfoilKi
 | --- | --- |
 | `kit.json` | Single source of truth: settings, runtimes, models, maps, library, extras |
 | `kit` | Wrapper for `python3 tools/kit.py --root <kit folder>` |
-| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`, `estimate`, `drives`, `place`, `share`, `autostart`) |
+| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`, `pins`, `estimate`, `drives`, `place`, `share`, `autostart`) |
+| `tools/pins.json` | The exact build and SHA-256 of every program this version installs. `./kit pins` writes it; the `pin program builds` workflow refreshes it weekly |
 | `SETUP.command`, `UNINSTALL.command` | Double-click setup and update: the first run asks for a drive or this computer and moves the kit there (`drives`, `place`), then every run does `update`, `sync`, `test`. Removal deletes the kit folder after a typed `delete` |
 | `tools/launch.sh` | Offline launcher, starts every server |
 | `tools/share.py` | Sharing on the home network (off by default): the gate on port 8000 that asks for the access code and passes requests to the servers, its QR code, and starting the kit with the computer (systemd user service, LaunchAgent). `SETUP.command --home-server` turns both on |
@@ -68,7 +69,7 @@ If you can't push to this repo, you're working for an outside contributor: [.git
 
 ## From a cloud session
 
-Cloud sessions can't reach library.kiwix.org, GitHub releases or most download hosts. Use the workflows instead: `kiwix search` (manual, takes search words) runs `./kit search`, and `refresh builder sizes` runs `./kit plan --json` and lists any kit.json source that no longer resolves.
+Cloud sessions can't reach library.kiwix.org, GitHub releases or most download hosts. Use the workflows instead: `kiwix search` (manual, takes search words) runs `./kit search`, `refresh builder sizes` runs `./kit plan --json` and lists any kit.json source that no longer resolves, and `pin program builds` runs `./kit pins`.
 
 ## Adding or replacing a library source
 
