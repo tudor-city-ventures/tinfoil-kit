@@ -1,58 +1,205 @@
 # Tinfoil Kit
 
-> A free, open-source (MIT) offline kit for Apple Silicon Macs. One external SSD holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: Wikipedia, medical, repair and preparedness books) and offline maps (address search, driving and walking directions). START-HERE.command serves it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library and Map tabs.
+> A free, open-source (MIT) kit for when the internet is down. One folder, kept on the computer's own disk or on an external drive, holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: all of English Wikipedia, plus medical, repair and preparedness books) and offline maps (address search, driving and walking directions, "nearest hospital"). START-HERE starts it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library and Map tabs. Once it's filled, it needs no internet, account or install.
 
-You are setting this up for a person. Work in their Terminal, explain each step in plain words, and ask before anything slow, costly or destructive.
+You are setting this up for a person, probably not a programmer. Work in their Terminal, explain each step in plain words, and ask before anything slow, costly or destructive. This file has what you need: what the kit runs on, how it works, where it can live, how to set it up, use it, update it and remove it, what to do when something breaks, and where every file comes from.
 
-Repo: https://github.com/tudor-city-ventures/tinfoilkit
+- Repo: https://github.com/tudor-city-ventures/tinfoilkit
+- Website: https://tinfoilkit.com
+- Printable guide: GUIDE.md, in the kit folder
 
-## 1. Check with the person first
+## What it runs on
 
-- Mac: Apple Silicon (`uname -m` prints arm64). Memory: `sysctl -n hw.memsize`. 32 GB runs the default model; with less, the kit starts a smaller one.
-- Drive: an external SSD with room for the kit. The default kit is about 300 GB.
-- Format: exFAT lets a Windows or Linux PC read the drive too; APFS is fine if it will only meet Macs. FAT32 and NTFS don't work. Formatting erases the drive: confirm which disk it is and get the person's explicit yes first.
-- Command Line Tools: `xcode-select -p`. Sync needs python3 3.9+ and curl; if they're missing, run `xcode-select --install`.
-- Time: the first sync downloads for a few hours. Keep the Mac plugged in. It resumes if interrupted.
+| Computer | Set up the kit | AI | Library | Map |
+| --- | --- | --- | --- | --- |
+| Mac with Apple Silicon (M1 or newer) | yes | yes | yes | yes |
+| Windows PC (x64), from an exFAT drive set up on a Mac | no, for now | yes | yes | no, for now |
+| Linux PC (x64), from an exFAT drive set up on a Mac | no, for now | yes | yes | no, for now |
 
-## 2. Install
+- Intel Macs and ARM Windows or Linux PCs can't run it: the kit downloads programs built for Apple Silicon and for x64 PCs only. On a Mac, `uname -m` prints arm64.
+- Memory decides which AI runs. 32 GB runs the default model, Inkling 2 Mini. On a Mac with less, the kit starts Gemma 4 E4B, which runs on 8 to 16 GB. `sysctl -n hw.memsize` prints the memory in bytes.
+- On Windows and Linux the AI uses the graphics card through Vulkan. Without a good one it's slow: pick Gemma 4 E4B.
+- Space: about 300 GB for the default kit. `./kit estimate` prints the number for the current kit.json, with no internet. Sync always leaves 50 GB free on the computer's own disk and 25 GB on a drive.
+- Setup needs the internet for a few hours, Apple's free Command Line Tools (for python3 3.9 or newer, and curl) and the Mac on its charger. After that, nothing needs the internet.
 
-    git clone https://github.com/tudor-city-ventures/tinfoilkit "/Volumes/<drive>/TinfoilKit"
+## How it works
+
+The whole kit is one folder, TinfoilKit, used in two ways:
+
+1. Online, whenever the person wants: SETUP.command, or `./kit update`, `./kit sync` and `./kit test`, fills the folder. kit.json lists every model, book, map and program with its publisher's download, and sync fetches the newest version of each straight from the publisher. Tinfoil Kit never hosts any of these files.
+2. Offline, any time: START-HERE.command starts a few servers from the folder on 127.0.0.1, and the browser page talks to them. Nothing goes over the internet.
+
+| Part | Program | Port | What it does |
+| --- | --- | --- | --- |
+| AI | llama-server (llama.cpp) | 8080 | Runs the AI model. AI chat is its built-in chat page |
+| Library | kiwix-serve (Kiwix) | 8888 | Serves the books (.zim files) with full-text search, and the kit page |
+| Map | pmtiles | 8090 | Serves the map: street detail for a region, plus a low-detail world |
+| Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy |
+| Directions | GraphHopper | 8989 | Plans driving and walking routes |
+
+Photon and GraphHopper run on a Java that's in the kit.
+
+- Ask: the AI turns the question into short searches, kiwix-serve searches every book, and the AI answers from the top articles with numbered sources. With the AI off, Ask shows the best passages. Map questions ("nearest pharmacy", "directions to the hospital") go to three map tools instead (search places, find nearby, get directions), and the answer shows on the Map tab.
+- The kit page (tools/portal.html) is one HTML file. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
+- The kit's code: `./kit` runs tools/kit.py (Python's standard library, with curl for every download). tools/launch.sh starts the servers; START-HERE-Windows.bat does it on Windows.
+
+What's in the folder:
+
+    TinfoilKit/
+    ├── SETUP.command           set up or update (online)
+    ├── START-HERE.command      start the kit offline (Mac, Linux)
+    ├── START-HERE-Windows.bat  start the kit offline (Windows)
+    ├── UNINSTALL.command       remove the kit and everything it downloaded
+    ├── GUIDE.md                the printable guide
+    ├── INVENTORY.md            what's installed, with versions and sizes
+    ├── kit, kit.json, tools/   the kit's code and its list of downloads
+    ├── bin/                    programs: llama.cpp, Kiwix, Java, the map servers
+    ├── models/                 AI models (.gguf)
+    ├── library/                books (.zim)
+    ├── maps/                   map tiles, address database, road network
+    ├── installers/             the Kiwix app, a backup way to read the books
+    ├── logs/                   what each sync and launch did
+    └── .kit/                   download progress, caches, the built kit page
+
+## Where it can live
+
+Help the person pick one. It's the same kit folder each way; only its place and how it's started change.
+
+1. This Mac, at ~/TinfoilKit. Nothing to buy or plug in, it's always with the laptop, and the internal disk is usually faster. It needs the kit's size plus 50 GB free. If the Mac is lost or breaks, the kit goes with it. Keep it in the home folder, not in Desktop or Documents, which iCloud may sync. Sync keeps it out of Time Machine backups.
+2. An external drive, at /Volumes/<drive>/TinfoilKit. It survives the Mac breaking, works on another Mac, and, formatted exFAT, starts the AI and the library on a Windows or Linux PC. It keeps the Mac's disk free. It needs an SSD with room for the kit plus 25 GB.
+3. A home server: either of the above on a Mac that stays on (a Mac mini, or a laptop on its charger), started with `bash START-HERE.command --share`. Phones, tablets and other computers on the same Wi-Fi or hotspot open the address it prints, and so can anyone else on that network. In an outage the router still needs power, even with no internet: a small battery backup keeps it on.
+
+Recommend a drive when the Mac is short of space or the person wants a kit they can grab and go. Recommend this Mac when it has room and the person wants nothing extra to carry. If neither has room, turn items off (step 3 below). Let the person choose.
+
+## Set it up
+
+### 1. Download the kit and size it up
+
+    cd ~
+    curl -fL -o tinfoilkit.zip https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip
+    unzip -q tinfoilkit.zip && mv tinfoilkit-main TinfoilKit && rm tinfoilkit.zip
+    cd ~/TinfoilKit
+    ./kit estimate   # GB this kit needs (no internet needed)
+    df -h ~          # free space on the Mac's own disk
+
+If the Command Line Tools aren't installed, macOS offers to install them the first time `./kit` runs (or run `xcode-select --install`). It takes 5 to 15 minutes; then run the command again. `xcode-select -p` shows whether they're there.
+
+Developers can `git clone https://github.com/tudor-city-ventures/tinfoilkit` straight into the chosen place instead, and update with `git pull`.
+
+### 2. Decide where it lives
+
+Go through "Where it can live" with the person, using the numbers from step 1.
+
+### 3. Choose what goes in it (optional)
+
+kit.json lists everything. The default kit:
+
+- AI models, all of which read photos: Inkling 2 Mini (the default, fast, about 18 GB), Qwen3.8 27B (a second opinion from another lab, slower, 17.5 GB), Gemma 4 26B-A4B (a third opinion, 15.7 GB) and Gemma 4 E4B (small, saves battery, runs on 8 to 16 GB, 5.3 GB).
+- Library: all of English Wikipedia with images (about 115 GB), WikiMed, field and military medicine manuals, LibreTexts textbooks, iFixit repair guides, Ready.gov, US Army publications, Wikibooks, Wiktionary, Wikivoyage, Wikiversity, Appropedia, Energypedia, and Stack Exchange Q&A on home improvement, cooking, gardening, car and bicycle repair, electronics, amateur radio and more. Off by default because they're huge: Survivor Library (232 GB), Khan Academy videos (168 GB) and Project Gutenberg (206 GB).
+- Maps: street detail, addresses and directions for the US Northeast (New England, New York, New Jersey, Pennsylvania), address search for the whole US, and a low-detail world map. 20 to 30 GB.
+
+To change it:
+
+- Skip an item: set "enabled": false on it in models, library or maps.
+- Add a book: `./kit search WORDS` finds Kiwix books and prints a line to paste into library.
+- Change the map region: edit "maps" (its notes explain how).
+- Or make a kit.json with the builder at https://tinfoilkit.com/#builder and put it in the kit folder, replacing the one there.
+
+Run `./kit estimate` again after any change.
+
+### 4. Fill it
+
+On a drive, check its format first: `diskutil info "/Volumes/<drive>" | grep Personality`.
+
+- exFAT works on Mac, Windows and Linux: the best choice for an emergency drive.
+- APFS is fine if the drive will only ever meet Macs.
+- FAT32 can't hold files over 4 GB, and a Mac can't write to NTFS. Those drives need erasing as exFAT (Disk Utility: select the drive, Erase, Format: ExFAT). Erasing deletes everything on the drive: confirm which disk it is and get the person's explicit yes first.
+
+Then move the kit onto it:
+
+    mv ~/TinfoilKit "/Volumes/<drive>/TinfoilKit"
     cd "/Volumes/<drive>/TinfoilKit"
+
+On this Mac, leave it at ~/TinfoilKit. Either way, in the kit folder:
+
     ./kit plan     # every item, version and size. Show the person the total and get a yes.
-    ./kit sync -y  # download, check, install
+    ./kit sync -y  # download, check, install: a few hours the first time
     ./kit test     # start every server offline and check each one answers
 
-Without git: download https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip, unzip it onto the drive and rename the folder TinfoilKit.
+- `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit already works with what it has.
+- Sync fetches the most important items first, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
+- If the person has Homebrew, `brew install aria2` makes downloads faster.
+- Last, prove it works offline: turn Wi-Fi off, double-click START-HERE.command and ask a question.
 
-`./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up (run it again: it resumes and names what's left) and 130 after Ctrl-C. SETUP.command is the double-click version of update, sync and test, for people who'd rather click.
+### For people who'd rather click
 
-If Terminal says "Operation not permitted", it needs access to the drive: System Settings > Privacy & Security > Files and Folders > Removable Volumes.
+Download https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip, unzip it and double-click SETUP.command. The first time, it asks "An external drive" or "This Mac", lists the drives with their format and free space, and moves the kit there. Then it updates, downloads and tests, explaining each step. On macOS 15 and later the first double-click says Apple could not verify it: open System Settings > Privacy & Security and click Open Anyway, once. SETUP asks questions as it goes, so as an agent, run the commands above instead.
 
-## 3. Choose what goes on the drive (optional, before syncing)
+## Use it
 
-kit.json lists everything. Set "enabled": false on an item in models, library or maps to skip it. `./kit search WORDS` finds more Kiwix books and prints a line to paste into library. The builder at https://tinfoilkit.com/#builder makes a kit.json too.
+- Double-click START-HERE.command, or run `bash START-HERE.command`. It opens http://127.0.0.1:8888. Keep its Terminal window open: closing it stops everything.
+- Options: `--share` lets other devices on the same network open it (it prints the address), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in models/), `--no-browser` skips opening the browser. If macOS asks whether to accept incoming connections, click Allow.
+- Ask answers from the books and cites them. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station.
+- Models: pick one on the Ask page. The first answer after switching takes up to a minute while it loads.
+- Map: set home first, since a laptop has no GPS (Set as home on a search result, or Set home to the map center). For actually driving, a phone with offline maps and GPS is better; the kit's map is for planning and for the AI's map questions.
+- Power: a big model drains a laptop battery in a couple of hours of steady use. Gemma 4 E4B saves battery, and the Library tab uses almost nothing.
+- Windows: double-click START-HERE-Windows.bat on the exFAT drive. Linux: `bash START-HERE.command`. The AI and the library start; the map needs a Mac for now. Fedora 45 and later need `sudo dnf install openssl3-libs` for the AI, installed while there's still internet.
 
-Maps cover the US Northeast in street detail, with address search for the whole US and a low-detail world map. Change the region under "maps" in kit.json (its notes explain how) before syncing.
+## Update it
 
-## 4. Use it
+There's no schedule. Whenever the person wants the newest models, books and maps, while online, in the kit folder:
 
-- Double-click START-HERE.command, or run `bash START-HERE.command`. It opens http://127.0.0.1:8888. Keep its Terminal window open.
-- Options: `--share` lets phones on the same network open it (so can anyone else on that network), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks a model.
-- Prove it works offline: turn Wi-Fi off, start it and ask a question.
+    ./kit update   # the kit's newest version, with any models and sources added since. Keeps the person's kit.json changes.
+    ./kit plan     # what's new or changed, and how much will download
+    ./kit sync -y  # download it, check every file, then remove the old versions
+    ./kit test
 
-## 5. Keep it fresh
+- `./kit update` exits 3 after installing a newer version of the kit. That's success: carry on with the next command. It exits 0 when the kit is already the newest.
+- In a git checkout, run `git pull` instead of `./kit update`.
+- Double-clicking SETUP.command again does all four.
+- A normal update brings new library editions, the newest AI engine, any re-released models and fresh map data. Only what changed downloads.
+- It's safe to stop at any point and run it again: it picks up where it left off, and the old files keep working until the new ones check out.
+- `./kit status` shows what's installed and when it was last updated. INVENTORY.md lists every item with its version and size.
 
-Every 2 to 3 months, double-click SETUP.command, or run `./kit update` (`git pull` in a git checkout), then `./kit sync` and `./kit test`.
+## Remove it
+
+Double-click UNINSTALL.command in the kit folder. Once the person types "delete", it removes the kit folder and everything the kit downloaded. On a drive it leaves the rest of the drive alone. As an agent, run `bash UNINSTALL.command --yes`, which skips the question, only after the person's explicit yes.
+
+## When something goes wrong
+
+- "Apple could not verify..." on a double-click: System Settings > Privacy & Security > Open Anyway, once. `bash START-HERE.command` in Terminal always works.
+- "Operation not permitted" in Terminal: macOS is keeping Terminal off the drive. System Settings > Privacy & Security > Files and Folders > Terminal: turn on Removable Volumes, then start again.
+- Sync ended with exit 1, or SETUP says some downloads didn't finish: run `./kit sync -y` again. It resumes and names what's left. The kit already works with what it has.
+- Not enough space: sync stops short of the free space it keeps (50 GB on the computer's own disk, 25 GB on a drive). Turn items off in kit.json, or move the kit to a bigger drive.
+- A file may be corrupt: `./kit verify` re-checks every file. `./kit verify --fix` removes bad ones, and the next sync replaces them.
+- A model won't load or is very slow: quit other apps, pick Gemma 4 E4B, or start with `--no-maps` to free about 5 GB. Advanced, with the person's password: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
+- The map says address search or directions are "not running": they take up to a minute to start. If they never do, read logs/geocoder.log and logs/routing.log. If `./kit test` fails on address search with a "lock" error in logs/test-geocoder.log, the exFAT format is the cause: reformat the drive as APFS and copy the kit back.
+- Anything else: close the Terminal window, start again, and read the logs folder (sync-*.log for downloads, llama-server.log for the AI).
+- The previous version of each program stays in bin/ and starts automatically if the newest one won't.
+- If the library server won't start, the Kiwix app in installers/ opens the books in library/ directly.
+
+## Where everything comes from
+
+The kit's own code is MIT. Everything it downloads comes straight from its publisher under the publisher's license: Tinfoil Kit never hosts, mirrors or bundles any of it, and the person is the one downloading, so those terms apply to them. All of it is free to download and use; some of it isn't free to sell. THIRD-PARTY.md has the full list.
+
+- AI models: Inkling 2 Mini by Thinking Machines (Apache 2.0, plus Thinking Machines' Model Acceptable Use Policy, which binds anyone who downloads the weights), Qwen3.8 27B by Alibaba (Apache 2.0), Gemma 4 26B-A4B and Gemma 4 E4B by Google (Apache 2.0). The files come from ggml-org's and Unsloth's Hugging Face repos.
+- Books: Wikipedia and its sister projects, WikiMed, Stack Exchange, Appropedia and Energypedia are CC BY-SA. iFixit, LibreTexts and Khan Academy are CC BY-NC-SA: no commercial use. Ready.gov and US Army publications are US government works. Project Gutenberg is public domain in the US. Survivor Library, Urban Prepper and the collections of field medicine, post-disaster, water, food and knots guides have mixed terms: free to read, not to republish.
+- Maps: OpenStreetMap data (© OpenStreetMap contributors, Open Database License), through Protomaps, Geofabrik and the Photon exports GraphHopper hosts. Map style: Protomaps basemaps (BSD-3-Clause). Fonts: Noto Sans (SIL Open Font License).
+- Programs: llama.cpp (MIT), kiwix-serve and the Kiwix app (GPL-3.0), Eclipse Temurin Java (GPL-2.0 with Classpath Exception), go-pmtiles (BSD-3-Clause), GraphHopper and Photon (Apache 2.0), MapLibre GL JS (BSD-3-Clause).
+- Setup and updates talk only to GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus anything added to kit.json. Using the kit sends nothing over the internet: no account, no telemetry.
 
 ## Rules
 
 - Start programs and models only through the kit's own commands. Don't run downloaded files to see what they do.
-- Don't delete files in models/, library/ or maps/ by hand. `./kit verify --fix` removes corrupt files, and the next sync replaces them.
-- Don't sell drives you've filled: some sources forbid commercial use.
-- The AI can be wrong. For anything medical or safety-related, tell the person to read the sources it cites.
+- Don't delete files in models/, library/ or maps/ by hand. `./kit verify --fix` removes corrupt files, and the next sync replaces them. To remove the whole kit, use UNINSTALL.command.
+- Ask before formatting a drive, deleting anything or using sudo.
+- Don't sell drives filled with the kit: some sources forbid commercial use.
+- The AI can be wrong. For anything medical or safety-related, tell the person to read the sources it cites and to get trained help when they can.
 
 ## More
 
 - README: https://github.com/tudor-city-ventures/tinfoilkit#readme
-- GUIDE.md: the printable guide that lives on the drive
-- THIRD-PARTY.md: where every model, book, map and program comes from, and its license
+- GUIDE.md: the printable guide, in the kit folder
+- THIRD-PARTY.md: every model, book, map and program, and its license
+- AGENTS.md: rules for changing the kit's own code
+- Bugs and ideas: https://github.com/tudor-city-ventures/tinfoilkit/issues

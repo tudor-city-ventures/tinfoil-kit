@@ -341,7 +341,7 @@ I want to set up Tinfoil Kit on my Mac. It's an offline AI assistant, an offline
 1. Which drive to buy and how to format it.
 2. How to download the kit and run the first sync, which takes a few hours.
 3. How to check that it works with Wi-Fi off.
-4. How to keep it updated every few months.
+4. How to update it whenever I want the newest models, books and maps.
 
 I'm not a programmer. Tell me exactly what to click or paste, and wait for me to confirm each step before moving on.
 ```
@@ -354,7 +354,7 @@ When the builder is used, it appends the person's picks or their `kit.json`.
 Help me build my own offline kit for an internet outage, on an external SSD. Principles:
 
 - Everything works with zero internet: local AI models, an offline library and offline maps, served on localhost and opened in a browser.
-- One config file lists every source. One command refreshes everything every 2-3 months. It resumes interrupted downloads, verifies checksums, and keeps the old version until the new one checks out.
+- One config file lists every source. One command brings everything up to date whenever I want. It resumes interrupted downloads, verifies checksums, and keeps the old version until the new one checks out.
 - AI: a few open-weight models sized to my computer's memory (one capable default, one small and fast), run with llama.cpp's server.
 - Library: Kiwix ZIM files (Wikipedia, medical references, iFixit, preparedness guides) served by kiwix-serve with full-text search.
 - The AI answers from the library: it searches it, reads the top passages and cites them. It still works with the AI off.

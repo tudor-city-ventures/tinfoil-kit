@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#F3F0E6">
 <title>Tinfoil Kit: the internet's down, your AI isn't</title>
-<meta name="description" content="A free, open-source kit for M1 Macs and newer: an AI that runs on your Mac, all of Wikipedia, medical and repair guides, and maps with directions, on one external drive. No internet needed.">
+<meta name="description" content="A free, open-source kit that keeps an AI, all of Wikipedia, medical and repair guides, and maps with directions on your laptop or an external drive. No internet needed.">
 <meta property="og:title" content="Tinfoil Kit">
-<meta property="og:description" content="The internet's down. Your AI isn't. An AI, Wikipedia, medical guides and maps on one drive for your Mac. Free and open source.">
+<meta property="og:description" content="The internet's down. Your AI isn't. An AI, Wikipedia, medical guides and maps on your laptop or one drive. Free and open source.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://tinfoilkit.com/">
 <meta property="og:image" content="https://tinfoilkit.com/og.png">
@@ -27,15 +27,15 @@
       "@type": "SoftwareApplication",
       "name": "Tinfoil Kit",
       "url": "https://tinfoilkit.com/",
-      "description": "A free, open-source kit for M1 Macs and newer: an AI that runs on your Mac, all of Wikipedia, medical and repair guides, and maps with directions, on one external drive. No internet needed.",
+      "description": "A free, open-source kit that keeps an AI, all of Wikipedia, medical and repair guides, and maps with directions on your laptop or an external drive. No internet needed.",
       "applicationCategory": "UtilitiesApplication",
-      "operatingSystem": "macOS",
-      "softwareRequirements": "A Mac with an M chip (M1 or newer) and an external SSD",
-      "memoryRequirements": "32 GB runs the full-size AI; Macs with less run a lighter one",
+      "operatingSystem": "macOS, Windows, Linux",
+      "softwareRequirements": "A Mac with an M chip (M1 or newer) to set it up, on its own disk or an external SSD. A drive set up on a Mac also runs the AI and the library on Windows and Linux.",
+      "memoryRequirements": "32 GB runs the full-size AI; computers with less run a lighter one",
       "storageRequirements": "About 300 GB for the recommended kit",
       "featureList": [
         "Ask: plain-word answers from the offline library, with numbered sources you can open",
-        "AI chat that runs on the Mac and can read photos",
+        "AI chat that runs on your laptop and can read photos",
         "Library: all of Wikipedia with pictures, medical references, iFixit repair guides, Army field manuals and FEMA emergency guides",
         "Map: address search, driving and walking directions, and the nearest hospital or pharmacy",
         "Works with no internet, no account and no telemetry"
@@ -249,15 +249,15 @@ Menu</button>
 <main id="top">
 <section class="wrap hero" data-for="human">
 <div class="hero-copy">
-<p class="kicker">Free&nbsp;· Open source&nbsp;· M1 Macs and up</p>
+<p class="kicker">Free&nbsp;· Open source</p>
 <h1>The internet's down.<br> Your AI isn't.</h1>
-<p class="lede">Ask anything, check a symptom, fix a leak, find the nearest hospital. It all lives on one drive: plug it into your Mac and double-click.</p>
+<p class="lede">Ask anything, check a symptom, fix a leak, find the nearest hospital. It all lives on your laptop or a drive you can grab, and starts with a double-click.</p>
 <div class="ctas">
 <a class="btn primary" href="https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip">Download free</a>
 <a class="btn" href="https://github.com/tudor-city-ventures/tinfoilkit">View on GitHub</a>
 <a class="star" href="https://github.com/tudor-city-ventures/tinfoilkit"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2L14.6 9L21.9 9.4L16.2 14L18.1 21L12 17L5.9 21L7.8 14L2.1 9.4L9.4 9z" fill="currentColor"/></svg>Star on GitHub</a>
 </div>
-<p class="cta-note">Then unzip it onto an external drive and double-click SETUP.</p>
+<p class="cta-note">Then double-click SETUP on a Mac. It asks whether the kit goes on the Mac or an external drive.</p>
 </div>
 <figure class="fig viz">
 <canvas role="img" aria-label="A dotted globe spins up and streams into a drive until the drive holds the whole kit. Then the Wi-Fi goes off, the globe goes dark, and the drive lights up what it holds: Wikipedia, AI models, maps and guides."></canvas>
@@ -268,9 +268,9 @@ Menu</button>
 <section id="instructions" class="wrap agent" data-for="agent">
 <p class="kicker">For AI agents&nbsp;· Markdown at /llms.txt</p>
 <h1>Your agent can set this&nbsp;up.</h1>
-<p class="lede">Claude Code, Codex and other agents that can run commands on a Mac can do the whole setup. Tell yours to follow <a href="/llms.txt">tinfoilkit.com/llms.txt</a>, or copy the markdown below and paste it in.</p>
+<p class="lede">Claude Code, Codex and other agents that can run commands on your computer can do the whole setup: help you choose between your laptop and a drive, fill it, test it, and later update or remove it. Tell yours to follow <a href="/llms.txt">tinfoilkit.com/llms.txt</a>, or copy the markdown below and paste it in.</p>
 <div class="prompt">
-<div class="bar"><div><b>llms.txt</b><span>The setup instructions, in markdown.</span></div><button type="button" data-copy="agentDoc">Copy</button></div>
+<div class="bar"><div><b>llms.txt</b><span>How it works, setup, updates, fixes and sources, in markdown.</span></div><button type="button" data-copy="agentDoc">Copy</button></div>
 <pre class="doc" id="agentDoc">The setup instructions for AI agents are at https://tinfoilkit.com/llms.txt</pre>
 </div>
 </section>
@@ -279,23 +279,23 @@ Menu</button>
 <div class="wrap section">
 <div class="head-row">
 <h2>What's inside</h2>
-<p class="mono" style="font-size:14px;color:var(--ink2)">Plug in the drive. Double-click START-HERE. Your browser opens to four tabs.</p>
+<p class="mono" style="font-size:14px;color:var(--ink2)">Double-click START-HERE and your browser opens to four tabs.</p>
 </div>
 <div class="grid4">
 <div class="tile"><span class="tag">TAB 01</span><h3>Ask</h3>
 <p>Ask in plain words, like you would online. The answer comes from the library, with numbered sources you can open. Works even with the AI off.</p></div>
 <div class="tile"><span class="tag">TAB 02</span><h3>AI chat</h3>
-<p>A chat AI that runs on your Mac instead of the cloud. Show it a photo of a rash, a part or a label and ask about it.</p></div>
+<p>A chat AI that runs on your laptop instead of the cloud. Show it a photo of a rash, a part or a label and ask about it.</p></div>
 <div class="tile"><span class="tag">TAB 03</span><h3>Library</h3>
 <p>All of Wikipedia with pictures, medical references, iFixit repair guides, Army field manuals and FEMA's emergency guides. All searchable.</p></div>
 <div class="tile"><span class="tag">TAB 04</span><h3>Map</h3>
 <p>Search an address, get driving or walking directions, or find the nearest hospital or pharmacy.</p></div>
 </div>
 <div class="steps">
-<div class="step"><b>01 · GET A DRIVE</b><p>An external SSD and a Mac with an M chip (M1 or newer). 32&nbsp;GB of memory runs the full-size AI; smaller Macs get a lighter one.</p></div>
-<div class="step"><b>02 · FILL IT</b><p>Unzip the kit onto the drive and double-click <code>SETUP</code>. It downloads for a few hours and checks every file.</p></div>
+<div class="step"><b>01 · PICK A PLACE</b><p>Your laptop's own disk, or an external SSD you can grab and take with you. SETUP helps you choose.</p></div>
+<div class="step"><b>02 · FILL IT</b><p>Unzip the kit and double-click <code>SETUP</code> on a Mac. It moves the kit where you chose, downloads for a few hours and checks every file.</p></div>
 <div class="step"><b>03 · TEST IT</b><p>Turn Wi-Fi off and double-click <code>START-HERE</code>. Everything should still answer.</p></div>
-<div class="step"><b>04 · REFRESH IT</b><p>Every two or three months, double-click <code>SETUP</code> again. Only what changed downloads.</p></div>
+<div class="step"><b>04 · UPDATE IT</b><p>Whenever you like, double-click <code>SETUP</code> again while you're online. New models, books and maps arrive, and only what changed downloads.</p></div>
 </div>
 </div>
 </section>
@@ -303,7 +303,7 @@ Menu</button>
 <section id="builder" class="wrap section" data-for="human">
 <div style="display:flex;flex-direction:column;gap:10px">
 <p class="kicker">The kit builder</p>
-<h2>Choose what goes on your drive.</h2>
+<h2>Choose what goes in your kit.</h2>
 <p style="font-size:18px;line-height:1.5;color:var(--ink2);max-width:680px">Start from a preset, then switch sources on or off. Each card says what it is, why you'd want it and how much room it takes.</p>
 </div>
 <div class="presets" role="group" aria-label="Preset">
@@ -314,7 +314,7 @@ Menu</button>
 <div id="groups" style="display:flex;flex-direction:column;gap:32px"><p class="mono">Loading sources…</p></div>
 <div class="ways">
 <div><b>Copy AI setup prompt</b><p>For a guided setup. Paste it into ChatGPT, Claude or another AI chat, and it walks you through each step with your picks built in.</p></div>
-<div><b>Download kit.json</b><p>For doing it yourself. kit.json is the kit's list of what to download. Put yours in the TinfoilKit folder on your drive, replacing the one there, then double-click SETUP.</p></div>
+<div><b>Download kit.json</b><p>For doing it yourself. kit.json is the kit's list of what to download. Put yours in the TinfoilKit folder, replacing the one there, then double-click SETUP.</p></div>
 </div>
 <div class="total" role="region" aria-label="Your kit">
 <div style="display:flex;flex-direction:column;gap:8px;flex:1 1 320px">
@@ -334,29 +334,29 @@ Menu</button>
 <div class="prompts">
 <div class="prompt">
 <div class="bar"><div><b>Install ours</b><span>Paste it into ChatGPT, Claude or another AI chat. It goes one step at a time.</span></div><button type="button" data-copy="installPrompt">Copy</button></div>
-<pre id="installPrompt">I want to set up Tinfoil Kit on my Mac. It's an offline AI assistant, an offline library (Wikipedia, medical and repair guides) and offline maps, all on an external drive, for when the internet is down. The project is at https://github.com/tudor-city-ventures/tinfoilkit. Read its README and GUIDE, then walk me through setup one step at a time:
+<pre id="installPrompt">I want to set up Tinfoil Kit. It's an offline AI assistant, an offline library (Wikipedia, medical and repair guides) and offline maps for when the internet is down, kept on my laptop or an external drive. The project is at https://github.com/tudor-city-ventures/tinfoilkit. Read its README and GUIDE, then walk me through setup one step at a time:
 
-1. Which drive to buy and how to format it.
-2. How to download the kit onto the drive and run SETUP.command, which takes a few hours the first time.
+1. Whether to keep it on my laptop or an external drive, and if a drive, which one to buy and how to format it.
+2. How to download the kit and run SETUP.command, which takes a few hours the first time.
 3. How to check that it works with Wi-Fi off.
-4. How to keep it updated every few months.
+4. How to update it whenever I want the newest models, books and maps.
 
 I'm not a programmer. Tell me exactly what to click or paste, and wait for me to confirm each step before moving on.</pre>
 </div>
 <div class="prompt">
 <div class="bar"><div><b>Build your own</b><span>The principles, for any AI to build from.</span></div><button type="button" data-copy="ownPrompt">Copy</button></div>
-<pre id="ownPrompt">Help me build my own offline kit for an internet outage, on an external SSD. Principles:
+<pre id="ownPrompt">Help me build my own offline kit for an internet outage, on my laptop or an external SSD. Principles:
 
 - Everything works with zero internet: local AI models, an offline library and offline maps, served on localhost and opened in a browser.
-- One config file lists every source. One command refreshes everything every 2-3 months. It resumes interrupted downloads, verifies checksums, and keeps the old version until the new one checks out.
+- One config file lists every source. One command brings everything up to date whenever I want. It resumes interrupted downloads, verifies checksums, and keeps the old version until the new one checks out.
 - AI: a few open-weight models sized to my computer's memory (one capable default, one small and fast), run with llama.cpp's server.
 - Library: Kiwix ZIM files (Wikipedia, medical references, iFixit, preparedness guides) served by kiwix-serve with full-text search.
 - The AI answers from the library: it searches it, reads the top passages and cites them. It still works with the AI off.
 - Maps: vector tiles for my region plus a low-detail world map, offline address search and offline directions. The AI can use them as tools.
 - An offline self-test, and a one-page printed guide kept with the drive.
-- Use exFAT so any computer can read the drive, and avoid symlinks.
+- On a drive, use exFAT so any computer can read it, and avoid symlinks.
 
-First ask me about my computer, drive size, region and priorities. Then propose a plan before writing any code.</pre>
+First ask me about my computer, where the kit should live, how much space I have, my region and priorities. Then propose a plan before writing any code.</pre>
 </div>
 </div>
 </div>
@@ -365,18 +365,20 @@ First ask me about my computer, drive size, region and priorities. Then propose 
 <section id="faq" class="wrap section" data-for="human">
 <div style="display:flex;flex-direction:column;gap:10px">
 <p class="kicker">Questions</p>
-<h2>Before you fill a drive.</h2>
+<h2>Before you set it up.</h2>
 </div>
 <div class="faq" itemscope itemtype="https://schema.org/FAQPage">
-<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What is Tinfoil Kit?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Tinfoil Kit is a free, open-source kit for when the internet goes down: an AI that runs on your Mac, all of Wikipedia, medical and repair guides, and maps with directions, on one external drive. You fill the drive while you're online. After that, plug it into a Mac with an M chip and double-click, and it all works with no internet.</p></div></details>
-<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Is the AI as good as ChatGPT?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Not quite. It's an open model small enough to run on a Mac, so it's a step behind the biggest cloud AIs. It's good at explaining and summarizing, the Ask tab answers from the library with sources, and none of it needs the internet.</p></div></details>
-<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What do I need?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">A Mac with an M chip (M1 or newer) and an external SSD. The kit itself is free. 32&nbsp;GB of memory runs the full-size AI; smaller Macs use a lighter one. The recommended kit is about 300&nbsp;GB, and the kit builder above shows the total for your picks.</p></div></details>
-<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Does anything leave my Mac?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">No. Once the drive is filled, every part runs on your Mac at 127.0.0.1 with no account and no telemetry. The only time it goes online is when you run SETUP or <code>./kit sync</code> to download updates, and then it only talks to the places it downloads from: GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus anything you add to kit.json.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What is Tinfoil Kit?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Tinfoil Kit is a free, open-source kit for when the internet goes down: an AI that runs on your laptop, all of Wikipedia, medical and repair guides, and maps with directions, kept on the laptop itself or on an external drive. You set it up while you're online. After that, double-click to start it, and it all works with no internet.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Is the AI as good as ChatGPT?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Not quite. It's an open model small enough to run on a laptop, so it's a step behind the biggest cloud AIs. It's good at explaining and summarizing, the Ask tab answers from the library with sources, and none of it needs the internet.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What do I need?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">A Mac with an M chip (M1 or newer) to set it up. The kit goes on the Mac's own disk or on an external SSD, and a drive also starts on Windows and Linux. 32&nbsp;GB of memory runs the full-size AI; with less, you get a lighter one. The recommended kit is about 300&nbsp;GB, and the kit builder above shows the total for your picks. On the Mac's own disk, the kit always leaves 50&nbsp;GB free.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Does anything leave my laptop?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">No. Once the kit is filled, every part runs on your laptop at 127.0.0.1 with no account and no telemetry. The only time it goes online is when you run SETUP or <code>./kit sync</code> to download updates, and then it only talks to the places it downloads from: GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus anything you add to kit.json.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Can I trust the AI's answers?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Treat it like a well-read friend, not a doctor. In the Ask tab it answers from the library and numbers its sources, so you can open the page it used and check. For anything serious, read the source itself.</p></div></details>
-<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What's under the hood?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Open-source parts, all served on your Mac at 127.0.0.1: llama.cpp's llama-server runs the AI, kiwix-serve runs the library, and Protomaps, Photon and GraphHopper run the map. One file, kit.json, lists every source. <code>./kit sync</code> checks each download against its publisher's checksum and keeps the old version until the new one verifies. The <a href="https://github.com/tudor-city-ventures/tinfoilkit#readme">README</a> has the commands.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What's under the hood?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Open-source parts, all served on your laptop at 127.0.0.1: llama.cpp's llama-server runs the AI, kiwix-serve runs the library, and Protomaps, Photon and GraphHopper run the map. One file, kit.json, lists every source. <code>./kit sync</code> checks each download against its publisher's checksum and keeps the old version until the new one verifies. The <a href="https://github.com/tudor-city-ventures/tinfoilkit#readme">README</a> has the commands.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Can my family use it from their phones?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Yes. Start it with <code>--share</code> and any phone on the same Wi-Fi or hotspot can open the page. No internet is needed for that, only a local network. Anyone else on that network can open it too, so share on your own hotspot or home Wi-Fi.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">How long does it run on battery?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">The big model uses a lot of power: expect a couple of hours of active use on a laptop. The small model uses much less, and the Library tab with the AI off uses almost nothing. A USB-C power station and a folding solar panel keep it going.</p></div></details>
-<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What about Windows or Linux?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">The Mac is the supported setup for now. They're a fallback if the Mac is gone: on an exFAT drive, a Windows PC runs the library and a slower AI with the included launcher, and Linux runs it from Terminal. The map is Mac-only, and these paths are less tested.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Does it run on Windows or Linux?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Yes, from an external drive formatted exFAT and set up on a Mac: double-click START-HERE-Windows.bat on Windows, or run <code>bash START-HERE.command</code> on Linux. The AI and the library start; the map runs on a Mac only. Without a strong graphics card the AI is slower, and these paths are tested less than the Mac.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">How do I update it?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Whenever you like, while you're online, double-click SETUP again. There's no schedule. It gets the newest version of the kit first, so models, books and maps added since arrive too, and the picks you made stay. Only what changed downloads, and your old files keep working until the new ones check out.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">How do I remove it?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Double-click UNINSTALL in the kit folder. Once you type delete, it removes the kit and everything it downloaded, and on a drive it leaves everything else alone.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Is all this content legal to download?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Yes, for your own use. The kit downloads everything straight from its publishers: Kiwix packages openly licensed sites like Wikipedia, WikiMed and iFixit, and US government guides, and the AI models are open-weight models published for anyone to run. Each keeps its own license, and some, like iFixit's, forbid commercial use, so don't sell drives you've filled. <a href="https://github.com/tudor-city-ventures/tinfoilkit/blob/main/THIRD-PARTY.md">Every source and its license</a>.</p></div></details>
 </div>
 </section>
@@ -386,7 +388,7 @@ First ask me about my computer, drive size, region and priorities. Then propose 
 <div style="flex:1 1 520px;display:flex;flex-direction:column;gap:16px">
 <p class="kicker" style="color:#E0884F">Open source, MIT license</p>
 <h2>Don't trust us? Good. Read every line.</h2>
-<p>No account, no subscription, no tracking. The sync script, the launcher and the page are plain files you can read, and your drive keeps working no matter what happens to us.</p>
+<p>No account, no subscription, no tracking. The sync script, the launcher and the page are plain files you can read, and your kit keeps working no matter what happens to us.</p>
 </div>
 <a class="btn primary" style="min-height:60px;font-size:19px;padding:0 28px;border-color:var(--signal)" href="https://github.com/tudor-city-ventures/tinfoilkit">
 <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3.1-.3 6.4-1.5 6.4-7a5.4 5.4 0 0 0-1.5-3.7 5 5 0 0 0-.1-3.8s-1.2-.3-3.9 1.5a13.4 13.4 0 0 0-7 0C6.3 1.7 5.1 2 5.1 2a5 5 0 0 0-.1 3.8A5.4 5.4 0 0 0 3.5 9.5c0 5.4 3.3 6.6 6.4 7a3.4 3.4 0 0 0-.9 2.6V22"/></svg>
@@ -556,7 +558,7 @@ View the code on GitHub</a>
     if (!state.kit) return;
     var a = el("a", { href: URL.createObjectURL(new Blob([customKit()], { type: "application/json" })), download: "kit.json" });
     document.body.appendChild(a); a.click(); a.remove();
-    toast("Saved kit.json. Put it in the TinfoilKit folder on your drive, replacing the one there.", 8000);
+    toast("Saved kit.json. Put it in the TinfoilKit folder, replacing the one there.", 8000);
   });
 
   Promise.all([fetch("sources.json").then(function (r) { return r.json(); }), fetch("kit.json").then(function (r) { return r.json(); })])

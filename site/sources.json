@@ -5,7 +5,7 @@
    "id": "Inkling-2-Mini",
    "group": "AI models",
    "title": "Inkling 2 Mini",
-   "why": "The default AI. Fast, reads photos, built for a 32 GB Mac.",
+   "why": "The default AI. Fast, reads photos, built for 32 GB of memory.",
    "bytes": 17973851712,
    "estimated": false,
    "presets": [

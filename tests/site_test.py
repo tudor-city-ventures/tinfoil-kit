@@ -59,6 +59,8 @@ STAR = """(() => { const r = s => document.querySelector(s).getBoundingClientRec
 # Travis: never mention 2 TB; the drive's size isn't the point
 site_text = " ".join(open(os.path.join(SITE, f), encoding="utf-8").read() for f in ("index.html", "hero.js", "llms.txt"))
 check("the site never mentions 2 TB", not re.search(r"\b2(\s|&nbsp;)*TB\b", site_text, re.I))
+# Travis: people update whenever they like, so no copy names a schedule
+check("the site names no update schedule", not re.search(r"\bmonths?\b|\bquarterly\b", site_text, re.I))
 
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path=os.environ.get("KIT_CHROMIUM") or None)
@@ -139,7 +141,7 @@ with sync_playwright() as p:
             check(f"{label}: no sideways scroll", w <= page.viewport_size["width"], f"{w}px")
         check(f"{name}: the human page is the default", page.is_visible(".hero h1") and not page.is_visible("#instructions"))
         page.click(".readas [data-reader=agent]")
-        page.wait_for_selector("#agentDoc:has-text('Check with the person first')", timeout=5000)
+        page.wait_for_selector("#agentDoc b", timeout=5000)   # heading lines are bold once llms.txt loads
         pictures = page.evaluate("[...document.querySelectorAll('img, svg, canvas')].filter(e => e.getClientRects().length).length")
         check(f"{name}: AI agent shows the markdown, with no images or icons", page.inner_text("#agentDoc").startswith("# Tinfoil Kit")
               and not page.is_visible(".hero") and not page.is_visible("#builder") and not pictures
@@ -164,7 +166,7 @@ with sync_playwright() as p:
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}.png"), full_page=True)
     deep = b.new_page()        # a shared link opens the version it names
     deep.goto(URL + "?for=agent")
-    deep.wait_for_selector("#agentDoc:has-text('Check with the person first')", timeout=5000)
+    deep.wait_for_selector("#agentDoc b", timeout=5000)
     check("?for=agent opens the agent page", deep.is_visible("#instructions") and not deep.is_visible(".hero"))
     deep.close()
     still = b.new_page(reduced_motion="reduce")

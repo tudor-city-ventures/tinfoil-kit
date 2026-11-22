@@ -14,7 +14,7 @@ GB = 1e9
 
 # What it is and why you'd want it. A source missing here falls back to its kit.json note.
 COPY = {
-    "Inkling-2-Mini": ("Inkling 2 Mini", "The default AI. Fast, reads photos, built for a 32 GB Mac."),
+    "Inkling-2-Mini": ("Inkling 2 Mini", "The default AI. Fast, reads photos, built for 32 GB of memory."),
     "Qwen3.8-27B": ("Qwen 3.8 27B", "A second opinion from a different lab. Slower, but strong."),
     "Gemma-4-26B-A4B": ("Gemma 4 26B", "A third opinion from Google. Quick and reads photos."),
     "Gemma-4-E4B": ("Gemma 4 E4B", "Small and light. Runs on an 8 to 16 GB laptop or on battery."),
