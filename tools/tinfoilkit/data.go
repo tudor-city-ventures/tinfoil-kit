@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
+	stdlog "log"
 	"math"
 	"net"
 	"net/http"
@@ -295,7 +295,7 @@ type notesServer struct {
 	origins map[string]bool
 	port    int
 	ln      net.Listener
-	log     *log.Logger
+	log     *stdlog.Logger
 }
 
 func newNotesServer(data string, port, library int, logTo io.Writer) (*notesServer, error) {
@@ -307,7 +307,7 @@ func newNotesServer(data string, port, library int, logTo io.Writer) (*notesServ
 	return &notesServer{
 		store:   &notesStore{notes: filepath.Join(data, "notes.txt"), places: filepath.Join(data, "places.json")},
 		origins: map[string]bool{"http://127.0.0.1:" + page: true, "http://localhost:" + page: true},
-		port:    ln.Addr().(*net.TCPAddr).Port, ln: ln, log: log.New(logTo, "", log.LstdFlags),
+		port:    ln.Addr().(*net.TCPAddr).Port, ln: ln, log: stdlog.New(logTo, "", stdlog.LstdFlags),
 	}, nil
 }
 

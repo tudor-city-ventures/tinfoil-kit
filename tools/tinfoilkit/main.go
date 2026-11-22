@@ -4,10 +4,12 @@
 // build it and get the same bytes: tools/tinfoilkit/build.sh.
 //
 //	tinfoilkit open [--share] [--model=NAME] [--no-browser] [--no-maps] [--root KIT]
+//	tinfoilkit [kit] [--root KIT] sync|plan|status|...   ./kit's commands (tinfoilkit kit --help lists them)
 //	tinfoilkit data --data KIT/data --port 8095 --library 8888
 //	tinfoilkit gate --root KIT --port 8000 --library 8888 --ai 8080 [--data N --tiles N --geocoder N --routing N]
 //	tinfoilkit banner --root KIT --port 8000 [--qr]
 //	tinfoilkit compare A B     whether two copies of the program are the same (build.sh verify asks)
+//	tinfoilkit list FILE [TAIL]  SETUP-Windows.bat's numbered choices
 //	tinfoilkit version
 package main
 
@@ -29,12 +31,22 @@ var (
 )
 
 func main() {
+	if windows { // the copy of this program an update replaced while it ran (installRelease)
+		if me, err := os.Executable(); err == nil {
+			os.Remove(me + ".old")
+		}
+	}
 	args := os.Args[1:]
 	cmd := "open"
+	if len(args) > 0 && (args[0] == "--root" || strings.HasPrefix(args[0], "--root=") || isKitCommand(args[0])) {
+		os.Exit(runKit(args))
+	}
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
 	}
 	switch cmd {
+	case "kit":
+		os.Exit(runKit(args))
 	case "open":
 		os.Exit(runOpen(args))
 	case "data":
@@ -45,10 +57,12 @@ func main() {
 		os.Exit(runBanner(args))
 	case "compare":
 		os.Exit(runCompare(args))
+	case "list":
+		os.Exit(runList(args))
 	case "version":
 		fmt.Printf("Tinfoil Kit's program for %s (%s)\n", plat(), runtime.Version())
 	default:
-		fmt.Fprintln(os.Stderr, "usage: tinfoilkit open | data | gate | banner | compare | version (tools/tinfoilkit/main.go says more)")
+		fmt.Fprintln(os.Stderr, "usage: tinfoilkit open | kit | data | gate | banner | compare | list | version (tools/tinfoilkit/main.go says more)")
 		os.Exit(2)
 	}
 }
@@ -229,4 +243,27 @@ func unsigned(data []byte) ([]byte, bool) {
 	le.PutUint64(out[linkedit+32:], 0)
 	le.PutUint64(out[linkedit+48:], 0)
 	return out[:sig], true
+}
+
+// runList prints the lines ./kit region wrote to FILE (id, name and group, tab-separated), numbered, as
+// "  1  NAME (GROUP)" with TAIL after GROUP: SETUP-Windows.bat's choices, which cmd would garble (letters with accents).
+func runList(args []string) int {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "usage: tinfoilkit list FILE [TAIL]")
+		return 2
+	}
+	tail := ""
+	if len(args) > 1 {
+		tail = args[1]
+	}
+	data, err := os.ReadFile(args[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	for i, line := range pyLines(string(data)) {
+		f := append(strings.Split(line, "\t"), "", "")
+		fmt.Printf("  %d  %s (%s%s)\n", i+1, f[1], f[2], tail)
+	}
+	return 0
 }

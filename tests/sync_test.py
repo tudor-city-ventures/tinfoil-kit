@@ -51,6 +51,18 @@ def program():
     return p if name and p.exists() else None
 
 
+GO = os.environ.get("KIT_ENGINE") == "go"    # run ./kit's commands with the kit's own program instead of kit.py
+if GO and not program():
+    sys.exit("KIT_ENGINE=go needs the kit's program for this computer: tools/tinfoilkit/build.sh")
+
+
+def kit_cmd(code, root, *args):
+    """The command line for a ./kit command in the kit folder root, with its code in the folder code."""
+    if GO:
+        return [str(code / "tools" / program().name), "--root", str(root), *args]
+    return [sys.executable, str(code / "tools" / "kit.py"), "--root", str(root), *args]
+
+
 def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
@@ -116,8 +128,7 @@ def kit(*args, env=env, root=None):
     """kit.py in the kit folder root: in its app folder, or at its top in a kit from before app/."""
     root = root or drive
     code = root / "app" if (root / "app" / "tools" / "kit.py").exists() else root
-    p = subprocess.run([sys.executable, str(code / "tools" / "kit.py"), "--root", str(root), *args], env=env,
-                       stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=180)
+    p = subprocess.run(kit_cmd(code, root, *args), env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=180)
     return p.returncode, p.stdout + p.stderr
 
 
@@ -340,7 +351,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
     record = partial.with_name(partial.name + ".parts")
     served("Tiny-Q4_K_M.gguf")
     (R / "SLOW").touch()
-    p = subprocess.Popen([sys.executable, str(drive / "app" / "tools" / "kit.py"), "--root", str(drive), "sync", "-y"], env=env,
+    p = subprocess.Popen(kit_cmd(drive / "app", drive, "sync", "-y"), env=env,
                          stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for _ in range(400):
         if record.exists() and partial.exists() and partial.stat().st_size:
@@ -608,7 +619,8 @@ pathlib.Path(str(out) + ".aria2").unlink()
     if tar and tar.returncode == 0:    # not in CI's bash 3.2 container, which has no git
         subprocess.run(["tar", "-x", "-C", str(whole)], input=tar.stdout, check=True)
         shutil.rmtree(whole / "tools")    # this code, not the last commit's
-        shutil.copytree(TESTS.parent / "tools", whole / "tools", ignore=shutil.ignore_patterns("tinfoilkit-*", "__pycache__"))
+        shutil.copytree(TESTS.parent / "tools", whole / "tools",
+                        ignore=shutil.ignore_patterns("__pycache__", *([] if GO else ["tinfoilkit-*"])))
         rc, out = kit("status", root=whole)
         left = sorted(p.name for p in whole.iterdir())
         check("all of a release's code at a folder's top moves into app, so the folder holds just the kit's folders",
@@ -718,6 +730,42 @@ pathlib.Path(str(out) + ".aria2").unlink()
     check("Wi-Fi sign-in page: plan says so and nothing is cached",
           rc == 1 and not (drive / "data" / ".kit/cache/kiwix-catalog.xml").exists(), out)
 
+    # ./kit remove: what an item downloaded goes, for its space, and it's switched off so sync doesn't get it again.
+    rc, out = kit("remove", "nothing-such")
+    check("remove: a name the kit doesn't have changes nothing", rc == 2 and "Nothing in the kit is called nothing-such" in out, out)
+    before = (drive / "data" / "kit.json").read_text()
+    rc, out = kit("remove", "Two")
+    check("remove: without a keyboard or --yes it lists what it would delete, and deletes nothing",
+          rc == 1 and "This deletes:" in out and "Two" in out and "--yes" in out and (drive / "downloads" / "models/Two").is_dir()
+          and (drive / "data" / "kit.json").read_text() == before, out)
+    rc, out = kit("remove", "Two", "--yes")
+    now = json.loads((drive / "data" / "kit.json").read_text())
+    check("remove --yes: a model's folder goes, the kit forgets it, and it's switched off in kit.json",
+          rc == 0 and "Freed" in out and not (drive / "downloads" / "models/Two").exists() and "models/Two" not in state()["items"]
+          and [m.get("enabled", True) for m in now["models"] if m["id"] == "Two"] == [False] and now["settings"].get("picked") is True
+          and "| Two |" not in (drive / "downloads" / "INVENTORY.md").read_text(), out)
+    cfg["library"][1]["enabled"] = False    # testsurvival_en, switched off by hand: still on the drive
+    write_cfg()
+    rc, out = kit("plan")
+    rc2, out2 = kit("status")
+    check("plan and status say what's switched off but still in the kit, and how to free it",
+          "Still in the kit, switched off: testsurvival_en" in out and "./kit remove" in out
+          and "Still in the kit, switched off: testsurvival_en" in out2, out + out2)
+    rc, out = kit("remove", "testsurvival", "--yes")
+    check("remove: a book (by its name up to the first underscore) goes, and the books beside it stay",
+          rc == 0 and not list((drive / "downloads" / "library").glob("testsurvival_en_*"))
+          and (drive / "downloads" / "library/testmed_en_all_maxi_2026-01.zim").is_file()
+          and "library/testsurvival_en" not in state()["items"], out)
+    rc, out = kit("remove", "disabled_one_en", "--yes")
+    check("remove: an unfinished download goes too", rc == 0 and "unfinished download" in out
+          and not list((drive / "downloads" / "library").glob("disabled_one_en_*")) and not state().get("partials"), out)
+    cfg["library"].append({"zim": "never_got_en"})
+    write_cfg()
+    rc, out = kit("remove", "never_got_en")
+    now = json.loads((drive / "data" / "kit.json").read_text())
+    check("remove: something with nothing downloaded is just switched off",
+          rc == 0 and "nothing to delete" in out and [z.get("enabled", True) for z in now["library"] if z["zim"] == "never_got_en"] == [False], out)
+
     spec = importlib.util.spec_from_file_location("kitpy", TESTS.parent / "tools" / "kit.py")
     kp = sys.modules["kitpy"] = importlib.util.module_from_spec(spec)    # dataclasses look the module up
     spec.loader.exec_module(kp)
@@ -820,6 +868,8 @@ pathlib.Path(str(out) + ".aria2").unlink()
     for rel, data in code.items():
         (up / "app" / rel).parent.mkdir(parents=True, exist_ok=True)
         (up / "app" / rel).write_bytes(data)
+        if rel.startswith("tools/tinfoilkit-"):
+            (up / "app" / rel).chmod(0o755)
     base_cfg = {"settings": {"default_model": "Tiny", "context_size": 8192},
                 "models": [{"id": "Tiny", "repo": "test/Tiny-GGUF", "files": ["*-Q4_K_M.gguf"]},
                            {"id": "Two", "repo": "test/Two-GGUF", "files": ["*-Q4_K_M.gguf"]}],
@@ -853,7 +903,8 @@ pathlib.Path(str(out) + ".aria2").unlink()
             with tarfile.open(R / "gh" / name, "w:gz") as tf:
                 for rel, data in files.items():
                     info = tarfile.TarInfo(f"tinfoilkit-{tag}/{rel}")
-                    info.size, info.mode = len(data), 0o755 if rel in ("kit", "SETUP.command") or rel.endswith(".sh") else 0o644
+                    info.size, info.mode = len(data), 0o755 if rel in ("kit", "SETUP.command") or rel.endswith(".sh") \
+                        or rel.startswith("tools/tinfoilkit-") else 0o644
                     tf.addfile(info, io.BytesIO(data))
                 for rel, target in links:
                     info = tarfile.TarInfo(f"tinfoilkit-{tag}/{rel}")
@@ -876,8 +927,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
         keyboard, tty = pty.openpty()
         os.write(keyboard, answer.encode())
         try:
-            p = subprocess.run([sys.executable, str(up / "app" / "tools" / "kit.py"), "--root", str(up), *args], env=env, stdin=tty,
-                               capture_output=True, text=True, timeout=180)
+            p = subprocess.run(kit_cmd(up / "app", up, *args), env=env, stdin=tty, capture_output=True, text=True, timeout=180)
         finally:
             os.close(keyboard)
             os.close(tty)
@@ -908,8 +958,9 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # Each with the reason it gives, so a check that stops working can't hide behind a later one.
     bad = {"a link": (dict(files=good, links=[("tools/evil", "kit.py")]), "a link in it"),
            "a path outside its folder": (dict(files={**good, "../../escaped.txt": b"x"}), "unexpected path"),
-           "a missing file": (dict(files={k: v for k, v in good.items() if k != "tools/launch.sh"}), "missing tools/launch.sh"),
-           "a kit.py this Python can't run": (dict(files={**good, "tools/kit.py": b"def broken(:\n"}), "won't run"),
+           "a missing file": (dict(files={k: v for k, v in good.items() if k != "tools/portal.html"}), "missing tools/portal.html"),
+           "a program this computer can't run": (dict(files={**good, f"tools/{program().name}": b"\x7fELF broken"} if GO
+                                                      else {**good, "tools/kit.py": b"def broken(:\n"}), "won't run"),
            "no signature": (dict(files=good, signed=False), "isn't signed (the release has no tinfoilkit-v2.tar.gz"),
            "another key's signature": (dict(files=good, seed=b"o" * 32), "isn't signed with the kit's release key"),
            "an archive swapped after it was signed": (dict(files=good, changed=True), "isn't signed with the kit's release key"),
@@ -1638,7 +1689,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     (fk / "data" / "kit.json").write_text(fit_json)
 
     def fit(mem_gb, *args, answers=""):
-        p = subprocess.run([sys.executable, str(fk / "app" / "tools" / "kit.py"), "--root", str(fk), "fit", *args], input=answers,
+        p = subprocess.run(kit_cmd(fk / "app", fk, "fit", *args), input=answers,
                            capture_output=True, text=True, timeout=60, env={**os.environ, "KIT_MEMORY_MB": str(mem_gb * 1024)})
         return p.returncode, p.stdout + p.stderr
 
@@ -1732,7 +1783,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         {"id": "testsurvival_en", "group": "Survival", "title": "Survival", "bytes": 60 * 10**9, "presets": ["everything", "no-ai"]}]}))
 
     def ask(answers):
-        p = subprocess.run([sys.executable, str(ak / "app" / "tools" / "kit.py"), "--root", str(ak), "pick", "--ask"], input=answers,
+        p = subprocess.run(kit_cmd(ak / "app", ak, "pick", "--ask"), input=answers,
                            capture_output=True, text=True, timeout=60, env={**os.environ, "KIT_MEMORY_MB": str(32 * 1024)})
         c = json.loads((ak / "data" / "kit.json").read_text())
         return p.returncode, p.stdout + p.stderr, sorted(e.get("id", e.get("zim")) for s in ("models", "library")

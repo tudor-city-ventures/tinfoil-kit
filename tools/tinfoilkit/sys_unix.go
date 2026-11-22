@@ -3,25 +3,30 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
+	"unsafe"
 )
 
 // memoryMB is this computer's memory, or 0 if it can't tell.
-func memoryMB() int {
+func memoryMB() int { return int(physMemory() / 1048576) }
+
+// physMemory is this computer's memory in bytes, or 0 if it can't tell.
+func physMemory() int64 {
 	if mac {
 		out, _ := exec.Command("sysctl", "-n", "hw.memsize").Output()
 		n, _ := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-		return int(n / 1048576)
+		return n
 	}
 	data, _ := os.ReadFile("/proc/meminfo")
 	for _, line := range strings.Split(string(data), "\n") {
 		if f := strings.Fields(line); len(f) >= 2 && f[0] == "MemTotal:" {
-			kb, _ := strconv.Atoi(f[1])
-			return kb / 1024
+			kb, _ := strconv.ParseInt(f[1], 10, 64)
+			return kb * 1024
 		}
 	}
 	return 0
@@ -48,3 +53,59 @@ func openBrowser(url string) {
 func terminate(p *os.Process) { _ = p.Signal(syscall.SIGTERM) }
 
 func stopSignals() []os.Signal { return []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP} }
+
+// brokenPipe: with SIGPIPE caught, writing to a reader that stopped reading is an error the kit can notice.
+var brokenPipe = []os.Signal{syscall.SIGPIPE}
+
+// isTerminal is whether f is a terminal, not a file, a pipe or /dev/null (which is a device too).
+func isTerminal(f *os.File) bool {
+	var ws struct{ rows, cols, x, y uint16 }
+	_, _, e := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(&ws)))
+	return e == 0
+}
+
+// terminalWidth is the terminal's width in columns, or 0 when stdout isn't one.
+func terminalWidth() int {
+	var ws struct{ rows, cols, x, y uint16 }
+	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, os.Stdout.Fd(), uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(&ws))); e != 0 {
+		return 0
+	}
+	return int(ws.cols)
+}
+
+// diskSpace is the free and total bytes of the disk a folder is on, as Python's shutil.disk_usage says them.
+func diskSpace(p string) (free, total int64, err error) {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(p, &st); err != nil {
+		return 0, 0, err
+	}
+	return int64(st.Bavail) * int64(st.Bsize), int64(st.Blocks) * int64(st.Bsize), nil
+}
+
+// sameDevice is whether two folders are on the same disk.
+func sameDevice(a, b string) bool {
+	var sa, sb syscall.Stat_t
+	if syscall.Stat(a, &sa) != nil || syscall.Stat(b, &sb) != nil {
+		return false
+	}
+	return sa.Dev == sb.Dev
+}
+
+// lockFile takes the kit's lock, errLocked if another kit command has it. A drive format without locks is no error.
+func lockFile(f *os.File) error {
+	err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if errors.Is(err, syscall.EWOULDBLOCK) {
+		return errLocked
+	}
+	return nil
+}
+
+// winVolume and winDrives are Windows' drive letters; elsewhere drives are folders in /Volumes or /media.
+func winVolume(string) (label, fs string) { return "", "" }
+func winDrives() []string                 { return nil }
+
+// startFile opens a file the way double-clicking it would, which only Windows' Startup folder needs.
+func startFile(string) error { return errors.ErrUnsupported }
+
+// writable is whether this user may save in a folder.
+func writable(p string) bool { return syscall.Access(p, 2) == nil }

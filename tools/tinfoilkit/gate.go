@@ -17,7 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	stdlog "log"
 	"math/big"
 	"net"
 	"net/http"
@@ -384,7 +384,7 @@ func newGate(kit string, port int, ports map[string]int) (*gate, error) {
 }
 
 func (g *gate) serve(errs io.Writer) error {
-	srv := &http.Server{Handler: g, ErrorLog: log.New(errs, "", log.LstdFlags), ReadHeaderTimeout: time.Minute}
+	srv := &http.Server{Handler: g, ErrorLog: stdlog.New(errs, "", stdlog.LstdFlags), ReadHeaderTimeout: time.Minute}
 	return srv.Serve(g.ln)
 }
 

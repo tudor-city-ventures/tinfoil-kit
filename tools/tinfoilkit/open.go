@@ -811,11 +811,6 @@ func up(port int, path string) bool {
 	return ok && status < 400
 }
 
-func isTerminal(f *os.File) bool {
-	st, err := f.Stat()
-	return err == nil && st.Mode()&os.ModeCharDevice != 0
-}
-
 // forward listens on 127.0.0.1:port and passes each connection to the library at host (::1), on the same port, until
 // the library stops.
 func forward(port int, host string, lib *proc) error {

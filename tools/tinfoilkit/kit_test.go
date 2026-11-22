@@ -331,3 +331,15 @@ func TestCompareSigned(t *testing.T) {
 		t.Error("only Mac programs have a signature to set aside")
 	}
 }
+
+// /dev/null is a device, but nobody types at it: the kit mustn't wait for an answer from it.
+func TestNullIsNoTerminal(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if isTerminal(f) {
+		t.Error("isTerminal says /dev/null is a terminal")
+	}
+}

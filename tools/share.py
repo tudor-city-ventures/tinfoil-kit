@@ -941,7 +941,9 @@ def autostart_state(root: Path, code: Optional[Path] = None) -> str:
         return "off"
     if WINDOWS:
         text = text.replace("%%", "%")
-    elif not MAC:
+    elif MAC:
+        text = html.unescape(text)    # a plist's &amp;
+    else:
         text = text.replace("%%", "%").replace("$$", "$").replace('\\"', '"').replace("\\\\", "\\")
     return "on" if ours(text, root, code) else "other"
 

@@ -106,6 +106,22 @@ out=$(python3 tests/sync_test.py 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
+step "the same, and sharing and the skills' commands, with the kit's own program in place of kit.py"
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) prog=tools/tinfoilkit-linux-x64 ;;
+  Darwin-arm64) prog=tools/tinfoilkit-macos-arm64 ;;
+  *) prog="" ;;
+esac
+if [ -n "$prog" ] && [ -x "$prog" ]; then
+  for t in sync_test share_test skills_test; do
+    out=$(KIT_ENGINE=go python3 "tests/$t.py" 2>&1); rc=$?
+    echo "$out" | grep -E "^FAIL" ; echo "$t: $(echo "$out" | tail -1)"
+    [ $rc -eq 0 ] || fail=1
+  done
+else
+  echo "skipped (not built)"
+fi
+
 step "sharing on the home network: the gate, the QR code, ./kit share and autostart"
 out=$(python3 tests/share_test.py 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1

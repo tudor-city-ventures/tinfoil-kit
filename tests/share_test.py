@@ -50,6 +50,9 @@ def program():
 
 
 PROGRAM = program()
+GO = os.environ.get("KIT_ENGINE") == "go"    # run ./kit's commands with the kit's own program instead of kit.py
+if GO and not PROGRAM:
+    sys.exit("KIT_ENGINE=go needs the kit's program for this computer: tools/tinfoilkit/build.sh")
 
 
 # ----------------------------------------------------------------------------- QR code
@@ -309,8 +312,9 @@ try:
     (k2 / "app" / "tools").mkdir(parents=True)
     for f in ("kit", "kit.json"):
         shutil.copy(ROOT / f, k2 / "app" / f)
-    for f in ("kit.py", "share.py", "data.py", "launch.sh"):
+    for f in ("kit.py", "share.py", "data.py", "launch.sh") + ((PROGRAM.name,) if GO else ()):
         shutil.copy(ROOT / "tools" / f, k2 / "app" / "tools" / f)
+    kit_line = [str(k2 / "app" / "tools" / PROGRAM.name), "--root", str(k2)] if GO else ["bash", str(k2 / "app" / "kit")]
     mine = k2 / "data" / "kit.json"    # the person's kit.json, a copy of app/kit.json at first
     fake_bin = work / "bin"
     fake_bin.mkdir()
@@ -324,7 +328,7 @@ try:
            "KIT_LAN_IP": "192.168.1.20"}
 
     def kit_cmd(*args):
-        p = subprocess.run(["bash", str(k2 / "app" / "kit"), *args], capture_output=True, text=True, env=env, timeout=60)
+        p = subprocess.run([*kit_line, *args], capture_output=True, text=True, env=env, timeout=60)
         return p.returncode, p.stdout + p.stderr
 
     before = (k2 / "app" / "kit.json").read_text()
@@ -340,8 +344,10 @@ try:
     check("./kit share on: the access code lives in data/.kit, not kit.json, and app/kit.json is as it was",
           json.loads((k2 / "data" / ".kit" / "share.json").read_text())["code"] == "24681357" and "2468" not in after
           and (k2 / "app" / "kit.json").read_text() == before)
-    p = subprocess.run(f'bash "{k2}/app/kit" share --qr | head -1', shell=True, capture_output=True, text=True, env=env, timeout=60)
-    check("./kit share | head -1: no traceback when the reader stops early", "Traceback" not in p.stderr, p.stderr)
+    p = subprocess.run(" ".join(f'"{w}"' for w in kit_line) + " share --qr | head -1", shell=True, capture_output=True, text=True,
+                       env=env, timeout=60)
+    check("./kit share | head -1: no traceback when the reader stops early",
+          "Traceback" not in p.stderr and "panic" not in p.stderr and "goroutine" not in p.stderr, p.stderr)
     rc, out = kit_cmd("share", "new-code")
     new = json.loads(share.access_file(k2).read_text())["code"]
     check("./kit share new-code: a new random 8-digit code", rc == 0 and new != "24681357" and len(new) == 8
@@ -485,6 +491,8 @@ http.server.HTTPServer(("127.0.0.1", int(sys.argv[sys.argv.index("--port") + 1])
             stopped = s.connect_ex(("127.0.0.1", sport)) != 0 and s2.connect_ex(("127.0.0.1", dport)) != 0
         check(f"{who}: closing it stops the gate and the notes server too", stopped)
 
+    if GO:    # launch.sh on its own first
+        (k2 / "app" / "tools" / PROGRAM.name).unlink()
     launcher_checks("launcher", False)
     if PROGRAM:
         shutil.copy(PROGRAM, k2 / "app" / "tools" / PROGRAM.name)

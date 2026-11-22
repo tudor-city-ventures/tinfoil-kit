@@ -25,6 +25,7 @@ The ids are in "What goes in" at https://tinfoilkit.com/llms.txt, and in data/ki
 | Have no AI | `./kit pick --no-ai` |
 | Have exactly these models | `./kit pick --models Gemma-4-12B,Gemma-4-E4B` |
 | Leave things out | `./kit pick --skip khanacademy_en_all,maps` |
+| Delete something, for its space | `./kit remove khanacademy_en_all` (asks first; `--yes` doesn't) |
 | Add things, like the huge collections | `./kit pick --add gutenberg_en_all` |
 | Keep only the models this computer runs | `./kit fit --skip` (`./kit fit --restore` puts them back) |
 | Get just the essentials, or everything again | `./kit essentials on`, `./kit essentials off` |
@@ -42,4 +43,6 @@ The ids are in "What goes in" at https://tinfoilkit.com/llms.txt, and in data/ki
 
 ## What happens to files already downloaded
 
-Switching an item off stops it downloading and updating. What it already downloaded stays, and sync never deletes it, with two exceptions: the try-it kit's extras once the full kit is in, and Wikipedia in a language or size `./kit region` switched away from, once the new one is in (also the smaller Wikipedia the try-it kit and the essentials get until then). To get the space back from an item that's switched off: with the person's OK, close the kit, delete its files (a book is the .zim in downloads/library whose name starts with its id, a model is the folder downloads/models/ID), then run `./kit verify --quick --fix` so the kit forgets it. Never delete anything that's still switched on, or anything in data/.
+Switching an item off stops it downloading and updating. What it already downloaded stays, and sync never deletes it, with two exceptions: the try-it kit's extras once the full kit is in, and Wikipedia in a language or size `./kit region` switched away from, once the new one is in (also the smaller Wikipedia the try-it kit and the essentials get until then). `./kit plan` and `./kit status` list what's switched off but still in the kit, with its size.
+
+To get the space back, `./kit remove NAME` deletes what an item downloaded, its unfinished downloads too, and switches it off. It takes the same names as `--skip`. It lists what it deletes and asks first; without a keyboard it needs `--yes`, so get the person's OK before adding it. Close the kit first on Windows, which won't delete a file the kit has open. `./kit pick --add NAME`, then `./kit sync -y`, gets it back. Never delete the kit's files by hand, or anything in data/.

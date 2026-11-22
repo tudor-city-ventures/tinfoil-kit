@@ -7,6 +7,8 @@ one of them, the skills cover every command people use, AGENTS.md and llms.txt l
 command or approves a tool when it loads.
 Usage: python3 tests/skills_test.py
 """
+import os
+import platform
 import re
 import subprocess
 import sys
@@ -32,9 +34,14 @@ def check(name, ok, detail=""):
         print(f"FAIL  {name}" + (f": {detail}" if detail else ""))
 
 
+# KIT_ENGINE=go reads the commands from the kit's own program (tools/tinfoilkit/build.sh builds it) instead of kit.py.
+PROGRAM = ROOT / "tools" / ("tinfoilkit-" + {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get(
+    (platform.system(), platform.machine()), ""))
+KIT_LINE = [str(PROGRAM), "kit"] if os.environ.get("KIT_ENGINE") == "go" else [sys.executable, str(ROOT / "tools" / "kit.py")]
+
+
 def kit_help(*args):
-    out = subprocess.run([sys.executable, str(ROOT / "tools" / "kit.py"), *args, "-h"], capture_output=True, text=True,
-                         check=True).stdout
+    out = subprocess.run([*KIT_LINE, *args, "-h"], capture_output=True, text=True, check=True).stdout
     flags, choices, section = set(), set(), None
     for line in out.splitlines():
         if re.match(r"^\S.*:$", line):

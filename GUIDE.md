@@ -114,6 +114,7 @@ Other commands:
 ./kit plan            # preview what sync would do (changes nothing)
 ./kit status          # what's in the kit and when it was last updated
 ./kit verify          # re-check every file for corruption (add --fix to remove bad ones, then sync)
+./kit remove NAME     # delete something the kit downloaded, for its space, and switch it off
 ./kit search medical  # find more books to add
 ```
 
@@ -122,7 +123,8 @@ Other commands:
 Everything the kit keeps is listed in **`data/kit.json`** (open it in any text editor):
 
 - Turn something off: set `"enabled": false` on its line. Turn every model off and the kit runs without the AI:
-  the library and the map work as usual, and Ask shows the best passages from the books.
+  the library and the map work as usual, and Ask shows the best passages from the books. What it downloaded
+  stays until `./kit remove NAME` deletes it.
 - Add a book: `./kit search <words>`, then paste the line it prints into the `"library"` list.
 - Swap a model: change its `"repo"` and `"files"` (Hugging Face repo and file name patterns). Each pattern must
   match exactly one file. A new model generation every few months is normal; check which GGUF models fit a

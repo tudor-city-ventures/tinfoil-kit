@@ -51,6 +51,8 @@ Commands (run from the kit's app folder, e.g.  ./kit sync):
                      those), --skip IDS, --add IDS. --ask asks the kit builder's questions instead.
                      Either one sets "picked" in kit.json, so SETUP doesn't ask again.
                      Without options, says what's on, its size, and the time to download it.
+  remove NAME...     Delete what these downloaded (names as pick takes them), for the space, and switch
+                     them off so sync doesn't get them again. Asks first; --yes doesn't.
   layout             Move a kit from before its app, downloads and data folders into them, by
                      renaming: nothing downloads again. Every command does it first; SETUP runs it.
 
@@ -1314,6 +1316,10 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
     disabled = [i for i in items if not i.enabled]
     if disabled:
         log(f"\n  ({len(disabled)} disabled in kit.json: {', '.join(i.id for i in disabled)})")
+    kept = [i for i in disabled if i.key in state["items"]]
+    if kept:
+        log(f"  Still in the kit, switched off: {', '.join(i.id for i in kept)} "
+            f"({fmt_size(sum(drive_bytes(state['items'][i.key]) for i in kept))}). To free the space: ./kit remove NAME")
     if offline(items):
         log("\nNothing could be looked up. Check that this computer is online (on hotel or cafe Wi-Fi, "
             "open any web page and sign in first), then try again.")
@@ -3201,6 +3207,10 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
         log("\nUnfinished downloads (sync resumes them while the item is on in kit.json; delete one to free its space):")
         for rel, size in left:
             log(f"  {rel[:60]:<62}{fmt_size(size):>9}")
+    kept = [i for i in items_from_config(load_config(root)) if not i.enabled and i.key in state["items"]]
+    if kept:
+        log(f"\nStill in the kit, switched off: {', '.join(i.id for i in kept)} "
+            f"({fmt_size(sum(drive_bytes(state['items'][i.key]) for i in kept))}). To free the space: ./kit remove NAME")
     last = state.get("last_sync")
     disk = "this computer's disk" if on_this_computer(root) else "the drive"
     log(f"\nKit content: {fmt_size(total)}.  Free on {disk}: {fmt_size(usage.free)} of {fmt_size(usage.total)}.")
@@ -3661,6 +3671,88 @@ def cmd_pick(root: Path, args: argparse.Namespace) -> None:
         left = estimate_bytes(root, cfg, cfg["settings"].get("essentials_only") is True, left=True)
         took = eta(root, left)
         log(f"To download: about {math.ceil(left / GB)} GB{', ' + took if took else ''}.")
+
+
+def cmd_remove(root: Path, args: argparse.Namespace) -> None:
+    """Delete what items downloaded, for their space, and switch them off so sync doesn't get them again. Names are
+    pick's (an id, a book's name up to its first underscore, maps, or a whole part), or anything ./kit status lists.
+    Asks first at a keyboard; elsewhere, --yes says go ahead."""
+    cfg = json.loads((data_dir(root) / "kit.json").read_text(encoding="utf-8"))
+    with Lock(root):
+        state = load_state(root)
+        parts, unknown = [], []
+        for name in [n for n in re.split(r"[,\s]+", " ".join(args.names)) if n]:
+            hits = find_parts(cfg, name) or [tuple(k.split("/", 1)) for k in state["items"]
+                                              if not k.startswith("runtimes/") and k.split("/", 1)[1].lower() == name.lower()]
+            unknown += [] if hits else [name]
+            parts += [h for h in hits if h not in parts]
+        if unknown:
+            die(f"Nothing in the kit is called {names(unknown)}. ./kit status lists what it has.", code=2)
+        wanted = {f"{s}/{i}" for s, i in parts}
+        keys = sorted(k for k in state["items"] if k in wanted or ("maps", "maps") in parts and k.startswith("maps/"))
+        dl = dl_dir(root)
+        unfinished = sorted(rel for rel, rec in state.get("partials", {}).items() if rec.get("item") in wanted | set(keys)
+                            or ("maps", "maps") in parts and str(rec.get("item")).startswith("maps/"))
+        unfinished += sorted(p.relative_to(dl).as_posix() for s, i in parts if s == "library" for p in files_in(dl, "library/*.partial")
+                             if re.fullmatch(re.escape(i) + r"_\d{4}-\d{2}\.zim\.partial", p.name))
+        unfinished = list(dict.fromkeys(rel for rel in unfinished if (dl / rel).is_file()))
+        sizes = {k: drive_bytes(state["items"][k]) for k in keys}
+        sizes.update({rel: (dl / rel).stat().st_size for rel in unfinished})
+        total = sum(sizes.values())
+        switch = {p: False for p in parts if p[0] == "maps" or p[0] in PART_KEYS and any(
+            e.get(PART_KEYS[p[0]]) == p[1] for e in cfg.get(p[0], []) if isinstance(e, dict))}
+        if not sizes:
+            if switch:
+                switch_parts(root, switch)
+                set_setting(root, "picked", True)
+            log(f"{names([i for _, i in parts])} isn't in the kit, so there's nothing to delete. "
+                + ("It's switched off now, so sync won't get it." if switch else ""))
+            return
+        log("This deletes:")
+        for k in keys:
+            log(f"  {k.split('/', 1)[1][:44]:<46}{fmt_size(sizes[k]):>9}")
+        for rel in unfinished:
+            log(f"  {rel[:44]:<46}{fmt_size(sizes[rel]):>9}   (unfinished download)")
+        if not args.yes:
+            if not sys.stdin.isatty():
+                log("Nothing is deleted yet. To delete it, run this again with --yes.")
+                sys.exit(1)
+            print(f"Delete it ({fmt_size(total)})? [y/N] ", end="", flush=True)
+            if read_line().lower() not in ("y", "yes"):
+                log("Nothing changed.")
+                return
+        if switch:
+            switch_parts(root, switch)
+            set_setting(root, "picked", True)    # chosen: SETUP doesn't ask what goes in again
+        freed, failed = 0, []
+        for k in keys:
+            v = state["items"][k]
+            dest = v.get("dest") or ""
+            # a model's or a map's own folder goes whole; a folder it shares with others (library), just its files
+            own = len(Path(dest).parts) > 1 and not any(
+                (w.get("dest") or "") == dest or (w.get("dest") or "").startswith(dest + "/") for j, w in state["items"].items() if j != k)
+            try:
+                if own and (dl / dest).exists():
+                    shutil.rmtree(dl / dest)
+                elif not own:
+                    for name in v.get("files", {}):
+                        (dl / dest / name).unlink(missing_ok=True)
+                    if v.get("binary"):
+                        (dl / v["binary"]).unlink(missing_ok=True)
+            except OSError as e:    # open in the kit, on Windows
+                failed.append(f"{k.split('/', 1)[1]} ({e.strerror or e})")
+                continue
+            del state["items"][k]
+            freed += sizes[k]
+        for rel in unfinished:
+            drop_partial(dl / rel)
+            state.get("partials", {}).pop(rel, None)
+            freed += sizes[rel]
+        save_state(root, state)
+        write_inventory(root, state)
+    log(f"Freed {fmt_size(freed)}." + (" It's switched off in kit.json; ./kit pick --add NAME brings it back." if switch else ""))
+    if failed:
+        die(f"Couldn't delete {names(failed)}. Close the kit, then run this again")
 
 
 def read_line() -> str:
@@ -4669,6 +4761,10 @@ def main() -> None:
     p.add_argument("--skip", metavar="IDS", help="leave these out: AI models, books (a name, or its start up to an "
                    "underscore, like wikipedia), maps, or a whole part (models, library, extras)")
     p.add_argument("--add", metavar="IDS", help="add these, like the books that are off by default")
+    p = sub.add_parser("remove", help="delete what these downloaded, for the space, and switch them off")
+    p.add_argument("names", nargs="+", metavar="NAME", help="an AI model, a book (or its name up to an underscore, like "
+                   "wikipedia), maps, or a whole part (models, library, extras)")
+    p.add_argument("-y", "--yes", action="store_true", help="don't ask first")
     p = sub.add_parser("fit", help="which AI model this computer runs, and the ones too big for its memory")
     p.add_argument("--ask", action="store_true", help="ask whether to download the models it can't run (SETUP)")
     p.add_argument("--skip", action="store_true", help="switch off the models it can't run, in kit.json")
@@ -4702,7 +4798,7 @@ def main() -> None:
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
                 "drives": cmd_drives, "kits": cmd_kits, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials, "starter": cmd_starter,
-                "fit": cmd_fit, "pick": cmd_pick, "share": cmd_share, "autostart": cmd_autostart, "pins": cmd_pins, "region": cmd_region,
+                "fit": cmd_fit, "pick": cmd_pick, "remove": cmd_remove, "share": cmd_share, "autostart": cmd_autostart, "pins": cmd_pins, "region": cmd_region,
                 "layout": cmd_layout}
     if args.cmd not in commands:
         ap.print_help()
