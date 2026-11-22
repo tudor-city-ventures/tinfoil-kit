@@ -3,6 +3,18 @@
 DIR="$(cd "$(dirname "$0")" && pwd)"
 KIT="$DIR"    # the kit folder: the app folder's, or a git checkout itself
 case "$(basename "$DIR" | tr '[:upper:]' '[:lower:]')" in app) [ -e "$DIR/.git" ] || KIT="$(dirname "$DIR")" ;; esac
+# The kit's own program (tools/tinfoilkit, which releases carry built for each computer) runs the commands when it's
+# here and runs on this computer. Without it, tools/kit.py does, on Python. KIT_NO_GO=1 keeps to Python.
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) TK="$DIR/tools/tinfoilkit-macos-arm64" ;;
+  Linux-x86_64) TK="$DIR/tools/tinfoilkit-linux-x64" ;;
+  *) TK="" ;;
+esac
+if [ -z "$KIT_NO_GO" ] && [ -n "$TK" ] && [ -f "$TK" ]; then
+  chmod +x "$TK" 2>/dev/null
+  if [ "$(uname -s)" = Darwin ]; then xattr -d com.apple.quarantine "$TK" 2>/dev/null; fi
+  "$TK" version >/dev/null 2>&1 && exec "$TK" --root "$KIT" "$@"
+fi
 # The Python SETUP got for a Mac without one, or else python3. Until Apple's developer tools are installed, a Mac's
 # /usr/bin/python3 only offers to install them.
 PY="$HOME/Library/Application Support/TinfoilKit/python/bin/python3"

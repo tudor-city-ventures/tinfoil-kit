@@ -54,6 +54,11 @@ def program():
 GO = os.environ.get("KIT_ENGINE") == "go"    # run ./kit's commands with the kit's own program instead of kit.py
 if GO and not program():
     sys.exit("KIT_ENGINE=go needs the kit's program for this computer: tools/tinfoilkit/build.sh")
+# ./kit and SETUP run the kit's own program wherever it's built; without KIT_ENGINE=go, they keep to kit.py.
+if GO:
+    os.environ.pop("KIT_NO_GO", None)
+else:
+    os.environ["KIT_NO_GO"] = "1"
 
 
 def kit_cmd(code, root, *args):
@@ -1320,21 +1325,45 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           rc == 1 and "checksum doesn't match" in out and calls == [] and not (py_home / "python").exists(), out)
     real_kit = TESTS.parent / "kit"
     shutil.copytree(mac / "src" / "python", py_home / "python")
-    p = subprocess.run([str(real_kit), "--help"], capture_output=True, text=True, env={**os.environ, "HOME": str(mac / "home")})
+    p = subprocess.run([str(real_kit), "--help"], capture_output=True, text=True,
+                       env={**os.environ, "HOME": str(mac / "home"), "KIT_NO_GO": "1"})
     check("./kit runs on the kit's own Python when SETUP got one",
           p.stdout.strip() == f"own python {TESTS.parent / 'tools' / 'kit.py'} --root {TESTS.parent} --help", p.stdout + p.stderr)
     shutil.rmtree(py_home)
     if shutil.which("python3", path="/usr/bin:/bin") == "/usr/bin/python3":
         p = subprocess.run([str(real_kit), "--help"], capture_output=True, text=True,
-                           env={**os.environ, "HOME": str(mac / "home"), "PATH": f"{mac / 'bin'}:/usr/bin:/bin"})
+                           env={**os.environ, "HOME": str(mac / "home"), "PATH": f"{mac / 'bin'}:/usr/bin:/bin", "KIT_NO_GO": "1"})
         check("./kit on a Mac without Apple's developer tools or the kit's Python: says to double-click SETUP",
               p.returncode == 1 and "Double-click SETUP.command" in p.stdout, p.stdout + p.stderr)
         p = subprocess.run([str(real_kit), "--help"], capture_output=True, text=True,
-                           env={**os.environ, "HOME": str(mac / "home"), "PATH": f"{mac / 'dev'}:/usr/bin:/bin"})
+                           env={**os.environ, "HOME": str(mac / "home"), "PATH": f"{mac / 'dev'}:/usr/bin:/bin", "KIT_NO_GO": "1"})
         check("./kit on a Mac with Apple's developer tools: runs on its python3", p.returncode == 0 and "usage" in p.stdout,
               p.stdout + p.stderr)
     else:
         print("skip  ./kit on a Mac's /usr/bin/python3 (no /usr/bin/python3 here)")
+    # The kit's own program, where it's there and runs on this computer: ./kit runs it, and SETUP gets no Python.
+    wrap = work / "wrapper" / "app"
+    (wrap / "tools").mkdir(parents=True)
+    shutil.copy(real_kit, wrap / "kit")
+    (wrap / "tools" / "kit.py").write_text("import sys; print('kit.py', *sys.argv[1:])\n")
+    plat = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get((platform.system(), platform.machine()))
+    if plat:
+        (wrap / "tools" / f"tinfoilkit-{plat}").write_text('#!/bin/sh\n[ "$1" = version ] && exit "${WONT_RUN:-0}"\necho program "$@"\n')
+        wrapped = lambda **e: subprocess.run(["bash", str(wrap / "kit"), "plan"], capture_output=True, text=True,
+                                             env={**os.environ, **e}).stdout.strip()
+        check("./kit runs the kit's own program when it's there (made runnable first, as a download leaves it)",
+              wrapped(KIT_NO_GO="") == f"program --root {wrap.parent} plan", wrapped(KIT_NO_GO=""))
+        check("./kit: KIT_NO_GO=1 keeps to kit.py", wrapped(KIT_NO_GO="1") == f"kit.py --root {wrap.parent} plan")
+        check("./kit: a program that won't run on this computer leaves it to kit.py",
+              wrapped(KIT_NO_GO="", WONT_RUN="1") == f"kit.py --root {wrap.parent} plan")
+    else:
+        print("skip  ./kit with the kit's own program (none for this computer)")
+    stub = setup / "app" / "tools" / "tinfoilkit-macos-arm64"
+    stub.write_text("#!/bin/sh\nexit 0\n")
+    rc, out, calls = run_setup(plan=1, answers="", **{**on_mac, "KIT_NO_GO": ""})
+    check("SETUP on a Mac with the kit's own program: no Python to get", calls == first[:4] and "Python" not in out
+          and not (py_home / "python").exists(), out)
+    stub.unlink()
 
     # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
     # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.

@@ -19,9 +19,11 @@ rem   --add IDS           add these, like the books that are off unless asked fo
 rem   --share             share the kit on the home network, behind an access code, whenever it's open
 rem   --home-server       share it, and start it whenever you sign in: for a PC that stays on
 rem   --yes               ask nothing: what isn't given keeps its default, and SETUP stops and says why instead of asking
-rem The kit's tools run on Python. SETUP gets python.org's own build from nuget.org (about 15 MB, once), checks it
-rem against the checksum below, and keeps it in %LOCALAPPDATA%\TinfoilKit, outside the kit folder, so the kit can
-rem move. UNINSTALL-Windows.bat removes it. KIT_PYTHON_URL: get the same file from there instead (tests).
+rem The kit's commands run on its own program, tools\tinfoilkit-windows-x64.exe, which releases carry. Without it
+rem (GitHub's Download ZIP has none) they run on Python: SETUP gets python.org's own build from nuget.org (about
+rem 15 MB, once), checks it against the checksum below, and keeps it in %LOCALAPPDATA%\TinfoilKit, outside the kit
+rem folder, so the kit can move. UNINSTALL-Windows.bat removes it. KIT_PYTHON_URL: get the same file from there
+rem instead (tests). KIT_NO_GO=1 keeps to Python.
 rem cmd reads this file a line at a time while it runs, and kit update can replace it, so each line that hands
 rem over to a new copy of SETUP also ends this one.
 rem The kit's folder holds three: app (this script and the rest of the code, as released), downloads (what sync gets)
@@ -58,6 +60,11 @@ if defined KIT_PYTHON_URL set "PYURL=%KIT_PYTHON_URL%"
 set "PYHOME=%LOCALAPPDATA%\TinfoilKit\python-%PYV%"
 set "PY=%PYHOME%\tools\python.exe"
 set "PYTHONUTF8=1"
+rem What runs the kit's commands, as "%KITEXE%" %KITPY% --root "%KIT%" COMMAND: the program, if it runs on this PC.
+set "KITEXE=%PY%"
+set KITPY="%APP%\tools\kit.py"
+set "TK=%APP%\tools\tinfoilkit-windows-x64.exe"
+if not defined KIT_NO_GO if exist "%TK%" "%TK%" version >nul 2>&1 && (set "KITEXE=%TK%" & set "KITPY=")
 set "SYS=%SystemRoot%\System32"
 set "OUT=%TEMP%\tinfoilkit-setup-%RANDOM%.txt"
 set "TRIES=0"
@@ -102,7 +109,7 @@ if defined UPDATE (
   echo This gets an offline AI, library and maps ready for when the internet is down, then checks that they work.
   echo The first time takes a few hours. Later runs only download what changed.
 )
-call :python || call :finish 1
+call :runtime || call :finish 1
 rem (kit place makes the downloads folder, so a download that hasn't been put in its place has none)
 if exist "%KIT%\downloads\" (
   if not defined UPDATE (
@@ -130,10 +137,10 @@ call :writable || call :finish 1
 echo(
 set "UPDATE_ARGS="
 if defined KIT_YES set "UPDATE_ARGS=--yes"
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" update !UPDATE_ARGS! & if errorlevel 3 call "%APP%\SETUP-Windows.bat" --updated & exit
+"%KITEXE%" %KITPY% --root "%KIT%" update !UPDATE_ARGS! & if errorlevel 3 call "%APP%\SETUP-Windows.bat" --updated & exit
 
 :download
-call :python || call :finish 1
+call :runtime || call :finish 1
 rem The answers that came with SETUP, after kit update so that new items can be left out too. The first run said
 rem them before moving the kit, and says them again quietly in case a kit was already where it landed.
 if defined KIT_GIVEN (
@@ -169,7 +176,7 @@ if defined UPDATE if not defined TRY call :how_much_now
 if not defined TRY goto update_all
 if defined UPDATE goto the_rest
 
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" estimate > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" estimate > "%OUT%" 2>nul
 set "SMALL=0"
 for /f "usebackq delims=" %%g in ("%OUT%") do set "SMALL=%%g"
 call :gb SMALL
@@ -275,7 +282,7 @@ echo(
 echo The try-it kit works. It's !WHERE!, in !KIT!
 echo Turn off Wi-Fi and try it: ask the AI something, look something up, find your street on the map.
 set "REMAIN=0" & set "TOOK="
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" estimate --rest > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" estimate --rest > "%OUT%" 2>nul
 for /f "usebackq tokens=1,2 delims=	" %%a in ("%OUT%") do (set "REMAIN=%%a" & set "TOOK=%%b")
 call :gb REMAIN
 set "SAY=The rest of the kit"
@@ -416,7 +423,7 @@ set "PLACE="
 set /p "PLACE=!Q!"
 if defined PLACE set "PLACE=!PLACE:"=!"
 if not defined PLACE goto region_size
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" region --find "!PLACE!" > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" region --find "!PLACE!" > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
@@ -449,7 +456,7 @@ goto region_ask
 :region_languages
 set "WIKI=!KIT_WIKIPEDIA!"
 if defined WIKI goto region_set
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" region --languages "!RID!" > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" region --languages "!RID!" > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
@@ -470,7 +477,7 @@ rem How much of Wikipedia, the first time: the sizes Kiwix makes in its language
 :region_size
 if not "%~1"=="first" goto :eof
 if defined KIT_WIKIPEDIA_SIZE goto :eof
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" region --sizes > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" region --sizes > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
@@ -537,9 +544,10 @@ if defined KIT_NO_AI set "FIT="
 call :kit fit !FIT!
 goto :eof
 
-rem The lines kit region wrote, numbered, as "  1  NAME (GROUP)" with this label's argument after GROUP. Python
-rem prints them, since cmd would garble letters with accents.
+rem The lines kit region wrote, numbered, as "  1  NAME (GROUP)" with this label's argument after GROUP. The kit's
+rem program (or Python) prints them, since cmd would garble letters with accents.
 :list
+if not defined KITPY "%KITEXE%" list "%OUT%" "%~1" & goto :eof
 "%PY%" -c "import sys; [print('  {}  {} ({}{})'.format(i, *l.rstrip('\r\n').split('\t')[1:3], sys.argv[2])) for i, l in enumerate(open(sys.argv[1], encoding='utf-8'), 1)]" "%OUT%" "%~1"
 goto :eof
 
@@ -550,7 +558,7 @@ rem only what's new downloads, rather than setting up a second kit. --this-compu
 :other_kit
 if defined KIT_PLACE goto :eof
 set "OTHER_KIT=" & set "OTHER_AT=" & set "OTHER_GB=" & set "OTHER_WHEN="
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" kits > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" kits > "%OUT%" 2>nul
 for /f "usebackq tokens=1-4 delims=	" %%a in ("%OUT%") do if not defined OTHER_KIT (
   set "OTHER_KIT=%%a" & set "OTHER_AT=%%b" & set "OTHER_GB=%%c" & set "OTHER_WHEN=%%d"
 )
@@ -569,7 +577,7 @@ goto :eof
 :other_kit_update
 rem (one whose app folder was deleted, for a new version's, gets a copy of this one: kit place says so)
 if not exist "!THERE!" (
-  "%PY%" "%APP%\tools\kit.py" --root "%KIT%" place "!OTHER_KIT!" > "%OUT%" || call :finish 1
+  "%KITEXE%" %KITPY% --root "%KIT%" place "!OTHER_KIT!" > "%OUT%" || call :finish 1
   call :setup_in "!OTHER_KIT!"
 )
 del "%OUT%" 2>nul & cd /d "!OTHER_KIT!" & call "!THERE!" & exit
@@ -607,7 +615,7 @@ goto put_kit
 
 :which_drive
 set "N=0"
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" drives > "%OUT%" 2>nul
 for /f "usebackq tokens=1-5 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
   set "D!N!=%%a" & set "F!N!=%%b" & set "W!N!=%%d" & set "L!N!=%%e"
@@ -655,7 +663,7 @@ rem The copy there records how much of the kit it gets in its kit.json
 set "KIT_ESSENTIALS=off"
 if "!ONLY!"=="essentials" set "KIT_ESSENTIALS=on"
 rem kit place says what it did, or why it can't, and prints the kit's new folder
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" place "%DEST%" > "%OUT%" || call :finish 1
+"%KITEXE%" %KITPY% --root "%KIT%" place "%DEST%" > "%OUT%" || call :finish 1
 set "NEW="
 for /f "usebackq delims=" %%l in ("%OUT%") do set "NEW=%%l"
 if not defined NEW call :finish 1
@@ -691,7 +699,7 @@ if not exist "!VOL!\" (
   exit /b 1
 )
 set "WHY=-" & set "FMT="
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" drives > "%OUT%" 2>nul
 for /f "usebackq tokens=1-5 delims=	" %%a in ("%OUT%") do (
   set "P=%%a"
   if "!P:~-1!"=="\" set "P=!P:~0,-1!"
@@ -833,7 +841,7 @@ for /f "eol=: delims=" %%f in ('dir /b /a "%~1" 2^>nul') do (
 exit /b 0
 
 :kit
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" %*
+"%KITEXE%" %KITPY% --root "%KIT%" %*
 exit /b %errorlevel%
 
 rem How the kit fits at a place (kit space): FULL and ESS say whether all of it and just the essentials fit with
@@ -842,7 +850,7 @@ rem disk, NEED and NEED_ESS GB for all of it and the essentials, and LEAVE GB wo
 rem (FREE_GB and so on), with LEFT_GB and LEFT_ESS_GB free after them, and NOTE on what fits.
 :space
 set "FULL=fits" & set "ESS=fits" & set "FREE=0" & set "TOTAL=0" & set "NEED=0" & set "NEED_ESS=0" & set "LEAVE=0"
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" space "%~1" > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" space "%~1" > "%OUT%" 2>nul
 for /f "usebackq tokens=1-7 delims=	" %%a in ("%OUT%") do (
   set "FULL=%%a" & set "ESS=%%b" & set "FREE=%%c" & set "TOTAL=%%d" & set "NEED=%%e" & set "NEED_ESS=%%f" & set "LEAVE=%%g"
 )
@@ -870,6 +878,13 @@ set "MSG=%~1"
 echo(
 echo Step !KIT_STEP! of !KIT_STEPS!: !MSG!
 goto :eof
+
+rem What the kit's commands need: its own program, which downloads with Windows' curl (Windows 10 1803 or newer), or
+rem else Python.
+:runtime
+if defined KITPY goto python
+if not exist "%SYS%\curl.exe" goto old_windows
+exit /b 0
 
 rem Python for the kit's tools: python.org's build, checked against PYSHA. Needs Windows 10 1803+ (curl, tar).
 :python
@@ -917,7 +932,7 @@ rem "on this PC" or "on the drive NAME", in WHERE
 set "WHERE=on this PC"
 if /i "%KIT:~0,2%"=="%USERPROFILE:~0,2%" goto :eof
 set "WHERE=on the drive %KIT:~0,2%"
-"%PY%" "%APP%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
+"%KITEXE%" %KITPY% --root "%KIT%" drives > "%OUT%" 2>nul
 for /f "usebackq tokens=1,5 delims=	" %%a in ("%OUT%") do (
   set "P=%%a"
   if /i "!P:~0,2!"=="%KIT:~0,2%" set "WHERE=on the drive %%b"
@@ -950,7 +965,7 @@ goto :eof
 
 rem The list of what failed, from the newest sync log: the sync's own copy has scrolled far up by now.
 :problems
-"%PY%" -c "import glob; f = sorted(glob.glob('data/logs/sync-*.log'))[-1:]; t = open(f[0], encoding='utf-8', errors='replace').read().split('===== sync started')[-1] if f else ''; p = t.split('Problems', 1)[1].split('Re-run', 1)[0] if 'Problems' in t else ''; print(chr(10).join(l for l in p.splitlines() if l.startswith('  - ')))"
+powershell -NoProfile -Command "$f = Get-ChildItem 'data\logs\sync-*.log' -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -Last 1; if ($f) { $t = ((Get-Content -Raw -Encoding UTF8 $f.FullName) -split '===== sync started')[-1]; $i = $t.IndexOf('Problems'); if ($i -ge 0) { $p = $t.Substring($i + 8); $j = $p.IndexOf('Re-run'); if ($j -ge 0) { $p = $p.Substring(0, $j) }; $p -split '\r?\n' | Where-Object { $_.StartsWith('  - ') } } }" <nul 2>nul
 goto :eof
 
 rem With --yes the questions take their defaults, and one that has none stops SETUP rather than wait for an answer.

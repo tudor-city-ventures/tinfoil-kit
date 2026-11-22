@@ -108,9 +108,31 @@ problems() {
                         on && /^  - / {buf = buf $0 "\n"} /^Re-run/ {on = 0} END {printf "%s", buf}' "$log"
 }
 
-# The kit's tools run on python3 (3.9 or newer) and curl. A Mac has curl, but until Apple's developer tools (several
-# GB) are installed its python3 only offers to install them: without them, SETUP gets a Python for the kit instead.
-need_python() {
+# Whether the kit's own program for this computer (tools/tinfoilkit-*, which releases carry) runs here: then ./kit runs
+# it, and the kit needs no Python. KIT_NO_GO=1 keeps to Python.
+program_runs() {
+  local p
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64) p="$CODE/tools/tinfoilkit-macos-arm64" ;;
+    Linux-x86_64) p="$CODE/tools/tinfoilkit-linux-x64" ;;
+    *) return 1 ;;
+  esac
+  [ -z "${KIT_NO_GO:-}" ] && [ -f "$p" ] || return 1
+  chmod +x "$p" 2>/dev/null
+  [ $MAC = 0 ] || xattr -d com.apple.quarantine "$p" 2>/dev/null
+  "$p" version >/dev/null 2>&1
+}
+# The kit's commands run on its own program, or else on python3 (3.9 or newer), and download with curl. A Mac has
+# curl, but until Apple's developer tools (several GB) are installed its python3 only offers to install them: without
+# them, SETUP gets a Python for the kit instead.
+need_tools() {
+  if program_runs; then
+    command -v curl >/dev/null && return
+    say "The kit needs curl. Install it, then run SETUP again:"
+    echo "  Debian, Ubuntu, Mint:  sudo apt install curl"
+    echo "  Fedora:                sudo dnf install curl"
+    finish 1
+  fi
   if [ $MAC = 0 ]; then
     python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' >/dev/null 2>&1 && command -v curl >/dev/null && return
     say "The kit needs python3 (3.9 or newer) and curl. Install them, then run SETUP again:"
@@ -546,7 +568,7 @@ home_server() {
 # carries on. At the top of a kit with an app folder, that folder's copy takes over.
 if [ "$CODE" = "$KIT" ] && [ ! -e .git ]; then
   if [ -f tools/kit.py ]; then
-    need_python
+    need_tools
     ./kit layout || finish 1
   fi
   [ -f app/SETUP.command ] && setup_in "$KIT" "$@"
@@ -565,7 +587,7 @@ if [ "${1:-}" != "--updated" ]; then
       echo "This gets an offline AI, library and maps ready for when the internet is down, then checks that they work."
       echo "The first time takes a few hours. Later runs only download what changed."
     fi
-    need_python
+    need_tools
     if [ -d "$KIT/downloads" ]; then
       [ $FIRST = 1 ] && { KIT_STEPS=2; goes_on && KIT_STEPS=3; }
       step "the kit is $(where_kit), in $KIT"

@@ -164,8 +164,8 @@ mac() {
 
   python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
   mock=$!
-  step "SETUP.command in the unzipped download, as on a Mac without Python: it gets the kit's own (the real"
-  echo "build, from the mock internet); pick the drive; it moves the kit there and gets the try-it kit"
+  step "SETUP.command in the unzipped download, on a Mac without Python: the kit's own program runs it, so it gets"
+  echo "none; pick the drive; it moves the kit there and gets the try-it kit"
   src="$W/Downloads/TinfoilKit" kit="$vol/TinfoilKit"
   rm -rf "$py"
   download_kit "$src" maps
@@ -191,7 +191,7 @@ mac() {
   grep -q "What goes in the kit?" "$L/setup-rest.log" || fail "SETUP didn't ask what goes in the kit"
   [ -f "$kit/downloads/maps/routing/graph-cache/properties" ] || fail "SETUP didn't build the map's roads on the drive"
   [ -d "$kit/downloads/models/Two" ] && fail "the try-it kit's sample AI is still there after the rest"
-  "$py/python/bin/python3" --version || fail "SETUP didn't get the kit's own Python"
+  [ -e "$py/python" ] && fail "SETUP got a Python, though the kit's own program runs on this Mac"
   [ -d "$kit/downloads/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
 
