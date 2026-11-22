@@ -15,6 +15,7 @@ import importlib.util
 import io
 import json
 import os
+import platform
 import re
 import shutil
 import signal
@@ -41,6 +42,13 @@ def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def program():
+    """The kit's own program for this computer (tools/tinfoilkit-*), if tools/tinfoilkit/build.sh has built it."""
+    name = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get((platform.system(), platform.machine()))
+    p = TESTS.parent / "tools" / f"tinfoilkit-{name}"
+    return p if name and p.exists() else None
 
 
 def sha(p):
@@ -1558,14 +1566,31 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         out = p.stdout + p.stderr
         return (out.split("?model=")[1].split("&")[0] if "?model=" in out else ""), out
 
-    for mem_gb, want in ((32, "Big"), (24, "Mid"), (16, "Small"), (4, "Small")):
-        got, out = launch(mem_gb)
-        check(f"launcher: {mem_gb} GB of memory starts {want}", got == want and (want == "Big" or f"{mem_gb} GB of memory" in out), out)
-    got, out = launch(16, "--model=Big")
-    check("launcher: --model wins over memory", got == "Big", out)
-    (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Gone", "library_port": rport, "ai_port": rport}}))
-    got, out = launch(24)
-    check("launcher: without the default model, the biggest that fits", got == "Mid" and "too little" not in out, out)
+    # Each launcher check runs on launch.sh, then on the kit's own program (tools/tinfoilkit) when it's built, which
+    # launch.sh hands over to when it's there.
+    built = program()
+    launchers = [("launcher", None)] + ([("launcher (Go)", built)] if built else [])
+    if not built:
+        print("  SKIP  launcher checks on the kit's own program: not built (tools/tinfoilkit/build.sh)")
+
+    def use(prog):
+        for old in (lk / "app" / "tools").glob("tinfoilkit-*"):
+            old.unlink()
+        if prog:
+            shutil.copy(prog, lk / "app" / "tools" / prog.name)
+
+    for who, prog in launchers:
+        use(prog)
+        (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": rport, "ai_port": rport}}))
+        for mem_gb, want in ((32, "Big"), (24, "Mid"), (16, "Small"), (4, "Small")):
+            got, out = launch(mem_gb)
+            check(f"{who}: {mem_gb} GB of memory starts {want}", got == want and (want == "Big" or f"{mem_gb} GB of memory" in out), out)
+        got, out = launch(16, "--model=Big")
+        check(f"{who}: --model wins over memory", got == "Big", out)
+        (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Gone", "library_port": rport, "ai_port": rport}}))
+        got, out = launch(24)
+        check(f"{who}: without the default model, the biggest that fits", got == "Mid" and "too little" not in out, out)
+    use(None)
 
     # ./kit fit: which model this computer runs, and asking before downloading the ones too big for it.
     fk = work / "fit"
@@ -1764,11 +1789,14 @@ server.serve_forever()
     (lk / "downloads" / "library").mkdir()
     (lk / "downloads" / "library" / "book.zim").touch()
     (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": port, "ai_port": rport}}))
-    p = subprocess.run(["bash", str(lk / "app" / "tools" / "launch.sh"), "--no-browser"], capture_output=True, text=True, timeout=60,
-                       stdin=subprocess.DEVNULL, env={**os.environ, "KIT_KIWIX_TOOLS_BIN": str(fake)})
-    out = p.stdout + p.stderr
-    check("launcher: another program on the library's port: it moves to the next free one",
-          f"using port {port}, so the library uses" in out and "Library:  ready" in out and f":{port}/" not in out, out)
+    for who, prog in launchers:
+        use(prog)
+        p = subprocess.run(["bash", str(lk / "app" / "tools" / "launch.sh"), "--no-browser"], capture_output=True, text=True, timeout=60,
+                           stdin=subprocess.DEVNULL, env={**os.environ, "KIT_KIWIX_TOOLS_BIN": str(fake)})
+        out = p.stdout + p.stderr
+        check(f"{who}: another program on the library's port: it moves to the next free one",
+              f"using port {port}, so the library uses" in out and "Library:  ready" in out and f":{port}/" not in out, out)
+    use(None)
 
     # A library server that won't use 127.0.0.1, as kiwix-serve 3.8 says when the loopback has a second IPv4 address (it
     # keeps only the last one of each interface): the launcher starts it on ::1 and forwards 127.0.0.1 to it, so the
@@ -1802,33 +1830,36 @@ Server(("::1", port), Page).serve_forever()
     if not ipv6:
         print("  SKIP  launcher: a library server that won't use 127.0.0.1 (this computer has no IPv6 to try ::1 on)")
     else:
-        lport = free_port()
-        (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": lport, "ai_port": rport}}))
-        p = subprocess.Popen(["bash", str(lk / "app" / "tools" / "launch.sh"), "--no-browser"], stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT, text=True, stdin=subprocess.DEVNULL,
-                             env={**os.environ, "KIT_KIWIX_TOOLS_BIN": str(refusing)})
-        lines = []
-        threading.Thread(target=lambda: [lines.append(x) for x in p.stdout], daemon=True).start()
-        end = time.time() + 60
-        while time.time() < end and not any("Keep this window open" in x for x in lines):
-            time.sleep(0.2)
-        try:
-            pages = [kp.http_get(f"http://127.0.0.1:{lport}/") for _ in range(3)]
-        except kp.HttpError as e:
-            pages = [str(e).encode()]
-        out = "".join(lines)
-        check("launcher: a library server that won't use 127.0.0.1 listens on ::1, and the library answers at 127.0.0.1",
-              "forwards 127.0.0.1" in out and "Library:  ready" in out and f"Open:     http://127.0.0.1:{lport}/" in out
-              and all(pg.startswith(b"<title>Tinfoil Kit</title>") and len(pg) == 200026 for pg in pages), out)
-        p.terminate()
-        try:
-            p.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            p.kill()
-        time.sleep(0.5)
-        with socket.socket() as s:
-            stopped = s.connect_ex(("127.0.0.1", lport)) != 0
-        check("launcher: closing it stops the library's forwarder too", stopped)
+        for who, prog in launchers:
+            use(prog)
+            lport = free_port()
+            (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": lport, "ai_port": rport}}))
+            p = subprocess.Popen(["bash", str(lk / "app" / "tools" / "launch.sh"), "--no-browser"], stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True, stdin=subprocess.DEVNULL,
+                                 env={**os.environ, "KIT_KIWIX_TOOLS_BIN": str(refusing)})
+            lines = []
+            threading.Thread(target=lambda: [lines.append(x) for x in p.stdout], daemon=True).start()
+            end = time.time() + 60
+            while time.time() < end and not any("Keep this window open" in x for x in lines):
+                time.sleep(0.2)
+            try:
+                pages = [kp.http_get(f"http://127.0.0.1:{lport}/") for _ in range(3)]
+            except kp.HttpError as e:
+                pages = [str(e).encode()]
+            out = "".join(lines)
+            check(f"{who}: a library server that won't use 127.0.0.1 listens on ::1, and the library answers at 127.0.0.1",
+                  "forwards 127.0.0.1" in out and "Library:  ready" in out and f"Open:     http://127.0.0.1:{lport}/" in out
+                  and all(pg.startswith(b"<title>Tinfoil Kit</title>") and len(pg) == 200026 for pg in pages), out)
+            p.terminate()
+            try:
+                p.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                p.kill()
+            time.sleep(0.5)
+            with socket.socket() as s:
+                stopped = s.connect_ex(("127.0.0.1", lport)) != 0
+            check(f"{who}: closing it stops the library's forwarder too", stopped)
+        use(None)
         (noai / "downloads" / "library").mkdir(parents=True, exist_ok=True)
         (noai / "downloads" / "library" / "book.zim").touch()
         rc, out = kit("test", root=noai, env={**env, "KIT_KIWIX_TOOLS_BIN": str(refusing)})

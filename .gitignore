@@ -23,3 +23,6 @@ site/.next/
 site/out/
 site/.claude/
 .claude/settings.local.json
+
+# The kit's program, built by tools/tinfoilkit/build.sh (releases carry it; git doesn't)
+tools/tinfoilkit-*

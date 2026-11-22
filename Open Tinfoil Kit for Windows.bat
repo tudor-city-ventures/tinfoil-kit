@@ -19,6 +19,17 @@ if not exist "%DL%\" if exist "%KIT%\bin\" (set "DL=%KIT%" & set "DATA=%KIT%")
 rem (kit.py makes the person's kit.json from app's the first time it runs)
 set "KJ=%DATA%\kit.json"
 if not exist "%KJ%" set "KJ=%APP%\kit.json"
+rem The kit's own program (tools\tinfoilkit, which releases carry built for each computer) does all of the below
+rem when it's here and runs. This script is for a kit without it. KIT_NO_GO=1 keeps to this script.
+if not defined KIT_NO_GO if exist "%APP%\tools\tinfoilkit-windows-x64.exe" (
+  "%APP%\tools\tinfoilkit-windows-x64.exe" version >nul 2>&1 && (
+    title Tinfoil Kit
+    rem Out of the kit folder, so this window doesn't hold it open (UNINSTALL-Windows.bat can delete it).
+    cd /d "%TEMP%"
+    "%APP%\tools\tinfoilkit-windows-x64.exe" open --root "%KIT%" %*
+    exit /b
+  )
+)
 set "SHARE=" & set "NO_BROWSER="
 for %%a in (%*) do (
   if /i "%%~a"=="--share" set "SHARE=1"

@@ -18,6 +18,18 @@ DL="$KIT/downloads"; DATA="$KIT/data"
 [ ! -d "$DL" ] && [ -d "$KIT/bin" ] && { DL="$KIT"; DATA="$KIT"; }
 CONF="$DATA/kit.json"; [ -f "$CONF" ] || CONF="$APP/kit.json"
 cd "$KIT" || exit 1
+# The kit's own program (tools/tinfoilkit, which releases carry built for each computer) does all of the below when
+# it's here and runs on this computer. This script is for a kit without it. KIT_NO_GO=1 keeps to this script.
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) TK="$APP/tools/tinfoilkit-macos-arm64" ;;
+  Linux-x86_64) TK="$APP/tools/tinfoilkit-linux-x64" ;;
+  *) TK="" ;;
+esac
+if [ -z "$KIT_NO_GO" ] && [ -n "$TK" ] && [ -f "$TK" ]; then
+  chmod +x "$TK" 2>/dev/null
+  if [ "$(uname -s)" = Darwin ]; then xattr -d com.apple.quarantine "$TK" 2>/dev/null; fi
+  "$TK" version >/dev/null 2>&1 && exec "$TK" open --root "$KIT" "$@"
+fi
 mkdir -p "$DATA/logs" "$DATA/.kit"
 SHARE=0; NO_BROWSER=0; NO_MAPS=0; MODEL=""; CHOSEN=0
 for a in "$@"; do

@@ -9,7 +9,7 @@ step "python compiles"
 run python3 -m py_compile tools/kit.py tools/share.py tests/*.py site/*.py
 
 step "bash parses"
-SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command tools/launch.sh mac/app.sh mac/build.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles)
+SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command tools/launch.sh mac/app.sh mac/build.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles tools/tinfoilkit/build.sh)
 for f in "${SH[@]}"; do run bash -n "$f"; done
 
 step "shellcheck"
@@ -92,6 +92,14 @@ step "what AI agents read names only commands and options that exist"
 out=$(python3 tests/skills_test.py 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
+
+step "the kit's own program (tools/tinfoilkit): the Go checks, and a build for each computer, which the tests below run"
+if command -v go >/dev/null; then
+  run tools/tinfoilkit/build.sh check
+  run tools/tinfoilkit/build.sh
+else
+  echo "skipped (Go not installed): the tests below check launch.sh and share.py only"
+fi
 
 step "sync engine against the mock internet"
 out=$(python3 tests/sync_test.py 2>&1); rc=$?

@@ -935,14 +935,15 @@ del "%KIT%\.kit-write-test" 2>nul
 goto :eof
 
 rem The kit's programs hold their files open, and Windows won't replace or move an open file: stop them first. They run
-rem from its downloads\bin folder (bin, before the three folders), and sharing runs its tools\share.py; the Open
-rem Tinfoil Kit window that started them goes too.
+rem from its downloads\bin folder (bin, before the three folders) and its tools folder (the kit's own program), and
+rem sharing runs its tools\share.py; the Open Tinfoil Kit window that started them goes too.
 :stop_kit
 set "TK_BIN=%KIT%\downloads\bin\"
 if not exist "%KIT%\downloads\" set "TK_BIN=%KIT%\bin\"
+set "TK_TOOLS=%APP%\tools\"
 set "TK_GATE=%APP%\tools\share.py"
 set "TK_START=%APP%\Open Tinfoil Kit for Windows.bat"
-powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($env:TK_BIN, $k) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and $c.IndexOf($env:TK_GATE, $k) -ge 0) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'The kit is running. Stopping it, so its files can be updated...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
+powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and $c.IndexOf($env:TK_GATE, $k) -ge 0) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'The kit is running. Stopping it, so its files can be updated...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 goto :eof
 
 rem The list of what failed, from the newest sync log: the sync's own copy has scrolled far up by now.
