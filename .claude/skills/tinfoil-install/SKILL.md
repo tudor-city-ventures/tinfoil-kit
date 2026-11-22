@@ -19,7 +19,7 @@ An external drive is the best place: formatted exFAT, it plugs into any Mac, Win
 
 If the kit's code is already on the computer (a download, or a git checkout), `./kit drives --json` in its app folder (`.\kit.cmd drives --json` on Windows) lists every drive with path, format, free_bytes, problem, has_kit and space: "fits", "tight" or "no", for all of it and for the essentials.
 
-- Room: about 300 GB for all of it, or 30 to 50 GB for the essentials, plus 25 GB to spare.
+- Room: about 300 GB for all of it, or 35 to 55 GB for the essentials, plus 25 GB to spare.
 - Format: exFAT works on all three, best on a GUID partition map (MBR works too). APFS and Mac OS Extended work only on a Mac, a Mac can't write to NTFS, and FAT32 can't hold files over 4 GB.
 - Wrong format: the drive needs erasing as exFAT, which deletes everything on it. Make sure it's the right drive, and get the person's explicit yes. Mac: Disk Utility > View > Show All Devices, select the drive itself (the top line), Erase, ExFAT, GUID Partition Map. Windows: File Explorer, right-click the drive, Format, exFAT, Start.
 - No drive: ask whether they have one to plug in, or want to get one, before suggesting this computer. On this computer the kit goes in ~/TinfoilKit and needs its size plus 50 GB free.
@@ -30,7 +30,7 @@ One or two questions at a time. For each, say what it's for and roughly how big 
 
 1. Their computer: a Mac with Apple Silicon, or a Windows or Linux PC on x64 (Intel Macs and ARM PCs can't run it), its memory and free space.
 2. Where it lives: the drive, this computer, or a home server (see the tinfoil-home-server skill).
-3. Where they live, for the map (`--region`), and Wikipedia's languages (`--wikipedia`).
+3. Where they live, for the map (`--region`), Wikipedia's languages (`--wikipedia`), and how much of Wikipedia (`--wikipedia-size`): all of it (127 GB in English) or just the best 50,000 articles (7 GB, or 2.7 GB as text).
 4. The AI: the one their computer runs (the default), none (`--no-ai`), or exact models (`--models`).
 5. The library, group by group. The huge collections are off unless added (`--add`).
 6. All of it, or just the essentials (`--essentials`) when space is short.
@@ -54,6 +54,7 @@ If the kit's code is already there, it's `bash TinfoilKit/app/SETUP.command OPTI
 | --- | --- |
 | `--region PLACE` | Where they live: "Texas", "Ontario", "Germany: Bayern", or an id from `./kit region --find WORDS`. Quote names with spaces |
 | `--wikipedia CODES` | Wikipedia's languages: `de`, or `de,en` |
+| `--wikipedia-size SIZE` | How much of Wikipedia: `all` (the default), `all-text`, `top` (the best 50,000 articles), `top-text` or `top-intros` (their opening paragraphs). With `--essentials`, add `--add wikipedia` for anything bigger than `top-text` |
 | `--drive PATH` | The drive: /Volumes/NAME on a Mac, E: on Windows, /media/USER/NAME on Linux. The kit goes in a TinfoilKit folder at its top |
 | `--this-computer` | The kit goes in the home folder instead |
 | `--no-ai`, `--models IDS` | No AI, or exactly these models |

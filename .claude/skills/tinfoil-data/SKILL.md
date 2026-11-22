@@ -1,6 +1,6 @@
 ---
 name: tinfoil-data
-description: Change what a Tinfoil Kit downloads. Add or remove AI models, books and maps, switch to just the essentials, change the map's region or Wikipedia's languages, find more Kiwix books, see what fits, and download the changes. Use when someone wants more or less in their kit, or asks how much space something takes.
+description: Change what a Tinfoil Kit downloads. Add or remove AI models, books and maps, switch to just the essentials, change the map's region or Wikipedia's languages and size, find more Kiwix books, see what fits, and download the changes. Use when someone wants more or less in their kit, or asks how much space something takes.
 ---
 
 # Change what's in the kit
@@ -32,6 +32,8 @@ The ids are in "What goes in" at https://tinfoilkit.com/llms.txt, and in data/ki
 | Change where they live, and Wikipedia's languages | `./kit region "Germany: Bayern" --wikipedia de,en` |
 | Find a place's id | `./kit region --find georgia` |
 | See the Wikipedia languages offered for a place | `./kit region bayern --languages` |
+| Take less of Wikipedia, or more: all, all-text, top (the best 50,000 articles), top-text or top-intros | `./kit region --wikipedia-size top-text` |
+| See the sizes Wikipedia comes in, in the kit's languages, with GB | `./kit region --sizes` |
 | Add a Kiwix book that isn't listed | `./kit search WORDS`, then paste the line it prints into "library" in data/kit.json |
 
 - `--skip` and `--add` take ids, `maps`, or a whole part (`models`, `library`, `extras`). A book's name up to its first underscore catches every book that starts with it (`wikipedia` is Wikipedia in any language), and a site's name catches all its books (`stackexchange`, `libretexts`). A wrong name changes nothing and lists the right ones.
@@ -40,4 +42,4 @@ The ids are in "What goes in" at https://tinfoilkit.com/llms.txt, and in data/ki
 
 ## What happens to files already downloaded
 
-Switching an item off stops it downloading and updating. What it already downloaded stays, and sync never deletes it, with two exceptions: the try-it kit's extras once the full kit is in, and Wikipedia in a language `./kit region` switched away from, once the new one is in. To get the space back from an item that's switched off: with the person's OK, close the kit, delete its files (a book is the .zim in downloads/library whose name starts with its id, a model is the folder downloads/models/ID), then run `./kit verify --quick --fix` so the kit forgets it. Never delete anything that's still switched on, or anything in data/.
+Switching an item off stops it downloading and updating. What it already downloaded stays, and sync never deletes it, with two exceptions: the try-it kit's extras once the full kit is in, and Wikipedia in a language or size `./kit region` switched away from, once the new one is in (also the smaller Wikipedia the try-it kit and the essentials get until then). To get the space back from an item that's switched off: with the person's OK, close the kit, delete its files (a book is the .zim in downloads/library whose name starts with its id, a model is the folder downloads/models/ID), then run `./kit verify --quick --fix` so the kit forgets it. Never delete anything that's still switched on, or anything in data/.

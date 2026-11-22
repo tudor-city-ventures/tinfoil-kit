@@ -134,7 +134,21 @@ MAPS_DEFAULTS: Dict[str, Any] = {
 # What a place in tools/regions.json sets ("Where do you live?"). Any of these in kit.json's maps wins over it.
 REGION_KEYS = ("label", "home", "detail_bbox", "routing_osm_pbf", "geocoder_country", "geocoder_wide", "units", "lang")
 REGIONS_FILE = Path(__file__).resolve().parent / "regions.json"
-WIKIPEDIA_RE = re.compile(r"^wikipedia_([a-z]{2,3}(?:-[a-z]+)?)_all_")
+WIKIPEDIA_RE = re.compile(r"^wikipedia_([a-z]{2,3}(?:-[a-z]+)?)_((?:all|top)_(?:maxi|nopic|mini))$")
+# Wikipedia comes in sizes, Kiwix's editions of it (smallest first). ./kit region --wikipedia-size names the ones the
+# kit offers; a language that lacks one gets the next smaller edition it has.
+EDITIONS = ("top_mini", "top_nopic", "top_maxi", "all_mini", "all_nopic", "all_maxi")
+WIKI_SIZES = {"all": "all_maxi", "all-text": "all_nopic", "top": "top_maxi", "top-text": "top_nopic",
+              "top-intros": "top_mini"}
+EDITION_LABELS = {"all_maxi": "all of it, with pictures", "all_nopic": "all of it, text only",
+                  "all_mini": "every article's opening paragraphs", "top_maxi": "the best 50,000 articles, with pictures",
+                  "top_nopic": "the best 50,000 articles, text only",
+                  "top_mini": "the best 50,000 articles' opening paragraphs"}
+# The try-it kit and the essentials get a smaller edition of the Wikipedia kit.json lists while that one isn't in
+# the kit yet, up to so many MB: the best articles' opening paragraphs, and their text.
+STAND_INS = {"starter": ("top_mini", 1000), "essentials": ("top_nopic", 5000)}
+# The kit builder's Essentials takes Wikipedia down to this size (site/components/builder.jsx too).
+WIKI_PRESET = {"essentials": "top-text"}
 GH_ENCODED_VALUES = {
     "car": ["car_access", "car_average_speed", "road_access"],
     "foot": ["foot_access", "foot_priority", "foot_average_speed", "foot_road_access", "hike_rating",
@@ -1199,12 +1213,14 @@ def starter_items(items: List[Item]) -> List[Item]:
     return out
 
 
-def drop_samples(root: Path, state: Dict[str, Any], cfg: Dict[str, Any]) -> None:
+def drop_samples(root: Path, state: Dict[str, Any], cfg: Dict[str, Any], items: List[Item]) -> None:
     """Once a full sync has everything, the try-it kit's samples go: what a try-it sync downloaded (marked "sample"
-    in state.json) that kit.json doesn't switch on. What it does switch on stays for good."""
+    in state.json) that kit.json doesn't switch on. What it does switch on stays for good, and a Wikipedia standing in
+    for kit.json's (wiki_stand_ins) stays while it does."""
     on = {i.key for i in items_from_config(cfg) if i.enabled}
+    planned = {i.key for i in items if i.enabled}
     for key, v in list(state["items"].items()):
-        if not v.get("sample"):
+        if not v.get("sample") or key in planned - on:
             continue
         if key in on or "files" not in v:
             del v["sample"]
@@ -1232,6 +1248,11 @@ def build_plan(root: Path, cfg: Dict[str, Any], state: Dict[str, Any], only: Lis
     elif essentials:
         fit = fit_report(root, cfg, state)
         items = [i for i in items if essential(i, fit)]
+    if (starter or essentials) and not only:
+        have = {i.key for i in items}
+        items += [Item(section="library", id=e["zim"], cfg={"type": "zim", **e})
+                  for e in wiki_stand_ins(cfg, state, "starter" if starter else "essentials")
+                  if "library/" + e["zim"] not in have]
     resolver = Resolver(root, cfg)
     active = [i for i in items if i.enabled]
     log(f"Checking {len(active)} items for updates...")
@@ -1799,19 +1820,21 @@ def sweep_partials(root: Path, state: Dict[str, Any], items: List[Item]) -> None
             partials.pop(rel)
 
 
-def drop_replaced_wikipedias(root: Path, state: Dict[str, Any], items: List[Item]) -> None:
-    """A Wikipedia in a language ./kit region switched away from (50 to 130 GB) goes once the new one is in."""
-    wanted = [i for i in items if i.section == "library" and WIKIPEDIA_RE.match(i.id) and i.enabled]
+def drop_replaced_wikipedias(root: Path, state: Dict[str, Any], items: List[Item], cfg: Dict[str, Any]) -> None:
+    """A Wikipedia in a language or size ./kit region switched away from (up to 130 GB) goes once kit.json's are in,
+    and so does a smaller one that stood in for them (wiki_stand_ins). items: this sync's plan."""
+    listed = [i for i in items_from_config(cfg) if i.section == "library" and WIKIPEDIA_RE.match(i.id)]
+    wanted = [i for i in listed if i.enabled]
     if not wanted or not all("files" in state["items"].get(i.key, {}) for i in wanted):
         return
-    listed = {i.key for i in items}
+    keep = {i.key for i in listed} | {i.key for i in items if i.enabled}
     for key, v in list(state["items"].items()):
         section, _, ident = key.partition("/")
-        if section == "library" and WIKIPEDIA_RE.match(ident) and key not in listed and "files" in v:
+        if section == "library" and WIKIPEDIA_RE.match(ident) and key not in keep and "files" in v:
             for name in v["files"]:
                 (dl_dir(root) / v["dest"] / name).unlink(missing_ok=True)
             del state["items"][key]
-            log(f"Removed {ident}: kit.json has Wikipedia in another language now.")
+            log(f"Removed {ident}: kit.json has {', '.join(i.id for i in wanted)} instead.")
 
 
 def matches(path: Path, f: RemoteFile, expected: Dict[str, str]) -> Optional[str]:
@@ -3089,11 +3112,11 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
         note_speed(state)
         errors = [i for i in items if i.enabled and i.status == "error"]
         if not part:
-            drop_replaced_wikipedias(root, state, items)
+            drop_replaced_wikipedias(root, state, items, cfg)
         if not failures and not errors and not part:
             state["last_sync"] = now_iso()
             if not starter:
-                drop_samples(root, state, cfg)
+                drop_samples(root, state, cfg, items)
         save_state(root, state)
         write_inventory(root, state)
         try:
@@ -3215,9 +3238,10 @@ def estimate_bytes(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] =
         sizes = {s["id"]: s.get("bytes") or 0 for s in listed}
     except (OSError, ValueError, KeyError, TypeError):
         sizes = {}
-    # a place's maps, and Wikipedia in other languages, are sized in tools/regions.json
-    for lang in regions()["languages"].values():
-        sizes.setdefault(lang["zim"], lang.get("mb", 0) * 1e6)
+    # a place's maps, and Wikipedia in other languages and sizes, are sized in tools/regions.json
+    for code in regions()["languages"]:
+        for e, mb in wiki_editions(code).items():
+            sizes.setdefault(f"wikipedia_{code}_{e}", mb * 1e6)
     maps = cfg.get("maps") or {}
     r = region(maps.get("region"))
     map_parts = {"maps/basemap": "tiles", "maps/routing": "roads", "maps/geocoder": "addresses"}
@@ -3241,6 +3265,8 @@ def estimate_bytes(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] =
           and wanted(m, m["id"], m["id"] in (fit.get("runs"), fit.get("smallest")))]
     on += [("library/" + z["zim"], z["zim"]) for z in cfg.get("library", []) if (not starter or some("library"))
            and wanted(z, z["zim"], int(z.get("priority", 2)) <= 1)]
+    if starter or essentials:
+        on += [("library/" + z["zim"], z["zim"]) for z in wiki_stand_ins(cfg, state, "starter" if starter else "essentials")]
     if maps_settings(cfg)["enabled"]:
         on += [(k, k) for k in map_parts if k in sizes]
     programs = (0.2 if starter else 1) * GB
@@ -3462,14 +3488,16 @@ def find_parts(cfg: Dict[str, Any], word: str) -> List[Tuple[str, str]]:
 
 
 PRESETS = (("recommended", "Recommended", "what we'd take"),
-           ("essentials", "Essentials", "the AI, the medical, preparedness and repair books, and the map"),
+           ("essentials", "Essentials", "the AI, the medical, preparedness and repair books, the map, and Wikipedia's "
+                                        "best articles"),
            ("everything", "Everything", "every AI model and book, the biggest collections too"),
            ("no-ai", "No AI", "the books and the map"))
 
 
 def ask_picks(root: Path) -> None:
     """./kit pick --ask: the kit builder's choices on tinfoilkit.com (site/sources.json), asked in a terminal. A preset,
-    or each part. The AI in a preset is one this computer runs."""
+    or each part. The AI in a preset is one this computer runs, and Essentials takes a smaller Wikipedia (WIKI_PRESET),
+    as the builder does."""
     try:
         listed = json.loads((app_dir(root) / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
     except (OSError, ValueError, KeyError, TypeError):
@@ -3501,7 +3529,14 @@ def ask_picks(root: Path) -> None:
     def applied(picked: Dict[str, bool]) -> Dict[Tuple[str, str], bool]:
         return {part: picked[s["id"]] for s in sources for part in parts(s)}
 
-    def gb(picked: Dict[str, bool]) -> int:
+    now = wikipedia_edition(cfg)
+
+    def smaller(key: str) -> Optional[str]:
+        """The edition a preset takes Wikipedia down to, if it's bigger now."""
+        e = WIKI_SIZES.get(WIKI_PRESET.get(key, ""))
+        return e if e and now and EDITIONS.index(now) > EDITIONS.index(e) else None
+
+    def gb(picked: Dict[str, bool], edition: Optional[str] = None) -> int:
         c = json.loads(json.dumps(cfg))
         for (section, ident), on in applied(picked).items():
             if section == "maps":
@@ -3509,6 +3544,8 @@ def ask_picks(root: Path) -> None:
             for e in c.get(section, []) if section != "maps" else []:
                 if e.get(PART_KEYS[section]) == ident:
                     e["enabled"] = on
+        if edition:
+            c["library"] = with_wikipedia(c.get("library", []), None, edition)
         return math.ceil(estimate_bytes(root, c, essentials=False) / GB)
 
     def preset(key: str) -> Dict[str, bool]:
@@ -3522,7 +3559,7 @@ def ask_picks(root: Path) -> None:
 
     log("\nWhat goes in the kit? The same choices as the kit builder on tinfoilkit.com:")
     for n, (key, name, what) in enumerate(PRESETS, 1):
-        log(f"  {n}  {name}: {what}. About {gb(preset(key))} GB.")
+        log(f"  {n}  {name}: {what}. About {gb(preset(key), smaller(key))} GB.")
     log(f"  {len(PRESETS) + 1}  Choose each part")
     while True:
         print(f"\nType a number, or press {RETURN} for 1: ", end="", flush=True)
@@ -3541,7 +3578,11 @@ def ask_picks(root: Path) -> None:
                 if s.get("group") != group:
                     group = s.get("group")
                     log(f"\n  {group}")
-                log(f"  {i:>3}  [{'x' if picked[s['id']] else ' '}] {s.get('title', s['id'])} ({fmt_size(s.get('bytes'))})")
+                title, size = s.get("title", s["id"]), fmt_size(s.get("bytes"))
+                if WIKIPEDIA_RE.match(s["id"]):    # the kit's own: its languages and size
+                    title, _, size = f"Wikipedia: {describe_wikipedia(cfg)}".partition(" (about ")
+                    size = size.rstrip(")") or "?"
+                log(f"  {i:>3}  [{'x' if picked[s['id']] else ' '}] {title} ({size})")
             took = eta(root, gb(picked) * GB)
             log(f"\nIn all: about {gb(picked)} GB{', ' + took if took else ''}.")
             print(f"Type numbers to switch them on or off (like 3 12), or press {RETURN} when it's right: ", end="", flush=True)
@@ -3554,6 +3595,8 @@ def ask_picks(root: Path) -> None:
     changes = {part: on for part, on in applied(picked).items() if is_on(cfg, part) != on}
     if changes:
         switch_parts(root, changes)
+    if n <= len(PRESETS) and smaller(PRESETS[n - 1][0]):
+        log(f"Wikipedia: {describe_wikipedia(set_region(root, None, None, smaller(PRESETS[n - 1][0])))}.")
 
 
 def cmd_pick(root: Path, args: argparse.Namespace) -> None:
@@ -3736,6 +3779,72 @@ def wikipedia_langs(cfg: Dict[str, Any]) -> List[str]:
             for m in [WIKIPEDIA_RE.match(z.get("zim", ""))] if m]
 
 
+def wikipedia_edition(cfg: Dict[str, Any]) -> Optional[str]:
+    """The edition of kit.json's Wikipedia (all_maxi, top_nopic...), switched on or not. None if it has none."""
+    return next((m.group(2) for z in cfg.get("library", []) for m in [WIKIPEDIA_RE.match(z.get("zim", ""))] if m), None)
+
+
+def wiki_editions(lang: str) -> Dict[str, float]:
+    """The editions of Wikipedia in a language, and their MB (tools/regions.json)."""
+    v = regions()["languages"].get(lang) or {}
+    out = {e: mb for e, mb in (v.get("sizes") or {}).items() if e in EDITIONS and isinstance(mb, (int, float))}
+    m = WIKIPEDIA_RE.match(v.get("zim") or "")
+    if m and m.group(2) not in out:
+        out[m.group(2)] = v.get("mb") or 0
+    return out
+
+
+def wiki_edition(lang: str, edition: str) -> Optional[str]:
+    """The edition of lang's Wikipedia nearest to the one asked for: it, else the biggest smaller one, else the
+    smallest. None when there's no Wikipedia in lang."""
+    have = sorted(wiki_editions(lang), key=EDITIONS.index)
+    smaller = [e for e in have if EDITIONS.index(e) <= EDITIONS.index(edition)]
+    return smaller[-1] if smaller else (have[0] if have else None)
+
+
+def gb_text(mb: float) -> str:
+    return f"{mb / 1000:.1f}" if mb < 9950 else str(round(mb / 1000))
+
+
+def wiki_note(lang: str, edition: str) -> str:
+    """kit.json's note for a Wikipedia: like English Wikipedia: all of it, with pictures (~127 GB)."""
+    mb = wiki_editions(lang).get(edition)
+    name = regions()["languages"].get(lang, {}).get("name", lang)
+    return f"{name} Wikipedia: {EDITION_LABELS[edition]}" + (f" (~{gb_text(mb)} GB)" if mb else "")
+
+
+def wiki_stand_ins(cfg: Dict[str, Any], state: Dict[str, Any], tier: str) -> List[Dict[str, Any]]:
+    """What the try-it kit or the essentials (tier: a key of STAND_INS) get of each Wikipedia kit.json switches on
+    that isn't in the kit yet: a smaller edition that stands in for it until it's in (drop_replaced_wikipedias), or
+    itself if it's that small. As kit.json entries."""
+    want, most = STAND_INS[tier]
+    out = []
+    for z in cfg.get("library", []):
+        m = WIKIPEDIA_RE.match(z.get("zim") or "")
+        whole = z.get("starter") is True if tier == "starter" else (z.get("essential") is True
+                                                                     or int(z.get("priority", 2)) <= 1)
+        if not m or not z.get("enabled", True) or whole or "files" in state["items"].get("library/" + z["zim"], {}):
+            continue    # (a whole one comes anyway)
+        lang, chosen = m.groups()
+        e = wiki_edition(lang, want)
+        if e is None:
+            continue
+        e = chosen if EDITIONS.index(e) >= EDITIONS.index(chosen) else e
+        mb = wiki_editions(lang).get(e)
+        if mb is not None and mb <= most:
+            out.append({**z, "zim": f"wikipedia_{lang}_{e}", "enabled": True,
+                        **({"note": wiki_note(lang, e)} if e != chosen else {})})
+    return out
+
+
+def size_choices(codes: List[str]) -> List[Tuple[str, str, float]]:
+    """The sizes of Wikipedia to offer in these languages, biggest first: (name, label, MB). Only the ones Kiwix makes
+    in every one of them."""
+    have = [wiki_editions(c) for c in codes]
+    return [(name, EDITION_LABELS[e][0].upper() + EDITION_LABELS[e][1:], sum(h[e] for h in have))
+            for name, e in WIKI_SIZES.items() if have and all(e in h for h in have)]
+
+
 def lang_names(codes: List[str]) -> str:
     names = [regions()["languages"].get(c, {}).get("name", c) for c in codes]
     return ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else "".join(names)
@@ -3761,46 +3870,68 @@ def language_choices(r: Dict[str, Any]) -> List[Tuple[List[str], str, int]]:
     return out
 
 
+def describe_wikipedia(cfg: Dict[str, Any]) -> str:
+    """Like: English, all of it, with pictures (about 127 GB)."""
+    wiki, edition = wikipedia_langs(cfg), wikipedia_edition(cfg)
+    if not wiki or not edition:
+        return "none"
+    mb = sum(wiki_editions(c).get(e or "", 0) for c in wiki for e in [wiki_edition(c, edition)])
+    return f"{lang_names(wiki)}, {EDITION_LABELS[edition]}" + (f" (about {gb_text(mb)} GB)" if mb else "")
+
+
 def describe_region(cfg: Dict[str, Any]) -> str:
     m = maps_settings(cfg)
     r = region((cfg.get("maps") or {}).get("region"))
-    wiki = wikipedia_langs(cfg)
+    wiki, edition = wikipedia_langs(cfg), wikipedia_edition(cfg)
     where = m["label"] if r else f"{m['label']} (set by hand in kit.json)"
     maps = f"Maps are for {where}" if m["enabled"] else "Maps are switched off"
-    return f"{maps}, and Wikipedia is in {lang_names(wiki)}." if wiki else f"{maps}, with no Wikipedia."
+    return (f"{maps}, and Wikipedia is in {lang_names(wiki)}: {EDITION_LABELS[edition or 'all_maxi']}." if wiki
+            else f"{maps}, with no Wikipedia.")
 
 
-def set_region(root: Path, r: Dict[str, Any], wiki: Optional[List[str]]) -> Dict[str, Any]:
-    """Point kit.json's maps at a place, and swap its Wikipedia for the languages given (None: leave it)."""
+def with_wikipedia(lib: List[Dict[str, Any]], codes: Optional[List[str]], edition: Optional[str]) -> List[Dict[str, Any]]:
+    """kit.json's library with its Wikipedia in these languages and this edition (None: as they are), in its place.
+    The new entries keep the old one's settings (priority, refresh_days, enabled)."""
+    was = [i for i, z in enumerate(lib) if WIKIPEDIA_RE.match(z.get("zim", ""))]
+    now = [WIKIPEDIA_RE.match(lib[i]["zim"]).groups() for i in was]
+    codes = codes if codes is not None else list(dict.fromkeys(c for c, _ in now))
+    edition = edition or (now[0][1] if now else "all_maxi")
+    keep = {k: v for k, v in lib[was[0]].items() if k not in ("zim", "note")} if was else {"priority": 2}
+    new = [{"zim": f"wikipedia_{c}_{e}", **keep, "note": wiki_note(c, e)}
+           for c in codes for e in [wiki_edition(c, edition)] if e]
+    at = was[0] if was else len(lib)
+    out = [z for i, z in enumerate(lib) if i not in was]
+    out[at:at] = new
+    return out
+
+
+def save_config(root: Path, raw: Dict[str, Any]) -> None:
     path = data_dir(root) / "kit.json"
-    cfg = load_config(root)
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    old = raw.get("maps") or {}
-    maps = {"enabled": old.get("enabled", True), "region": r["id"]}
-    maps.update({k: v for k, v in old.items() if k not in maps and k not in REGION_KEYS})
-    raw["maps"] = maps
-    if wiki is not None:
-        langs = regions()["languages"]
-        lib = raw.get("library", [])
-        was = [i for i, z in enumerate(lib) if WIKIPEDIA_RE.match(z.get("zim", ""))]
-        # the new ones keep the old one's settings (priority, refresh_days)
-        keep = {k: v for k, v in lib[was[0]].items() if k not in ("zim", "note")} if was else {"priority": 2}
-        new = [{"zim": langs[c]["zim"], **keep,
-                "note": f"All of {langs[c]['name']} Wikipedia{' with images' if langs[c].get('pictures') else ''}"
-                        f" (~{max(1, round(langs[c].get('mb', 0) / 1000))} GB)"} for c in wiki]
-        at = was[0] if was else len(lib)
-        lib = [z for i, z in enumerate(lib) if i not in was]
-        lib[at:at] = new
-        raw["library"] = lib
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, path)
+
+
+def set_region(root: Path, r: Optional[Dict[str, Any]], wiki: Optional[List[str]],
+               edition: Optional[str] = None) -> Dict[str, Any]:
+    """Point kit.json's maps at a place (None: leave them), and its Wikipedia at these languages and this edition
+    (None: leave them)."""
+    cfg = load_config(root)
+    raw = json.loads((data_dir(root) / "kit.json").read_text(encoding="utf-8"))
+    if r:
+        old = raw.get("maps") or {}
+        maps = {"enabled": old.get("enabled", True), "region": r["id"]}
+        maps.update({k: v for k, v in old.items() if k not in maps and k not in REGION_KEYS})
+        raw["maps"] = maps
+    if wiki is not None or edition is not None:
+        raw["library"] = with_wikipedia(raw.get("library", []), wiki, edition)
+    save_config(root, raw)
     return {**cfg, **raw}
 
 
 def cmd_region(root: Path, args: argparse.Namespace) -> None:
     """Where you live: sets the map area, the road data for directions, the address search, home, units and the
-    language Wikipedia comes in. SETUP and the website's kit builder use it."""
+    language Wikipedia comes in. SETUP and the website's kit builder use it. Also how much of Wikipedia."""
     if not regions()["regions"]:
         die(f"{REGIONS_FILE} is missing or broken; get the kit again (./kit update) to restore it")
     if args.find is not None:
@@ -3808,12 +3939,34 @@ def cmd_region(root: Path, args: argparse.Namespace) -> None:
             print(f"{r['id']}\t{r['name']}\t{r['group']}")
         return
     cfg = load_config(root)
+    langs = regions()["languages"]
+    wiki, edition = None, None
+    if args.wikipedia:
+        wiki = [c.strip().lower() for c in args.wikipedia.split(",") if c.strip()]
+        bad = [c for c in wiki if c not in langs]
+        if bad or not wiki:
+            die(f"Wikipedia doesn't come in '{','.join(bad)}' here. Languages: " +
+                ", ".join(f"{c} ({v['name']})" for c, v in sorted(langs.items())))
+    if args.wikipedia_size:
+        edition = WIKI_SIZES.get(args.wikipedia_size.strip().lower())
+        if not edition:
+            die(f"Wikipedia doesn't come in a size called '{args.wikipedia_size}'. The sizes: {', '.join(WIKI_SIZES)}.")
+        if wiki is None and not any(WIKIPEDIA_RE.match(z.get("zim", "")) for z in cfg.get("library", [])):
+            die("kit.json has no Wikipedia. Add one in a language: ./kit region --wikipedia CODES")
+    if args.sizes:    # for the languages given, or kit.json's
+        for name, label, mb in size_choices(wiki or wikipedia_langs(cfg)):
+            print(f"{name}\t{label}\t{gb_text(mb)}")
+        return
     if not args.place:
-        if args.languages or args.wikipedia:    # for the place kit.json has now
-            r = region((cfg.get("maps") or {}).get("region"))
+        r = region((cfg.get("maps") or {}).get("region"))
+        if args.languages:    # for the place kit.json has now
             if not r:
                 die("kit.json has no region yet: ./kit region PLACE")
             args.place = [r["id"]]
+        elif wiki is not None or edition:
+            cfg = set_region(root, None, wiki, edition)
+            log(f"Wikipedia: {describe_wikipedia(cfg)}.")
+            return
         else:
             print(describe_region(cfg))
             return
@@ -3832,15 +3985,7 @@ def cmd_region(root: Path, args: argparse.Namespace) -> None:
         for codes, label, gb in choices:
             print(f"{','.join(codes)}\t{label}\t{gb}")
         return
-    wiki = None
-    if args.wikipedia:
-        wiki = [c.strip().lower() for c in args.wikipedia.split(",") if c.strip()]
-        langs = regions()["languages"]
-        bad = [c for c in wiki if c not in langs]
-        if bad or not wiki:
-            die(f"Wikipedia doesn't come in '{','.join(bad)}' here. Languages: " +
-                ", ".join(f"{c} ({v['name']})" for c, v in sorted(langs.items())))
-    cfg = set_region(root, r, wiki)
+    cfg = set_region(root, r, wiki, edition)
     m = maps_settings(cfg)
     log(f"Maps: {r['name']}. Street maps and directions for {r['name']}, and a simple map of the whole world.")
     if not r.get("photon"):
@@ -3854,12 +3999,7 @@ def cmd_region(root: Path, args: argparse.Namespace) -> None:
         log('Maps are switched off in kit.json ("enabled": false under "maps"), so none of this downloads.')
     log(f"Home: {m['home'].get('label') or 'the middle of it'}. Directions and \"nearest\" searches start there; "
         "set your own on the Map tab.")
-    wiki_now = wikipedia_langs(cfg)
-    if wiki_now:
-        gb = round(sum(v.get("mb", 0) for c, v in regions()["languages"].items() if c in wiki_now) / 1000)
-        log(f"Wikipedia: {lang_names(wiki_now)} (about {gb} GB).")
-    else:
-        log("Wikipedia: none.")
+    log(f"Wikipedia: {describe_wikipedia(cfg)}.")
 
 
 def cmd_drives(root: Path, args: argparse.Namespace) -> None:
@@ -4529,12 +4669,16 @@ def main() -> None:
     p = sub.add_parser("autostart", help="start the kit whenever this computer starts, for a home server")
     p.add_argument("action", nargs="?", choices=("on", "off"))
     p = sub.add_parser("region", help="where you live: sets the map area, directions, address search, home and "
-                                      "Wikipedia's language")
+                                      "Wikipedia's language; and how much of Wikipedia")
     p.add_argument("place", nargs="*", help="a US state or a country (a name, or an id from --find)")
     p.add_argument("--find", nargs="*", metavar="WORDS", help="list the places matching WORDS: id, name, group")
     p.add_argument("--languages", action="store_true", help="the Wikipedia languages to offer for the place: codes, "
                                                             "name, GB")
     p.add_argument("--wikipedia", metavar="CODES", help="Wikipedia's languages, comma-separated (en, es, de...)")
+    p.add_argument("--wikipedia-size", metavar="SIZE", help="how much of Wikipedia: all (with pictures), all-text, "
+                   "top (the best 50,000 articles, with pictures), top-text or top-intros (their opening paragraphs)")
+    p.add_argument("--sizes", action="store_true", help="the sizes of Wikipedia to offer in its languages: name, "
+                                                        "what it is, GB")
     sub.add_parser("layout", help="move a kit from before its app, downloads and data folders into them (SETUP does)")
     args = ap.parse_args()
     root = (args.root or kit_of(ROOT)).resolve()

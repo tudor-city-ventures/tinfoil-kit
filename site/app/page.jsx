@@ -1,4 +1,4 @@
-import Builder, { CopySetup, Groups, PlaceSelect, Preset, SetupText, Total, WikiSelect } from '@/components/builder';
+import Builder, { CopySetup, Groups, PlaceSelect, Preset, SetupText, SizeSelect, Total, WikiSelect } from '@/components/builder';
 import { CopyButton, Toast } from '@/components/copy';
 import Download, { SetupLink } from '@/components/download';
 import Header from '@/components/header';
@@ -69,7 +69,7 @@ const jsonLd = {
       operatingSystem: "macOS, Windows, Linux",
       softwareRequirements: "A Mac with an M chip (M1 or newer), or a Windows 10 or 11 or Linux PC with an Intel or AMD chip. The kit goes on the computer's own disk or an external SSD, and on a drive formatted exFAT it starts on all three.",
       memoryRequirements: "32 GB or more runs the default AI, Inkling 2 Mini; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B",
-      storageRequirements: "About 300 GB for the recommended kit, or 30 to 50 GB for just the essentials",
+      storageRequirements: "About 300 GB for the recommended kit, or 35 to 55 GB for just the essentials",
       featureList: [
         "Plain-word answers from the offline library, with numbered sources you can open",
         "An AI chat that runs on your laptop and can read photos",
@@ -190,7 +190,11 @@ export default function Home() {
                 <label htmlFor="wikiLang">Wikipedia in</label>
                 <WikiSelect />
               </div>
-              <p className="hint" id="placeNote" aria-live="polite">Sets your map, and offers Wikipedia in your language.</p>
+              <div className="field">
+                <label htmlFor="wikiSize">How much of Wikipedia</label>
+                <SizeSelect />
+              </div>
+              <p className="hint" id="placeNote" aria-live="polite">Sets your map, and offers Wikipedia in your language, in the size you want.</p>
             </div>
             <div className="presets" role="group" aria-label="Preset">
               <Preset value="essentials">Essentials</Preset>
@@ -319,7 +323,7 @@ export default function Home() {
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
               <summary itemProp="name">What do I need?</summary>
               <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
-                <p itemProp="text">A Mac with an M chip (M1 or newer), or a Windows or Linux PC with an Intel or AMD chip. 32&nbsp;GB of memory runs the full-size AI; with less, you get a lighter one. The recommended kit takes about 300&nbsp;GB on your laptop or an external SSD, and the kit builder above shows the size of yours. Short on room? The installer can get just the essentials, about 30 to 50&nbsp;GB: the AI, the map, and the medical, preparedness and repair books.</p>
+                <p itemProp="text">A Mac with an M chip (M1 or newer), or a Windows or Linux PC with an Intel or AMD chip. 32&nbsp;GB of memory runs the full-size AI; with less, you get a lighter one. The recommended kit takes about 300&nbsp;GB on your laptop or an external SSD, and the kit builder above shows the size of yours. Short on room? The installer can get just the essentials, about 35 to 55&nbsp;GB: the AI, the map, the medical, preparedness and repair books, and Wikipedia's best articles.</p>
               </div>
             </details>
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">

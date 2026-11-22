@@ -224,7 +224,7 @@ with sync_playwright() as p:
             # Where you live: sets the map card and Wikipedia's language, and goes into the setup prompt
             regions = json.load(open(os.path.join(SITE, "regions.json"), encoding="utf-8"))["regions"]
             home = next(r["name"] for r in regions if r["id"] == json.load(open(os.path.join(SITE, "kit.json")))["maps"]["region"])
-            wiki_titles = "[...document.querySelectorAll('.card strong')].map(e => e.textContent).filter(t => t.startsWith('Wikipedia'))"
+            wiki_titles = "[...document.querySelectorAll('.card strong')].map(e => e.textContent).filter(t => /^(Best of )?Wikipedia/.test(t))"
             check("the builder starts at kit.json's place, with Wikipedia in English",
                   page.inner_text("#place") == home and page.evaluate(wiki_titles) == ["Wikipedia, with images"]
                   and page.inner_text("#wikiLang").startswith("English"), page.inner_text("#place"))
@@ -269,7 +269,7 @@ with sync_playwright() as p:
                 got[preset] = options()
             page.click("[data-preset=essentials]")
             page.locator(".card", has_text="Wikipedia in German").locator("[role=checkbox]").click()
-            got["essentials and Wikipedia"] = options()
+            got["essentials without Wikipedia"] = options()
             page.click("[data-preset=recommended]")
             page.locator(".card", has_text="WikiMed").locator("[role=checkbox]").click()
             got["no WikiMed"] = options()
@@ -277,8 +277,37 @@ with sync_playwright() as p:
             check("each preset, and a ticked or unticked book, become SETUP's options", got["recommended"] == here
                   and got["essentials"] == here + " --essentials" and got["no-ai"] == here + " --no-ai"
                   and got["everything"].startswith(here + " --add ") and "gutenberg_en_all" in got["everything"]
-                  and got["essentials and Wikipedia"] == here + " --essentials --add wikipedia"
+                  and got["essentials without Wikipedia"] == here + " --essentials --skip wikipedia"
                   and got["no WikiMed"] == here + " --skip mdwiki_en_all_maxi", str(got))
+            page.click("[data-preset=recommended]")
+            # How much of Wikipedia: the sizes Kiwix makes in that language. A preset sets one, and one that isn't the
+            # preset's goes into SETUP's options.
+            page.click("#wikiSize")
+            sizes = page.locator("[role=listbox] [role=option]").all_inner_texts()
+            page.keyboard.press("Escape")
+            check("the size dropdown lists the sizes Wikipedia comes in, in that language, with their GB",
+                  sizes == ["All, with pictures (49 GB)", "Best 50,000 articles, with pictures (4.5 GB)",
+                            "Best 50,000 articles, text only (1.3 GB)", "Best 50,000 articles, opening paragraphs (<1 GB)"], str(sizes))
+            before = page.inner_text("#totalText")
+            choose(page, "#wikiSize", re.compile(r"^Best 50,000 articles, text only \("))
+            check("a smaller Wikipedia: its card, the language's size and the total follow", page.evaluate(wiki_titles)
+                  == ["Best of Wikipedia in German, text only"] and page.inner_text("#wikiLang") == "German (1.3 GB)"
+                  and page.inner_text("#totalText") != before, page.inner_text("#wikiLang") + str(page.evaluate(wiki_titles)))
+            line = options()
+            prompt = page.evaluate("navigator.clipboard.readText()")
+            check("a size that isn't the preset's goes in SETUP's options, and the prompt says it in words",
+                  line == here + " --wikipedia-size top-text" and "want Wikipedia in German, best 50,000 articles, text only." in prompt, line)
+            page.click("[data-preset=recommended]")
+            all_of_it = page.evaluate(wiki_titles)
+            page.click("[data-preset=essentials]")
+            check("presets set the size: Essentials the best articles' text, the others all of it",
+                  all_of_it == ["Wikipedia in German, with images"] and page.evaluate(wiki_titles) == ["Best of Wikipedia in German, text only"]
+                  and page.inner_text("#wikiSize").startswith("Best 50,000 articles, text only"), str(all_of_it))
+            choose(page, "#wikiSize", re.compile(r"^All, with pictures \("))
+            line = options()
+            check("just the essentials with all of Wikipedia: it's added, in that size",
+                  line == here + " --essentials --wikipedia-size all --add wikipedia", line)
+            page.click("[data-preset=recommended]")
             us_georgia = next(r["name"] for r in regions if r["id"] == "us/georgia")
             page.click("#place")
             in_us = page.locator("[role=listbox] [role=group]", has=page.get_by_text("US states", exact=True)).get_by_role("option", name=us_georgia, exact=True).count()

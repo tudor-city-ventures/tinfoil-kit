@@ -62,7 +62,7 @@ jobs:
           sys.exit(0 if ok else "The new sources.json changes more than sizes, so it isn't committed. Run build_sources.py by hand.")
           PY
           # From the new regions.json, take only what a weekly refresh may change: sizes, download paths on Geofabrik and
-          # Photon (each path segment checked), Wikipedia file names, and which known languages a place offers. Ids,
+          # Photon (each path segment checked), Wikipedia file names and editions, and which known languages a place offers. Ids,
           # names, nicknames and home towns stay as a person last committed them: SETUP prints them, the site's agent
           # prompt quotes them, and GeoNames, one of their sources, is edited by the public. What's kept back is listed
           # as warnings, so a person can rebuild the file by hand.
@@ -78,7 +78,9 @@ jobs:
               return type(v) in (int, float) and v >= 0
           REGION = {"mb": lambda v: type(v) is dict and all(size(x) for x in v.values()), "pbf": path("pbf"), "photon": path("photon"),
                     "langs": lambda v: type(v) is list and all(type(c) is str and c in old["languages"] for c in v)}
-          LANGUAGE = {"zim": path("zim"), "mb": size, "pictures": lambda v: type(v) is bool}
+          EDITIONS = ("top_mini", "top_nopic", "top_maxi", "all_mini", "all_nopic", "all_maxi")    # kit.EDITIONS
+          LANGUAGE = {"zim": path("zim"), "mb": size, "pictures": lambda v: type(v) is bool,
+                      "sizes": lambda v: type(v) is dict and all(k in EDITIONS and size(x) for k, x in v.items())}
           kept = []
           def take(have, got, allowed, name):
               for k, good in allowed.items():

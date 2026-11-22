@@ -316,6 +316,7 @@
    "bytes": 127418088448,
    "estimated": false,
    "presets": [
+    "essentials",
     "recommended",
     "no-ai",
     "everything"

@@ -135,9 +135,9 @@ def main():
     add("maps", "Maps", place["name"], mp.get("enabled", True), True)
     if "maps" not in live:     # the map viewer, fonts and icons, and the place's map, road data and address search
         out[-1]["bytes"] = int(0.1 * GB + sum(place["mb"].values()) * 1e6)
-    for z in cfg["library"]:
+    for z in cfg["library"]:    # Essentials takes Wikipedia too, in a smaller size (builder.jsx's WIKI_PRESET)
         add(z["zim"], group_for(z["zim"]), z.get("note", ""), z.get("enabled", True),
-            z.get("enabled", True) and z.get("priority", 9) == 1)
+            z.get("enabled", True) and (z.get("priority", 9) == 1 or z["zim"].startswith("wikipedia_")))
 
     site = ROOT / "site"
     (site / "sources.json").write_text(json.dumps({"default_model": default_model, "sources": out}, indent=1) + "\n")

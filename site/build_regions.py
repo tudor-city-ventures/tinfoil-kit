@@ -509,7 +509,10 @@ def main():
         if code not in NAMES:
             warn(f"no name for language '{code}'; add it to NAMES")
         languages[code] = {"name": en, "native": native, "zim": e["prefix"], "mb": round((e.get("size") or 0) / 1e6),
-                           "pictures": flavour == "maxi"}
+                           "pictures": flavour == "maxi",
+                           # every edition Kiwix makes, for Wikipedia's sizes (kit.EDITIONS)
+                           "sizes": {ed: round((catalog[f"wikipedia_{code}_{ed}"].get("size") or 0) / 1e6)
+                                     for ed in kit.EDITIONS if f"wikipedia_{code}_{ed}" in catalog}}
 
     order = {"United States": "0"}
     regions.sort(key=lambda r: (order.get(r["group"], "1" + r["group"]), fold(r["name"])))
@@ -570,6 +573,8 @@ def check(regions, languages):
     for c, v in languages.items():
         if not re.fullmatch(r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)", v["zim"]):
             bad.append(f"language {c}: bad Wikipedia name {v['zim']}")
+        if not all(e in kit.EDITIONS and isinstance(mb, int) and mb >= 0 for e, mb in v["sizes"].items()):
+            bad.append(f"language {c}: bad Wikipedia sizes {v['sizes']}")
     if bad:
         sys.exit("regions.json would be wrong:\n  " + "\n  ".join(bad))
 

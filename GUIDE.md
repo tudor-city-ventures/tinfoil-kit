@@ -94,8 +94,8 @@ Either way it is safe to stop (Ctrl-C or close the window) and re-run; it picks 
 keeps working with what it has meanwhile. A normal update gets the
 newest version of the kit itself and the programs it was released with (the AI engine and the rest), new library
 editions, any re-released models and fresh map data (rebuilding the
-directions network takes 10 to 40 minutes). Wikipedia is the exception: at 115 GB, it keeps the edition it has
-until that one is a year old. Then pull the plug on Wi-Fi and open the kit once for real.
+directions network takes 10 to 40 minutes). Wikipedia is the exception: at up to 127 GB, it keeps the edition it
+has until that one is a year old. Then pull the plug on Wi-Fi and open the kit once for real.
 
 A newer download of the kit (a new ZIP, or a new Mac app) finds this kit and updates it, so nothing it has
 downloads again. SETUP shows what's new before anything downloads: say no, and the kit keeps working with what it
@@ -140,10 +140,13 @@ what's new in the kit's own list (`app/kit.json`).
    - **Linux**: open a terminal in `TinfoilKit/app` and run `bash SETUP.command`. It needs python3 and curl.
 3. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works
    too). That sets the maps' area, directions, address search and home, and offers Wikipedia in your language.
+   Then it asks how much of Wikipedia: all of it (127 GB in English, with pictures), or just the best 50,000
+   articles (7 GB with pictures, 3 GB as text).
 4. SETUP says which AI model this computer can run, and asks before downloading any that are too big for it. Then
    it asks where the kit should go, says how much room each place has, and moves the kit there for you. If all of
    it won't fit, or would leave less than about 10% of the computer's disk (5% of a drive) free, it says so and
-   offers just the essentials: the AI, the medical, preparedness and repair books, and the map.
+   offers just the essentials: the AI, the medical, preparedness and repair books, the map, and Wikipedia's best
+   articles as text.
    - **An external drive** (recommended): it goes with you. Plug it into any Mac, Windows PC or Linux PC, and keep
      it somewhere safe. It goes in a `TinfoilKit` folder on the drive. The drive should be **exFAT**, which all
      three can use. Many new drives come as exFAT. FAT32 won't work (files over 4 GB don't fit), and SETUP shows how
@@ -168,7 +171,7 @@ what's new in the kit's own list (`app/kit.json`).
 In a terminal, SETUP takes every answer as an option, and with `--yes` it asks nothing: for example
 `bash SETUP.command --region texas --this-computer --yes` (on Windows, `.\SETUP-Windows.bat` with the same options)
 gets the kit to try, and `bash ~/TinfoilKit/app/SETUP.command --yes` the rest. `--help` lists them: a drive, just the
-essentials, which AI models and books, and sharing on the home network.
+essentials, how much of Wikipedia, which AI models and books, and sharing on the home network.
 
 ## Removing it
 

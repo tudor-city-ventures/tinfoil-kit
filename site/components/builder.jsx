@@ -13,7 +13,17 @@ import { loadJSON } from '@/lib/data';
 // the same places as SETUP's question and ./kit region).
 
 const VISIBLE = 6;   // cards a group shows before "Show all"
-const WIKI = /^wikipedia_[a-z-]+_all_/;
+const WIKI = /^wikipedia_[a-z-]+_(all|top)_(maxi|nopic|mini)$/;
+// Wikipedia's sizes, as ./kit region --wikipedia-size names them, with Kiwix's edition of each (kit.py's WIKI_SIZES).
+const SIZES = [
+  ['all', 'all_maxi', 'All, with pictures'],
+  ['all-text', 'all_nopic', 'All, text only'],
+  ['top', 'top_maxi', 'Best 50,000 articles, with pictures'],
+  ['top-text', 'top_nopic', 'Best 50,000 articles, text only'],
+  ['top-intros', 'top_mini', 'Best 50,000 articles, opening paragraphs'],
+];
+const EDITIONS = ['top_mini', 'top_nopic', 'top_maxi', 'all_mini', 'all_nopic', 'all_maxi'];   // smallest first
+const WIKI_PRESET = { essentials: 'top-text' };   // the size a preset takes, else all (kit.py's WIKI_PRESET)
 // The US has whole states (ids like us/texas) and a few areas of several (us-northeast): the areas get their own section, on top.
 const US_AREAS = 'Groups of US states', US_STATES = 'US states';
 const GROUPS = [US_AREAS, US_STATES, 'North America', 'Central America', 'South America', 'Europe', 'Africa', 'Asia'];
@@ -40,13 +50,52 @@ function languageChoices(regions, place) {
   return out;
 }
 
-function wikiCard(regions, code, like) {
+// The editions of Wikipedia in a language, and their MB.
+function editions(regions, code) {
   const l = regions.languages[code];
-  if (code === 'en' && like.id === 'wikipedia_en_all_maxi') return like;
+  return { [l.zim.split('_').slice(2).join('_')]: l.mb || 0, ...(l.sizes || {}) };
+}
+
+// The edition nearest to the one asked for: it, else the biggest smaller one, else the smallest.
+function edition(regions, code, want) {
+  const have = Object.keys(editions(regions, code)).sort((a, b) => EDITIONS.indexOf(a) - EDITIONS.indexOf(b));
+  const smaller = have.filter((e) => EDITIONS.indexOf(e) <= EDITIONS.indexOf(want));
+  return smaller.length ? smaller[smaller.length - 1] : have[0];
+}
+
+// The sizes Kiwix makes in every one of these languages, with their bytes.
+function sizeChoices(regions, codes) {
+  return SIZES.filter(([, e]) => codes.every((c) => e in editions(regions, c)))
+    .map(([size, e, label]) => ({ size, label, bytes: codes.reduce((t, c) => t + editions(regions, c)[e] * 1e6, 0) }));
+}
+
+// The size nearest to the one asked for that every language comes in: it, else the biggest smaller one, else the smallest.
+function nearestSize(regions, codes, size) {
+  const sizes = sizeChoices(regions, codes);
+  if (!sizes.length || sizes.some((s) => s.size === size)) return size;
+  const rank = (name) => EDITIONS.indexOf(SIZES.find((s) => s[0] === name)[1]);
+  const smaller = sizes.filter((s) => rank(s.size) <= rank(size));
+  return (smaller[0] || sizes[sizes.length - 1]).size;
+}
+
+function wikiCard(regions, code, size, like) {
+  const l = regions.languages[code];
+  const e = edition(regions, code, SIZES.find((s) => s[0] === size)[1]);
+  const of = l.name + ' Wikipedia' + (l.native && l.native !== l.name ? ' (' + l.native + ')' : '');
+  const live = like.id === 'wikipedia_' + code + '_' + e;   // the builder measures kit.json's own
   return {
-    id: l.zim, group: like.group, presets: like.presets, estimated: true, bytes: Math.round((l.mb || 0) * 1e6),
-    title: 'Wikipedia in ' + l.name + (l.pictures ? ', with images' : ''),
-    why: 'All of ' + l.name + ' Wikipedia' + (l.native && l.native !== l.name ? ' (' + l.native + ')' : '') + '. The reference for nearly any question.',
+    id: 'wikipedia_' + code + '_' + e, group: like.group, presets: like.presets,
+    estimated: live ? like.estimated : true, bytes: live ? like.bytes : Math.round(editions(regions, code)[e] * 1e6),
+    title: (e.startsWith('top') ? 'Best of Wikipedia' : 'Wikipedia') + (code === 'en' ? '' : ' in ' + l.name)
+      + { maxi: ', with images', nopic: ', text only', mini: ', opening paragraphs' }[e.split('_')[1]],
+    why: {
+      all_maxi: 'All of ' + of + '. The reference for nearly any question.',
+      all_nopic: 'All of ' + of + ', without the pictures. The reference for nearly any question.',
+      all_mini: 'The opening paragraphs of every article in ' + of + '.',
+      top_maxi: 'The best 50,000 articles of ' + of + ', with pictures.',
+      top_nopic: 'The best 50,000 articles of ' + of + ', without the pictures.',
+      top_mini: 'The opening paragraphs of the best 50,000 articles of ' + of + '.',
+    }[e],
   };
 }
 
@@ -64,22 +113,24 @@ function mapsCard(kit, place, like) {
   return card;
 }
 
-// The cards: the place's map, and Wikipedia in the languages picked.
-function cardsFor({ data, place, wiki }) {
+// The cards: the place's map, and Wikipedia in the languages and size picked.
+function cardsFor({ data, place, wiki, size }) {
   if (!data) return [];
   if (!place) return data.base;
   return data.base.flatMap((s) => (s.id === 'maps' ? [mapsCard(data.kit, place, s)]
-    : WIKI.test(s.id) ? wiki.map((c) => wikiCard(data.regions, c, s)) : [s]));
+    : WIKI.test(s.id) ? wiki.map((c) => wikiCard(data.regions, c, size, s)) : [s]));
 }
 
 function withPreset(state, preset) {
-  return { ...state, preset, picked: Object.fromEntries(cardsFor(state).map((s) => [s.id, s.presets.includes(preset)])) };
+  const size = WIKI_PRESET[preset] || 'all';
+  const next = { ...state, preset, size: state.data ? nearestSize(state.data.regions, state.wiki, size) : size };
+  return { ...next, picked: Object.fromEntries(cardsFor(next).map((s) => [s.id, s.presets.includes(preset)])) };
 }
 
-// New Wikipedia cards keep the old ones' tick.
-function withWiki(state, wiki) {
+// New Wikipedia cards keep the old ones' tick, in the nearest size the new languages all come in.
+function withWiki(state, wiki, size = state.size) {
   const wasOn = cardsFor(state).some((s) => WIKI.test(s.id) && state.picked[s.id]);
-  const next = { ...state, wiki, picked: { ...state.picked } };
+  const next = { ...state, wiki, size: nearestSize(state.data.regions, wiki, size), picked: { ...state.picked } };
   cardsFor(next).forEach((s) => { if (WIKI.test(s.id)) next.picked[s.id] = wasOn; });
   return next;
 }
@@ -98,12 +149,15 @@ function reducer(state, a) {
     case 'more': return { ...state, open: { ...state.open, [a.group]: !state.open[a.group] } };
     case 'place': return withWiki({ ...state, chosen: true, place: a.place }, languageChoices(state.data.regions, a.place)[0]);
     case 'wiki': return withWiki({ ...state, chosen: true }, a.wiki);
+    case 'size': return { ...withWiki(state, state.wiki, a.size), preset: null };
     default: throw new Error(a.type);
   }
 }
 
 // chosen: the person picked where they live (until then the AI asks). from: the preset their picks started from.
-const START = { data: null, failed: false, place: null, wiki: ['en'], picked: {}, preset: 'recommended', from: 'recommended', chosen: false, open: {} };
+const START = {
+  data: null, failed: false, place: null, wiki: ['en'], size: 'all', picked: {}, preset: 'recommended', from: 'recommended', chosen: false, open: {},
+};
 const Kit = createContext(null);
 
 export default function Builder({ children }) {
@@ -117,8 +171,8 @@ export default function Builder({ children }) {
     );
     return () => { live = false; };
   }, []);
-  const { data, place, wiki } = state;
-  const cards = useMemo(() => cardsFor({ data, place, wiki }), [data, place, wiki]);
+  const { data, place, wiki, size } = state;
+  const cards = useMemo(() => cardsFor({ data, place, wiki, size }), [data, place, wiki, size]);
   return <Kit value={{ state, cards, dispatch, setupText, showSetup }}>{children}</Kit>;
 }
 
@@ -156,16 +210,31 @@ export function PlaceSelect() {
 
 export function WikiSelect() {
   const { state, dispatch } = use(Kit);
-  const { data, place, wiki } = state;
+  const { data, place, wiki, size } = state;
   const choices = place ? languageChoices(data.regions, place) : [];
   return (
     <Select value={place ? wiki.join(',') : ''} onValueChange={(v) => dispatch({ type: 'wiki', wiki: v.split(',') })} disabled={!place}>
       <SelectTrigger id="wikiLang"><SelectValue /></SelectTrigger>
       <SelectContent>
-        {choices.map((codes) => {
-          const bytes = codes.reduce((t, c) => t + (data.regions.languages[c].mb || 0) * 1e6, 0);
+        {choices.map((codes) => {   // each in the size picked, as picking it would make it
+          const want = SIZES.find((s) => s[0] === nearestSize(data.regions, codes, size))[1];
+          const bytes = codes.reduce((t, c) => t + editions(data.regions, c)[edition(data.regions, c, want)] * 1e6, 0);
           return <SelectItem key={codes.join(',')} value={codes.join(',')}>{`${langName(data.regions, codes)} (${gb(bytes).replace('~', '')})`}</SelectItem>;
         })}
+      </SelectContent>
+    </Select>
+  );
+}
+
+export function SizeSelect() {
+  const { state, dispatch } = use(Kit);
+  const { data, place, wiki, size } = state;
+  const choices = place ? sizeChoices(data.regions, wiki) : [];
+  return (
+    <Select value={place ? size : ''} onValueChange={(v) => dispatch({ type: 'size', size: v })} disabled={!place}>
+      <SelectTrigger id="wikiSize"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {choices.map((c) => <SelectItem key={c.size} value={c.size}>{`${c.label} (${gb(c.bytes).replace('~', '')})`}</SelectItem>)}
       </SelectContent>
     </Select>
   );
@@ -241,6 +310,12 @@ function setupOptions(state, cards) {
   if (!wiki.some(inBase) && langs.length) add.unshift('wikipedia');
   const opts = state.chosen ? ['--region ' + state.place.id, '--wikipedia ' + (langs.length ? langs : state.wiki).join(',')] : [];
   if (base === 'essentials') opts.push('--essentials');
+  // Wikipedia's size, when it isn't the preset's. Just the essentials bring the best articles' text until the size
+  // picked is in, so another size comes with them only when Wikipedia is added.
+  if (langs.length && state.size !== nearestSize(state.data.regions, state.wiki, WIKI_PRESET[base] || 'all')) {
+    opts.push('--wikipedia-size ' + state.size);
+    if (base === 'essentials' && !add.includes('wikipedia')) add.unshift('wikipedia');
+  }
   if (!models.some(on)) opts.push('--no-ai');
   else if (models.some((s) => on(s) !== inBase(s))) opts.push('--models ' + ids(models.filter(on)).join(','));
   if (skip.length) opts.push('--skip ' + skip.join(','));
@@ -253,7 +328,8 @@ function setupPrompt(state, cards) {
   const gbs = Math.round(cards.filter((s) => state.picked[s.id]).reduce((t, s) => t + (s.bytes || 0), 0) / 1e9);
   const r = state.chosen && state.place;
   return INSTALL_PROMPT + `\n\nI already picked what goes in with the kit builder on tinfoilkit.com. It comes to about ${gbs} GB`
-    + (r ? `. I live in ${r.name}, and want Wikipedia in ${langName(state.data.regions, state.wiki)}` : '')
+    + (r ? `. I live in ${r.name}, and want Wikipedia in ${langName(state.data.regions, state.wiki)}, `
+         + SIZES.find((s) => s[0] === state.size)[2].toLowerCase() : '')
     + (opts.length ? `. In the setup command, that's:\n${opts.join(' ')}\nUse those options as they are. ` : ', the recommended kit. ')
     + "Tell me if it won't fit, and ask me only about the rest.";
 }

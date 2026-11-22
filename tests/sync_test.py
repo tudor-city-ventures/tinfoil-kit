@@ -226,6 +226,46 @@ try:
           and "models/Tiny" not in st["items"] and "Removed Tiny" in out and list((tk / "downloads" / "library").glob("testmed_*.zim"))
           and list((tk / "downloads" / "library").glob("testsurvival_*.zim")) and "library/testmed_en_all_maxi" in st["items"], out)
 
+    # Wikipedia in sizes: until kit.json's Wikipedia is in, the try-it kit gets its best articles' opening paragraphs and
+    # the essentials their text; once it's in, those go. (The mock's catalog lists any Wikipedia in remote/zim.)
+    wikis = {"wikipedia_en_top_mini_2026-01.zim": 20_000, "wikipedia_en_top_nopic_2026-01.zim": 30_000,
+             "wikipedia_en_top_maxi_2026-01.zim": 40_000, "wikipedia_en_all_maxi_2026-01.zim": 50_000}
+    for z, size in wikis.items():
+        (R / "zim" / z).write_bytes(os.urandom(size))
+    wk = new_kit(work / "wiki sizes")
+    (wk / "app" / "site").mkdir()
+    (wk / "app" / "site" / "sources.json").write_text(json.dumps({"sources": [{"id": "testmed_en_all_maxi", "bytes": 10**9}]}))
+
+    def wk_cfg(**settings):
+        (wk / "data" / "kit.json").write_text(json.dumps({"settings": {**cfg["settings"], **settings}, "models": [], "library": [
+            {**cfg["library"][0], "starter": True}, {"zim": "wikipedia_en_all_maxi", "priority": 2}]}))
+
+    def wk_has():
+        return sorted(p.name.rsplit("_", 1)[0] for p in (wk / "downloads" / "library").glob("wikipedia_*.zim"))
+
+    wk_cfg()
+    sizes = [kit("estimate", *a, root=wk)[1].strip() for a in (("--starter",), ("--essentials",), ())]
+    check("estimate: the try-it kit and the essentials count the smaller Wikipedia standing in for kit.json's",
+          sizes == ["2", "5", "130"], str(sizes))
+    wk_cfg(starter_only=True)
+    rc, out = kit("sync", "-y", root=wk)
+    check("Wikipedia sizes: the try-it kit gets the best articles' opening paragraphs, in kit.json's language",
+          rc == 0 and wk_has() == ["wikipedia_en_top_mini"], out)
+    wk_cfg(essentials_only=True)
+    rc, out = kit("sync", "-y", root=wk)
+    check("Wikipedia sizes: the essentials get their text, and the try-it kit's goes", rc == 0 and wk_has() == ["wikipedia_en_top_nopic"], out)
+    wk_cfg()
+    rc, out = kit("sync", "-y", root=wk)
+    check("Wikipedia sizes: all of it comes, then the one standing in for it goes",
+          rc == 0 and wk_has() == ["wikipedia_en_all_maxi"]
+          and "Removed wikipedia_en_top_nopic: kit.json has wikipedia_en_all_maxi instead." in out, out)
+    rc, out = kit("region", "--wikipedia-size", "top", root=wk)
+    rc2, out2 = kit("sync", "-y", root=wk)
+    check("Wikipedia sizes: another size comes in, and the old one goes once it's in",
+          rc == rc2 == 0 and wk_has() == ["wikipedia_en_top_maxi"] and "Removed wikipedia_en_all_maxi" in out2, out + out2)
+    for z in wikis:
+        (R / "zim" / z).unlink()
+
     rc, out = kit("verify")
     check("verify passes", rc == 0 and "All 5 files OK" in out, out)
     book = drive / "downloads" / "library/testmed_en_all_maxi_2026-01.zim"
@@ -1228,9 +1268,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
     # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.
-    def first_run(answers, drives=(), git=False, home_kit=None, where="\n", args=(), beside=None, **env_extra):
+    def first_run(answers, drives=(), git=False, home_kit=None, where="\n1\n", args=(), beside=None, **env_extra):
         """SETUP's first run. ./kit space says what SPACE (this computer) and SPACE_DRIVE (drives) say. where: the
-        answers to "Where do you live?" (Return keeps the kit's place)."""
+        answers to "Where do you live?" and "How much of Wikipedia?" (Return keeps the kit's place, 1 all of it)."""
         place = work / "place"
         shutil.rmtree(place, ignore_errors=True)
         home, vols = place / "home", place / "Volumes"
@@ -1326,17 +1366,25 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         c = json.loads((where / "data" / "kit.json").read_text())
         return c["maps"].get("region"), [z["zim"] for z in c["library"] if z["zim"].startswith("wikipedia_")]
 
-    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Atlantis\nUSA\nTexas\n1\n")
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Atlantis\nUSA\nTexas\n1\n1\n")
     check("SETUP first run: asks where you live first, says when it can't tell, and sets the maps and Wikipedia",
           rc == 0 and "Step 1 of 3: where do you live?" in out and 'No place called "Atlantis"' in out
           and '"USA" matches' in out and "Maps: Texas" in out and "Step 2 of 3: where should the kit go" in out
           and "Step 3 of 3: a small kit to try first" in out and placed_ok(home / "TinfoilKit")
           and placed_cfg(home / "TinfoilKit") == ("us/texas", ["wikipedia_en_all_maxi"]), out)
-    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Georgia\n1\n2\n")
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Georgia\n1\n2\n1\n")
     check("SETUP first run: a name two places share: asks which, then which language",
           rc == 0 and "Which one?" in out and "Georgia (United States)" in out and "Georgia (Europe)" in out
           and "Which language should Wikipedia be in?" in out
           and placed_cfg(home / "TinfoilKit") == ("us/georgia", ["wikipedia_es_all_maxi"]), out)
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="\n4\n")
+    check("SETUP first run: asks how much of Wikipedia, with the sizes Kiwix makes in its language, and sets it",
+          rc == 0 and "How much of Wikipedia?" in out and "  1  All of it, with pictures (127 GB)" in out
+          and "  5  The best 50,000 articles' opening paragraphs (0.3 GB)" in out and placed_ok(home / "TinfoilKit")
+          and placed_cfg(home / "TinfoilKit") == ("us-northeast", ["wikipedia_en_top_nopic"]), out)
+    rc, out, dl, home, _ = first_run("", where="", args=("--region", "texas", "--wikipedia-size", "top", "--this-computer", "--yes"))
+    check("SETUP --wikipedia-size: sets it, asking nothing",
+          rc == 0 and "How much of Wikipedia?" not in out and placed_cfg(home / "TinfoilKit") == ("us/texas", ["wikipedia_en_top_maxi"]), out)
     rc, out, dl, home, _ = first_run("", where="", args=("--region", "texas", "--this-computer", "--yes"))
     k = home / "TinfoilKit"
     check("SETUP --region texas --this-computer --yes: asks nothing, sets up in the home folder, doesn't open the kit",
@@ -1369,7 +1417,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("SETUP --yes: all of it with --all, or even the essentials, won't fit: stops before moving anything",
           rc == rc2 == 1 and dl.exists() and dl2.exists() and not (home / "TinfoilKit").exists()
           and "There isn't room on this computer, even for the essentials" in out2, out + out2)
-    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Texas\n1\n", home_kit="kit")
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Texas\n1\n1\n", home_kit="kit")
     check("SETUP first run: a kit already in the home folder gets the place chosen in the download",
           rc == 0 and "already a Tinfoil Kit" in out and placed_cfg(home / "TinfoilKit")[0] == "us/texas", out)
     shm = Path("/dev/shm")
@@ -1658,6 +1706,21 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("kit pick --ask: choose each part, by group, switching them with their numbers",
           rc == 0 and "AI models" in out and "[ ] Tiny AI (2.0 GB)" in out and "[x] Survival (60.0 GB)" in out
           and on == ["Tiny", "testmed_en_all_maxi"], out)
+    # Essentials takes a smaller Wikipedia, as the kit builder does
+    (ak / "data" / "kit.json").write_text(json.dumps({"settings": {}, "models": [{"id": "Tiny", "type": "hf"}],
+                                                       "library": [{"zim": "testmed_en_all_maxi"}, {"zim": "wikipedia_en_all_maxi"}]}))
+    src = json.loads((ak / "app" / "site" / "sources.json").read_text())
+    (ak / "app" / "site" / "sources.json").write_text(json.dumps({"sources": src["sources"] + [
+        {"id": "wikipedia_en_all_maxi", "group": "Reference", "title": "Wikipedia", "bytes": 127 * 10**9,
+         "presets": ["recommended", "essentials", "everything", "no-ai"]}]}))
+    rc, out, on, _ = ask("2\n")
+    check("kit pick --ask: Essentials takes Wikipedia down to the best articles' text, sized that way, and says so",
+          rc == 0 and "Recommended: what we'd take. About 134 GB." in out and "and Wikipedia's best articles. About 10 GB." in out
+          and on == ["Tiny", "testmed_en_all_maxi", "wikipedia_en_top_nopic"]
+          and "Wikipedia: English, the best 50,000 articles, text only (about 2.7 GB)." in out, out)
+    rc, out, on, _ = ask("5\n\n")
+    check("kit pick --ask: choose each part shows the kit's Wikipedia, in its size", rc == 0
+          and "[x] Wikipedia: English, the best 50,000 articles, text only (2.7 GB)" in out, out)
 
     # ./kit space: whether the kit, or just its essentials, fits on a disk and leaves 10% of the computer's (5% of a
     # drive's) free. A made-up 1000 GB disk, a kit of 300 GB and essentials of 40 GB.
@@ -1937,6 +2000,30 @@ Server(("::1", port), Page).serve_forever()
     rc, out = kit("region", "Texas", "--wikipedia", "xx", root=rk)
     check("region: a language Wikipedia doesn't come in", rc == 1 and "doesn't come in 'xx'" in out
           and rk_cfg()[0]["region"] == "us/texas", out)
+    # How much of Wikipedia
+    kit("region", "--wikipedia", "en", root=rk)
+    rc, out = kit("region", "--sizes", root=rk)
+    sizes = [line.split("\t") for line in out.splitlines()]
+    check("region --sizes: the sizes Kiwix makes in its languages, biggest first, with GB",
+          rc == 0 and [s[0] for s in sizes] == ["all", "all-text", "top", "top-text", "top-intros"]
+          and sizes[0][1] == "All of it, with pictures" and float(sizes[3][2]) < 10 < float(sizes[1][2]), out)
+    was, full_gb = rk_cfg()[1][0], int(kit("estimate", root=rk)[1].strip())
+    rc, out = kit("region", "--wikipedia-size", "top-text", root=rk)
+    now = rk_cfg()[1]
+    check("region --wikipedia-size: swaps Wikipedia for that size in place, keeping its settings, and leaves the maps be",
+          rc == 0 and [z["zim"] for z in now] == ["wikipedia_en_top_nopic"] and "the best 50,000 articles, text only" in out
+          and {k: v for k, v in now[0].items() if k not in ("zim", "note")} == {k: v for k, v in was.items() if k not in ("zim", "note")}
+          and "Maps:" not in out and rk_cfg()[0]["region"] == "us/texas" and int(kit("estimate", root=rk)[1].strip()) < full_gb - 100, out)
+    rc, out = kit("region", root=rk)
+    check("region: says how much of Wikipedia", rc == 0 and "Wikipedia is in English: the best 50,000 articles, text only" in out, out)
+    rc, out = kit("region", "Bavaria", "--wikipedia", "de,en", root=rk)
+    check("region: a new language comes in the size Wikipedia has", rc == 0 and [z["zim"] for z in rk_cfg()[1]]
+          == ["wikipedia_de_top_nopic", "wikipedia_en_top_nopic"] and "German and English, the best 50,000" in out, out)
+    rc, out = kit("region", "--wikipedia-size", "huge", root=rk)
+    check("region --wikipedia-size: a size it doesn't know", rc == 1 and "all, all-text, top, top-text, top-intros" in out, out)
+    rc, out = kit("region", "Texas", "--wikipedia", "de", "--wikipedia-size", "all", root=rk)
+    check("region: a place, a language and a size at once", rc == 0 and rk_cfg()[0]["region"] == "us/texas"
+          and [z["zim"] for z in rk_cfg()[1]] == ["wikipedia_de_all_maxi"], out)
     wide = next(r for r in kp.regions()["regions"] if r.get("addresses_wide"))
     rc, out = kit("region", wide["id"], root=rk)
     check("region: a place with only a continent's address search says so, and how big it is",
@@ -2011,14 +2098,60 @@ Server(("::1", port), Page).serve_forever()
     (wr / "downloads" / "zim" / "wikipedia_en_all_maxi_2026-01.zim").write_bytes(b"en")
     st = {"items": {"library/wikipedia_en_all_maxi": {"dest": "zim", "files": {"wikipedia_en_all_maxi_2026-01.zim": {}}},
                     "library/testmed_en_all_maxi": {"dest": "zim", "files": {}}}}
-    items = kp.items_from_config({"settings": {}, "library": [{"zim": "wikipedia_de_all_maxi"}, {"zim": "testmed_en_all_maxi"}]})
-    kp.drop_replaced_wikipedias(wr, st, items)
+    wcfg = {"settings": {}, "library": [{"zim": "wikipedia_de_all_maxi"}, {"zim": "testmed_en_all_maxi"}]}
+    items = kp.items_from_config(wcfg)
+    kp.drop_replaced_wikipedias(wr, st, items, wcfg)
     check("Wikipedia swap: the old one stays until the new one is in", "library/wikipedia_en_all_maxi" in st["items"]
           and (wr / "downloads" / "zim" / "wikipedia_en_all_maxi_2026-01.zim").exists())
     st["items"]["library/wikipedia_de_all_maxi"] = {"dest": "zim", "files": {"wikipedia_de_all_maxi_2026-01.zim": {}}}
-    kp.drop_replaced_wikipedias(wr, st, items)
+    kp.drop_replaced_wikipedias(wr, st, items, wcfg)
     check("Wikipedia swap: then the old one goes, and nothing else", "library/wikipedia_en_all_maxi" not in st["items"]
           and not (wr / "downloads" / "zim" / "wikipedia_en_all_maxi_2026-01.zim").exists() and "library/testmed_en_all_maxi" in st["items"])
+    # A plan of just the essentials, with a smaller Wikipedia standing in, leaves kit.json's own alone; that one's being
+    # in is what lets the smaller one go.
+    st = {"items": {"library/wikipedia_en_all_maxi": {"dest": "zim", "files": {}},
+                    "library/wikipedia_en_top_nopic": {"dest": "zim", "files": {}}}}
+    big = {"settings": {}, "library": [{"zim": "wikipedia_en_top_maxi"}]}
+    kp.drop_replaced_wikipedias(wr, st, kp.items_from_config({"library": [{"zim": "wikipedia_en_top_nopic"}]}), big)
+    check("Wikipedia sizes: nothing goes while kit.json's size isn't in", sorted(st["items"]) == [
+        "library/wikipedia_en_all_maxi", "library/wikipedia_en_top_nopic"], str(st))
+    mine = {"settings": {}, "library": [{"zim": "wikipedia_en_all_maxi"}]}
+    kp.drop_replaced_wikipedias(wr, st, [], mine)
+    check("Wikipedia sizes: once it's in, the one standing in for it goes, even in a plan without either",
+          sorted(st["items"]) == ["library/wikipedia_en_all_maxi"], str(st))
+    st = {"items": {"library/wikipedia_en_top_mini": {"dest": "zim", "files": {}, "sample": True}}}
+    kp.drop_samples(wr, st, mine, kp.items_from_config({"library": [{"zim": "wikipedia_en_top_mini"}]}))
+    kept = "library/wikipedia_en_top_mini" in st["items"]
+    kp.drop_samples(wr, st, mine, [])
+    check("drop_samples: a try-it kit's Wikipedia stays while it stands in for kit.json's, then goes",
+          kept and "library/wikipedia_en_top_mini" not in st["items"], str(st))
+
+    # Wikipedia's sizes: the edition nearest to the one asked for, the sizes every language comes in, what stands in
+    langs = kp.regions()["languages"]
+    saved = dict(langs["de"])
+    langs["de"] = {**saved, "sizes": {"top_mini": 100, "top_nopic": 1000, "all_maxi": 50000}}
+    check("wiki_edition: the one asked for, else the biggest smaller one, else the smallest",
+          [kp.wiki_edition("de", e) for e in ("top_nopic", "all_nopic", "all_maxi")] == ["top_nopic", "top_nopic", "all_maxi"]
+          and kp.wiki_edition("xx", "all_maxi") is None)
+    check("size_choices: only the sizes every language comes in, biggest first",
+          [s[0] for s in kp.size_choices(["de", "en"])] == ["all", "top-text", "top-intros"]
+          and kp.size_choices(["de"])[1] == ("top-text", "The best 50,000 articles, text only", 1000))
+    langs["de"] = saved
+    st = {"items": {}}
+    wcfg = {"library": [{"zim": "wikipedia_en_all_maxi", "priority": 2, "refresh_days": 365}, {"zim": "testmed_en_all_maxi"}]}
+    check("wiki_stand_ins: the try-it kit gets the best articles' opening paragraphs, the essentials their text, "
+          "with Wikipedia's settings",
+          [z["zim"] for z in kp.wiki_stand_ins(wcfg, st, "starter")] == ["wikipedia_en_top_mini"]
+          and [(z["zim"], z["refresh_days"]) for z in kp.wiki_stand_ins(wcfg, st, "essentials")] == [("wikipedia_en_top_nopic", 365)])
+    check("wiki_stand_ins: none once it's in the kit, switched off, or coming whole anyway",
+          not kp.wiki_stand_ins(wcfg, {"items": {"library/wikipedia_en_all_maxi": {"files": {}}}}, "essentials")
+          and not kp.wiki_stand_ins({"library": [{"zim": "wikipedia_en_all_maxi", "enabled": False}]}, st, "starter")
+          and not kp.wiki_stand_ins({"library": [{"zim": "wikipedia_en_all_maxi", "essential": True}]}, st, "essentials")
+          and not kp.wiki_stand_ins({"library": [{"zim": "wikipedia_en_all_maxi", "starter": True}]}, st, "starter"))
+    small = {"library": [{"zim": "wikipedia_en_top_mini"}]}
+    check("wiki_stand_ins: a Wikipedia that small comes itself",
+          [z["zim"] for z in kp.wiki_stand_ins(small, st, "starter") + kp.wiki_stand_ins(small, st, "essentials")]
+          == ["wikipedia_en_top_mini"] * 2)
 
     # Geofabrik's -latest can point at a file that isn't up yet: then the day before's
     saved_head, asked = kp.http_head, []

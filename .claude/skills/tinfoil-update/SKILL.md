@@ -40,7 +40,7 @@ In a git checkout, `git pull` replaces `./kit update`.
 
 ## Choices along the way
 
-- One item now, like a newer Wikipedia: `./kit sync -y --only wikipedia_en_all_maxi`.
+- One item now, like a newer Wikipedia: `./kit sync -y --only wikipedia`.
 - An update can bring models too big for this computer: `./kit fit` names them, and `./kit fit --skip` switches them off.
 - A kit with just the essentials: `./kit space . --json` says when all of it fits. Then `./kit essentials off` before syncing.
 - The person never has to take a newer edition: the plan lists what's new before anything downloads, and they can say no.

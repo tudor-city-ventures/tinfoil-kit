@@ -8,6 +8,8 @@
 # questions, then gives them that command (site/llms.txt). It asks only what these leave out:
 #   --region PLACE      where you live: a US state, a country or a part of one, as ./kit region takes it
 #   --wikipedia CODES   Wikipedia's languages, like de or de,en
+#   --wikipedia-size SIZE  how much of Wikipedia: all (the default), all-text, top (the best 50,000 articles),
+#                       top-text or top-intros (their opening paragraphs)
 #   --this-computer     the kit goes on this computer, in the home folder
 #   --drive PATH        the kit goes on the drive at PATH (like /Volumes/T7), in a TinfoilKit folder at its top
 #   --essentials        just the essentials (the first time, right after the kit to try)
@@ -34,11 +36,12 @@ while [ $# -gt 0 ]; do
     --no-ai) export KIT_NO_AI=1 ;;
     --share) export KIT_SHARE=1 ;;
     --home-server) export KIT_HOME_SERVER=1 ;;
-    --region|--wikipedia|--drive|--models|--skip|--add)
+    --region|--wikipedia|--wikipedia-size|--drive|--models|--skip|--add)
       [ -n "${2:-}" ] || { echo "SETUP: $1 needs a value after it. SETUP --help lists them all." >&2; exit 2; }
       case "$1" in
         --region) export KIT_REGION="$2" KIT_REGION_ASKED=1 ;;
         --wikipedia) export KIT_WIKIPEDIA="$2" ;;
+        --wikipedia-size) export KIT_WIKIPEDIA_SIZE="$2" ;;
         --drive) export KIT_PLACE=drive KIT_DRIVE="$2" ;;
         --models) export KIT_MODELS="$2" ;;
         --skip) export KIT_SKIP="$2" ;;
@@ -82,7 +85,7 @@ choose() { [ -n "${KIT_YES:-}" ] && { say "SETUP needs an answer here, so it sto
              case "$pick" in ""|*[!0-9]*) ;; *) [ "$pick" -ge 1 ] && [ "$pick" -le "$2" ] && return 0 ;; esac
              echo "Type a number from 1 to $2, then press Return."; done; }
 finish() { printf '\a'; [ -n "${KIT_YES:-}" ] && exit "${1:-0}"; printf '\nPress Return to close this window.'; read -r _; exit "${1:-0}"; }
-gb() { awk -v g="$1" 'BEGIN { if (g >= 1000) printf "%.1f TB", g / 1000; else printf "%d GB", g }'; }
+gb() { awk -v g="$1" 'BEGIN { if (g >= 1000) printf "%.1f TB", g / 1000; else if (g < 10 && g != int(g)) printf "%.1f GB", g; else printf "%d GB", g }'; }
 dev_of() { stat -c %d "$1" 2>/dev/null || stat -f %d "$1" 2>/dev/null; }    # Linux, then macOS
 same_disk() { [ "$(dev_of "$1")" = "$(dev_of "$2")" ]; }
 on_this_mac() { same_disk "$KIT" "$HOME"; }
@@ -273,7 +276,8 @@ pick_drive() {
 # Where the person lives sets the maps (street detail, directions, address search, home) and Wikipedia's language.
 # ./kit region does the work; this asks. The first run asks before the kit moves (its size depends on the answer),
 # and hands the answer on in KIT_REGION and KIT_WIKIPEDIA to the copy of this script where the kit lands, in case a
-# kit was there already. Updates ask after ./kit update, so a kit from before this question gets it too.
+# kit was there already. Updates ask after ./kit update, so a kit from before this question gets it too. The first
+# run also asks how much of Wikipedia (pick_size).
 pick_region() {
   local now place n i id name c l g ids names codes labels sizes wiki
   now="$(./kit region 2>/dev/null)" || return 0
@@ -281,7 +285,7 @@ pick_region() {
   [ "$1" = first ] && step "where do you live?"
   [ -n "${KIT_REGION:-}" ] && { given_region || finish 1; return 0; }    # (it came with SETUP)
   if [ -n "${KIT_YES:-}" ]; then
-    if [ -n "${KIT_WIKIPEDIA:-}" ]; then given_region || finish 1; elif [ "$1" = first ]; then echo "$now"; fi
+    if [ -n "${KIT_WIKIPEDIA:-}${KIT_WIKIPEDIA_SIZE:-}" ]; then given_region || finish 1; elif [ "$1" = first ]; then echo "$now"; fi
     return 0
   fi
   if [ "$1" = first ]; then
@@ -294,7 +298,7 @@ pick_region() {
   fi
   while :; do
     read -r place || return 0     # (nothing more to read: the next question stops it)
-    [ -z "$place" ] && return 0
+    [ -z "$place" ] && { [ "$1" = first ] && pick_size; return 0; }
     ids=(); names=()
     while IFS=$'\t' read -r id name g; do ids+=("$id"); names+=("$name ($g)"); done < <(./kit region --find "$place" 2>/dev/null)
     n=${#ids[@]}
@@ -329,13 +333,31 @@ pick_region() {
   echo
   ./kit region "$id" ${wiki:+--wikipedia "$wiki"} || return 0
   export KIT_REGION="$id" KIT_WIKIPEDIA="$wiki"
+  [ "$1" = first ] && pick_size
+  return 0
+}
+
+# How much of Wikipedia: the sizes Kiwix makes in its languages (./kit region --sizes), biggest first.
+pick_size() {
+  local names labels sizes n l g i
+  [ -n "${KIT_WIKIPEDIA_SIZE:-}" ] && return 0
+  names=(); labels=(); sizes=()
+  while IFS=$'\t' read -r n l g; do names+=("$n"); labels+=("$l"); sizes+=("$g"); done < <(./kit region --sizes 2>/dev/null)
+  [ ${#names[@]} -gt 1 ] || return 0
+  say "How much of Wikipedia?"
+  for ((i = 0; i < ${#names[@]}; i++)); do printf '  %d  %s (%s)\n' $((i + 1)) "${labels[$i]}" "$(gb "${sizes[$i]}")"; done
+  choose "Type a number, then press Return:" ${#names[@]}
+  echo
+  ./kit region --wikipedia-size "${names[$((pick - 1))]}" || return 0
+  export KIT_WIKIPEDIA_SIZE="${names[$((pick - 1))]}"
 }
 
 # The answers that came with SETUP's options (or the first run's, for a kit that was already where it put this one):
 # where you live, and what goes in the kit. Saying them again changes nothing.
 given_region() {
-  if [ -n "${KIT_REGION:-}" ]; then ./kit region "$KIT_REGION" ${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"}
-  elif [ -n "${KIT_WIKIPEDIA:-}" ]; then ./kit region --wikipedia "$KIT_WIKIPEDIA"; fi
+  local wiki=(${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"} ${KIT_WIKIPEDIA_SIZE:+--wikipedia-size "$KIT_WIKIPEDIA_SIZE"})
+  if [ -n "${KIT_REGION:-}" ]; then ./kit region "$KIT_REGION" ${wiki[@]+"${wiki[@]}"}
+  elif [ ${#wiki[@]} -gt 0 ]; then ./kit region "${wiki[@]}"; fi
 }
 picked() { [ -n "${KIT_NO_AI:-}${KIT_MODELS:-}${KIT_SKIP:-}${KIT_ADD:-}" ]; }
 # Whether someone has said what goes in the kit, now or before (./kit pick sets "picked").

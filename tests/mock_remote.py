@@ -31,6 +31,7 @@ def sha(p: Path) -> str:
 
 def catalog() -> bytes:
     zims = ["testmed_en_all_maxi_2026-01.zim", "testsurvival_en_2026-05.zim" if v2() else "testsurvival_en_2026-02.zim"]
+    zims += sorted(p.name for p in (R / "zim").glob("wikipedia_*.zim"))    # a test's Wikipedias, in their sizes
     entries = []
     for z in zims:
         p = R / "zim" / z

@@ -7,6 +7,7 @@ rem The answers can come with it instead, the same ones SETUP.command takes, so 
 rem helping someone asks them the questions, then gives them that command. It asks only what these leave out:
 rem   --region PLACE      where you live: a US state, a country or a part of one, as kit region takes it
 rem   --wikipedia CODES   Wikipedia's languages, like de or de,en
+rem   --wikipedia-size SIZE  how much of Wikipedia: all (the default), all-text, top (the best 50,000 articles), top-text or top-intros (their opening paragraphs)
 rem   --this-computer     the kit goes on this PC, in your user folder
 rem   --drive PATH        the kit goes on the drive at PATH (like E:), in a TinfoilKit folder at its top
 rem   --essentials        just the essentials (the first time, right after the kit to try)
@@ -382,7 +383,8 @@ goto :eof
 rem Where the person lives sets the maps (street detail, directions, address search, home) and Wikipedia's language.
 rem kit region does the work; this asks. The first run asks before the kit moves (its size depends on the answer),
 rem and hands the answer on in KIT_REGION and KIT_WIKIPEDIA to the copy of this script where the kit lands, in case
-rem a kit was there already. Updates ask after kit update, so a kit from before this question gets it too.
+rem a kit was there already. Updates ask after kit update, so a kit from before this question gets it too. The first
+rem run also asks how much of Wikipedia (region_size).
 :pick_region
 call :kit region >nul 2>&1 || goto :eof
 set "KIT_REGION_ASKED=1"
@@ -391,6 +393,7 @@ rem (it came with SETUP)
 if defined KIT_REGION goto region_given
 if defined KIT_YES (
   if defined KIT_WIKIPEDIA goto region_given
+  if defined KIT_WIKIPEDIA_SIZE goto region_given
   if "%~1"=="first" call :kit region
   goto :eof
 )
@@ -412,7 +415,7 @@ set "Q=To change that, type where you live (a US state or a country), or press E
 set "PLACE="
 set /p "PLACE=!Q!"
 if defined PLACE set "PLACE=!PLACE:"=!"
-if not defined PLACE goto :eof
+if not defined PLACE goto region_size
 "%PY%" "%APP%\tools\kit.py" --root "%KIT%" region --find "!PLACE!" > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
@@ -463,6 +466,24 @@ echo(
 set "KIT_REGION=!RID!"
 set "KIT_WIKIPEDIA=!WIKI!"
 call :given_region || (set "KIT_REGION=" & set "KIT_WIKIPEDIA=")
+rem How much of Wikipedia, the first time: the sizes Kiwix makes in its languages (kit region --sizes), biggest first.
+:region_size
+if not "%~1"=="first" goto :eof
+if defined KIT_WIKIPEDIA_SIZE goto :eof
+"%PY%" "%APP%\tools\kit.py" --root "%KIT%" region --sizes > "%OUT%" 2>nul
+set "N=0"
+for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
+  set /a "N+=1"
+  set "SIZE!N!=%%a"
+)
+if !N! leq 1 goto :eof
+echo(
+echo How much of Wikipedia?
+call :list " GB"
+call :choose "Type a number, then press Enter:" !N!
+set "KIT_WIKIPEDIA_SIZE=!SIZE%PICK%!"
+echo(
+call :kit region --wikipedia-size "!KIT_WIKIPEDIA_SIZE!" || set "KIT_WIKIPEDIA_SIZE="
 goto :eof
 
 rem The answers that came with SETUP's options (or the first run's, for a kit that was already where it put this
@@ -471,6 +492,7 @@ rem one): where you live, in KIT_REGION and KIT_WIKIPEDIA, and what goes in the 
 set "REGION_ARGS="
 if defined KIT_REGION set "REGION_ARGS="!KIT_REGION!""
 if defined KIT_WIKIPEDIA set "REGION_ARGS=!REGION_ARGS! --wikipedia "!KIT_WIKIPEDIA!""
+if defined KIT_WIKIPEDIA_SIZE set "REGION_ARGS=!REGION_ARGS! --wikipedia-size "!KIT_WIKIPEDIA_SIZE!""
 if not defined REGION_ARGS exit /b 0
 call :kit region !REGION_ARGS!
 exit /b !errorlevel!
@@ -1005,7 +1027,7 @@ if /i "!OPT!"=="--help" goto options_help
 set "SEP=,"
 if /i "!OPT!"=="--region" set "SEP= "
 if /i "!OPT!"=="--drive" set "SEP= "
-for %%o in (--region --wikipedia --drive --models --skip --add) do if /i "!OPT!"=="%%o" goto options_value
+for %%o in (--region --wikipedia --wikipedia-size --drive --models --skip --add) do if /i "!OPT!"=="%%o" goto options_value
 >&2 echo SETUP: there's no !OPT!. It takes:
 call :options_list >&2
 set "OPTS=bad"
@@ -1027,6 +1049,7 @@ if not defined VAL (
 )
 if /i "!OPT!"=="--region" set "KIT_REGION=!VAL!" & set "KIT_REGION_ASKED=1"
 if /i "!OPT!"=="--wikipedia" set "KIT_WIKIPEDIA=!VAL!"
+if /i "!OPT!"=="--wikipedia-size" set "KIT_WIKIPEDIA_SIZE=!VAL!"
 if /i "!OPT!"=="--drive" set "KIT_PLACE=drive" & set "KIT_DRIVE=!VAL!"
 if /i "!OPT!"=="--models" set "KIT_MODELS=!VAL!"
 if /i "!OPT!"=="--skip" set "KIT_SKIP=!VAL!"
