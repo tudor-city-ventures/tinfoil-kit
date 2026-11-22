@@ -189,6 +189,26 @@ try:
     check("gate: the servers' own permission for other websites is dropped", r.getheader("Access-Control-Allow-Origin") is None)
     r, data, _ = req("GET", "/props", headers=signed)
     check("gate: the AI chat page's API at the root goes to the AI too", r.status == 200 and Upstream.seen[-1][0] == ai_port)
+    n = len(Upstream.seen)
+    answers = [req(m, p, b"{}" if m == "POST" else None, signed)[:2] for m, p in
+               (("GET", "/ai/tools"), ("POST", "/ai/tools"), ("GET", "/ai//%74ools/"), ("GET", "/v1/../tools"),
+                ("GET", "/ai/cors-proxy?url=http://192.168.1.1/"))]
+    check("gate: llama-server's tools and web proxy stay off for the network, however they're spelled",
+          all(r.status == 403 and b"feature_disabled" in d for r, d in answers) and len(Upstream.seen) == n,
+          str([(r.status, d[:40]) for r, d in answers]))
+    # A browser sends its next request on the same connection: what the gate didn't read mustn't become part of it.
+    c = http.client.HTTPConnection("127.0.0.1", gport, timeout=20)
+    seq = []
+    for path, hdrs in (("/ai/tools", signed), ("/ai/v1/models", signed), ("/ai/v1/chat/completions", {}),
+                       ("/ai/v1/models", signed)):
+        c.request("POST" if "models" not in path else "GET", path,
+                  body=b'{"messages": []}' if "models" not in path else None, headers=hdrs)
+        r = c.getresponse()
+        r.read()
+        seq.append(r.status)
+    c.close()
+    check("gate: a request answered without reading its body doesn't spoil the next one on the connection",
+          seq == [403, 200, 401, 200], str(seq))
     r, data, _ = req("GET", "/ai", headers=signed)
     check("gate: /ai becomes /ai/", r.status == 303 and r.getheader("Location") == "/ai/")
     r, data, _ = req("GET", "/tiles/basemap/1/0/0.mvt?x=1", headers=signed)
@@ -272,6 +292,8 @@ try:
           "Access code: 2468 1357" in out and "\033[30;47m" in out and "home network" in out, out)
     check("./kit share on: the access code lives in .kit, not kit.json",
           json.loads(share.access_file(k2).read_text())["code"] == "24681357" and "2468" not in after)
+    p = subprocess.run(f'bash "{k2}/kit" share --qr | head -1', shell=True, capture_output=True, text=True, env=env, timeout=60)
+    check("./kit share | head -1: no traceback when the reader stops early", "Traceback" not in p.stderr, p.stderr)
     rc, out = kit_cmd("share", "new-code")
     new = json.loads(share.access_file(k2).read_text())["code"]
     check("./kit share new-code: a new random 8-digit code", rc == 0 and new != "24681357" and len(new) == 8

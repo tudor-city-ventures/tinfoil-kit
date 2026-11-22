@@ -23,6 +23,7 @@ import ipaddress
 import json
 import os
 import plistlib
+import posixpath
 import re
 import secrets
 import shutil
@@ -431,11 +432,23 @@ ROUTES = ("ai", "tiles", "geocoder", "routing")
 # llama-server's own chat page may ask for its API at the root; the library has nothing at these paths.
 AI_PATHS = ("/v1/", "/props", "/models", "/slots", "/health", "/completion", "/tokenize", "/detokenize",
             "/apply-template", "/infill", "/embedding", "/rerank", "/lora-adapters", "/metrics")
+# llama-server features that run things on this computer (tools, a web proxy). The kit leaves them off; if someone
+# turns them on for themselves, they still stay off for the network. Same answer llama-server gives when they're off.
+AI_OFF = ("/tools", "/cors-proxy")
+AI_OFF_ANSWER = b'{"error": {"message": "this feature is disabled", "type": "feature_disabled"}}'
+
 DROP_REQUEST = {"connection", "keep-alive", "proxy-authorization", "proxy-connection", "te", "trailer",
                 "transfer-encoding", "upgrade", "host", "cookie", "authorization", "origin", "referer", "content-length"}
 DROP_RESPONSE = {"connection", "keep-alive", "transfer-encoding", "server", "date", "trailer", "upgrade"}
 MAX_BODY = 64 * 10**6           # a photo for the AI goes up as base64
 TRIES, TRIES_WINDOW = 10, 600   # wrong codes allowed from one address in 10 minutes
+
+
+def ai_off(path: str) -> bool:
+    """Is this one of AI_OFF, however it's spelled? llama-server decodes %74ools as /tools."""
+    p = re.sub("/+", "/", "/" + urllib.parse.unquote(path.split("?", 1)[0].split("#", 1)[0]))
+    return posixpath.normpath(p) in AI_OFF
+
 
 LOGIN = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -510,6 +523,7 @@ class Gate(http.server.ThreadingHTTPServer):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    body_read = False
     server: Gate
 
     def version_string(self) -> str:
@@ -522,6 +536,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         sys.stderr.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {self.client_address[0]} {fmt % args}\n")
 
     def do_GET(self) -> None:
+        self.body_read = False
         try:
             self.respond()
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, socket.timeout):
@@ -536,6 +551,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         for k, v in (("Content-Type", ctype), ("Content-Length", str(len(body))), ("Cache-Control", "no-store"),
                      *headers):
             self.send_header(k, v)
+        if self.close_connection or not self.body_read and (self.headers.get("Transfer-Encoding") or
+                                   (self.headers.get("Content-Length") or "0").strip() not in ("", "0")):
+            # Answered without reading what the device sent (turned away, or llama-server's tools): the rest of
+            # it would be read as the next request on this connection, so close it instead.
+            self.send_header("Connection", "close")
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
@@ -563,6 +583,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # -- the access code
 
     def body(self) -> Optional[bytes]:
+        self.body_read = True
         if "chunked" in self.headers.get("Transfer-Encoding", "").lower():
             parts, total = [], 0
             while True:
@@ -657,6 +678,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             if url.path.startswith(AI_PATHS):
                 name = "ai"
+        if name == "ai" and ai_off(path):
+            return self.send(403, "application/json", AI_OFF_ANSWER)
         self.proxy(name, path, inject=(name == "library" and url.path == "/" and self.command == "GET"), code=code)
 
     def proxy(self, name: str, path: str, inject: bool, code: str) -> None:

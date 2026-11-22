@@ -132,22 +132,36 @@ with sync_playwright() as p:
         check("shared: map tiles come through the gate", tile.value.ok, tile.value.url)
         check("shared: nothing failed", not bad and not js, "; ".join(bad + js))
 
-        # The AI chat link opens llama-server's own chat page, which asks for its API by paths of its own.
+        # The AI chat link opens llama-server's own chat page, which asks for its API by paths of its own. It
+        # keeps a connection open, so the page never goes quiet: wait for the message box instead (the visible one:
+        # the page has hidden text boxes too).
         bad.clear()
+        pending = {}
+        p3.on("request", lambda r: pending.__setitem__(r, r.url))
+        p3.on("requestfinished", lambda r: pending.pop(r, None))
+        p3.on("requestfailed", lambda r: pending.pop(r, None))
         try:
             p3.goto(share + "/ai/")
-            p3.wait_for_load_state("networkidle", timeout=30000)
-            box = p3.locator("textarea").first
-            box.wait_for(timeout=20000)
+            box = p3.locator("textarea:visible, [contenteditable=true]:visible").first
+            box.wait_for(timeout=30000)
             with p3.expect_response(lambda r: "chat/completions" in r.url, timeout=120000) as reply:
                 box.fill("Hello")
                 box.press("Enter")
             answered, why = reply.value.ok, reply.value.url
             p3.wait_for_timeout(2000)
-        except Exception as e:    # a timeout: the screenshot shows where it got stuck
-            answered, why = False, str(e).splitlines()[0]
+        except Exception as e:    # a timeout: say what was on screen and what was still loading
+            answered = False
+            boxes = p3.evaluate("[...document.querySelectorAll('textarea, [contenteditable]')].map(e => e.tagName + ' '"
+                                " + e.offsetWidth + 'x' + e.offsetHeight + ' ' + getComputedStyle(e).visibility).join(', ')")
+            why = (str(e).splitlines()[0] + " | on screen: " + " ".join(p3.inner_text("body").split())[:300]
+                   + " | text boxes: " + boxes + " | still loading: " + ", ".join(sorted(set(pending.values())))[:300])
         p3.screenshot(path=os.path.join(SHOTS, "shot_share_ai_chat.png"))
         check("shared: AI chat answers through the gate", answered, why)
+        # The page asks whether llama-server's own tools are on. They aren't, and the gate keeps them off.
+        tools = p3.request.get(share + "/ai/tools")
+        check("shared: llama-server's tools stay off", tools.status == 403 and "feature_disabled" in tools.text(),
+              f"{tools.status} {tools.text()[:80]}")
+        bad[:] = [b for b in bad if not b.startswith("403 ") or not b.split("?")[0].endswith(("/ai/tools", "/ai/cors-proxy"))]
         check("shared: AI chat's requests all work", not bad, "; ".join(bad))
         outsider = b.new_context().request.get(share + "/ai/v1/models")
         check("shared: no AI without the code", outsider.status == 401, str(outsider.status))

@@ -7,6 +7,7 @@ cd "$(dirname "$0")" || exit 1
 KIT="$(pwd)"
 YES=0; [ "${1:-}" = "--yes" ] && YES=1
 THIS="this computer"; [ "$(uname -s)" = Darwin ] && THIS="this Mac"
+PY_HOME="$HOME/Library/Application Support/TinfoilKit"    # the Python SETUP got for a Mac without one
 say() { printf '\n%s\n' "$*"; }
 finish() { [ $YES = 1 ] || { printf '\nPress Return to close this window.'; read -r _; }; exit "${1:-0}"; }
 dev_of() { stat -c %d "$1" 2>/dev/null || stat -f %d "$1" 2>/dev/null; }    # Linux, then macOS
@@ -38,6 +39,7 @@ if [ -n "$drive" ]; then where="from the drive $drive"; else where="from $THIS";
 echo
 echo "This deletes Tinfoil Kit $where: the folder $KIT,"
 echo "with the AI models, books, maps and programs it downloaded ($size in all)."
+[ -d "$PY_HOME" ] && echo "Also the Python it downloaded for $THIS, in $PY_HOME."
 echo "It can't be undone. The files don't go to the Trash."
 [ -n "$drive" ] && echo "Nothing else on the drive is touched."
 if [ $YES = 0 ]; then
@@ -64,6 +66,7 @@ if [ -e "$KIT" ]; then
   echo "turn on Removable Volumes under Terminal, and run this again. Or drag the folder to the Trash."
   finish 1
 fi
+rm -rf "$PY_HOME"
 # The kit told Spotlight to skip the drive it's at the top of (it would index hundreds of GB of downloads). Undo that.
 top="${KIT%/*}"
 [ -n "$drive" ] && [ "$(dev_of "$top")" != "$(dev_of "$top/..")" ] && rm -f "$top/.metadata_never_index"
