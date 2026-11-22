@@ -121,7 +121,7 @@ say "  ==========="
 [ -n "$KIWIX" ] || missing "Library server" kiwix-tools kiwix-serve
 [ -n "$LLAMA" ] || missing "AI server" llama.cpp llama-server
 [ ${#ZIMS[@]} -gt 0 ] || say "  ! No library files in library/. Run ./kit sync while online."
-[ ${#MODELS[@]} -gt 0 ] || say "  ! No models in models/. Run ./kit sync while online."
+[ ${#MODELS[@]} -gt 0 ] || say "  No AI models in models/, so the AI stays off. If kit.json lists some, run ./kit sync while online."
 
 # A model has to fit in memory with room for everything else. On a computer with less memory than the
 # first model needs, or without that model, start with the biggest one that fits (./kit fit picks the same way);
@@ -280,6 +280,7 @@ URL="http://127.0.0.1:$LIB_PORT/?model=$MODEL&ai=$AI_PORT"
 say ""
 if [ "$LIB_OK" = 1 ]; then say "  Library:  ready"; else say "  Library:  NOT running (see logs/kiwix-serve.log)"; fi
 if [ "$AI_OK" = 1 ]; then say "  AI:       ready (the first answer takes longer while the model loads)"
+elif [ ${#MODELS[@]} -eq 0 ]; then say "  AI:       off (no models). The library still works."
 else say "  AI:       NOT running (see logs/llama-server.log). The library still works."; fi
 say ""
 say "  Open:     $URL"

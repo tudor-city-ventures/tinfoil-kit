@@ -2489,7 +2489,10 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
     check("library server installed", bool(kiwix), str(kiwix or "run ./kit sync"))
     check("AI server installed", bool(llama), str(llama or "run ./kit sync"))
     check("library files present", bool(zims), f"{len(zims)} .zim files")
-    check("models present", bool(models), ", ".join(m.name for m in models))
+    if any(m.get("enabled", True) for m in cfg.get("models", [])):
+        check("models present", bool(models), ", ".join(m.name for m in models))
+    else:
+        log("  SKIP  models: kit.json switches them all off, so the kit runs without the AI")
     procs: List[subprocess.Popen] = []
     logs_dir = root / "logs"
     logs_dir.mkdir(exist_ok=True)
