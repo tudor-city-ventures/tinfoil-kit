@@ -140,6 +140,46 @@ with sync_playwright() as p:
             kit = json.loads(open(dl.value.path()).read())
             off = [m["id"] for m in kit["models"] if not m["enabled"]]
             check("downloaded kit.json reflects the picks", len(off) == 1 and kit["settings"]["default_model"] != off[0], str(off))
+            # Where you live: sets the map card and Wikipedia's language, and goes into kit.json and the setup prompt
+            wiki_titles = "[...document.querySelectorAll('.card strong')].map(e => e.textContent).filter(t => t.startsWith('Wikipedia'))"
+            check("the builder starts at kit.json's place, with Wikipedia in English",
+                  page.input_value("#place").startswith("US Northeast") and page.evaluate(wiki_titles) == ["Wikipedia, with images"]
+                  and page.locator("#wikiLang option").first.inner_text().startswith("English"), page.input_value("#place"))
+            before = page.inner_text("#totalText")
+            page.fill("#place", "Bavaria")
+            page.dispatch_event("#place", "change")
+            maps_why = page.locator(".card", has_text="Offline maps").locator(".why").inner_text()
+            check("a place sets the map card and offers its language first",
+                  page.input_value("#place") == "Germany: Bayern" and "Germany: Bayern" in maps_why
+                  and "address search for all of Germany" in maps_why
+                  and page.locator("#wikiLang option").first.inner_text().startswith("German")
+                  and page.evaluate(wiki_titles) == ["Wikipedia in German, with images"] and page.inner_text("#totalText") != before,
+                  maps_why)
+            page.select_option("#wikiLang", "de,en")
+            check("two languages: a Wikipedia card for each", page.evaluate(wiki_titles) == ["Wikipedia in German, with images",
+                                                                                         "Wikipedia, with images"])
+            page.select_option("#wikiLang", "de")
+            with page.expect_download() as dl:
+                page.click("#downloadKit")
+            kit = json.loads(open(dl.value.path()).read())
+            wiki = [z for z in kit["library"] if z["zim"].startswith("wikipedia_")]
+            check("downloaded kit.json has the place, and Wikipedia in its language with the same settings",
+                  kit["maps"]["region"] == "bayern" and "label" not in kit["maps"] and "detail_bbox" not in kit["maps"]
+                  and [z["zim"] for z in wiki] == ["wikipedia_de_all_maxi"] and wiki[0]["enabled"] and wiki[0]["refresh_days"] == 365,
+                  json.dumps(kit["maps"]))
+            page.click("#copySetup")
+            page.wait_for_selector("#toast:has-text('Copied')", timeout=5000)
+            check("the setup prompt says where you live, as a ./kit region command",
+                  "./kit region bayern --wikipedia de" in page.evaluate("navigator.clipboard.readText()"))
+            for typed, says in (("Georgia", "more than one place"), ("Atlantis", "No place called")):
+                page.fill("#place", typed)
+                page.dispatch_event("#place", "change")
+                check(f"the builder: {typed} says {says}, and keeps the place", says in page.inner_text("#placeNote")
+                      and "Germany: Bayern" in page.locator(".card", has_text="Offline maps").locator(".why").inner_text())
+            page.fill("#place", "Georgia (Europe)")
+            check("the builder: a pick from the list", page.input_value("#place") == "Georgia"
+                  and "for Georgia" in page.locator(".card", has_text="Offline maps").locator(".why").inner_text())
+            page.locator(".where").screenshot(path=os.path.join(SHOTS, "site_place_picker.png"))
         # Read as: the human page is the default; AI agent shows the markdown with no images or icons, and the pick sticks
         def wide_enough(label):
             w = page.evaluate("document.documentElement.scrollWidth")

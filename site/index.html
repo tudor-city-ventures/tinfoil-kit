@@ -88,7 +88,7 @@ p{margin:0}
 .btn:hover{color:var(--ink);background:var(--paper2)}
 .btn.primary{background:#E4672F}.btn.primary:hover{background:#EA7038}
 .btn.dark{background:var(--ink);color:var(--paper)}.btn.dark:hover{background:#30342C;color:var(--paper)}
-.btn:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+.btn:focus-visible,button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
 header.top{border-bottom:var(--rule)}
 header.top .wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;padding-top:14px;padding-bottom:14px}
 .brand{display:flex;align-items:center;gap:12px;font:600 18px var(--mono);letter-spacing:.04em;color:var(--ink);text-decoration:none}
@@ -153,6 +153,13 @@ html:not(.js) .fig{display:none}
 .presets button{min-height:44px;padding:0 20px;border:0;border-right:var(--rule);background:transparent;font:500 15px var(--mono);color:var(--ink);cursor:pointer}
 .presets button:last-child{border-right:0}
 .presets button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.where{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;border:var(--rule);padding:18px 20px;background:var(--paper2)}
+.where .field{display:flex;flex-direction:column;gap:6px;flex:2 1 300px;min-width:0}
+.where .field+.field{flex:1 1 220px}
+.where label{font:600 13px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--olive)}
+.where input,.where select{min-height:48px;width:100%;border:var(--rule);border-radius:4px;background:var(--paper);color:var(--ink);font:16px var(--sans);padding:0 12px}
+.where .hint{flex-basis:100%;font-size:15px;line-height:1.45;color:var(--ink2)}
+.where .hint.bad{color:var(--signal-text);font-weight:600}
 .group{display:flex;flex-direction:column;gap:12px}
 .group h3{font:600 14px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--mute);padding-bottom:8px}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:12px}
@@ -356,7 +363,14 @@ Menu</button>
 <div style="display:flex;flex-direction:column;gap:10px">
 <p class="kicker">The kit builder</p>
 <h2>Choose what goes in your kit.</h2>
-<p style="font-size:18px;line-height:1.5;color:var(--ink2);max-width:680px">Start from a preset, then switch sources on or off. Each card says what it is, why you'd want it and how much room it takes.</p>
+<p style="font-size:18px;line-height:1.5;color:var(--ink2);max-width:680px">Say where you live, start from a preset, then switch sources on or off. Each card says what it is, why you'd want it and how much room it takes.</p>
+</div>
+<div class="where">
+<div class="field"><label for="place">Where do you live?</label>
+<input id="place" list="places" autocomplete="off" spellcheck="false" placeholder="A US state or a country, like Texas or Germany" aria-describedby="placeNote">
+<datalist id="places"></datalist></div>
+<div class="field"><label for="wikiLang">Wikipedia in</label><select id="wikiLang"></select></div>
+<p class="hint" id="placeNote" aria-live="polite">Sets the map's street detail, directions and address search, and offers Wikipedia in your language.</p>
 </div>
 <div class="presets" role="group" aria-label="Preset">
 <button type="button" data-preset="essentials" aria-pressed="false">Essentials</button>
@@ -525,7 +539,10 @@ View the code on GitHub</a>
   });
 
   var VISIBLE = 6;
-  var state = { sources: [], picked: {}, preset: "recommended", open: {} };
+  var state = { sources: [], picked: {}, preset: "recommended", open: {}, base: [], place: null, wiki: ["en"] };
+  // What ./kit region sets in kit.json's maps (the place does instead), and which library entries are Wikipedia.
+  var REGION_KEYS = ["label", "home", "detail_bbox", "routing_osm_pbf", "geocoder_country", "geocoder_wide", "units", "lang"];
+  var WIKI = /^wikipedia_[a-z-]+_all_/;
   var groupsEl = document.getElementById("groups");
 
   function gb(bytes) {
@@ -597,13 +614,113 @@ View the code on GitHub</a>
   }
   function picks() { return state.sources.filter(function (s) { return state.picked[s.id]; }); }
   function setupPrompt() {
-    var list = picks().map(function (s) { return "- " + s.title + " (" + s.id + ")"; }).join("\n");
+    var list = picks().map(function (s) { return "- " + s.title + " (" + s.id + ")"; }).join("\n"), r = state.place;
     return document.getElementById("installPrompt").textContent +
       "\n\nI used the kit builder on the website and picked these sources. The builder can also download a kit.json " +
-      "with only these switched on; tell me where it goes:\n" + list;
+      "with only these switched on; tell me where it goes:\n" + list +
+      (r ? "\n\nI live in " + r.name + ", and want Wikipedia in " + langName(state.wiki) + ". In the kit folder, that's: " +
+           "./kit region " + r.id + " --wikipedia " + state.wiki.join(",") : "");
   }
+
+  /* Where you live: the same choices as SETUP's question and ./kit region (tools/regions.json). */
+  function fold(s) { return String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+  function placeLabel(r) { return r.name + " (" + r.group + ")"; }
+  function findPlaces(text) {
+    var q = fold(text), all = state.regions.regions;
+    var exact = all.filter(function (r) { return fold(placeLabel(r)) === q; });
+    return exact.length ? exact : all.filter(function (r) {
+      return [r.name, r.id].concat(r.also || [], r.name.split(": ").slice(1)).some(function (k) { return fold(k) === q; });
+    });
+  }
+  function langName(codes) {
+    var n = codes.map(function (c) { return state.regions.languages[c].name; });
+    return n.length > 1 ? n.slice(0, -1).join(", ") + " and " + n[n.length - 1] : n[0];
+  }
+  // A place's own languages, English, and its first two together; a small Wikipedia only alongside another.
+  function languageChoices(r) {
+    var langs = state.regions.languages, codes = (r.langs || []).filter(function (c) { return langs[c]; });
+    if (langs.en && codes.indexOf("en") < 0) codes.push("en");
+    var out = codes.filter(function (c) { return c === "en" || (langs[c].mb || 0) >= 1000; }).map(function (c) { return [c]; });
+    if (codes.length > 1) out.push(codes.slice(0, 2));
+    return out;
+  }
+  function wikiCard(c, like) {
+    var l = state.regions.languages[c];
+    if (c === "en" && like.id === "wikipedia_en_all_maxi") return like;
+    return { id: l.zim, group: like.group, presets: like.presets, estimated: true, bytes: Math.round((l.mb || 0) * 1e6),
+      title: "Wikipedia in " + l.name + (l.pictures ? ", with images" : ""),
+      why: "All of " + l.name + " Wikipedia" + (l.native && l.native !== l.name ? " (" + l.native + ")" : "") +
+           ". The reference for nearly any question." };
+  }
+  function mapsCard(r, like) {
+    var addr = !r.photon ? "no address search, since nobody publishes it there yet" :
+      "address search for all of " + (r.addresses || r.name) + (r.addresses_wide ? ", since nobody publishes it for " + r.name + " alone" : "");
+    var card = { id: like.id, group: like.group, presets: like.presets, title: like.title, estimated: like.estimated, bytes: like.bytes,
+      why: "Street maps and driving or walking directions for " + r.name + ", with " + addr + "." };
+    if (r.id !== state.kit.maps.region) {     // the builder's own sizes are for kit.json's place
+      card.bytes = Math.round(0.1e9 + Object.keys(r.mb).reduce(function (t, k) { return t + r.mb[k]; }, 0) * 1e6);
+      card.estimated = true;
+    }
+    return card;
+  }
+  // The cards, with the place's map and Wikipedia in the languages picked; a swapped card keeps the old one's tick.
+  function placeSources() {
+    var wasOn = state.sources.some(function (s) { return WIKI.test(s.id) && state.picked[s.id]; });
+    var out = [];
+    state.base.forEach(function (s) {
+      if (s.id === "maps") out.push(mapsCard(state.place, s));
+      else if (WIKI.test(s.id)) state.wiki.forEach(function (c) { out.push(wikiCard(c, s)); });
+      else out.push(s);
+    });
+    out.forEach(function (s) { if (WIKI.test(s.id) && state.sources.length) state.picked[s.id] = wasOn; });
+    state.sources = out;
+  }
+  function setWiki(codes) { state.wiki = codes; placeSources(); render(); }
+  function setPlace(r) {
+    var langs = state.regions.languages, sel = document.getElementById("wikiLang");
+    state.place = r;
+    document.getElementById("place").value = r.name;
+    sel.textContent = "";
+    languageChoices(r).forEach(function (codes, i) {
+      var bytes = codes.reduce(function (t, c) { return t + (langs[c].mb || 0) * 1e6; }, 0);
+      sel.appendChild(el("option", { value: codes.join(","), text: langName(codes) + " (" + gb(bytes).replace("~", "") + ")" }));
+    });
+    sel.selectedIndex = 0;
+    note("Sets the map's street detail, directions and address search, and offers Wikipedia in your language.", false);
+    setWiki(sel.value.split(","));
+  }
+  function note(text, bad) { var n = document.getElementById("placeNote"); n.textContent = text; n.classList.toggle("bad", bad); }
+  function placeTyped(final) {
+    var text = document.getElementById("place").value, hits = text.trim() ? findPlaces(text) : [];
+    if (hits.length === 1) { if (hits[0] !== state.place) setPlace(hits[0]); return; }
+    if (!final) return;
+    if (!text.trim()) document.getElementById("place").value = state.place.name;
+    else if (hits.length) note("\u201c" + text.trim() + "\u201d is more than one place. Pick yours from the list.", true);
+    else note("No place called \u201c" + text.trim() + "\u201d here. Pick a US state or a country from the list, in English.", true);
+  }
+
   function customKit() {
     var kit = JSON.parse(JSON.stringify(state.kit));
+    if (state.place) {    // what ./kit region does: the place's maps, and Wikipedia in the languages picked
+      var mp = { enabled: kit.maps.enabled, region: state.place.id };
+      Object.keys(kit.maps).forEach(function (k) { if (!(k in mp) && REGION_KEYS.indexOf(k) < 0) mp[k] = kit.maps[k]; });
+      kit.maps = mp;
+      var was = [], keep = { priority: 2 };
+      kit.library.forEach(function (z, i) { if (WIKI.test(z.zim)) was.push(i); });
+      if (was.length) {
+        keep = {};
+        Object.keys(kit.library[was[0]]).forEach(function (k) { if (k !== "zim" && k !== "note") keep[k] = kit.library[was[0]][k]; });
+      }
+      var fresh = state.wiki.map(function (c) {
+        var l = state.regions.languages[c], e = { zim: l.zim };
+        Object.keys(keep).forEach(function (k) { e[k] = keep[k]; });
+        e.note = "All of " + l.name + " Wikipedia" + (l.pictures ? " with images" : "") + " (~" + Math.max(1, Math.round((l.mb || 0) / 1000)) + " GB)";
+        return e;
+      });
+      var at = was.length ? was[0] : kit.library.length;
+      kit.library = kit.library.filter(function (z, i) { return was.indexOf(i) < 0; });
+      Array.prototype.splice.apply(kit.library, [at, 0].concat(fresh));
+    }
     kit.models.forEach(function (m) { m.enabled = !!state.picked[m.id]; });
     kit.library.forEach(function (z) { z.enabled = !!state.picked[z.zim]; });
     kit.maps.enabled = !!state.picked.maps;
@@ -641,8 +758,21 @@ View the code on GitHub</a>
     toast("Saved kit.json. Put it in the TinfoilKit folder, replacing the one there.", 8000);
   });
 
-  Promise.all([fetch("sources.json").then(function (r) { return r.json(); }), fetch("kit.json").then(function (r) { return r.json(); })])
-    .then(function (res) { state.sources = res[0].sources; state.kit = res[1]; applyPreset("recommended"); })
+  var placeBox = document.getElementById("place");
+  placeBox.addEventListener("input", function () { placeTyped(false); });
+  placeBox.addEventListener("change", function () { placeTyped(true); });
+  placeBox.addEventListener("focus", function () { placeBox.select(); });
+  document.getElementById("wikiLang").addEventListener("change", function (e) { setWiki(e.target.value.split(",")); });
+
+  Promise.all(["sources.json", "kit.json", "regions.json"].map(function (f) { return fetch(f).then(function (r) { return r.json(); }); }))
+    .then(function (res) {
+      state.base = state.sources = res[0].sources; state.kit = res[1]; state.regions = res[2];
+      var list = document.getElementById("places");
+      state.regions.regions.forEach(function (r) { list.appendChild(el("option", { value: placeLabel(r) })); });
+      var home = state.regions.regions.filter(function (r) { return r.id === state.kit.maps.region; })[0];
+      if (home) setPlace(home);
+      applyPreset("recommended");
+    })
     .catch(function () { groupsEl.innerHTML = '<p class="mono">Couldn\'t load the source list. <a href="kit.json">kit.json</a> lists everything.</p>'; });
 })();
 </script>
