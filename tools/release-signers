@@ -1,3 +1,4 @@
 # The keys ./kit update accepts a new version of the kit from, in ssh-keygen's allowed-signers format.
 # Each release brings the next copy of this file, so a new key arrives signed by an old one. .github/release.sh
 # makes a release.
+tinfoilkit-release namespaces="tinfoilkit-release" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID0jwfORDkj0/iAf+qvlWNOi2+YBJ/gFH8JC8X82f6mi
