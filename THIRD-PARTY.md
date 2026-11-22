@@ -46,6 +46,7 @@ The files come from ggml-org's and Unsloth's Hugging Face repos, which repackage
 
 - `site/fonts/`: IBM Plex Sans and IBM Plex Mono, under the SIL Open Font License ([OFL.txt](site/fonts/OFL.txt)).
 - The globe on the website is drawn from Natural Earth land data, which is public domain.
+- `tools/regions.json`, the places SETUP offers for "Where do you live?": their outlines, names and download addresses come from Geofabrik's index of OpenStreetMap extracts (© OpenStreetMap contributors, Open Database License), and the towns that set each place's home and search names from [GeoNames](https://www.geonames.org/) (CC BY 4.0).
 
 ## Sharing or selling a filled drive
 

@@ -36,7 +36,7 @@ STATES = "https://download.geonames.org/export/dump/admin1CodesASCII.txt"
 MAX_PBF = 2.2e9
 ALWAYS = {"us-northeast"}                       # kit.json's default
 US_GROUPS = ["us-northeast", "us-midwest", "us-south", "us-west"]    # for people near a state line
-SKIP = {"antarctica", "great-britain"}          # nobody's home; a copy of the United Kingdom without Northern Ireland
+SKIP = {"antarctica", "ile-de-clipperton", "great-britain"}  # nobody's home; the United Kingdom without Northern Ireland
 IMPERIAL = {"us", "gb"}
 # What people call a country besides its name, for the search in SETUP.
 NICKNAMES = {"us": ["USA", "America", "United States"], "gb": ["UK", "Britain", "Great Britain"], "nl": ["Holland"],
@@ -46,7 +46,7 @@ NICKNAMES = {"us": ["USA", "America", "United States"], "gb": ["UK", "Britain", 
 LANGS = {"us": ["en", "es"], "ca": ["en", "fr"], "quebec": ["fr", "en"], "ch": ["de", "fr", "it"],
          "be": ["nl", "fr"], "lu": ["fr", "de"], "fi": ["fi", "sv"], "in": ["en", "hi"], "sg": ["en", "zh"],
          "za": ["en", "af"], "il": ["he", "ar"], "israel-and-palestine": ["he", "ar"], "ph": ["en", "tl"],
-         "ie": ["en", "ga"], "pk": ["ur", "en"]}
+         "ie": ["en", "ga"], "pk": ["ur", "en"], "no": ["nb", "no", "nn"]}
 NAMES = {   # code: (English, native)
     "af": ("Afrikaans", "Afrikaans"), "am": ("Amharic", "አማርኛ"), "ar": ("Arabic", "العربية"),
     "az": ("Azerbaijani", "Azərbaycanca"), "be": ("Belarusian", "Беларуская"), "bg": ("Bulgarian", "Български"),
@@ -72,9 +72,13 @@ NAMES = {   # code: (English, native)
     "ta": ("Tamil", "தமிழ்"), "te": ("Telugu", "తెలుగు"), "tg": ("Tajik", "Тоҷикӣ"), "th": ("Thai", "ไทย"),
     "tk": ("Turkmen", "Türkmençe"), "tl": ("Tagalog", "Tagalog"), "tr": ("Turkish", "Türkçe"), "uk": ("Ukrainian", "Українська"),
     "ur": ("Urdu", "اردو"), "uz": ("Uzbek", "Oʻzbekcha"), "vi": ("Vietnamese", "Tiếng Việt"), "yo": ("Yoruba", "Yorùbá"),
-    "zh": ("Chinese", "中文"), "zu": ("Zulu", "isiZulu"),
+    "zh": ("Chinese", "中文"), "zu": ("Zulu", "isiZulu"), "bi": ("Bislama", "Bislama"), "dv": ("Dhivehi", "ދިވެހި"),
+    "dz": ("Dzongkha", "རྫོང་ཁ"), "kl": ("Greenlandic", "Kalaallisut"), "ny": ("Chichewa", "Chicheŵa"),
+    "se": ("Northern Sami", "Davvisámegiella"), "sm": ("Samoan", "Gagana Samoa"), "tet": ("Tetum", "Tetun"),
+    "to": ("Tongan", "Lea faka-Tonga"), "nb": ("Norwegian", "Norsk bokmål"), "nn": ("Norwegian Nynorsk", "Norsk nynorsk"),
 }
-ALIAS = {"nb": "no", "nn": "no", "fil": "tl", "cmn": "zh", "iw": "he", "in": "id"}   # GeoNames code -> Wikipedia's
+ALIAS = {"fil": "tl", "cmn": "zh", "iw": "he", "in": "id"}   # GeoNames code -> Wikipedia's
+PHOTON_AREAS = {"australia-oceania": "Australia and Oceania"}   # Photon's folders for a region of the world
 PBF_PATH = re.compile(r"^[a-z0-9][a-z0-9/_-]*-latest\.osm\.pbf$")
 SAFE = re.compile(r"^[a-z0-9][a-z0-9/_-]*$")
 warnings = []
@@ -363,6 +367,10 @@ def main():
     catalog = kit.parse_kiwix_catalog(kit.http_get(kit.KIWIX_CATALOG, timeout=900))
     continents = [(prop(t, "name"), polygons(feats[t].get("geometry")))
                   for t in kids.get(None, []) if t not in SKIP and t != "russia"]
+    outline = {t: polygons(feats[t].get("geometry")) for t in kids.get(None, [])}
+    every_town = sorted((t + (c,) for c, ts in towns.items() for t in ts), key=lambda t: -t[0])
+    have = sorted({k.split("_")[1] for k in catalog if re.fullmatch(r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)", k)})
+    print(f"Kiwix has all of Wikipedia in: {' '.join(have)}", flush=True)
 
     def wikipedia(code):
         for flavour in ("maxi", "nopic", "mini"):
@@ -391,6 +399,14 @@ def main():
                     inside[c].append(t)
                     if len(ccs) == 1 and len(inside[c]) == 3:
                         break
+        top = chain[-1]
+        if not any(inside.values()):
+            # An overseas region filed under its country (Réunion under France) has a country code of its own.
+            near = [t for t in every_town if box[1] <= t[2] <= box[3] and box[0] <= t[3] <= box[2]
+                    and in_polys(t[3], t[2], polys)][:3]
+            if near and not in_polys(near[0][3], near[0][2], outline[top]):
+                ccs, country = [near[0][5]], ident
+                inside = {ccs[0]: [t[:5] for t in near if t[5] == ccs[0]]}
         # An extract of several countries ("Israel and Palestine") takes the address database and languages of the
         # one most of its people live in.
         cc = max(ccs, key=lambda c: sum(t[0] for t in inside[c])) if ccs else ""
@@ -404,7 +420,7 @@ def main():
             home = {"label": prop(ident, "name"), "lat": round((box[1] + box[3]) / 2, 4),
                     "lon": round((box[0] + box[2]) / 2, 4)}
 
-        name, top = prop(ident, "name"), chain[-1]
+        name = prop(ident, "name")
         part = country != ident             # a state, province or region of a country, or a group of US states
         if cc == "us":
             group = "United States"
@@ -454,10 +470,13 @@ def main():
         if ph:
             r["photon"] = ph[0] + ph[1]
             # Address search covers the whole country, or the region of the world where a country has none of its own.
-            where = (ph[0].split("/")[0].replace("-", " ").title() if ph[2] else
+            area = ph[0].split("/")[0]
+            where = (PHOTON_AREAS.get(area, area.replace("-", " ").title()) if ph[2] else
                      "the United States" if cc == "us" else countries.get(cc, (name,))[0])
             if fold(where) != fold(name):
                 r["addresses"] = where
+            if ph[2]:
+                r["addresses_wide"] = True      # kit.py leaves it out of just the essentials
         r["_pbf_bytes"] = size[ident]
         r["_polys"] = polys
         regions.append(r)

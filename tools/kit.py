@@ -109,7 +109,7 @@ MAPS_DEFAULTS: Dict[str, Any] = {
     "lang": "en",
 }
 # What a place in tools/regions.json sets ("Where do you live?"). Any of these in kit.json's maps wins over it.
-REGION_KEYS = ("label", "home", "detail_bbox", "routing_osm_pbf", "geocoder_country", "units", "lang")
+REGION_KEYS = ("label", "home", "detail_bbox", "routing_osm_pbf", "geocoder_country", "geocoder_wide", "units", "lang")
 REGIONS_FILE = Path(__file__).resolve().parent / "regions.json"
 WIKIPEDIA_RE = re.compile(r"^wikipedia_([a-z]{2,3}(?:-[a-z]+)?)_all_")
 GH_ENCODED_VALUES = {
@@ -359,6 +359,8 @@ def region_maps(r: Dict[str, Any]) -> Dict[str, Any]:
     return {"label": r["name"], "home": {**r["home"], "zoom": 10}, "detail_bbox": r["bbox"],
             "routing_osm_pbf": f"{GEOFABRIK.rstrip('/')}/{r['pbf']}",
             "geocoder_country": r["country"] if r.get("photon") else "",    # Photon publishes none for a few places
+            # a place with no address database of its own gets its whole region of the world's (most of Europe)
+            "geocoder_wide": bool(r.get("addresses_wide")),
             "units": r["units"], "lang": (r.get("langs") or ["en"])[0]}
 
 
@@ -374,6 +376,8 @@ def maps_settings(cfg: Dict[str, Any]) -> Dict[str, Any]:
             preset = {"region_error": str(e)}
     m = {**MAPS_DEFAULTS, **preset, **user}
     m["home"] = {**MAPS_DEFAULTS["home"], **(preset.get("home") or {}), **(user.get("home") or {})}
+    if "geocoder_country" in user and "geocoder_wide" not in user:
+        m["geocoder_wide"] = False
     return m
 
 
@@ -382,6 +386,7 @@ def maps_items(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not m["enabled"]:
         return []
     geocoder = [{"id": "geocoder", "type": "photon_db", "country": m["geocoder_country"], "priority": 3,
+                 "wide": bool(m.get("geocoder_wide")),
                  "note": "Address and place search database (Photon)"}] if m.get("geocoder_country") else []
     return [
         {"id": "maplibre-gl", "type": "npm", "package": "maplibre-gl", "version_prefix": "5.", "priority": 1,
@@ -940,6 +945,8 @@ def essential(item: Item, fit: Dict[str, Any]) -> bool:
     runs plus the smallest one. SETUP's first run downloads and checks these first, so the kit works hours sooner."""
     if item.section == "models":
         return item.id in (fit["runs"], fit["smallest"])
+    if item.cfg.get("wide"):     # address search for a whole region of the world, tens of GB
+        return False
     return item.section in ("runtimes", "maps") or (item.section == "library" and item.priority <= 1)
 
 
@@ -1213,7 +1220,7 @@ def sweep_partials(root: Path, state: Dict[str, Any], items: List[Item]) -> None
 def drop_replaced_wikipedias(root: Path, state: Dict[str, Any], items: List[Item]) -> None:
     """A Wikipedia in a language ./kit region switched away from (50 to 130 GB) goes once the new one is in."""
     wanted = [i for i in items if i.section == "library" and WIKIPEDIA_RE.match(i.id) and i.enabled]
-    if not wanted or any(state["items"].get(i.key, {}).get("version") != i.version for i in wanted):
+    if not wanted or not all("files" in state["items"].get(i.key, {}) for i in wanted):
         return
     listed = {i.key for i in items}
     for key, v in list(state["items"].items()):
@@ -2458,7 +2465,9 @@ def estimate_gb(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] = No
     maps = cfg.get("maps") or {}
     r = region(maps.get("region"))
     if r and not any(k in maps for k in ("detail_bbox", "routing_osm_pbf", "geocoder_country")):
-        sizes["maps"] = sum((r.get("mb") or {}).values()) * 1e6 + 0.1 * GB    # plus the map viewer, fonts and icons
+        wide = essentials and r.get("addresses_wide")     # see essential()
+        mb = {k: v for k, v in (r.get("mb") or {}).items() if not (wide and k == "addresses")}
+        sizes["maps"] = sum(mb.values()) * 1e6 + 0.1 * GB    # plus the map viewer, fonts and icons
     on = [m["id"] for m in cfg.get("models", [])
           if m.get("enabled", True) and (not essentials or m["id"] in (fit["runs"], fit["smallest"]))]
     on += [z["zim"] for z in cfg.get("library", [])
@@ -2742,13 +2751,14 @@ def lang_names(codes: List[str]) -> str:
 
 
 def language_choices(r: Dict[str, Any]) -> List[Tuple[List[str], str, int]]:
-    """Wikipedia's languages to offer for a place: each of its own, English, and its first two together.
+    """Wikipedia's languages to offer for a place: each of its own, English, and its first two together. A small
+    Wikipedia (under 1 GB) comes only with another, so nobody swaps English for a few thousand articles by mistake.
     Each is (codes, label, GB)."""
     langs = regions()["languages"]
     codes = [c for c in r.get("langs", []) if c in langs]
     if "en" in langs and "en" not in codes:
         codes.append("en")
-    picks = [[c] for c in codes] + ([codes[:2]] if len(codes) > 1 else [])
+    picks = [[c] for c in codes if c == "en" or langs[c].get("mb", 0) >= 1000] + ([codes[:2]] if len(codes) > 1 else [])
     out = []
     for p in picks:
         if len(p) == 1:
@@ -2756,7 +2766,7 @@ def language_choices(r: Dict[str, Any]) -> List[Tuple[List[str], str, int]]:
             label = f"{name} ({native})" if native and native != name else name
         else:
             label = lang_names(p)
-        out.append((p, label, round(sum(langs[c].get("mb", 0) for c in p) / 1000)))
+        out.append((p, label, max(1, round(sum(langs[c].get("mb", 0) for c in p) / 1000))))
     return out
 
 
@@ -2782,8 +2792,9 @@ def set_region(root: Path, r: Dict[str, Any], wiki: Optional[List[str]]) -> Dict
         langs = regions()["languages"]
         lib = raw.get("library", [])
         was = [i for i, z in enumerate(lib) if WIKIPEDIA_RE.match(z.get("zim", ""))]
-        prio = lib[was[0]].get("priority", 2) if was else 2
-        new = [{"zim": langs[c]["zim"], "priority": prio,
+        # the new ones keep the old one's settings (priority, refresh_days)
+        keep = {k: v for k, v in lib[was[0]].items() if k not in ("zim", "note")} if was else {"priority": 2}
+        new = [{"zim": langs[c]["zim"], **keep,
                 "note": f"All of {langs[c]['name']} Wikipedia{' with images' if langs[c].get('pictures') else ''}"
                         f" (~{max(1, round(langs[c].get('mb', 0) / 1000))} GB)"} for c in wiki]
         at = was[0] if was else len(lib)
@@ -2840,9 +2851,14 @@ def cmd_region(root: Path, args: argparse.Namespace) -> None:
                 ", ".join(f"{c} ({v['name']})" for c, v in sorted(langs.items())))
     cfg = set_region(root, r, wiki)
     m = maps_settings(cfg)
-    search = (f"address search for all of {r.get('addresses') or r['name']}" if r.get("photon") else
-              "no address search (nobody publishes one for there yet)")
-    log(f"Maps: {r['name']}. Street maps and directions for {r['name']}, {search}, and a simple map of the whole world.")
+    log(f"Maps: {r['name']}. Street maps and directions for {r['name']}, and a simple map of the whole world.")
+    if not r.get("photon"):
+        log("Address search: none, since nobody publishes it for there yet.")
+    elif r.get("addresses_wide"):
+        log(f"Address search: all of {r['addresses']} (about {max(1, round(r['mb'].get('addresses', 0) / 1000))} GB), "
+            f"since nobody publishes it for {r['name']} alone. Just the essentials leave it out.")
+    else:
+        log(f"Address search: all of {r.get('addresses') or r['name']}.")
     if not m["enabled"]:
         log('Maps are switched off in kit.json ("enabled": false under "maps"), so none of this downloads.')
     log(f"Home: {m['home'].get('label') or 'the middle of it'}. Directions and \"nearest\" searches start there; "

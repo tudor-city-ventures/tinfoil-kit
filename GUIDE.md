@@ -58,9 +58,9 @@ The AI can be wrong. Treat it like a well-read friend, not a doctor: check the s
   350 Fifth Avenue, New York", "Where is the closest gas station?". The AI looks it up and the route appears on the Map tab.
   This works even when the AI is off, for simply worded questions.
 
-Coverage: street-level map, addresses and directions for the US Northeast (New England, New York, New Jersey,
-Pennsylvania), plus a low-detail world map. Address search covers the whole US. Change the region in `kit.json`
-under `"maps"` (see its notes), then run `./kit sync`.
+Coverage: street-level map, addresses and directions for where you live (the US state, country or part of a big
+country you told SETUP), plus a low-detail world map. Address search covers your whole country. To change it, run
+SETUP again and type another place, or run `./kit region PLACE` and then `./kit sync`.
 
 **For actually driving, use your phone.** Download offline maps on it now: Organic Maps (free, fully offline,
 spoken directions) or offline areas in Google Maps or Apple Maps. A phone has GPS; this laptop doesn't.
@@ -118,7 +118,9 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
    - **Windows**: double-click **`SETUP-Windows.bat`**. If Windows says it protected your PC, click **More info**,
      then **Run anyway**. First it gets Python, which the kit's tools run on (about 15 MB, once).
    - **Linux**: open a terminal in the folder and run `bash SETUP.command`. It needs python3 and curl.
-3. SETUP asks where the kit should go, and moves it there for you:
+3. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works
+   too). That sets the maps' area, directions, address search and home, and offers Wikipedia in your language.
+4. SETUP asks where the kit should go, and moves it there for you:
    - **An external drive**: keep it somewhere safe and plug it in when you need it, into any Mac, Windows PC or
      Linux PC. It goes in a `TinfoilKit` folder on the drive. The drive should be **exFAT**, which all three can use.
      Many new drives come as exFAT. FAT32 won't work (files over 4 GB don't fit), and SETUP shows how to erase the
@@ -127,11 +129,11 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
      files on a removable volume, say yes.
    - **This computer**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder and leaves 50 GB
      free for the computer. On a Mac it stays out of Time Machine backups.
-4. It downloads everything (about 280 to 330 GB the first time, a few hours; maps are 20 to 30 GB of that), then
+5. It downloads everything (about 280 to 330 GB the first time, a few hours; maps are 5 to 30 GB of that), then
    starts each part offline to check it answers. Leave the laptop plugged in; it stays awake while this runs. If
    you stop it, start SETUP in the kit's folder again and it picks up where it left off. If it ends with "some
    downloads didn't finish", the kit already works with what it has: run SETUP again later for the rest.
-5. Turn off Wi-Fi and start the kit (see the top of this page).
+6. Turn off Wi-Fi and start the kit (see the top of this page).
 
 ## Removing it
 
