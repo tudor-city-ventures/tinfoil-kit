@@ -118,7 +118,8 @@ def main():
         size = live.get(sid) or size_from_note(note)
         out.append({"id": sid, "group": group, "title": title or note.split(":")[0].split("(")[0].strip(),
                     "why": why or note, "bytes": int(size) if size else None, "estimated": sid not in live,
-                    "presets": [p for p, on in (("essentials", essential), ("recommended", enabled), ("everything", True)) if on]})
+                    "presets": [p for p, on in (("essentials", essential), ("recommended", enabled),
+                                                 ("no-ai", enabled and group != "AI models"), ("everything", True)) if on]})
 
     for m in cfg["models"]:
         add(m["id"], "AI models", m.get("note", ""), m.get("enabled", True),

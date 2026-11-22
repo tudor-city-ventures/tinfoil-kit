@@ -88,10 +88,14 @@ with sync_playwright() as p:
         check(f"{name}: Pause holds the hero still", page.evaluate(FRAME) == before and page.inner_text(".viz-pause") == "Play")
         page.click(".viz-pause")
         totals = {}
-        for preset in ("essentials", "everything", "recommended"):
+        for preset in ("essentials", "everything", "no-ai", "recommended"):
             page.click(f"[data-preset={preset}]")
             totals[preset] = int(page.inner_text("#totalText").split("ABOUT ")[1].split(" GB")[0])
+            if preset == "no-ai":
+                models = page.locator(".group", has=page.locator("h3", has_text="AI models")).locator("input:checked").count()
         check(f"{name}: presets order by size", totals["essentials"] < totals["recommended"] < totals["everything"], str(totals))
+        check(f"{name}: No AI picks no models and is smaller than Recommended", models == 0 and totals["no-ai"] < totals["recommended"],
+              f"{models} models, {totals}")
         width = page.evaluate("document.documentElement.scrollWidth")
         check(f"{name}: no sideways scroll", width <= vp["width"], f"{width}px")
         star, where = page.locator(".ctas .star"), page.evaluate(STAR)

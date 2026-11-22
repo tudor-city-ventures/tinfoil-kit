@@ -73,6 +73,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -86,6 +87,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -99,6 +101,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -112,6 +115,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -125,6 +129,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -138,6 +143,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -151,6 +157,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -164,6 +171,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -177,6 +185,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -189,6 +198,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -202,6 +212,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -215,6 +226,7 @@
    "presets": [
     "essentials",
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -227,6 +239,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -239,6 +252,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -251,6 +265,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -263,6 +278,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -275,6 +291,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -287,6 +304,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -299,6 +317,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -311,6 +330,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -323,6 +343,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -335,6 +356,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -347,6 +369,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -359,6 +382,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -371,6 +395,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -383,6 +408,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -395,6 +421,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -407,6 +434,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -419,6 +447,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -431,6 +460,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -443,6 +473,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -455,6 +486,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -467,6 +499,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -479,6 +512,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -491,6 +525,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },
@@ -503,6 +538,7 @@
    "estimated": false,
    "presets": [
     "recommended",
+    "no-ai",
     "everything"
    ]
   },

@@ -721,6 +721,14 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("kit fit --skip: leaves alone a model that's already downloaded", rc == 0 and "can't run" not in out
           and (fk / "kit.json").read_text() == fit_json, out)
 
+    # The kit builder's No AI preset switches every model off: ./kit test doesn't ask for one
+    noai = work / "noai"
+    shutil.copytree(TESTS.parent / "tools", noai / "tools")
+    (noai / "kit.json").write_text(json.dumps({"settings": {}, "models": [{"id": "Tiny", "enabled": False}],
+                                               "library": [], "maps": {"enabled": False}}))
+    rc, out = kit("test", root=noai)
+    check("test: a kit with every model off doesn't ask for one", "models present" not in out and "without the AI" in out, out)
+
     # Another program on the library's port (the mock internet, here): the library starts on the next one.
     fake = work / "fake-kiwix-serve"
     fake.write_text(f"""#!{sys.executable}

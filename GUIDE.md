@@ -24,13 +24,14 @@ Nothing here needs the internet, an account, or an install.
 - **Library**: browse or search every book yourself.
 - **Map**: search an address or place, get driving or walking directions, or find the nearest hospital, pharmacy,
   gas station and more. See [Maps](#maps).
-- **AI chat**: plain chat with the AI. You can attach a photo (a broken part, a label, a rash). It doesn't search the
+- **AI chat**: plain chat with the AI. You can attach a photo (a broken part, a label). It doesn't search the
   library, so check anything important there, and never eat a wild plant or mushroom because an AI said it was safe.
 - **Models**: pick from the list on the Ask page.
   - `Inkling-2-Mini` (default): fast, good quality, reads photos.
   - `Qwen3.8-27B` and `Gemma-4-26B-A4B`: second and third opinions from other labs. Worth asking twice on anything important.
-  - `Gemma-4-E4B`: small. Use it to **save battery**. On a Mac with less than 32 GB of memory the kit starts
-    with it, because the bigger models don't fit.
+  - `Gemma-4-12B`: mid-size. On a laptop with 16 to 24 GB of memory the kit starts with it, because the
+    bigger models don't fit.
+  - `Gemma-4-E4B`: small. Use it to **save battery**. On an 8 GB laptop the kit starts with it.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
 - **Share with family**: start with `bash START-HERE.command --share`. It prints an address that phones on the same
   Wi-Fi or hotspot can open (turn on the Mac's hotspot if the router is down). If macOS asks whether to accept
@@ -89,7 +90,8 @@ Other commands:
 
 Everything the kit keeps is listed in **`kit.json`** (open it in any text editor):
 
-- Turn something off: set `"enabled": false` on its line.
+- Turn something off: set `"enabled": false` on its line. Turn every model off and the kit runs without the AI:
+  the library and the map work as usual, and Ask shows the best passages from the books.
 - Add a book: `./kit search <words>`, then paste the line it prints into the `"library"` list.
 - Swap a model: change its `"repo"` and `"files"` (Hugging Face repo and file name patterns). Each pattern must
   match exactly one file. A new model generation every few months is normal; check which GGUF models fit a
