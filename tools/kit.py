@@ -339,10 +339,10 @@ def maps_items(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
          "priority": 1, "note": "Map style (Protomaps)"},
         {"id": "basemaps-assets", "type": "github_archive", "repo": "protomaps/basemaps-assets", "branch": "main",
          "priority": 1, "note": "Map fonts and icons"},
-        {"id": "basemap", "type": "protomaps", "priority": 2,
-         "note": f"Offline map: {m['label']} in street detail, plus a world overview"},
         {"id": "routing", "type": "routing", "url": m["routing_osm_pbf"], "priority": 2,
          "note": "Road network for directions (GraphHopper)"},
+        {"id": "basemap", "type": "protomaps", "priority": 2,    # after routing: its size estimate uses the road data's
+         "note": f"Offline map: {m['label']} in street detail, plus a world overview"},
         {"id": "geocoder", "type": "photon_db", "country": m["geocoder_country"], "priority": 3,
          "note": "Address and place search database (Photon)"},
     ]
@@ -620,10 +620,8 @@ class Resolver:
             raise ValueError("no Protomaps map build listed")
         latest = max(usable, key=lambda b: b["key"])
         m = maps_settings(self.cfg)
-        w, s, e, n = (float(x) for x in m["detail_bbox"])
-        sq_deg = abs(e - w) * abs(n - s) * math.cos(math.radians((n + s) / 2))
-        # rough: ~1 GB world overview + ~40 MB per square degree of street detail at zoom 15
-        est = int(GB + sq_deg * 40e6 * 0.4 ** max(0, 15 - int(m["detail_maxzoom"])))
+        roads = self.resolved.get("routing")
+        est = tiles_estimate(m["detail_bbox"], m["detail_maxzoom"], roads.files[0].size if roads and roads.files else None)
         item.kind, item.dest = "custom", "maps/tiles"
         item.version = latest["key"].replace(".pmtiles", "")
         item.files = [RemoteFile(name="basemap.pmtiles", url=f"{PROTOMAPS_BUILD_BASE}/{latest['key']}", estimate=est)]
@@ -679,6 +677,16 @@ class Resolver:
             item.files = [RemoteFile(name=url.rsplit("/", 1)[-1], url=url, size=size, md5_sidecar=True)]
             return
         raise ValueError(f"couldn't find a Photon database file in {folder} for version(s) {', '.join(wanted)}")
+
+
+def tiles_estimate(bbox: List[float], maxzoom: Any, roads_bytes: Optional[int] = None) -> int:
+    """Rough size of the map tiles: about 1 GB of world overview, plus street detail at about 40 MB per square
+    degree where streets are dense. A big, mostly empty area (a desert state's box) is capped at twice its road data."""
+    w, s, e, n = (float(x) for x in bbox)
+    detail = abs(e - w) * abs(n - s) * math.cos(math.radians((n + s) / 2)) * 40e6
+    if roads_bytes:
+        detail = min(detail, 2 * roads_bytes)
+    return int(GB + detail * 0.4 ** max(0, 15 - int(maxzoom)))
 
 
 def http_day(h: Dict[str, str]) -> str:
