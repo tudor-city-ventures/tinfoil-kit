@@ -1,4 +1,5 @@
-// Runs the github-scripts in .github/workflows/pr-gate.yml against fake pull requests and a fake GitHub API.
+// Runs the github-scripts in .github/workflows/pr-gate.yml against fake pull requests and issues and a fake GitHub
+// API, and the issue check against what GitHub writes for each form in .github/ISSUE_TEMPLATE.
 // Usage: node tests/pr_gate_test.js
 const fs = require("fs");
 const path = require("path");
@@ -17,6 +18,8 @@ function script(job) {    // the `script: |` block of that job
 }
 const gate = script("gate");
 const guard = script("protected-files");
+const forms = script("forms");
+const TEMPLATES = path.join(__dirname, "..", ".github", "ISSUE_TEMPLATE");
 
 const REPO = { owner: "tudor-city-ventures", repo: "tinfoilkit" };
 const ACCEPTED = { labels: [{ name: "accepted" }] };
@@ -102,6 +105,53 @@ async function expect(name, opts, closed) {
   check("a branch in this repo skips it", !(await files([".github/workflows/check.yml"], { head: { repo: { full_name: "Tudor-City-Ventures/tinfoilkit" } } })));
   check("a deleted fork is still checked", !!(await files([".github/CODEOWNERS"], { head: { repo: null } })));
   check("more files than GitHub lists fails it", !!(await files(["README.md"], { changed_files: 3001 })));
+
+  // forms: outside issues that didn't come through a form are closed.
+  async function issue(opts = {}) {
+    const calls = [];
+    const i = { number: 60, body: "", author_association: "NONE", user: { login: "drive-by", type: "User" }, ...opts };
+    const github = { rest: { issues: {
+      createComment: async (a) => { calls.push("comment"); i.comment = a.body; },
+      update: async (a) => calls.push(`${a.state} ${a.state_reason}`),
+      addLabels: async (a) => calls.push(`label ${a.labels}`),
+    } } };
+    await forms(github, { repo: REPO, payload: { action: "opened", issue: i } }, { info() {}, warning() {} });
+    return { closed: calls.includes("closed not_planned"), calls, comment: i.comment };
+  }
+  async function expectIssue(name, opts, closed) {
+    const r = await issue(opts);
+    check(`issue ${name}: expected ${closed ? "closed" : "left open"}, calls ${JSON.stringify(r.calls)}`, r.closed === closed);
+    return r;
+  }
+  // What GitHub writes for an issue sent with a form: a "### label" heading per field, ticked boxes under checkboxes.
+  function filled(yml) {
+    const out = [];
+    let boxes = false;
+    for (const l of yml.split("\n")) {
+      let m;
+      if (/^  - type: /.test(l)) boxes = /checkboxes/.test(l);
+      if ((m = l.match(/^      label: (.*)$/))) out.push(`### ${m[1]}`, "", boxes ? "" : "Something real", "");
+      else if (boxes && (m = l.match(/^        - label: (.*)$/))) out.push(`- [X] ${m[1]}`);
+    }
+    return out.join("\n");
+  }
+  const templates = fs.readdirSync(TEMPLATES).filter((f) => f.endsWith(".yml") && f !== "config.yml");
+  check("there are issue forms", templates.length >= 2);
+  for (const f of templates) {
+    const yml = fs.readFileSync(path.join(TEMPLATES, f), "utf8");
+    await expectIssue(`sent with ${f}`, { body: filled(yml) }, false);
+    check(`${f} labels new issues needs-triage`, /^labels: \[.*\bneeds-triage\b.*\]$/m.test(yml));
+  }
+  check("blank issues are off", /^blank_issues_enabled: false$/m.test(fs.readFileSync(path.join(TEMPLATES, "config.yml"), "utf8")));
+
+  const r2 = await expectIssue("made with the API", { body: "Your app is broken, please fix ASAP!!" }, true);
+  check("the comment points to the forms", /\/issues\/new\/choose/.test(r2.comment));
+  check("it's labeled auto-closed", r2.calls.includes("label auto-closed"));
+  await expectIssue("with no body", { body: null }, true);
+  await expectIssue("with the heading but no ticked box", { body: "### Before you start\n\n- [ ] I searched" }, true);
+  await expectIssue("from a first-time contributor", { author_association: "FIRST_TIME_CONTRIBUTOR" }, true);
+  for (const a of ["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]) await expectIssue(`from ${a}`, { author_association: a }, false);
+  await expectIssue("from one of the repo's apps", { user: { login: "dependabot[bot]", type: "Bot" } }, false);
 
   console.log(failed ? `${failed} FAILED, ${passed} passed` : `ALL ${passed} PASSED`);
   process.exit(failed ? 1 : 0);

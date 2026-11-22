@@ -1,33 +1,68 @@
 name: Something broke
-description: A problem you ran into with the kit, the guide or the website
-labels: [bug]
+description: A problem with the kit on your computer. For the website or the guide, use "Idea or change".
+labels: [bug, needs-triage]
 body:
+  - type: checkboxes
+    id: first
+    attributes:
+      label: Before you start
+      description: Most setup problems are answered in the guide's [If something doesn't work](https://github.com/tudor-city-ventures/tinfoilkit/blob/main/GUIDE.md#if-something-doesnt-work).
+      options:
+        - label: I searched the open and closed issues, and this isn't one of them.
+          required: true
+        - label: I read the guide's "If something doesn't work" section.
+          required: true
+        - label: I saw this happen myself, on my own computer. It isn't only something an AI tool or a scanner flagged.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Kit version
+      description: The "Kit version" line at the end of `./kit status`. If there isn't one, say how and when you got the kit.
+      placeholder: v1.2.0
+    validations:
+      required: true
+  - type: input
+    id: computer
+    attributes:
+      label: Computer
+      description: Model, memory, operating system, and where the kit is.
+      placeholder: MacBook Air M2, 16 GB, macOS 26.1, kit on an exFAT SSD
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: What you did, one step per line, starting from SETUP or START-HERE.
+      placeholder: |
+        1. Double-clicked START-HERE.command
+        2. Opened the Map tab and searched for an address
+    validations:
+      required: true
   - type: textarea
     id: what
     attributes:
       label: What happened
-      description: What you did, what you expected, and what happened instead.
+      description: What you expected, and what happened instead.
     validations:
       required: true
   - type: textarea
     id: output
     attributes:
       label: Output
-      description: The error, the end of what `SETUP.command`, `./kit sync` or `./kit test` printed, or the relevant file from the drive's `logs` folder.
+      description: The error, or the last lines SETUP, START-HERE or `./kit` printed. The kit's `logs` folder has the rest.
       render: shell
-  - type: input
-    id: mac
-    attributes:
-      label: Mac and drive
-      placeholder: MacBook Air M2, 16 GB, macOS 26.1, external SSD formatted exFAT
     validations:
       required: true
-  - type: checkboxes
-    id: checks
+  - type: dropdown
+    id: ai
     attributes:
-      label: Before you send it
+      label: AI use
+      description: Did an AI tool write or find any of this?
       options:
-        - label: I searched the open issues and this isn't one of them.
-          required: true
-        - label: I saw this happen myself. It isn't only something an AI tool or scanner flagged.
-          required: true
+        - "No"
+        - It helped me write this up, and I checked every detail
+        - It found the problem, and I reproduced it myself
+    validations:
+      required: true
