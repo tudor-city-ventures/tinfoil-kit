@@ -330,7 +330,7 @@ with sync_playwright() as p:
     )
     check(
         "non-map questions still go to the library",
-        "Water purification" in p3.inner_text("#answer") or "8 drops" in p3.inner_text("#answer"),
+        "Water purification" in p3.inner_text("#sources") or "8 drops" in p3.inner_text("#sources"),
         p3.inner_text("#progress"),
     )
     e3 = [e for e in e3 if "favicon" not in e and "ERR_CONNECTION_REFUSED" not in e]  # the AI is off on purpose
