@@ -1812,6 +1812,11 @@ KEEP = {".git", ".kit", "bin", "installers", "library", "logs", "maps", "models"
 NEEDED = ("kit", "kit.json", "SETUP.command", "START-HERE.command", "UNINSTALL.command", "tools/kit.py", "tools/launch.sh",
           "tools/portal.html", "tools/share.py")
 MISSING = object()
+# A release is a tarball the maintainer built and signed on their own computer (.github/release.sh), so taking over
+# the kit's GitHub account isn't enough to put code on every drive. tools/release-signers holds the keys a drive
+# accepts, and each release brings the next copy of it: a new key arrives signed by the old one.
+RELEASE_NAMESPACE = "tinfoilkit-release"
+REPORT = "https://github.com/tudor-city-ventures/tinfoilkit/security"
 
 
 def item_key(x: Any) -> Any:
@@ -1875,6 +1880,108 @@ def merge_kit_json(root: Path, theirs_text: str) -> Tuple[str, str]:
                   "kit.json is the new version's.")
 
 
+# Ed25519 (RFC 8032) and OpenSSH's signature format (PROTOCOL.sshsig), checking only: Python has no Ed25519 of its
+# own, and ssh-keygen isn't on every Windows and Linux computer. The tests check the same signatures with ssh-keygen.
+ED_P = 2**255 - 19
+ED_L = 2**252 + 27742317777372353535851937790883648493
+ED_D = -121665 * pow(121666, ED_P - 2, ED_P) % ED_P
+
+
+def ed_add(a: Tuple[int, ...], b: Tuple[int, ...]) -> Tuple[int, ...]:
+    """Add two points in extended coordinates (x, y, z, t)."""
+    p, q = (a[1] - a[0]) * (b[1] - b[0]) % ED_P, (a[1] + a[0]) * (b[1] + b[0]) % ED_P
+    r, s = 2 * a[3] * b[3] * ED_D % ED_P, 2 * a[2] * b[2] % ED_P
+    e, f, g, h = q - p, s - r, s + r, q + p
+    return e * f % ED_P, g * h % ED_P, f * g % ED_P, e * h % ED_P
+
+
+def ed_mul(n: int, a: Tuple[int, ...]) -> Tuple[int, ...]:
+    out = (0, 1, 1, 0)
+    while n:
+        if n & 1:
+            out = ed_add(out, a)
+        a, n = ed_add(a, a), n >> 1
+    return out
+
+
+def ed_point(b: bytes) -> Optional[Tuple[int, ...]]:
+    """Decode a point, or None if these 32 bytes aren't one."""
+    y = int.from_bytes(b, "little")
+    sign, y = y >> 255, y & ((1 << 255) - 1)
+    if len(b) != 32 or y >= ED_P:
+        return None
+    x2 = (y * y - 1) * pow(ED_D * y * y + 1, ED_P - 2, ED_P) % ED_P
+    x = pow(x2, (ED_P + 3) // 8, ED_P)
+    if (x * x - x2) % ED_P:
+        x = x * pow(2, (ED_P - 1) // 4, ED_P) % ED_P
+    if (x * x - x2) % ED_P or (x == 0 and sign):
+        return None
+    if x & 1 != sign:
+        x = ED_P - x
+    return x, y, 1, x * y % ED_P
+
+
+ED_B = ed_point((4 * pow(5, ED_P - 2, ED_P) % ED_P).to_bytes(32, "little"))
+
+
+def ed25519_ok(key: bytes, msg: bytes, sig: bytes) -> bool:
+    a, r, s = ed_point(key), ed_point(sig[:32]), int.from_bytes(sig[32:], "little")
+    if a is None or r is None or len(sig) != 64 or s >= ED_L:
+        return False
+    k = int.from_bytes(hashlib.sha512(sig[:32] + key + msg).digest(), "little") % ED_L
+    x1, y1, z1, _ = ed_mul(s, ED_B)
+    x2, y2, z2, _ = ed_add(r, ed_mul(k, a))
+    return (x1 * z2 - x2 * z1) % ED_P == 0 and (y1 * z2 - y2 * z1) % ED_P == 0
+
+
+def ssh_strings(b: bytes) -> List[bytes]:
+    """Split SSH wire format into its length-prefixed strings."""
+    out = []
+    while b:
+        n = int.from_bytes(b[:4], "big")
+        if len(b) < 4 + n:
+            raise ValueError("truncated")
+        out.append(b[4:4 + n])
+        b = b[4 + n:]
+    return out
+
+
+def release_keys(signers: Path) -> List[bytes]:
+    """The Ed25519 keys tools/release-signers lists for the kit's releases (ssh-keygen's allowed-signers format)."""
+    try:
+        text = signers.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    keys = []
+    for m in re.finditer(rf"(?m)^{RELEASE_NAMESPACE}\s(?:.*?\s)?ssh-ed25519\s+([A-Za-z0-9+/]+=*)", text):
+        with contextlib.suppress(ValueError):
+            kind, key = ssh_strings(base64.b64decode(m.group(1)))
+            if kind == b"ssh-ed25519" and len(key) == 32:
+                keys.append(key)
+    return keys
+
+
+def verify_release(root: Path, data: bytes, sig: bytes) -> None:
+    """Refuse a release unless one of this copy's keys signed it, the way ssh-keygen -Y sign does."""
+    keys = release_keys(root / "tools" / "release-signers")
+    if not keys:
+        raise ValueError("this copy of the kit has no release key to check it with (tools/release-signers). "
+                         "Download the kit again from tinfoilkit.com")
+    try:
+        lines = sig.decode("ascii").split()
+        blob = base64.b64decode("".join(lines[lines.index("SIGNATURE-----") + 1:lines.index("-----END")]), validate=True)
+        key_blob, namespace, reserved, alg, sig_blob = ssh_strings(blob[10:]) if blob[:10] == b"SSHSIG\0\0\0\1" else []
+        (kind, key), (sig_kind, raw) = ssh_strings(key_blob), ssh_strings(sig_blob)
+    except ValueError:
+        raise ValueError(f"its signature file is damaged. Please report it at {REPORT}") from None
+    if not (key in keys and kind == sig_kind == b"ssh-ed25519" and namespace == RELEASE_NAMESPACE.encode()
+            and alg in (b"sha256", b"sha512")
+            and ed25519_ok(key, b"SSHSIG" + b"".join(len(x).to_bytes(4, "big") + x for x in (
+                namespace, reserved, alg, hashlib.new(alg.decode(), data).digest())), raw)):
+        raise ValueError("it isn't signed with the kit's release key. Someone other than the kit's maintainer may have "
+                         f"published it: don't install it by hand, and please report it at {REPORT}")
+
+
 def unpack_release(data: bytes, dest: Path) -> None:
     """Unpack a GitHub release archive into dest without trusting it: plain files and folders only, all inside
     its one top folder, and nothing for the kit's own folders of downloads (KEEP)."""
@@ -1908,6 +2015,8 @@ def check_release(new: Path) -> None:
     missing = [rel for rel in NEEDED if not (new / rel).is_file()]
     if missing:
         raise ValueError(f"the release is missing {', '.join(missing)}")
+    if not release_keys(new / "tools" / "release-signers"):
+        raise ValueError("it has no release key (tools/release-signers), so the kit could never update again")
     try:
         compile((new / "tools" / "kit.py").read_text(encoding="utf-8"), "tools/kit.py", "exec")
     except SyntaxError as e:
@@ -2486,11 +2595,11 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
     with Lock(root):
         state = load_state(root)
         log("Checking GitHub for a newer version of the kit...")
-        release = kit_github("releases/latest", "tag_name", "tarball_url")
+        release = kit_github("releases/latest", "tag_name")
         if release is None:
             log("No version of the kit is published yet, so this one stays.")
             return
-        tag, url = release["tag_name"], release["tarball_url"]
+        tag = release["tag_name"]
         if tag == state.get("kit_version") and not args.force:
             log(f"This is the newest version ({tag}).")
             return
@@ -2506,16 +2615,29 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
             if status == "ahead":
                 log(f"This copy of the kit is newer than its latest release ({tag}), so it stays.")
                 return
+        name = f"tinfoilkit-{tag}.tar.gz"
+        assets = {a.get("name"): a.get("browser_download_url") for a in release.get("assets") or [] if isinstance(a, dict)}
         stage = root / ".kit" / "update"
         shutil.rmtree(stage, ignore_errors=True)
         try:
-            unpack_release(http_get(url, timeout=600), stage)
+            if not (isinstance(assets.get(name), str) and isinstance(assets.get(name + ".sig"), str)):
+                raise ValueError(f"it isn't signed (the release has no {name} and {name}.sig)")
+            data = http_get(assets[name], timeout=600)
+            verify_release(root, data, http_get(assets[name + ".sig"]))
+            unpack_release(data, stage)
             check_release(stage)
             text, note = merge_kit_json(root, (stage / "kit.json").read_text(encoding="utf-8"))
             (stage / "kit.json").write_text(text, encoding="utf-8")
         except Exception as e:     # whatever goes wrong before the first file moves, the kit stays as it was
             shutil.rmtree(stage, ignore_errors=True)
             die(f"couldn't install version {tag}, so this one stays as it was: {e}")
+        news = [line.rstrip() for line in str(release.get("body") or "").splitlines() if line.strip()][:12]
+        log(f"Version {tag} of the kit is ready, signed by its maintainer." +
+            ("\nWhat's new:\n" + "\n".join("  " + line for line in news) if news else ""))
+        if not args.yes and sys.stdin.isatty() and input("Install it now? [Y/n] ").strip().lower() not in ("", "y", "yes"):
+            shutil.rmtree(stage, ignore_errors=True)
+            log(f"This version stays. Run SETUP again when you want {tag}.")
+            return
         try:
             state["kit_files"] = install_release(root, stage, state.get("kit_files", []))
         except OSError as e:
@@ -2524,9 +2646,6 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
         save_state(root, state)
         shutil.rmtree(stage, ignore_errors=True)
     log(f"Installed version {tag}. {note}")
-    news = [line.rstrip() for line in str(release.get("body") or "").splitlines() if line.strip()][:12]
-    if news:
-        log("What's new:\n" + "\n".join("  " + line for line in news))
     sys.exit(3)
 
 
@@ -2556,6 +2675,7 @@ def main() -> None:
     p.add_argument("--model", help="model folder name to test (default: the smallest)")
     p = sub.add_parser("update", help="install the newest version of the kit's own code, keeping kit.json changes")
     p.add_argument("--force", action="store_true", help="reinstall even if this is the newest version")
+    p.add_argument("-y", "--yes", action="store_true", help="don't ask before installing")
     sub.add_parser("estimate", help="about how many GB this kit.json needs (no internet needed)")
     p = sub.add_parser("drives", help="the plugged-in drives the kit could go on")
     p.add_argument("--json", action="store_true", help="with this computer's free space and what the kit needs")

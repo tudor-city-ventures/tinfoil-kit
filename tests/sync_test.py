@@ -5,8 +5,10 @@ taken, ./kit update, SETUP.command's choices, and the launcher's first model and
 Needs only python3 and curl, so it runs in the quick gate and in cloud sessions.
 usage: python3 tests/sync_test.py
 """
+import base64
 import hashlib
 import http.server
+import importlib.util
 import io
 import json
 import os
@@ -263,12 +265,92 @@ pathlib.Path(str(out) + ".aria2").unlink()
     check("Wi-Fi sign-in page: plan says so and nothing is cached",
           rc == 1 and not (drive / ".kit/cache/kiwix-catalog.xml").exists(), out)
 
+    spec = importlib.util.spec_from_file_location("kitpy", TESTS.parent / "tools" / "kit.py")
+    kp = sys.modules["kitpy"] = importlib.util.module_from_spec(spec)    # dataclasses look the module up
+    spec.loader.exec_module(kp)
+
+    def ssh_str(b):
+        return len(b).to_bytes(4, "big") + b
+
+    def ssh_sign(seed, data, namespace=b"tinfoilkit-release", claim=None):
+        """Sign data the way ssh-keygen -Y sign does, with the Ed25519 key made from seed (RFC 8032), saying it's
+        claim's key if given. Returns the signature file and the key's line for tools/release-signers."""
+        h = hashlib.sha512(seed).digest()
+        a = int.from_bytes(h[:32], "little") & (2**254 - 8) | 2**254
+
+        def enc(pt):
+            zi = pow(pt[2], kp.ED_P - 2, kp.ED_P)
+            return ((pt[1] * zi % kp.ED_P) | (pt[0] * zi % kp.ED_P & 1) << 255).to_bytes(32, "little")
+        pub = enc(kp.ed_mul(a, kp.ED_B))
+        msg = b"SSHSIG" + ssh_str(namespace) + ssh_str(b"") + ssh_str(b"sha512") + ssh_str(hashlib.sha512(data).digest())
+        r = int.from_bytes(hashlib.sha512(h[32:] + msg).digest(), "little") % kp.ED_L
+        big_r = enc(kp.ed_mul(r, kp.ED_B))
+        sig = big_r + ((r + int.from_bytes(hashlib.sha512(big_r + pub + msg).digest(), "little") * a) % kp.ED_L).to_bytes(32, "little")
+        key = ssh_str(b"ssh-ed25519") + ssh_str(pub)
+        blob = (b"SSHSIG\0\0\0\1" + ssh_str(ssh_str(b"ssh-ed25519") + ssh_str(claim or pub)) + ssh_str(namespace) + ssh_str(b"") + ssh_str(b"sha512")
+                + ssh_str(ssh_str(b"ssh-ed25519") + ssh_str(sig)))
+        b64 = base64.b64encode(blob).decode()
+        armored = "\n".join(["-----BEGIN SSH SIGNATURE-----", *(b64[i:i + 70] for i in range(0, len(b64), 70)),
+                             "-----END SSH SIGNATURE-----", ""])
+        return armored.encode(), f'tinfoilkit-release namespaces="tinfoilkit-release" ssh-ed25519 {base64.b64encode(key).decode()} test\n'
+
+    # The signature check against RFC 8032's test vectors, and the ways a signature can be wrong.
+    for pub, msg, sig in (("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "",
+                           "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"),
+                          ("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c", "72",
+                           "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00")):
+        pub, msg, sig = bytes.fromhex(pub), bytes.fromhex(msg), bytes.fromhex(sig)
+        flipped = bytes([sig[0] ^ 1]) + sig[1:]
+        plus_l = sig[:32] + (int.from_bytes(sig[32:], "little") + kp.ED_L).to_bytes(32, "little")
+        check(f"Ed25519: RFC 8032's signature of {len(msg)} byte(s) checks out; another message, a changed byte or S + L doesn't",
+              kp.ed25519_ok(pub, msg, sig) and not kp.ed25519_ok(pub, msg + b"x", sig)
+              and not kp.ed25519_ok(pub, msg, flipped) and not kp.ed25519_ok(pub, msg, plus_l))
+    signed = work / "signed"
+    (signed / "tools").mkdir(parents=True)
+    sig_file, signer = ssh_sign(b"k" * 32, b"release")
+    (signed / "tools" / "release-signers").write_text("# comment\n" + signer)
+
+    def verified(data, sig):
+        try:
+            kp.verify_release(signed, data, sig)
+            return "ok"
+        except ValueError as e:
+            return str(e)
+    other_sig, _ = ssh_sign(b"o" * 32, b"release")
+    forged, _ = ssh_sign(b"o" * 32, b"release", claim=kp.release_keys(signed / "tools" / "release-signers")[0])
+    check("release signature: the kit's key checks out", verified(b"release", sig_file) == "ok", verified(b"release", sig_file))
+    check("release signature: another file, key, namespace or a damaged signature is refused, and so is another key "
+          "claiming to be the kit's",
+          "isn't signed with the kit's release key" in verified(b"release!", sig_file)
+          and "isn't signed with the kit's release key" in verified(b"release", other_sig)
+          and "isn't signed with the kit's release key" in verified(b"release", forged)
+          and "isn't signed with the kit's release key" in verified(b"release", ssh_sign(b"k" * 32, b"release", b"file")[0])
+          and "damaged" in verified(b"release", sig_file[:-60]) and "damaged" in verified(b"release", b""))
+    if shutil.which("ssh-keygen"):    # the signatures agree with OpenSSH's
+        (signed / "release").write_bytes(b"release")
+        (signed / "release.sig").write_bytes(sig_file)
+        p = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", str(signed / "tools" / "release-signers"), "-I", "tinfoilkit-release",
+                            "-n", "tinfoilkit-release", "-s", str(signed / "release.sig")], input=b"release", capture_output=True)
+        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(signed / "key")], stdin=subprocess.DEVNULL, check=True)
+        (signed / "release.sig").unlink()
+        subprocess.run(["ssh-keygen", "-q", "-Y", "sign", "-f", str(signed / "key"), "-n", "tinfoilkit-release", str(signed / "release")],
+                       stdin=subprocess.DEVNULL, capture_output=True, check=True)
+        (signed / "tools" / "release-signers").write_text(f'tinfoilkit-release ssh-ed25519 {(signed / "key.pub").read_text().split()[1]}\n')
+        check("release signature: ssh-keygen accepts the kit's signatures and the kit accepts ssh-keygen's",
+              p.returncode == 0 and verified(b"release", (signed / "release.sig").read_bytes()) == "ok",
+              p.stderr.decode() + verified(b"release", (signed / "release.sig").read_bytes()))
+    elif os.environ.get("CI"):
+        check("release signature: ssh-keygen is here to cross-check the signatures", False)
+    else:
+        print("skipped: checking signatures against OpenSSH (no ssh-keygen here)")
+
     # ./kit update: a kit on the drive, its kit.json changed by its owner, and releases of the kit's code
     # published on the mock GitHub. site/kit.json is the copy of kit.json the kit's current version came with.
     up = work / "update" / "TinfoilKit"
     code = {rel: (TESTS.parent / rel).read_bytes() for rel in ("kit", "SETUP.command", "START-HERE.command", "UNINSTALL.command")}
     code.update({p.relative_to(TESTS.parent).as_posix(): p.read_bytes() for p in (TESTS.parent / "tools").rglob("*")
                  if p.is_file() and "__pycache__" not in p.parts})
+    code["tools/release-signers"] = signer.encode()    # this kit's key, and the one each test release brings
     for rel, data in code.items():
         (up / rel).parent.mkdir(parents=True, exist_ok=True)
         (up / rel).write_bytes(data)
@@ -290,21 +372,45 @@ pathlib.Path(str(out) + ".aria2").unlink()
     v2_cfg["models"][1]["note"] = "new in v2"
     v2_cfg["library"] = [z for z in v2_cfg["library"] if z["zim"] != "gone_en"] + [{"zim": "new_en"}]
 
-    def publish(tag, files, links=(), body=""):
-        """A release on the mock GitHub, packed the way GitHub packs one: everything under one top folder."""
+    def publish(tag, files, links=(), body="", seed=b"k" * 32, signed=True, changed=False):
+        """A release on the mock GitHub as .github/release.sh makes one: everything under one top folder, and its
+        signature beside it. changed: the archive is swapped for another after it was signed."""
         (R / "gh").mkdir(exist_ok=True)
-        name = f"kit-{tag}-{len(list((R / 'gh').glob('kit-*')))}.tar.gz"
-        with tarfile.open(R / "gh" / name, "w:gz") as tf:
-            for rel, data in files.items():
-                info = tarfile.TarInfo(f"tudor-city-ventures-tinfoilkit-abc1234/{rel}")
-                info.size, info.mode = len(data), 0o755 if rel in ("kit", "SETUP.command") or rel.endswith(".sh") else 0o644
-                tf.addfile(info, io.BytesIO(data))
-            for rel, target in links:
-                info = tarfile.TarInfo(f"tudor-city-ventures-tinfoilkit-abc1234/{rel}")
-                info.type, info.linkname = tarfile.SYMTYPE, target
-                tf.addfile(info)
-        (R / "kit").mkdir(exist_ok=True)
-        (R / "kit" / "release.json").write_text(json.dumps({"tag_name": tag, "tarball_url": f"{base}/gh/{name}", "body": body}))
+        name = f"kit-{tag}-{len(list((R / 'gh').glob('kit-*.gz')))}.tar.gz"
+
+        def pack(files):
+            with tarfile.open(R / "gh" / name, "w:gz") as tf:
+                for rel, data in files.items():
+                    info = tarfile.TarInfo(f"tinfoilkit-{tag}/{rel}")
+                    info.size, info.mode = len(data), 0o755 if rel in ("kit", "SETUP.command") or rel.endswith(".sh") else 0o644
+                    tf.addfile(info, io.BytesIO(data))
+                for rel, target in links:
+                    info = tarfile.TarInfo(f"tinfoilkit-{tag}/{rel}")
+                    info.type, info.linkname = tarfile.SYMTYPE, target
+                    tf.addfile(info)
+        pack(files)
+        (R / "gh" / f"{name}.sig").write_bytes(ssh_sign(seed, (R / "gh" / name).read_bytes())[0])
+        if changed:
+            pack({**files, "tools/extra.txt": b"added after signing"})
+        assets = [{"name": f"tinfoilkit-{tag}.tar.gz", "browser_download_url": f"{base}/gh/{name}"}]
+        if signed:
+            assets.append({"name": f"tinfoilkit-{tag}.tar.gz.sig", "browser_download_url": f"{base}/gh/{name}.sig"})
+        (R / "kit").mkdir(exist_ok=True)    # GitHub's own source archive is listed too, and must never be used
+        (R / "kit" / "release.json").write_text(json.dumps({"tag_name": tag, "assets": assets, "body": body,
+                                                            "tarball_url": f"{base}/gh/{name}"}))
+
+    def kit_tty(answer, *args):
+        """./kit at a keyboard, where someone types answer."""
+        import pty
+        keyboard, tty = pty.openpty()
+        os.write(keyboard, answer.encode())
+        try:
+            p = subprocess.run([sys.executable, str(up / "tools" / "kit.py"), "--root", str(up), *args], env=env, stdin=tty,
+                               capture_output=True, text=True, timeout=180)
+        finally:
+            os.close(keyboard)
+            os.close(tty)
+        return p.returncode, p.stdout + p.stderr
 
     def kit_json(cfg):
         text = json.dumps(cfg, indent=4).encode()
@@ -332,19 +438,34 @@ pathlib.Path(str(out) + ".aria2").unlink()
     bad = {"a link": (dict(files=good, links=[("tools/evil", "kit.py")]), "a link in it"),
            "a path outside its folder": (dict(files={**good, "../../escaped.txt": b"x"}), "unexpected path"),
            "a missing file": (dict(files={k: v for k, v in good.items() if k != "tools/launch.sh"}), "missing tools/launch.sh"),
-           "a kit.py this Python can't run": (dict(files={**good, "tools/kit.py": b"def broken(:\n"}), "won't run")}
+           "a kit.py this Python can't run": (dict(files={**good, "tools/kit.py": b"def broken(:\n"}), "won't run"),
+           "no signature": (dict(files=good, signed=False), "isn't signed (the release has no tinfoilkit-v2.tar.gz"),
+           "another key's signature": (dict(files=good, seed=b"o" * 32), "isn't signed with the kit's release key"),
+           "an archive swapped after it was signed": (dict(files=good, changed=True), "isn't signed with the kit's release key"),
+           "no key to check the next one": (dict(files={**good, "tools/release-signers": b"# none\n"}),
+                                            "no release key (tools/release-signers)")}
     for what, (release, why) in bad.items():
         publish("v2", **release)
         rc, out = kit("update", root=up)
         check(f"kit update: a release with {what} is refused and nothing changes",
               rc == 1 and "couldn't install version v2" in out and why in out and not (up / "docs").exists()
               and not (work / "escaped.txt").exists() and (up / "kit.json").read_text() == mine_text, out)
+    (up / "tools/release-signers").write_text("# none\n")
+    publish("v2", good)
+    rc, out = kit("update", root=up)
+    check("kit update: a copy with no release key refuses every release", rc == 1 and "no release key to check it with" in out
+          and not (up / "docs").exists(), out)
+    (up / "tools/release-signers").write_text(signer)
     publish("v2", good, body="Faster answers.\nBetter maps.")
     (up / "kit.json").write_text(mine_text.replace('"Two"', '"Two",', 1))
     rc, out = kit("update", root=up)
     check("kit update: a typo in kit.json stops it before anything changes", rc == 1 and "syntax error on line" in out
           and not (up / "docs").exists(), out)
     (up / "kit.json").write_text(mine_text)
+    rc, out = kit_tty("n\n", "update")
+    check("kit update: at a keyboard it shows what's new and asks first, and no keeps this version",
+          rc == 0 and "Better maps." in out and "Install it now?" in out and "This version stays" in out
+          and not (up / "docs").exists() and (up / "kit.json").read_text() == mine_text, out)
     rc, out = kit("update", root=up)
     merged = json.loads((up / "kit.json").read_text())
     check("kit update: installs the release, shows what's new", rc == 3 and "Installed version v2" in out and "Better maps." in out
@@ -357,10 +478,10 @@ pathlib.Path(str(out) + ".aria2").unlink()
     check("kit update: already the newest", rc == 0 and "This is the newest version (v2)" in out, out)
     v3_cfg = {**v2_cfg, "settings": {**v2_cfg["settings"], "context_size": 32768}}
     publish("v3", {**code, **kit_json(v3_cfg), "docs/v3.txt": b"v3"})
-    rc, out = kit("update", root=up)
+    rc, out = kit_tty("n\n", "update", "--yes")
     merged = json.loads((up / "kit.json").read_text())
-    check("kit update: the next release removes files the last one installed and still keeps the choices",
-          rc == 3 and not (up / "docs/v2.txt").exists() and (up / "docs/v3.txt").exists()
+    check("kit update: --yes doesn't ask, and the next release removes files the last one installed and still keeps the choices",
+          rc == 3 and "Install it now?" not in out and not (up / "docs/v2.txt").exists() and (up / "docs/v3.txt").exists()
           and merged["settings"] == {"default_model": "Two", "context_size": 32768} and merged["library"][-1] == {"zim": "mine_en"}, out)
     (up / "kit.json").write_text((up / "site/kit.json").read_text())
     rc, out = kit("update", "--force", root=up)
@@ -644,11 +765,7 @@ server.serve_forever()
           f"using port {port}, so the library uses" in out and "Library:  ready" in out and f":{port}/" not in out, out)
 
     # Windows has no unzip, and its tar may not read bzip2 (the address database): the kit unpacks in Python there.
-    import importlib.util
     import zipfile
-    spec = importlib.util.spec_from_file_location("kitpy", TESTS.parent / "tools" / "kit.py")
-    kp = sys.modules["kitpy"] = importlib.util.module_from_spec(spec)    # dataclasses look the module up
-    spec.loader.exec_module(kp)
     ex = work / "extract"
     ex.mkdir()
     with zipfile.ZipFile(ex / "a.zip", "w") as z:

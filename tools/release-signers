@@ -1,0 +1,3 @@
+# The keys ./kit update accepts a new version of the kit from, in ssh-keygen's allowed-signers format.
+# Each release brings the next copy of this file, so a new key arrives signed by an old one. .github/release.sh
+# makes a release.
