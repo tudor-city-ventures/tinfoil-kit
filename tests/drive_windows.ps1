@@ -27,6 +27,14 @@ $script:fails = 0
 function Fail($msg) { "FAIL: $msg"; $script:fails++ }
 function Step($msg) { ""; "=== $msg" }
 
+# A person's Edge is long past its first-run screen ("Make Microsoft Edge your own"). A fresh runner's isn't, and it
+# would show that instead of the page Open Tinfoil Kit for Windows.bat opens. Edge's policy to skip it, in CI only.
+if ($env:GITHUB_ACTIONS -eq "true") {
+  $edge = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
+  if (-not (Test-Path $edge)) { New-Item -Path $edge -Force | Out-Null }  # only if missing: keep any policies set there
+  Set-ItemProperty -Path $edge -Name HideFirstRunExperience -Value 1 -Type DWord
+}
+
 # The mock internet, and the KIT_* settings that point the kit at it
 Get-Content "$tests\env.sh" | ForEach-Object { if ($_ -match '^export (\w+)="(.*)"$') { Set-Item "env:$($Matches[1])" $Matches[2] } }
 if (-not $Drive) {
