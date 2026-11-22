@@ -1,8 +1,10 @@
 #!/bin/bash
 # Build everything the end-to-end suite's mock internet serves, into tests/work/remote.
 # With "drive", also the real Mac, Windows and Linux Vulkan builds the drive test installs (tests/drive_test.sh),
-# the Pythons SETUP.command (on a Mac without one) and SETUP-Windows.bat get, and the real map programs.
-# Linux x86_64 only. Needs internet (GitHub, download.kiwix.org, npm, PyPI) the first time.
+# the Pythons SETUP.command (on a Mac without one) and SETUP-Windows.bat get, the real map programs, and Andorra's
+# roads and address database.
+# Linux x86_64 only. Needs internet (GitHub, download.kiwix.org, npm, PyPI; for "drive", GraphHopper's downloads too)
+# the first time.
 # Python deps: pip install gguf numpy libzim playwright && playwright install chromium
 set -eo pipefail
 TESTS="$(cd "$(dirname "$0")" && pwd)"
@@ -143,7 +145,7 @@ print("kiwix-tools_%s-%s.%s" % (plat, newest, ext))' "$TMP/kiwix.html" "$plat")
   python3 -c 'import hashlib, sys; sys.exit(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() != sys.argv[2])' \
     "$R/pbs/python.tar.gz" "$pysha" || { echo "${pyurl##*/} doesn't match the checksum in SETUP.command"; exit 1; }
 
-  echo "== drive test: the real map programs for each computer, Andorra's roads, and a map build with tiles at zoom 0-5"
+  echo "== drive test: the real map programs for each computer, Andorra's roads and addresses, and a map build with tiles at zoom 0-5"
   # They replace the e2e's stand-ins: pmtiles and Java for the Mac, Windows and Linux, and GraphHopper (a fake jar)
   rm -f "$R"/gh2/go-pmtiles_* "$R"/adoptium/OpenJDK21U-*
   curl -fsSL "${GH_AUTH[@]}" https://api.github.com/repos/protomaps/go-pmtiles/releases/latest > "$TMP/pmtiles.json"
@@ -173,6 +175,27 @@ print(max((v for v in re.findall(r"<version>([0-9.]+)</version>", sys.stdin.read
   # Andorra's roads, from GraphHopper's own tests (Geofabrik answers GitHub's runners with 404s)
   get https://raw.githubusercontent.com/graphhopper/graphhopper/master/core/files/andorra.osm.pbf "$DL/andorra.osm.pbf"
   cp "$DL/andorra.osm.pbf" "$R/geofabrik/andorra-latest.osm.pbf" && md5 "$R/geofabrik/andorra-latest.osm.pbf"
+  # Andorra's address database, the newest version a Photon release opens, and that Photon (the mock lists it beside
+  # its stand-ins, so the kit has to match the release to the database, as it does for real)
+  curl -fsSL https://download1.graphhopper.com/public/europe/andorra/ > "$TMP/andorra.html"
+  curl -fsSL "${GH_AUTH[@]}" "https://api.github.com/repos/komoot/photon/releases?per_page=50" > "$TMP/photon.json"
+  read -r dbv jar <<< "$(python3 - "$TMP/andorra.html" "$TMP/photon.json" <<'PY'
+import json, re, sys
+dbs = set(re.findall(r"photon-db-andorra-(\d+\.\d+)-latest\.tar\.bz2", open(sys.argv[1]).read()))
+for v in sorted(dbs, key=lambda v: [int(x) for x in v.split(".")], reverse=True):
+    for r in json.load(open(sys.argv[2])):
+        jars = [a for a in r["assets"] if re.fullmatch(r"photon-\d[\d.]*\.jar", a["name"])]
+        if jars and not r["prerelease"] and r["tag_name"].lstrip("v").startswith(v + "."):
+            print(v, jars[0]["browser_download_url"])
+            sys.exit()
+PY
+)"
+  [ -n "$jar" ] || { echo "no Photon release opens Andorra's address database" >&2; exit 1; }
+  get "$jar" "$DL/$(basename "$jar")"
+  cp "$DL/$(basename "$jar")" "$R/gh2/"
+  db="photon-db-andorra-$dbv-latest.tar.bz2"
+  get "https://download1.graphhopper.com/public/europe/andorra/$db" "$DL/$db"
+  mkdir -p "$R/photon/europe/andorra" && cp "$DL/$db" "$R/photon/europe/andorra/"
   # pmtiles' own one-tile fixture, as every tile from zoom 0 to 5: one directory entry whose run covers them all
   mkdir -p "$R/protomaps"
   python3 - "$W/test_fixture_1.pmtiles" "$R/protomaps/build.pmtiles" <<'PY'
