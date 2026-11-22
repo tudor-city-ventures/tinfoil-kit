@@ -41,7 +41,7 @@ echo   ===========
 if not defined KIWIX echo   - Library server not found ^(bin\kiwix-tools-windows-x64^). Run SETUP-Windows.bat while online.
 if not defined LLAMA echo   - AI server not found ^(bin\llama.cpp-windows-x64^). Run SETUP-Windows.bat while online.
 if !BOOKS!==0 echo   - No library files in library. Run SETUP-Windows.bat while online.
-if not defined MODEL echo   - No models in models. Run SETUP-Windows.bat while online.
+if not defined MODEL echo   No AI models in models, so the AI stays off. If kit.json lists some, run SETUP-Windows.bat while online.
 if defined TOO_BIG echo   This computer has !GB! GB of memory, too little for !TOO_BIG!. Starting with !MODEL!.
 
 rem --- library
@@ -57,18 +57,26 @@ set "MAPS="
 if exist "%KIT%\maps\" call :start_maps
 
 rem Wait for the library and the AI to answer.
-set "LIB_OK=0" & set "AI_OK=0"
+set "LIB_OK=0" & set "AI_OK=0" & set "AI_ON="
+if defined LLAMA if defined MODEL set "AI_ON=1"
 if not defined CURL (
   ping -n 11 127.0.0.1 >nul
-  set "LIB_OK=1" & set "AI_OK=1"
+  set "LIB_OK=1"
+  if defined AI_ON set "AI_OK=1"
 )
 if defined CURL for /l %%i in (1,1,60) do if !LIB_OK!==0 call :ours "http://127.0.0.1:%LIB_PORT%/" "Tinfoil Kit" && (set "LIB_OK=1") || ping -n 2 127.0.0.1 >nul
-if defined CURL for /l %%i in (1,1,30) do if !AI_OK!==0 call :ours "http://127.0.0.1:%AI_PORT%/v1/models" "\"data\"" && (set "AI_OK=1") || ping -n 2 127.0.0.1 >nul
+if defined CURL if defined AI_ON for /l %%i in (1,1,30) do if !AI_OK!==0 call :ours "http://127.0.0.1:%AI_PORT%/v1/models" "\"data\"" && (set "AI_OK=1") || ping -n 2 127.0.0.1 >nul
 
 set "URL=http://127.0.0.1:%LIB_PORT%/?model=%MODEL%&ai=%AI_PORT%"
 echo(
 if !LIB_OK!==1 (echo   Library:  ready) else (echo   Library:  NOT running ^(see logs\kiwix-serve.log^))
-if !AI_OK!==1 (echo   AI:       ready ^(the first answer takes longer while the model loads^)) else (echo   AI:       NOT running ^(see logs\llama-server.log^). The library still works.)
+if !AI_OK!==1 (
+  echo   AI:       ready ^(the first answer takes longer while the model loads^)
+) else if not defined MODEL (
+  echo   AI:       off ^(no models^). The library still works.
+) else (
+  echo   AI:       NOT running ^(see logs\llama-server.log^). The library still works.
+)
 echo(
 echo   Open:     !URL!
 echo   AI chat:  http://127.0.0.1:!AI_PORT!/
@@ -211,13 +219,13 @@ if not defined CURL exit /b 1
 "%CURL%" -s -f -o nul --max-time 2 "%~1" 2>nul
 goto :eof
 
-rem Another program can hold a port (many developer tools take 8080): use the next free one.
+rem Another program can hold a port (many developer tools take 8080): use the next free one. netstat says what's
+rem listening at once, where connecting to a free port takes Windows about 2 seconds to give up.
 :free_port
-if not defined CURL goto :eof
 set /a "P=!%~1!, LAST=!%~1!+9"
 :free_port_next
-"%CURL%" -s -o nul --max-time 2 "http://127.0.0.1:!P!/" 2>nul
-if errorlevel 7 if not errorlevel 8 goto free_port_done
+rem A listening port's line has no remote address: 0.0.0.0:0 or [::]:0 (the state's name depends on the language).
+netstat -an | findstr /r /c:"TCP  *[^ ]*:%P%  *0\.0\.0\.0:0 " /c:"TCP  *[^ ]*:%P%  *\[::\]:0 " >nul || goto free_port_done
 if !P! geq !LAST! goto free_port_done
 set /a "P+=1"
 goto free_port_next

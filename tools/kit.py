@@ -16,11 +16,15 @@ Commands (run from the kit folder, e.g.  ./kit sync):
   update             Replace the kit's own code with its newest release on GitHub, keeping
                      your kit.json changes. SETUP.command runs it first.
   estimate           About how many GB this kit.json needs, from the sizes the website's kit
-                     builder lists. Needs no internet. SETUP.command uses it.
+                     builder lists (--essentials: just those). Needs no internet. SETUP.command uses it.
   drives [--json]    The plugged-in drives the kit could go on: folder, format, GB free, and why
                      not (or -). --json adds this computer's free space and what the kit needs.
   place DEST         Put the kit at DEST (a TinfoilKit folder at the top of a drive or in the home
                      folder), ready to set up there. Prints its folder. SETUP.command uses it.
+  space PATH         Whether the kit, or just its essentials, fits at PATH (a kit folder, or where one
+                     would go) and leaves 10% of the computer's disk, or 5% of a drive, free.
+  essentials [on|off]
+                     Get just the essentials from now on (on), or everything switched on (off).
   fit [--ask]        Which AI model this computer runs, given its memory, and the switched-on ones
                      too big for it. --ask (SETUP.command) asks whether to download those anyway;
                      --skip switches them off, --restore back on. --json for scripts and agents.
@@ -904,12 +908,18 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
         log("\nNothing could be looked up. Check that this computer is online (on hotel or cafe Wi-Fi, "
             "open any web page and sign in first), then try again.")
         return
-    keep = keep_free(root, cfg)
+    keep, leave = keep_free(root, cfg), leave_free(root, cfg)
     log(f"\nTo download: {fmt_size(total)}   Free space: {fmt_size(free)}   "
         f"Free afterwards: ~{fmt_size(max(0, free - total))} (before old versions are removed)")
+    if cfg["settings"].get("essentials_only") is True:
+        log("Just the essentials, as chosen at setup. To get everything else too: ./kit essentials off")
     if free - total < keep:
         log(f"WARNING: that leaves less than the {fmt_size(keep)} the kit keeps free. Items that don't fit "
-            "are skipped, the most important ones download first. Switch some off in kit.json, or make room.")
+            "are skipped, the most important ones download first. Switch some off in kit.json, ./kit essentials on "
+            "for just the essentials, or make room.")
+    elif free - total < leave:
+        log(f"Note: that leaves less than {fmt_size(leave)} free, the {10 if on_this_computer(root) else 5}% of the "
+            "disk worth keeping free. Switch some off in kit.json, or ./kit essentials on for just the essentials.")
 
 
 # ----------------------------------------------------------------------------- downloading
@@ -1036,6 +1046,12 @@ def keep_free(root: Path, cfg: Dict[str, Any]) -> float:
     if on_this_computer(root):
         gb = max(gb, float(s.get("keep_free_gb_this_computer", 50)))
     return gb * GB
+
+
+def leave_free(root: Path, cfg: Dict[str, Any]) -> float:
+    """Bytes a comfortable install leaves free: 10% of the computer's own disk, 5% of a drive, or what the kit keeps
+    free if that's more. SETUP steers people away from going below it; sync itself stops only at keep_free."""
+    return max(keep_free(root, cfg), shutil.disk_usage(root).total * (0.10 if on_this_computer(root) else 0.05))
 
 
 def ensure_space(root: Path, need: int, cfg: Dict[str, Any]) -> bool:
@@ -2109,7 +2125,7 @@ def cmd_plan(root: Path, args: argparse.Namespace) -> None:
     cfg, state = load_config(root), load_state(root)
     if args.json:
         return plan_json(root, cfg, args.only)
-    items = build_plan(root, cfg, state, args.only, args.essentials)
+    items = build_plan(root, cfg, state, args.only, args.essentials or cfg["settings"].get("essentials_only") is True)
     print_plan(root, items, state, cfg)
     if offline(items):
         sys.exit(1)
@@ -2146,8 +2162,9 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
     with Lock(root), keep_awake():
         prepare_folder(root)
         cfg, state = load_config(root), load_state(root)
-        items = build_plan(root, cfg, state, args.only, args.essentials)
-        part = args.only or args.essentials
+        items = build_plan(root, cfg, state, args.only,
+                           args.essentials or cfg["settings"].get("essentials_only") is True)
+        part = args.only or args.essentials    # just this once: the next full sync gets the rest
         print_plan(root, items, state, cfg)
         if offline(items):
             sys.exit(1)
@@ -2271,23 +2288,76 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
         log(f"Kit version: {state['kit_version']}.")
 
 
-def estimate_gb(root: Path, cfg: Dict[str, Any]) -> int:
+def estimate_gb(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] = None) -> int:
     """About how many GB the switched-on items need, from the sizes the kit builder lists (site/sources.json), plus
-    about 1 GB of programs. Needs no internet, so SETUP can say how much room the kit needs before choosing where."""
+    about 1 GB of programs. Needs no internet, so SETUP can say how much room the kit needs before choosing where.
+    essentials: only those (see essential()); None goes by kit.json's essentials_only."""
+    if essentials is None:
+        essentials = cfg["settings"].get("essentials_only") is True
+    fit = fit_report(root, cfg, load_state(root)) if essentials else {}
     try:
         listed = json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
         sizes = {s["id"]: s.get("bytes") or 0 for s in listed}
     except (OSError, ValueError, KeyError, TypeError):
         sizes = {}
-    on = [m["id"] for m in cfg.get("models", []) if m.get("enabled", True)]
-    on += [z["zim"] for z in cfg.get("library", []) if z.get("enabled", True)]
+    on = [m["id"] for m in cfg.get("models", [])
+          if m.get("enabled", True) and (not essentials or m["id"] in (fit["runs"], fit["smallest"]))]
+    on += [z["zim"] for z in cfg.get("library", [])
+           if z.get("enabled", True) and (not essentials or int(z.get("priority", 2)) <= 1)]
     if maps_settings(cfg)["enabled"]:
         on.append("maps")
     return math.ceil((sum(sizes.get(i, 0) for i in on) + GB) / GB)
 
 
 def cmd_estimate(root: Path, args: argparse.Namespace) -> None:
-    print(estimate_gb(root, load_config(root)))
+    print(estimate_gb(root, load_config(root), True if args.essentials else None))
+
+
+def space_at(path: Path, root: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """How the kit would fit at path (its folder, which may not exist yet): the disk's free and total bytes, what the
+    kit keeps free there and what a comfortable install leaves, the full kit's size and the essentials', and for each
+    of those "fits" (leaving that comfortable amount), "tight" (fits, but leaves less) or "no"."""
+    at = path
+    while not at.exists() and at != at.parent:
+        at = at.parent
+    usage = shutil.disk_usage(at)
+    keep, leave = keep_free(at, cfg), leave_free(at, cfg)
+    have = 0
+    with contextlib.suppress(OSError):
+        if path.resolve() == root.resolve():    # the kit's own folder: what's downloaded already counts
+            have = sum(drive_bytes(v) for v in load_state(root)["items"].values())
+    full = max(0, estimate_gb(root, cfg, False) * GB - have)
+    ess = max(0, estimate_gb(root, cfg, True) * GB - have)
+
+    def verdict(need: int) -> str:
+        return "fits" if usage.free - need >= leave else "tight" if usage.free - need >= keep else "no"
+    return {"path": str(path), "free_bytes": usage.free, "total_bytes": usage.total, "keeps_free_bytes": int(keep),
+            "leaves_free_bytes": int(leave), "full_bytes": full, "essentials_bytes": ess,
+            "full": verdict(full), "essentials": verdict(ess)}
+
+
+def cmd_space(root: Path, args: argparse.Namespace) -> None:
+    """One tab-separated line for scripts: the full kit's verdict, the essentials', then GB free, GB in all, GB the
+    full kit and the essentials need, and GB a comfortable install leaves free."""
+    sp = space_at(Path(os.path.abspath(os.path.expanduser(args.path))), root, load_config(root))
+    if args.json:
+        print(json.dumps(sp, indent=2))
+        return
+    print("\t".join([sp["full"], sp["essentials"], str(sp["free_bytes"] // GB), str(round(sp["total_bytes"] / GB)),
+                     str(math.ceil(sp["full_bytes"] / GB)), str(math.ceil(sp["essentials_bytes"] / GB)),
+                     str(math.ceil(sp["leaves_free_bytes"] / GB))]))
+
+
+def cmd_essentials(root: Path, args: argparse.Namespace) -> None:
+    if args.action:
+        set_setting(root, "essentials_only", True if args.action == "on" else None)
+    cfg = load_config(root)
+    if cfg["settings"].get("essentials_only") is True:
+        log(f"Just the essentials (about {estimate_gb(root, cfg)} GB): the programs, the map, the most important "
+            "books, and the AI this computer runs plus the smallest. To get everything: ./kit essentials off")
+    else:
+        log(f"Everything switched on in kit.json (about {estimate_gb(root, cfg)} GB). "
+            "To get just the essentials: ./kit essentials on")
 
 
 # ----------------------------------------------------------------------------- the AI models this computer can run
@@ -2341,7 +2411,8 @@ def memory_for(size: int) -> int:
 def fit_report(root: Path, cfg: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
     """Which model the AI starts with on this computer (tools/launch.sh picks the same way: the default model if it
     fits, else the biggest that does, else the smallest), the switched-on models it can't run that aren't downloaded
-    yet, and the ones switched off for that on a computer with less memory that this one runs."""
+    yet, and the ones switched off for that on a computer with less memory that this one runs. Those are listed in
+    kit.json, not .kit/state.json, so the list moves with the kit when SETUP puts it in its place."""
     memory, sizes = memory_bytes(), model_sizes(root, cfg)
     default = cfg["settings"].get("default_model")
     models = [{"id": m["id"], "bytes": sizes[m["id"]], "fits": fits(sizes[m["id"]], memory),
@@ -2355,7 +2426,7 @@ def fit_report(root: Path, cfg: Dict[str, Any], state: Dict[str, Any]) -> Dict[s
             "models": models,
             "too_big": [m["id"] for m in on if not m["fits"] and m is not runs and f"models/{m['id']}" not in state["items"]],
             "fits_now": [m["id"] for m in models if not m["enabled"] and m["fits"]
-                         and m["id"] in state.get("models_off_for_memory", [])]}
+                         and m["id"] in cfg["settings"].get("models_off_for_memory", [])]}
 
 
 def switch_models(root: Path, ids: List[str], on: bool) -> None:
@@ -2396,6 +2467,19 @@ def switch_models(root: Path, ids: List[str], on: bool) -> None:
     os.replace(tmp, path)
 
 
+def read_line() -> str:
+    """One answer from stdin, read a byte at a time: a script feeding SETUP its answers from a file or pipe keeps the
+    lines after it for the prompts that come later (Python's own buffered stdin would read ahead and take them)."""
+    said = b""
+    with contextlib.suppress(OSError):
+        while True:
+            c = os.read(0, 1)
+            if not c or c == b"\n":
+                break
+            said += c
+    return said.decode(errors="replace").strip()
+
+
 def names(ids: List[str]) -> str:
     return ids[0] if len(ids) == 1 else ", ".join(ids[:-1]) + " and " + ids[-1]
 
@@ -2417,7 +2501,7 @@ def cmd_fit(root: Path, args: argparse.Namespace) -> None:
 
     def answer(question: str, default: bool) -> bool:
         print(f"\n{question} {'[Y/n]' if default else '[y/N]'} ", end="", flush=True)
-        said = sys.stdin.readline().strip().lower()
+        said = read_line().lower()
         return default if not said else said in ("y", "yes")
 
     def downloads(ids: List[str]) -> str:
@@ -2429,10 +2513,11 @@ def cmd_fit(root: Path, args: argparse.Namespace) -> None:
         log(f"\n{gb}. It can run {names(back)}, skipped before on a computer with less memory ({downloads(back)}).")
         if args.restore or (args.ask and answer("Download them now?", True)):
             switch_models(root, back, on=True)
-            state["models_off_for_memory"] = sorted(set(state.get("models_off_for_memory", [])) - set(back))
-            save_state(root, state)
+            off = sorted(set(cfg["settings"].get("models_off_for_memory", [])) - set(back))
+            set_setting(root, "models_off_for_memory", off or None)
             log("Switched them back on.")
-            fit = fit_report(root, load_config(root), state)
+            cfg = load_config(root)
+            fit = fit_report(root, cfg, state)
         elif not args.ask:
             log("To get them: ./kit fit --restore")
         log(f"Its AI will be {fit['runs']}.")
@@ -2449,8 +2534,7 @@ def cmd_fit(root: Path, args: argparse.Namespace) -> None:
         log("A computer with more memory could, with this drive plugged in.")
     if args.skip or (args.ask and not answer("Download them anyway?", False)):
         switch_models(root, big, on=False)
-        state["models_off_for_memory"] = sorted(set(state.get("models_off_for_memory", [])) | set(big))
-        save_state(root, state)
+        set_setting(root, "models_off_for_memory", sorted(set(cfg["settings"].get("models_off_for_memory", [])) | set(big)))
         log("Skipped them. On a computer with more memory, SETUP offers them again.")
     elif not args.ask:
         log("To skip them: ./kit fit --skip")
@@ -2464,10 +2548,13 @@ def cmd_drives(root: Path, args: argparse.Namespace) -> None:
         return
     cfg, home = load_config(root), Path.home()
     print(json.dumps({
-        "kit": str(root), "kit_on_this_computer": on_this_computer(root), "needs_gb": estimate_gb(root, cfg),
+        "kit": str(root), "kit_on_this_computer": on_this_computer(root), "needs_gb": estimate_gb(root, cfg, False),
+        "needs_essentials_gb": estimate_gb(root, cfg, True),
         "this_computer": {"path": str(home / KIT_FOLDER), "free_bytes": shutil.disk_usage(home).free,
-                          "keeps_free_gb": float(cfg["settings"].get("keep_free_gb_this_computer", 50))},
-        "drives": [{**d, "kit_path": str(Path(d["path"]) / KIT_FOLDER)} for d in drives]}, indent=2))
+                          "keeps_free_gb": float(cfg["settings"].get("keep_free_gb_this_computer", 50)),
+                          "space": space_at(home / KIT_FOLDER, root, cfg)},
+        "drives": [{**d, "kit_path": str(Path(d["path"]) / KIT_FOLDER),
+                    "space": space_at(Path(d["path"]) / KIT_FOLDER, root, cfg)} for d in drives]}, indent=2))
 
 
 def cmd_place(root: Path, args: argparse.Namespace) -> None:
@@ -2731,15 +2818,21 @@ def share_tools() -> Any:
 
 
 def set_setting(root: Path, key: str, value: Any) -> None:
-    """Change one setting in kit.json, and leave the rest of the file as it is."""
+    """Change one setting in kit.json (None removes it), and leave the rest of the file as it is."""
     path = root / "kit.json"
     text = path.read_text(encoding="utf-8")
     val = json.dumps(value)
-    new, n = re.subn(rf'("{re.escape(key)}"\s*:\s*)(true|false|null|-?[\d.]+|"(?:[^"\\]|\\.)*")',
-                     lambda m: m.group(1) + val, text, count=1)
-    if not n:    # a kit.json from before this setting: it goes first in "settings"
-        new = re.sub(r'("settings"\s*:\s*\{)(\s*)', lambda m: f'{m.group(1)}{m.group(2)}"{key}": {val},{m.group(2)}',
-                     text, count=1)
+    name = rf'"{re.escape(key)}"\s*:\s*'
+    now = r'(?:true|false|null|-?[\d.]+|"(?:[^"\\]|\\.)*"|\[[^\[\]{}]*\])'
+    if value is None:    # with the comma and space after it, or before it if it's the last one
+        new, n = re.subn(name + now + r"\s*,\s*", "", text, count=1)
+        if not n:
+            new = re.sub(r",\s*" + name + now, "", text, count=1)
+    else:
+        new, n = re.subn(f"({name}){now}", lambda m: m.group(1) + val, text, count=1)
+        if not n:    # a kit.json from before this setting: it goes first in "settings"
+            new = re.sub(r'("settings"\s*:\s*\{)(\s*)', lambda m: f'{m.group(1)}{m.group(2)}"{key}": {val},{m.group(2)}',
+                         text, count=1)
     try:
         ok = json.loads(new).get("settings", {}).get(key) == value
     except ValueError:
@@ -2747,6 +2840,8 @@ def set_setting(root: Path, key: str, value: Any) -> None:
     if not ok:
         cfg = json.loads(text)
         cfg.setdefault("settings", {})[key] = value
+        if value is None:
+            cfg["settings"].pop(key)
         new = json.dumps(cfg, indent=2) + "\n"
     tmp = path.with_suffix(".tmp")
     tmp.write_text(new, encoding="utf-8")
@@ -2754,6 +2849,8 @@ def set_setting(root: Path, key: str, value: Any) -> None:
 
 
 def cmd_share(root: Path, args: argparse.Namespace) -> None:
+    if os.name == "nt":
+        die("Sharing on the home network works on a Mac or Linux for now. On Windows the kit is for this PC.")
     share = share_tools()
     s = load_config(root)["settings"]
     port, on = int(s.get("share_port", 8000)), s.get("share_on_network") is True
@@ -2770,12 +2867,14 @@ def cmd_share(root: Path, args: argparse.Namespace) -> None:
         log("The kit restarted without it." if share.restart_if_autostarted(root) else
             "If the kit is running, close its window and start it again.")
         return
-    if args.action == "on":
+    if args.action == "on" and on:
+        log("Sharing is already on.")
+    elif args.action == "on":
         set_setting(root, "share_on_network", True)
         on = True
-        log("Sharing on your home network is on. Phones and laptops there need the access code to get in.")
+        log("Sharing is on: phones and laptops on your home network need the access code.")
         log("The kit restarted with sharing on." if share.restart_if_autostarted(root) else
-            "Start the kit (START-HERE.command), or close its window and start it again if it's running.")
+            "Start the kit to share it (START-HERE.command), or restart it if it's running.")
     elif args.action == "new-code":
         log("New access code. Phones and laptops that used the old one need this one now.")
     if not on:
@@ -2790,6 +2889,8 @@ def cmd_share(root: Path, args: argparse.Namespace) -> None:
 
 
 def cmd_autostart(root: Path, args: argparse.Namespace) -> None:
+    if os.name == "nt":
+        die("Starting the kit with the computer works on a Mac or Linux for now.")
     rc = share_tools().autostart(root, args.action or "status")
     if rc == 0 and args.action == "on" and load_config(root)["settings"].get("share_on_network") is not True:
         log("Sharing is off, so only this computer can use the kit. ./kit share on lets your phones and laptops in.")
@@ -2907,11 +3008,17 @@ def main() -> None:
     p = sub.add_parser("update", help="install the newest version of the kit's own code, keeping kit.json changes")
     p.add_argument("--force", action="store_true", help="reinstall even if this is the newest version")
     p.add_argument("-y", "--yes", action="store_true", help="don't ask before installing")
-    sub.add_parser("estimate", help="about how many GB this kit.json needs (no internet needed)")
+    p = sub.add_parser("estimate", help="about how many GB this kit.json needs (no internet needed)")
+    p.add_argument("--essentials", action="store_true", help="just the essentials")
     p = sub.add_parser("drives", help="the plugged-in drives the kit could go on")
     p.add_argument("--json", action="store_true", help="with this computer's free space and what the kit needs")
     p = sub.add_parser("place", help="put the kit at DEST, a TinfoilKit folder on a drive or in the home folder")
     p.add_argument("dest")
+    p = sub.add_parser("space", help="whether the kit, or just its essentials, fits at PATH with room to spare")
+    p.add_argument("path")
+    p.add_argument("--json", action="store_true", help="print it all as JSON")
+    p = sub.add_parser("essentials", help="get just the essentials from now on (on), or everything again (off)")
+    p.add_argument("action", nargs="?", choices=("on", "off"))
     p = sub.add_parser("fit", help="which AI model this computer runs, and the ones too big for its memory")
     p.add_argument("--ask", action="store_true", help="ask whether to download the models it can't run (SETUP)")
     p.add_argument("--skip", action="store_true", help="switch off the models it can't run, in kit.json")
@@ -2929,7 +3036,7 @@ def main() -> None:
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
-                "drives": cmd_drives, "place": cmd_place, "fit": cmd_fit, "share": cmd_share,
+                "drives": cmd_drives, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials, "fit": cmd_fit, "share": cmd_share,
                 "autostart": cmd_autostart}
     if args.cmd not in commands:
         ap.print_help()

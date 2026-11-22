@@ -12,7 +12,7 @@ W="$KIT_TEST_WORK" R="$KIT_TEST_WORK/remote" L="$KIT_TEST_WORK/logs"
 mkdir -p "$L"
 D="$W/drive/TinfoilKit"
 
-cleanup() { pkill -f tools/launch.sh; pkill -f START-HERE; sleep 1; pkill -f llama-server; pkill -f kiwix-serve;
+cleanup() { pkill -f tools/launch.sh; pkill -f START-HERE; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; pkill -f "share.py serve";
             pkill -f "mock_services.py (tiles|photon|graphhopper|llama)"; }
 main() {
 cleanup 2>/dev/null
@@ -55,8 +55,14 @@ step "setup (sync again, then test)"; printf 'y\nn\n\n' | timeout 600 bash SETUP
 grep -E "PASS|FAIL|up to date|All set" "$L/setup.log" | tail -12
 finder_files_left "./kit test"; finder_files
 step "search";  ./kit search test | head -2
-step "launcher"; (timeout 900 bash START-HERE.command --no-browser > "$L/launch.out" 2>&1 &); sleep 12; grep -E "Library:|AI:|Maps" "$L/launch.out"
+step "share on the home network"; ./kit share on --code 13572468 | head -2
+step "launcher"; (timeout 900 bash START-HERE.command --no-browser > "$L/launch.out" 2>&1 &); sleep 12
+grep -E "Library:|AI:|Maps|home network|Access code" "$L/launch.out"
 finder_files_left "the launcher"
+# What a phone on the home network opens: this machine's network address, from the launcher's message.
+KIT_SHARE_URL="$(sed -n 's/.*open \(http:[^ ]*\) on a phone.*/\1/p' "$L/launch.out" | head -1)"
+[ -n "$KIT_SHARE_URL" ] || echo "FAIL: the launcher showed no address for the home network"
+export KIT_SHARE_URL KIT_SHARE_CODE=13572468
 (python3 "$TESTS/mock_services.py" llama 18081 > "$L/m_llama.log" 2>&1 &)
 (MOCK_PHOTON_OLD=1 python3 "$TESTS/mock_services.py" photon 12323 > "$L/m_photon_old.log" 2>&1 &)
 sleep 1
@@ -65,8 +71,10 @@ step "map logic";    run_test map_logic 180 node "$TESTS/map_logic_test.js" "$D/
 step "portal UI";    run_test portal_ui 240 python3 "$TESTS/ui_test.py"
 step "map UI";       run_test map_ui 400 python3 "$TESTS/map_ui_test.py"
 cleanup 2>/dev/null
+step "share off"; ./kit share off | head -1
 step "launcher --no-maps"; (timeout 60 bash START-HERE.command --no-browser --no-maps > "$L/launch2.out" 2>&1 &); sleep 8
 grep -q "Starting maps" "$L/launch2.out" && echo "FAIL: maps started" || echo "ok: no map servers"
+grep -q "home network" "$L/launch2.out" && echo "FAIL: still shared after ./kit share off" || echo "ok: not shared"
 pgrep -f "mock_services.py (tiles|photon|graphhopper)" >/dev/null && echo "FAIL: map process running"
 cleanup 2>/dev/null
 step "update (3 months later)"; touch "$R/STATE_V2"; rm -f .kit/cache/kiwix-catalog.xml

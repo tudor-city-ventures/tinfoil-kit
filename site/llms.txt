@@ -17,7 +17,7 @@ You are setting this up for a person, probably not a programmer. Work in their T
 | Linux PC (x64), from an exFAT drive set up on a Mac | no, for now | yes | yes | no, for now |
 
 - Intel Macs and ARM Windows or Linux PCs can't run it: the kit downloads programs built for Apple Silicon and for x64 PCs only. On a Mac, `uname -m` prints arm64.
-- Memory decides which AI runs: a model may take 60% of it. 32 GB or more runs the default model, Inkling 2 Mini, and the other big models; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B. On Windows the person picks it on the Ask page. `./kit fit` says which one this computer runs (`--json` for agents), and `./kit fit --skip` switches off the models it can't run, which saves about 50 GB on a 16 or 24 GB laptop. `sysctl -n hw.memsize` prints the memory in bytes.
+- Memory decides which AI runs: a model may take 60% of it. 32 GB or more runs the default model, Inkling 2 Mini, and the other big models; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B. `./kit fit` says which one this computer runs (`--json` for agents), and `./kit fit --skip` switches off the models it can't run, which saves about 50 GB on a 16 or 24 GB laptop. `sysctl -n hw.memsize` prints the memory in bytes.
 - On Windows and Linux the AI uses the graphics card through Vulkan. Without a good one it's slow: pick Gemma 4 E4B.
 - Space: about 300 GB for the default kit. `./kit estimate` prints the number for the current kit.json, with no internet. Sync always leaves 50 GB free on the computer's own disk and 25 GB on a drive.
 - Setup needs the internet for a few hours, Apple's free Command Line Tools (for python3 3.9 or newer, and curl) and the Mac on its charger. After that, nothing needs the internet.
@@ -189,7 +189,7 @@ Double-click UNINSTALL.command in the kit folder. Once the person types "delete"
 
 The kit's own code is MIT. Everything it downloads comes straight from its publisher under the publisher's license: Tinfoil Kit never hosts, mirrors or bundles any of it, and the person is the one downloading, so those terms apply to them. All of it is free to download and use; some of it isn't free to sell. THIRD-PARTY.md has the full list.
 
-- AI models: Inkling 2 Mini by Thinking Machines (Apache 2.0, plus Thinking Machines' Model Acceptable Use Policy, which binds anyone who downloads the weights), Qwen3.8 27B by Alibaba (Apache 2.0), Gemma 4 26B-A4B and Gemma 4 E4B by Google (Apache 2.0). The files come from ggml-org's and Unsloth's Hugging Face repos.
+- AI models: Inkling 2 Mini by Thinking Machines (Apache 2.0, plus Thinking Machines' Model Acceptable Use Policy, which binds anyone who downloads the weights), Qwen3.8 27B by Alibaba (Apache 2.0), Gemma 4 26B-A4B, Gemma 4 12B and Gemma 4 E4B by Google (Apache 2.0). The files come from ggml-org's and Unsloth's Hugging Face repos.
 - Books: Wikipedia and its sister projects, WikiMed, Stack Exchange, Appropedia and Energypedia are CC BY-SA. iFixit, LibreTexts and Khan Academy are CC BY-NC-SA: no commercial use. Ready.gov and US Army publications are US government works. Project Gutenberg is public domain in the US. Survivor Library, Urban Prepper and the collections of field medicine, post-disaster, water, food and knots guides have mixed terms: free to read, not to republish.
 - Maps: OpenStreetMap data (© OpenStreetMap contributors, Open Database License), through Protomaps, Geofabrik and the Photon exports GraphHopper hosts. Map style: Protomaps basemaps (BSD-3-Clause). Fonts: Noto Sans (SIL Open Font License).
 - Programs: llama.cpp (MIT), kiwix-serve and the Kiwix app (GPL-3.0), Eclipse Temurin Java (GPL-2.0 with Classpath Exception), go-pmtiles (BSD-3-Clause), GraphHopper and Photon (Apache 2.0), MapLibre GL JS (BSD-3-Clause).
@@ -198,8 +198,8 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 ## Security
 
 - `./kit update` installs new kit code only if the maintainer's release key signed it, checked against tools/release-signers in the copy already there. The key never touches GitHub.
-- Every download comes straight from its publisher over HTTPS and is checked against the checksum the publisher posts. Nothing is hosted or mirrored by this project.
-- The servers listen on 127.0.0.1. Sharing is off until the person turns it on; then a gate on port 8000 asks for an 8-digit code. It's plain HTTP, so share on the person's own Wi-Fi or hotspot, not a public network.
+- Every download comes straight from its publisher over HTTPS, and is checked against the publisher's checksum wherever one is posted (the map tiles and fonts have none). Nothing is hosted or mirrored by this project.
+- The servers listen on 127.0.0.1. Sharing is off until the person turns it on; then a gate, on port 8000 by default, asks for an 8-digit code. It's plain HTTP, so share on the person's own Wi-Fi or hotspot, not a public network.
 - To check a release before running it, download tinfoilkit-TAG.tar.gz and its .sig from the release, then run `ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz`.
 - Security problems go to https://github.com/tudor-city-ventures/tinfoilkit/security/advisories/new, never a public issue.
 
