@@ -3,6 +3,7 @@
 State "v1" = initial release; touch remote/STATE_V2 to simulate the world 3 months later
 (newer ZIM date, new llama.cpp build, re-uploaded model file).
 """
+
 import base64
 import hashlib
 import json
@@ -31,15 +32,15 @@ def sha(p: Path) -> str:
 
 def catalog() -> bytes:
     zims = ["testmed_en_all_maxi_2026-01.zim", "testsurvival_en_2026-05.zim" if v2() else "testsurvival_en_2026-02.zim"]
-    zims += sorted(p.name for p in (R / "zim").glob("wikipedia_*.zim"))    # a test's Wikipedias, in their sizes
+    zims += sorted(p.name for p in (R / "zim").glob("wikipedia_*.zim"))  # a test's Wikipedias, in their sizes
     entries = []
     for z in zims:
         p = R / "zim" / z
         name = z.rsplit("_", 1)[0]
-        kib = -(-p.stat().st_size // 1024)    # Kiwix lists a book's size rounded up to a whole KiB, never to the byte
+        kib = -(-p.stat().st_size // 1024)  # Kiwix lists a book's size rounded up to a whole KiB, never to the byte
         entries.append(f"""  <entry>
     <id>urn:uuid:{hashlib.md5(z.encode()).hexdigest()}</id>
-    <title>{name.replace('_', ' ').title()}</title>
+    <title>{name.replace("_", " ").title()}</title>
     <summary>Summary of {name}</summary>
     <language>eng</language>
     <name>{name}</name>
@@ -49,42 +50,109 @@ def catalog() -> bytes:
     <link type="text/html" href="/content/{z[:-4]}" />
     <link rel="http://opds-spec.org/acquisition/open-access" type="application/x-zim" href="{BASE}/zim/{z}.meta4" length="{kib * 1024}" />
   </entry>""")
-    return ('<?xml version="1.0" encoding="UTF-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n'
-            + "\n".join(entries) + "\n</feed>\n").encode()
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n'
+        + "\n".join(entries)
+        + "\n</feed>\n"
+    ).encode()
 
 
 def gh_releases(repo: str):
     """The releases GitHub lists for each program's repo, newest first; None for a repo it doesn't know."""
     if repo == "ggml-org/llama.cpp":
         return json.loads(releases())
-    if repo == "protomaps/go-pmtiles":    # Linux's fake, or the real builds the drive test has (the Mac's go-pmtiles-1.31.2_...)
-        return [{"tag_name": "v1.31.2", "draft": False, "prerelease": False, "assets": [
-            {"name": a.name, "size": a.stat().st_size, "browser_download_url": f"{BASE}/gh2/{a.name}"}
-            for a in sorted((R / "gh2").glob("go-pmtiles?1.31.2_*"))]}]
-    if repo == "komoot/photon":    # stand-ins, plus the real Photon the drive test has for Andorra's address database
+    if (
+        repo == "protomaps/go-pmtiles"
+    ):  # Linux's fake, or the real builds the drive test has (the Mac's go-pmtiles-1.31.2_...)
+        return [
+            {
+                "tag_name": "v1.31.2",
+                "draft": False,
+                "prerelease": False,
+                "assets": [
+                    {"name": a.name, "size": a.stat().st_size, "browser_download_url": f"{BASE}/gh2/{a.name}"}
+                    for a in sorted((R / "gh2").glob("go-pmtiles?1.31.2_*"))
+                ],
+            }
+        ]
+    if repo == "komoot/photon":  # stand-ins, plus the real Photon the drive test has for Andorra's address database
         a, a2 = R / "gh2" / "photon-1.3.0.jar", R / "gh2" / "photon-1.2.1.jar"
-        real = [{"tag_name": j.stem[len("photon-"):], "draft": False, "prerelease": False, "assets": [
-            {"name": j.name, "size": j.stat().st_size, "digest": "sha256:" + sha(j), "browser_download_url": f"{BASE}/gh2/{j.name}"}]}
-            for j in sorted((R / "gh2").glob("photon-*.jar")) if j not in (a, a2)]
+        real = [
+            {
+                "tag_name": j.stem[len("photon-") :],
+                "draft": False,
+                "prerelease": False,
+                "assets": [
+                    {
+                        "name": j.name,
+                        "size": j.stat().st_size,
+                        "digest": "sha256:" + sha(j),
+                        "browser_download_url": f"{BASE}/gh2/{j.name}",
+                    }
+                ],
+            }
+            for j in sorted((R / "gh2").glob("photon-*.jar"))
+            if j not in (a, a2)
+        ]
         return real + [
-            {"tag_name": "2.0.0-beta", "draft": False, "prerelease": True, "assets": [
-                {"name": "photon-2.0.0-beta.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"}]},
-            {"tag_name": "1.3.0", "draft": False, "prerelease": False, "assets": [
-                {"name": "original-photon-1.3.0.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"},
-                {"name": a.name, "size": a.stat().st_size, "digest": "sha256:" + sha(a), "browser_download_url": f"{BASE}/gh2/{a.name}"}]},
-            {"tag_name": "1.2.1", "draft": False, "prerelease": False, "assets": [
-                {"name": a2.name, "size": a2.stat().st_size, "digest": "sha256:" + sha(a2), "browser_download_url": f"{BASE}/gh2/{a2.name}"}]}]
+            {
+                "tag_name": "2.0.0-beta",
+                "draft": False,
+                "prerelease": True,
+                "assets": [
+                    {"name": "photon-2.0.0-beta.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"}
+                ],
+            },
+            {
+                "tag_name": "1.3.0",
+                "draft": False,
+                "prerelease": False,
+                "assets": [
+                    {"name": "original-photon-1.3.0.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"},
+                    {
+                        "name": a.name,
+                        "size": a.stat().st_size,
+                        "digest": "sha256:" + sha(a),
+                        "browser_download_url": f"{BASE}/gh2/{a.name}",
+                    },
+                ],
+            },
+            {
+                "tag_name": "1.2.1",
+                "draft": False,
+                "prerelease": False,
+                "assets": [
+                    {
+                        "name": a2.name,
+                        "size": a2.stat().st_size,
+                        "digest": "sha256:" + sha(a2),
+                        "browser_download_url": f"{BASE}/gh2/{a2.name}",
+                    }
+                ],
+            },
+        ]
     return None
 
 
 def releases() -> bytes:
     tag = "b99999" if v2() else "b99990"
     # every build of this tag: the Linux one, plus the Mac, Windows and Linux Vulkan ones for the drive test
-    assets = [{"name": a.name, "size": a.stat().st_size, "digest": "sha256:" + sha(a), "browser_download_url": f"{BASE}/gh/{a.name}"}
-              for a in sorted((R / "gh").glob(f"llama-{tag}-bin-*"))]
+    assets = [
+        {
+            "name": a.name,
+            "size": a.stat().st_size,
+            "digest": "sha256:" + sha(a),
+            "browser_download_url": f"{BASE}/gh/{a.name}",
+        }
+        for a in sorted((R / "gh").glob(f"llama-{tag}-bin-*"))
+    ]
     data = [
-        {"tag_name": "v1.0.0", "draft": False, "prerelease": False, "assets": [
-            {"name": "nightly-tag.txt", "size": 7, "browser_download_url": f"{BASE}/gh/nightly-tag.txt"}]},
+        {
+            "tag_name": "v1.0.0",
+            "draft": False,
+            "prerelease": False,
+            "assets": [{"name": "nightly-tag.txt", "size": 7, "browser_download_url": f"{BASE}/gh/nightly-tag.txt"}],
+        },
         {"tag_name": tag, "draft": False, "prerelease": True, "assets": assets},
     ]
     return json.dumps(data).encode()
@@ -116,7 +184,7 @@ class H(BaseHTTPRequestHandler):
             self.wfile.write(data)
 
     def redirect(self, url: str, head=False):
-        body = f'<a href="{url}">Found</a>'.encode()    # a redirect has a size of its own, which isn't the file's
+        body = f'<a href="{url}">Found</a>'.encode()  # a redirect has a size of its own, which isn't the file's
         self.send_response(302)
         self.send_header("Location", url)
         self.send_header("Content-Type", "text/html")
@@ -130,7 +198,9 @@ class H(BaseHTTPRequestHandler):
             return self.send_error(404)
         total = p.stat().st_size
         start, end, rng = 0, total - 1, self.headers.get("Range")
-        if rng and (R / "NO_PARTS").exists() and rng != "bytes=0-0":    # a server that sends only whole files, but says how big
+        if (
+            rng and (R / "NO_PARTS").exists() and rng != "bytes=0-0"
+        ):  # a server that sends only whole files, but says how big
             rng = None
         if rng and not head:
             m = re.match(r"bytes=(\d+)-(\d*)", rng)
@@ -143,7 +213,7 @@ class H(BaseHTTPRequestHandler):
                 return
         length = end + 1 - start
         if not head:
-            with open(R / "served.log", "a") as log:    # which bytes of which file went out, for the tests to look at
+            with open(R / "served.log", "a") as log:  # which bytes of which file went out, for the tests to look at
                 log.write(f"{p.name} {start} {start + length}\n")
         # a flaky connection: the first model download drops halfway (not just asking how big it is)
         flaky = p.name.endswith(".gguf") and not head and length > 1 and (R / "FLAKY").exists()
@@ -160,7 +230,7 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         if head:
             return
-        slow = (R / "SLOW").exists()    # a slow connection, to stop a download partway
+        slow = (R / "SLOW").exists()  # a slow connection, to stop a download partway
         todo = length // 2 if flaky else length
         try:
             with open(p, "rb") as f:
@@ -174,7 +244,7 @@ class H(BaseHTTPRequestHandler):
                     if slow:
                         self.wfile.flush()
                         time.sleep(0.25)
-        except (BrokenPipeError, ConnectionResetError):    # the downloader stopped reading: it had what it wanted
+        except (BrokenPipeError, ConnectionResetError):  # the downloader stopped reading: it had what it wanted
             flaky = True
         if flaky:
             self.close_connection = True
@@ -190,15 +260,23 @@ class H(BaseHTTPRequestHandler):
         path = unquote(u.path)
         if path == "/catalog/v2/entries":
             return self.send_bytes(catalog(), "application/atom+xml", head)
-        if path == "/wifi-sign-in":    # what a hotel or cafe network answers every URL with until you log in
-            return self.send_bytes(b'<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sign in</title></head>'
-                                   b'<body><p>Welcome to Hotel Wi-Fi<br>Accept the terms to continue</body></html>', "text/html", head)
+        if path == "/wifi-sign-in":  # what a hotel or cafe network answers every URL with until you log in
+            return self.send_bytes(
+                b'<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sign in</title></head>'
+                b"<body><p>Welcome to Hotel Wi-Fi<br>Accept the terms to continue</body></html>",
+                "text/html",
+                head,
+            )
         m = re.match(r"^/zim/(.+\.zim)(\.sha256)?$", path)
         if m:
             p = R / "zim" / m.group(1)
             if m.group(2):
-                return self.send_bytes(f"{sha(p)}  {p.name}\n".encode(), "text/plain", head) if p.exists() else self.send_error(404)
-            return self.redirect(f"{BASE}/mirror/zim/{m.group(1)}", head)    # download.kiwix.org sends you on to a mirror
+                return (
+                    self.send_bytes(f"{sha(p)}  {p.name}\n".encode(), "text/plain", head)
+                    if p.exists()
+                    else self.send_error(404)
+                )
+            return self.redirect(f"{BASE}/mirror/zim/{m.group(1)}", head)  # download.kiwix.org sends you on to a mirror
         if path.startswith("/mirror/zim/"):
             return self.send_file(R / "zim" / path.split("/")[-1], head)
         m = re.match(r"^/release/([^/]+)/(.*)$", path)
@@ -211,114 +289,238 @@ class H(BaseHTTPRequestHandler):
             name = m.group(2)
             if name.endswith(".sha256"):
                 p = d / name[:-7]
-                return self.send_bytes(f"{sha(p)}  {p.name}\n".encode(), "text/plain", head) if p.exists() else self.send_error(404)
+                return (
+                    self.send_bytes(f"{sha(p)}  {p.name}\n".encode(), "text/plain", head)
+                    if p.exists()
+                    else self.send_error(404)
+                )
             return self.send_file(d / name, head)
-        if path == "/repos/tudor-city-ventures/tinfoil-kit/releases/latest":    # ./kit update: none until a test publishes one
+        if (
+            path == "/repos/tudor-city-ventures/tinfoil-kit/releases/latest"
+        ):  # ./kit update: none until a test publishes one
             p = R / "kit" / "release.json"
             return self.send_bytes(p.read_bytes(), "application/json", head) if p.exists() else self.send_error(404)
-        if path.startswith("/repos/tudor-city-ventures/tinfoil-kit/compare/"):    # "BASE...HEAD": answered only if a test wrote one
+        if path.startswith(
+            "/repos/tudor-city-ventures/tinfoil-kit/compare/"
+        ):  # "BASE...HEAD": answered only if a test wrote one
             p = R / "kit" / "compare" / path.split("/compare/", 1)[1]
             return self.send_bytes(p.read_bytes(), "application/json", head) if p.is_file() else self.send_error(404)
         m = re.match(r"^/repos/([^/]+/[^/]+)/releases(?:/tags/(.+))?$", path)
         if m and gh_releases(m.group(1)) is not None:
             rels = gh_releases(m.group(1))
-            if m.group(2):    # one release, by its tag (a pinned build)
+            if m.group(2):  # one release, by its tag (a pinned build)
                 rel = next((r for r in rels if r["tag_name"] == unquote(m.group(2))), None)
-                return self.send_bytes(json.dumps(rel).encode(), "application/json", head) if rel else self.send_error(404)
+                return (
+                    self.send_bytes(json.dumps(rel).encode(), "application/json", head) if rel else self.send_error(404)
+                )
             return self.send_bytes(json.dumps(rels).encode(), "application/json", head)
         if path == "/repos/protomaps/basemaps-assets/commits/main":
-            return self.send_bytes(json.dumps({"sha": (R / "gh2" / "basemaps-assets.sha").read_text().strip()}).encode(), "application/json", head)
+            return self.send_bytes(
+                json.dumps({"sha": (R / "gh2" / "basemaps-assets.sha").read_text().strip()}).encode(),
+                "application/json",
+                head,
+            )
         m = re.match(r"^/ghweb/protomaps/basemaps-assets/archive/([0-9a-f]+)\.tar\.gz$", path)
         if m:
             return self.send_file(R / "gh2" / f"basemaps-assets-{m.group(1)}.tar.gz", head)
         if path.startswith("/gh2/"):
             return self.send_file(R / "gh2" / path[5:], head)
-        if path == "/adoptium/v3/assets/latest/21/hotspot":    # Linux's fake, or the real builds the drive test has
+        if path == "/adoptium/v3/assets/latest/21/hotspot":  # Linux's fake, or the real builds the drive test has
             q = parse_qs(u.query)
             os_, arch = q.get("os", ["linux"])[0], q.get("architecture", ["x64"])[0]
             a = next(iter(sorted((R / "adoptium").glob(f"OpenJDK21U-jre_{arch}_{os_}_*"))), None)
             if not a:
                 return self.send_bytes(b"[]", "application/json", head)
-            return self.send_bytes(json.dumps([{"release_name": "jdk-21.0.9+10", "version": {"semver": "21.0.9+10"}, "binary": {
-                "image_type": "jre", "package": {"name": a.name, "link": f"{BASE}/adoptium/file/{a.name}", "size": a.stat().st_size,
-                                                 "checksum": sha(a)}}}]).encode(), "application/json", head)
+            return self.send_bytes(
+                json.dumps(
+                    [
+                        {
+                            "release_name": "jdk-21.0.9+10",
+                            "version": {"semver": "21.0.9+10"},
+                            "binary": {
+                                "image_type": "jre",
+                                "package": {
+                                    "name": a.name,
+                                    "link": f"{BASE}/adoptium/file/{a.name}",
+                                    "size": a.stat().st_size,
+                                    "checksum": sha(a),
+                                },
+                            },
+                        }
+                    ]
+                ).encode(),
+                "application/json",
+                head,
+            )
         m = re.match(r"^/adoptium/v3/assets/release_name/eclipse/([^/?]+)$", path)
-        if m:    # a pinned Java: that one release, with builds the kit must pick from
+        if m:  # a pinned Java: that one release, with builds the kit must pick from
             if unquote(m.group(1)) != "jdk-21.0.9+10":
                 return self.send_error(404)
             a = R / "adoptium" / "OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz"
             wrong = {"name": "wrong.tar.gz", "link": f"{BASE}/nope"}
-            return self.send_bytes(json.dumps({"release_name": "jdk-21.0.9+10", "binaries": [
-                {"image_type": "jdk", "os": "linux", "architecture": "x64", "package": wrong},
-                {"image_type": "jre", "os": "mac", "architecture": "aarch64", "package": wrong},
-                {"image_type": "jre", "os": "linux", "architecture": "x64", "package": {
-                    "name": a.name, "link": f"{BASE}/adoptium/file/{a.name}", "size": a.stat().st_size if a.exists() else 0,
-                    "checksum": sha(a) if a.exists() else None}}]}).encode(), "application/json", head)
+            return self.send_bytes(
+                json.dumps(
+                    {
+                        "release_name": "jdk-21.0.9+10",
+                        "binaries": [
+                            {"image_type": "jdk", "os": "linux", "architecture": "x64", "package": wrong},
+                            {"image_type": "jre", "os": "mac", "architecture": "aarch64", "package": wrong},
+                            {
+                                "image_type": "jre",
+                                "os": "linux",
+                                "architecture": "x64",
+                                "package": {
+                                    "name": a.name,
+                                    "link": f"{BASE}/adoptium/file/{a.name}",
+                                    "size": a.stat().st_size if a.exists() else 0,
+                                    "checksum": sha(a) if a.exists() else None,
+                                },
+                            },
+                        ],
+                    }
+                ).encode(),
+                "application/json",
+                head,
+            )
         if path.startswith("/adoptium/file/"):
             return self.send_file(R / "adoptium" / path.split("/")[-1], head)
         if path.startswith("/maven/"):
-            return self.send_file(R / "maven" / path[len("/maven/"):], head)
+            return self.send_file(R / "maven" / path[len("/maven/") :], head)
         if path in ("/npm/maplibre-gl", "/npm/@protomaps/basemaps"):
             f = next((R / "npm").glob("maplibre-gl-*.tgz" if "maplibre" in path else "basemaps-*.tgz"))
             ver = f.name[:-4].rsplit("-", 1)[1]
             raw = f.read_bytes()
-            doc = {"name": path[5:], "versions": {
-                ver: {"dist": {"tarball": f"{BASE}/npmfile/{f.name}", "shasum": hashlib.sha1(raw).hexdigest(),
-                               "integrity": "sha512-" + base64.b64encode(hashlib.sha512(raw).digest()).decode()}},
-                "6.19.0": {"dist": {"tarball": f"{BASE}/npmfile/nope.tgz", "integrity": "sha512-AAAA"}},
-                "5.0.0-pre.1": {"dist": {"tarball": f"{BASE}/npmfile/nope.tgz"}}}}
+            doc = {
+                "name": path[5:],
+                "versions": {
+                    ver: {
+                        "dist": {
+                            "tarball": f"{BASE}/npmfile/{f.name}",
+                            "shasum": hashlib.sha1(raw).hexdigest(),
+                            "integrity": "sha512-" + base64.b64encode(hashlib.sha512(raw).digest()).decode(),
+                        }
+                    },
+                    "6.19.0": {"dist": {"tarball": f"{BASE}/npmfile/nope.tgz", "integrity": "sha512-AAAA"}},
+                    "5.0.0-pre.1": {"dist": {"tarball": f"{BASE}/npmfile/nope.tgz"}},
+                },
+            }
             return self.send_bytes(json.dumps(doc).encode(), "application/json", head)
         if path.startswith("/npmfile/"):
             return self.send_file(R / "npm" / path.split("/")[-1], head)
         if path == "/protomaps/builds.json":
-            return self.send_bytes(json.dumps([
-                {"key": "20261101.pmtiles", "size": 130000000000, "version": "4.15.1", "uploaded": "2026-11-02"},
-                {"key": "20261115.pmtiles", "size": 131000000000, "version": "4.15.2", "uploaded": "2026-11-16"},
-                {"key": "20261116.pmtiles", "size": 131000000000, "version": "5.0.0", "uploaded": "2026-11-17"},
-                {"key": "20261115.layerstats.parquet", "size": 10}] +
-                ([{"key": "20270201.pmtiles", "size": 132000000000, "version": "4.16.0", "uploaded": "2027-02-02"}] if v2() else [])
-                ).encode(), "application/json", head)
-        if re.match(r"^/protomaps/\d+\.pmtiles$", path):    # a whole map build: only the drive test has one
+            return self.send_bytes(
+                json.dumps(
+                    [
+                        {
+                            "key": "20261101.pmtiles",
+                            "size": 130000000000,
+                            "version": "4.15.1",
+                            "uploaded": "2026-11-02",
+                        },
+                        {
+                            "key": "20261115.pmtiles",
+                            "size": 131000000000,
+                            "version": "4.15.2",
+                            "uploaded": "2026-11-16",
+                        },
+                        {"key": "20261116.pmtiles", "size": 131000000000, "version": "5.0.0", "uploaded": "2026-11-17"},
+                        {"key": "20261115.layerstats.parquet", "size": 10},
+                    ]
+                    + (
+                        [
+                            {
+                                "key": "20270201.pmtiles",
+                                "size": 132000000000,
+                                "version": "4.16.0",
+                                "uploaded": "2027-02-02",
+                            }
+                        ]
+                        if v2()
+                        else []
+                    )
+                ).encode(),
+                "application/json",
+                head,
+            )
+        if re.match(r"^/protomaps/\d+\.pmtiles$", path):  # a whole map build: only the drive test has one
             return self.send_file(R / "protomaps" / "build.pmtiles", head)
         if path.startswith("/geofabrik/"):
             return self.send_file(R / "geofabrik" / path.split("/")[-1], head)
         if path == "/photon/":
-            return self.send_bytes(b"""<html><body><h1>Photon dumps</h1><table><tr><th>Region</th><th>DB dump</th><th>Countries</th></tr>
+            return self.send_bytes(
+                b"""<html><body><h1>Photon dumps</h1><table><tr><th>Region</th><th>DB dump</th><th>Countries</th></tr>
 <tr><td><a href="planet/index.html">planet</a></td><td>\xe2\x9c\x93</td><td></td></tr>
 <tr><td><a href="europe/index.html">europe</a></td><td>\xe2\x9c\x93</td><td>ad, at, be, de, fr</td></tr>
-<tr><td><a href="north-america/index.html">north-america</a></td><td>\xe2\x9c\x93</td><td>ca, mx, us</td></tr></table></body></html>""", "text/html", head)
+<tr><td><a href="north-america/index.html">north-america</a></td><td>\xe2\x9c\x93</td><td>ca, mx, us</td></tr></table></body></html>""",
+                "text/html",
+                head,
+            )
         if path in ("/photon/north-america/", "/photon/north-america/index.html"):
-            return self.send_bytes(b"""<html><body><table><tr><th>Region</th><th>DB dump</th><th>Countries</th></tr>
+            return self.send_bytes(
+                b"""<html><body><table><tr><th>Region</th><th>DB dump</th><th>Countries</th></tr>
 <tr><td><a href="caribbean/index.html">caribbean</a></td><td></td><td>bs, cu, jm</td></tr>
 <tr><td><a href="canada/index.html">canada</a></td><td>\xe2\x9c\x93</td><td>ca</td></tr>
-<tr><td><a href="usa/index.html">usa</a></td><td>\xe2\x9c\x93</td><td>us</td></tr></table></body></html>""", "text/html", head)
+<tr><td><a href="usa/index.html">usa</a></td><td>\xe2\x9c\x93</td><td>us</td></tr></table></body></html>""",
+                "text/html",
+                head,
+            )
         if path in ("/photon/europe/", "/photon/europe/index.html"):
-            return self.send_bytes(b"""<html><body><table><tr><th>Region</th><th>DB dump</th><th>Countries</th></tr>
+            return self.send_bytes(
+                b"""<html><body><table><tr><th>Region</th><th>DB dump</th><th>Countries</th></tr>
 <tr><td><a href="andorra/index.html">andorra</a></td><td>\xe2\x9c\x93</td><td>ad</td></tr>
-<tr><td><a href="germany/index.html">germany</a></td><td>\xe2\x9c\x93</td><td>de</td></tr></table></body></html>""", "text/html", head)
-        if path.startswith("/photon/europe/andorra/"):    # the drive test's map: Andorra's real database, else a stand-in
-            dbs = {f.name: f for f in (R / "photon" / "europe" / "andorra").glob("photon-db-andorra-*-latest.tar.bz2")} or \
-                  {"photon-db-andorra-1.0-latest.tar.bz2": R / "photon" / "north-america" / "usa" / "photon-db-usa-1.3-latest.tar.bz2"}
+<tr><td><a href="germany/index.html">germany</a></td><td>\xe2\x9c\x93</td><td>de</td></tr></table></body></html>""",
+                "text/html",
+                head,
+            )
+        if path.startswith("/photon/europe/andorra/"):  # the drive test's map: Andorra's real database, else a stand-in
+            dbs = {
+                f.name: f for f in (R / "photon" / "europe" / "andorra").glob("photon-db-andorra-*-latest.tar.bz2")
+            } or {
+                "photon-db-andorra-1.0-latest.tar.bz2": R
+                / "photon"
+                / "north-america"
+                / "usa"
+                / "photon-db-usa-1.3-latest.tar.bz2"
+            }
             name = path.split("/")[-1]
             if name in ("", "index.html"):
-                return self.send_bytes(("<html><body>" + "".join(f'<a href="{n}">{n}</a><br>' for n in sorted(dbs))
-                                        + "</body></html>").encode(), "text/html", head)
+                return self.send_bytes(
+                    (
+                        "<html><body>" + "".join(f'<a href="{n}">{n}</a><br>' for n in sorted(dbs)) + "</body></html>"
+                    ).encode(),
+                    "text/html",
+                    head,
+                )
             if name.endswith(".md5") and name[:-4] in dbs:
-                return self.send_bytes(f"{hashlib.md5(dbs[name[:-4]].read_bytes()).hexdigest()}  {name[:-4]}\n".encode(),
-                                       "text/plain", head)
+                return self.send_bytes(
+                    f"{hashlib.md5(dbs[name[:-4]].read_bytes()).hexdigest()}  {name[:-4]}\n".encode(),
+                    "text/plain",
+                    head,
+                )
             return self.send_file(dbs[name], head) if name in dbs else self.send_error(404)
-        old_dump = (R / "PHOTON_OLD_DUMP").exists()     # only an older database version is published
+        old_dump = (R / "PHOTON_OLD_DUMP").exists()  # only an older database version is published
         if path in ("/photon/north-america/usa/", "/photon/north-america/usa/index.html"):
-            names = ["photon-db-usa-1.2-latest.tar.bz2", "photon-db-usa-master-latest.tar.bz2"] if old_dump else \
-                    ["photon-db-usa-1.3-latest.tar.bz2", "photon-db-usa-1.2-latest.tar.bz2"]
-            return self.send_bytes(("<html><body>" + "".join(f'<a href="{n}">{n}</a><br>' for n in names) + "</body></html>").encode(), "text/html", head)
+            names = (
+                ["photon-db-usa-1.2-latest.tar.bz2", "photon-db-usa-master-latest.tar.bz2"]
+                if old_dump
+                else ["photon-db-usa-1.3-latest.tar.bz2", "photon-db-usa-1.2-latest.tar.bz2"]
+            )
+            return self.send_bytes(
+                ("<html><body>" + "".join(f'<a href="{n}">{n}</a><br>' for n in names) + "</body></html>").encode(),
+                "text/html",
+                head,
+            )
         m = re.match(r"^/photon/north-america/usa/photon-db-usa-([0-9.]+)-latest\.tar\.bz2(\.md5)?$", path)
         if m:
             if m.group(1) not in (("1.2",) if old_dump else ("1.3", "1.2")):
                 return self.send_error(404)
             f = R / "photon" / "north-america" / "usa" / "photon-db-usa-1.3-latest.tar.bz2"
             if m.group(2):
-                return self.send_bytes(f"{hashlib.md5(f.read_bytes()).hexdigest()}  {path.split('/')[-1][:-4]}\n".encode(), "text/plain", head)
+                return self.send_bytes(
+                    f"{hashlib.md5(f.read_bytes()).hexdigest()}  {path.split('/')[-1][:-4]}\n".encode(),
+                    "text/plain",
+                    head,
+                )
             return self.send_file(f, head)
         if path.startswith("/gh/"):
             return self.send_file(R / "gh" / path[4:], head)
@@ -333,8 +535,15 @@ class H(BaseHTTPRequestHandler):
                 return self.send_bytes(json.dumps({"id": repo, "sha": commit}).encode(), "application/json", head)
             tree = [{"type": "file", "path": ".gitattributes", "size": 10, "oid": "x" * 40}]
             for p in sorted(d.iterdir()):
-                tree.append({"type": "file", "path": p.name, "size": p.stat().st_size, "oid": "y" * 40,
-                             "lfs": {"oid": sha(p), "size": p.stat().st_size, "pointerSize": 130}})
+                tree.append(
+                    {
+                        "type": "file",
+                        "path": p.name,
+                        "size": p.stat().st_size,
+                        "oid": "y" * 40,
+                        "lfs": {"oid": sha(p), "size": p.stat().st_size, "pointerSize": 130},
+                    }
+                )
             return self.send_bytes(json.dumps(tree).encode(), "application/json", head)
         m = re.match(r"^/([^/]+/[^/]+)/resolve/[^/]+/(.+)$", path)
         if m and m.group(1) in HF_REPOS:

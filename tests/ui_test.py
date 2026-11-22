@@ -4,6 +4,7 @@ KIT_DATA_PORT (notes and pins) the ports. With KIT_SHARE_URL (the address the la
 the kit the way a phone on the home network does: through the gate, with the access code, AI chat page included.
 With KIT_VIDEO (tests/drive.py record sets it), the page is in a window and goes at a person's pace for the drive
 test's videos: typing, pausing on answers, and also opening a source, AI chat, the map and Help."""
+
 import json
 import os
 import subprocess
@@ -19,7 +20,7 @@ LIB = os.environ.get("KIT_LIBRARY_PORT", "18888")
 AI = os.environ.get("KIT_AI_PORT", "18080")
 DATA = os.environ.get("KIT_DATA_PORT", "18095")
 BROWSER = os.environ.get("KIT_BROWSER", "chromium")
-URL = f"http://localhost:{LIB}/?model=Tiny&ai={AI}&data={DATA}"   # localhost on purpose: must redirect to 127.0.0.1
+URL = f"http://localhost:{LIB}/?model=Tiny&ai={AI}&data={DATA}"  # localhost on purpose: must redirect to 127.0.0.1
 NOTES = "Sam is allergic to penicillin. If we're split up, we meet at the library on Main Street."
 VIDEO = bool(os.environ.get("KIT_VIDEO"))
 fails = 0
@@ -35,7 +36,10 @@ def intact(page):
     """Is the answer the test model's, as the page shows it (bold, [1] a link to the source), every character intact?
     If not, what arrived, spelled in ASCII so a mangled character shows as its code."""
     shown = page.inner_text("#answer")
-    ok = " ".join(shown.split()) == " ".join(ANSWER.replace("**", "").split()) and page.locator("#answer a.cite").count() == 1
+    ok = (
+        " ".join(shown.split()) == " ".join(ANSWER.replace("**", "").split())
+        and page.locator("#answer a.cite").count() == 1
+    )
     return ok, "" if ok else ascii(shown)[:400]
 
 
@@ -68,7 +72,7 @@ def popup(page, sel, then):
 def front(exe):
     """In the video on a Mac: the browser opens behind the app in front (Safari, with the page Open Tinfoil Kit opened),
     and only Launch Services brings an app forward. Only if it lists the browser as running: else open starts another."""
-    app = exe[:exe.index(".app/") + 4] if ".app/" in exe else os.path.join(os.path.dirname(exe), "Playwright.app")
+    app = exe[: exe.index(".app/") + 4] if ".app/" in exe else os.path.join(os.path.dirname(exe), "Playwright.app")
     try:
         listed = subprocess.run(["lsappinfo", "list"], capture_output=True, text=True, timeout=10).stdout
     except (OSError, subprocess.SubprocessError):
@@ -103,7 +107,7 @@ with sync_playwright() as p:
     else:
         b = p.chromium.launch(args=["--no-sandbox"], **show)
     size, phone_height = {"width": 1100, "height": 900}, 844
-    if VIDEO:    # the window has to fit the screen it's filmed on
+    if VIDEO:  # the window has to fit the screen it's filmed on
         probe = b.new_page()
         w, h = probe.evaluate("[screen.availWidth, screen.availHeight]")
         probe.close()
@@ -133,7 +137,9 @@ with sync_playwright() as p:
     srcs = page.eval_on_selector_all("#sources li a", "els => els.map(e => e.textContent)")
     check("sources listed", "Water purification" in srcs, ", ".join(srcs))
     check("the AI's answer arrives with every character intact, and cites its source", *intact(page))
-    note("The answer and its sources. This test kit's AI always gives the same answer; the real ones answer the question")
+    note(
+        "The answer and its sources. This test kit's AI always gives the same answer; the real ones answer the question"
+    )
     pause(page, 5)
     page.screenshot(path=os.path.join(SHOTS, "shot_ask.png"), full_page=True)
     href = page.get_attribute("#sources li a", "href")
@@ -147,8 +153,11 @@ with sync_playwright() as p:
     note("Notes: what your household needs to know. Ask reads them with every question")
     page.click("nav a[data-tab=notes]")
     page.wait_for_function("document.getElementById('notesWhere').textContent.length > 0", timeout=10000)
-    check("notes: kept in the kit's data folder", "saved in the kit's data folder" in page.inner_text("#notesWhere"),
-          page.inner_text("#notesWhere"))
+    check(
+        "notes: kept in the kit's data folder",
+        "saved in the kit's data folder" in page.inner_text("#notesWhere"),
+        page.inner_text("#notesWhere"),
+    )
     type_in(page, "#notesText", NOTES)
     page.wait_for_function("document.getElementById('notesStatus').textContent === 'Saved in the kit'", timeout=10000)
     pause(page)
@@ -173,13 +182,15 @@ with sync_playwright() as p:
     if VIDEO:
         page.go_back()
         has_map = page.evaluate("!!(window.KIT_MAPS && window.KIT_MAPS.available)")
-        for tab, what in (("map", "The Map tab: the offline map" if has_map else "The Map tab (this test kit has no map)"),
-                          ("help", "Help")):
+        for tab, what in (
+            ("map", "The Map tab: the offline map" if has_map else "The Map tab (this test kit has no map)"),
+            ("help", "Help"),
+        ):
             note(what)
             page.click(f"nav a[data-tab={tab}]")
             pause(page, 3.5)
 
-    if os.environ.get("KIT_AXE"):     # axe-core's axe.min.js
+    if os.environ.get("KIT_AXE"):  # axe-core's axe.min.js
         for scheme in ("light", "dark"):
             pa = b.new_page(color_scheme=scheme)
             pa.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai={AI}&data={DATA}")
@@ -194,12 +205,15 @@ with sync_playwright() as p:
     # AI down, on a phone (how family members use a shared kit): answers fall back to library passages
     page2 = b.new_page(viewport={"width": 390, "height": phone_height})
     note("On a phone, with the AI off: the answer is the library's best passages")
-    page2.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai=18999&data={DATA}")    # nothing listens on 18999
+    page2.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai=18999&data={DATA}")  # nothing listens on 18999
     page2.wait_for_function("document.getElementById('aiStatus').textContent.includes('off')", timeout=15000)
     type_in(page2, "#q", "tourniquet placement")
     page2.click("#askBtn")
-    page2.wait_for_function("document.getElementById('progress').textContent.includes('passages') || "
-                            "document.getElementById('progress').textContent.includes('Nothing')", timeout=60000)
+    page2.wait_for_function(
+        "document.getElementById('progress').textContent.includes('passages') || "
+        "document.getElementById('progress').textContent.includes('Nothing')",
+        timeout=60000,
+    )
     check("AI-off fallback shows passages", "5 to 7 cm" in page2.inner_text("#answer"), page2.inner_text("#progress"))
     pause(page2, 4)
     page2.screenshot(path=os.path.join(SHOTS, "shot_ai_off.png"), full_page=True)
@@ -214,14 +228,21 @@ with sync_playwright() as p:
         phone = b.new_context(viewport={"width": 390, "height": 844})
         p3 = phone.new_page()
         bad, js = [], []
-        p3.on("response", lambda r: bad.append(f"{r.status} {r.url}") if r.status >= 400 and "favicon" not in r.url else None)
+        p3.on(
+            "response",
+            lambda r: bad.append(f"{r.status} {r.url}") if r.status >= 400 and "favicon" not in r.url else None,
+        )
         p3.on("pageerror", lambda e: js.append(str(e)))
         p3.goto(share + "/?model=Tiny")
-        check("shared: a phone on the network gets the access code page", p3.locator("input[name=code]").count() == 1, p3.url)
+        check(
+            "shared: a phone on the network gets the access code page",
+            p3.locator("input[name=code]").count() == 1,
+            p3.url,
+        )
         width = p3.evaluate("document.documentElement.scrollWidth")
         check("shared: the access code page fits a phone", width <= 390, f"{width}px")
         p3.screenshot(path=os.path.join(SHOTS, "shot_share_code.png"))
-        bad.clear()    # the code page itself answers 401
+        bad.clear()  # the code page itself answers 401
         p3.fill("input[name=code]", code[:4] + " " + code[4:])
         p3.click("button[type=submit]")
         p3.wait_for_function("document.getElementById('aiStatus').textContent.includes('ready')", timeout=30000)
@@ -238,16 +259,23 @@ with sync_playwright() as p:
         check("shared: a source opens through the gate", r.ok and "8 drops" in r.text())
         p3.click("nav a[data-tab=notes]")
         p3.wait_for_function(f"document.getElementById('notesText').value === {json.dumps(NOTES)}", timeout=10000)
-        check("shared: a phone has the same notes, through the gate", "saved in the kit" in p3.inner_text("#notesWhere"))
+        check(
+            "shared: a phone has the same notes, through the gate", "saved in the kit" in p3.inner_text("#notesWhere")
+        )
         p3.click("nav a[data-tab=help]")
-        check("shared: Help shows the address and the access code",
-              share.split("//")[1] in p3.inner_text("#shareAddr") and p3.inner_text("#shareCode").replace(" ", "") == code,
-              p3.inner_text("#shareOn"))
+        check(
+            "shared: Help shows the address and the access code",
+            share.split("//")[1] in p3.inner_text("#shareAddr")
+            and p3.inner_text("#shareCode").replace(" ", "") == code,
+            p3.inner_text("#shareOn"),
+        )
         p3.wait_for_function("document.getElementById('shareQr').naturalWidth > 0", timeout=10000)
         p3.screenshot(path=os.path.join(SHOTS, "shot_share_help.png"), full_page=True)
         p3.click("nav a[data-tab=map]")
-        p3.wait_for_function("/Address search: ready.*Directions: ready/.test(document.getElementById('mapStatus').textContent)",
-                             timeout=90000)
+        p3.wait_for_function(
+            "/Address search: ready.*Directions: ready/.test(document.getElementById('mapStatus').textContent)",
+            timeout=90000,
+        )
         check("shared: address search and directions answer through the gate", True)
         p3.wait_for_function("window.__kitMap && window.__kitMap.loaded()", timeout=30000)
         with p3.expect_response(lambda r: "/tiles/" in r.url, timeout=30000) as tile:
@@ -261,7 +289,10 @@ with sync_playwright() as p:
         bad.clear()
         pending, sent = {}, []
         p3.on("request", lambda r: pending.__setitem__(r, r.url))
-        p3.on("response", lambda r: sent.append(f"{r.request.method} {r.status} {r.url}") if r.request.method != "GET" else None)
+        p3.on(
+            "response",
+            lambda r: sent.append(f"{r.request.method} {r.status} {r.url}") if r.request.method != "GET" else None,
+        )
         p3.on("requestfinished", lambda r: pending.pop(r, None))
         p3.on("requestfailed", lambda r: pending.pop(r, None))
         asked_with = ""
@@ -270,11 +301,12 @@ with sync_playwright() as p:
             box = p3.locator("textarea:visible, [contenteditable=true]:visible").first
             box.wait_for(timeout=30000)
             box.click()
-            p3.keyboard.type("Hello")    # real keys: the page's editor doesn't notice text set directly
+            p3.keyboard.type("Hello")  # real keys: the page's editor doesn't notice text set directly
             send = p3.get_by_role("button", name="Send")
-            asked = ("chat/completions", "/responses", "/completion")    # whichever API this llama.cpp's page uses
-            with p3.expect_response(lambda r: r.request.method == "POST" and any(a in r.url for a in asked),
-                                    timeout=120000) as reply:
+            asked = ("chat/completions", "/responses", "/completion")  # whichever API this llama.cpp's page uses
+            with p3.expect_response(
+                lambda r: r.request.method == "POST" and any(a in r.url for a in asked), timeout=120000
+            ) as reply:
                 if send.count():
                     send.first.click()
                 else:
@@ -282,22 +314,37 @@ with sync_playwright() as p:
             answered, why = reply.value.ok, reply.value.url
             asked_with = reply.value.request.post_data or ""
             p3.wait_for_timeout(2000)
-        except Exception as e:    # a timeout: say what was on screen and what was still loading
+        except Exception as e:  # a timeout: say what was on screen and what was still loading
             answered = False
-            boxes = p3.evaluate("[...document.querySelectorAll('textarea, [contenteditable]')].map(e => e.tagName + ' '"
-                                " + e.offsetWidth + 'x' + e.offsetHeight + ' ' + getComputedStyle(e).visibility).join(', ')")
-            why = (str(e).splitlines()[0] + " | on screen: " + " ".join(p3.inner_text("body").split())[:300]
-                   + " | text boxes: " + boxes + " | still loading: " + ", ".join(sorted(set(pending.values())))[:300]
-                   + " | sent: " + "; ".join(sent)[:300])
+            boxes = p3.evaluate(
+                "[...document.querySelectorAll('textarea, [contenteditable]')].map(e => e.tagName + ' '"
+                " + e.offsetWidth + 'x' + e.offsetHeight + ' ' + getComputedStyle(e).visibility).join(', ')"
+            )
+            why = (
+                str(e).splitlines()[0]
+                + " | on screen: "
+                + " ".join(p3.inner_text("body").split())[:300]
+                + " | text boxes: "
+                + boxes
+                + " | still loading: "
+                + ", ".join(sorted(set(pending.values())))[:300]
+                + " | sent: "
+                + "; ".join(sent)[:300]
+            )
         p3.screenshot(path=os.path.join(SHOTS, "shot_share_ai_chat.png"))
         check("shared: AI chat answers through the gate", answered, why)
         # tools/ai-chat.json, through llama-server's UI settings: the stock page asks with Ask's safety rules.
         check("shared: AI chat asks with the kit's safety rules", "wild plant" in asked_with, asked_with[:300])
         # The page asks whether llama-server's own tools are on. They aren't, and the gate keeps them off.
         tools = p3.request.get(share + "/ai/tools")
-        check("shared: llama-server's tools stay off", tools.status == 403 and "feature_disabled" in tools.text(),
-              f"{tools.status} {tools.text()[:80]}")
-        bad[:] = [b for b in bad if not b.startswith("403 ") or not b.split("?")[0].endswith(("/ai/tools", "/ai/cors-proxy"))]
+        check(
+            "shared: llama-server's tools stay off",
+            tools.status == 403 and "feature_disabled" in tools.text(),
+            f"{tools.status} {tools.text()[:80]}",
+        )
+        bad[:] = [
+            b for b in bad if not b.startswith("403 ") or not b.split("?")[0].endswith(("/ai/tools", "/ai/cors-proxy"))
+        ]
         check("shared: AI chat's requests all work", not bad, "; ".join(bad))
         outsider = b.new_context().request.get(share + "/ai/v1/models")
         check("shared: no AI without the code", outsider.status == 401, str(outsider.status))

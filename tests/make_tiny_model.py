@@ -7,14 +7,17 @@ embeddings and output weights chain the prompt's last token through ANSWER to th
 random, by SEED, so another seed makes another file with the same answer (a re-uploaded model).
 
 usage: make_tiny_model.py OUT.gguf [SEED]"""
+
 import sys
 
 # ANSWER token by token, "|" between them. A token can't repeat: each has exactly one next token. é, ½ and — are
 # spelled byte by byte, as real models write a character they have no token for, so a decoder that mangles a character
 # split between tokens or network reads shows it.
-TOKENS = ("**This| is| the| kit's| test| AI.**| It| gives| one| fixed| answer| to| any| question,| so| tests| can|"
-          " check| that| each| character| arrives| intact| [1].| Accents| and| symbols| too:| caf|é|, |½| cup, 20 °C |—|"
-          " all there.").split("|")
+TOKENS = (
+    "**This| is| the| kit's| test| AI.**| It| gives| one| fixed| answer| to| any| question,| so| tests| can|"
+    " check| that| each| character| arrives| intact| [1].| Accents| and| symbols| too:| caf|é|, |½| cup, 20 °C |—|"
+    " all there."
+).split("|")
 ANSWER = "".join(TOKENS)
 SPELLED = "é½—"
 
@@ -34,7 +37,7 @@ def main(out, seed):
             chain.append(len(vocab))
             vocab.append(t.replace(" ", "▁").encode())
             types.append(1)
-    starts = [byte(ord(":")), byte(ord("\n"))]   # the prompt ends "assistant:", or "\n" in a server's own template
+    starts = [byte(ord(":")), byte(ord("\n"))]  # the prompt ends "assistant:", or "\n" in a server's own template
     n_vocab, n_embd, n_layer, n_head, n_ff = len(vocab), 64, 2, 4, 128
     assert len(set(chain)) == len(chain) and not set(starts) & set(chain) and len(chain) + 2 <= n_embd
 
@@ -73,10 +76,11 @@ def main(out, seed):
     w.add_eos_token_id(eos)
     w.add_chat_template(
         "{% for m in messages %}{{ m['role'] }}: {{ m['content'] }}\n{% endfor %}"
-        "{% if add_generation_prompt %}assistant:{% endif %}")
+        "{% if add_generation_prompt %}assistant:{% endif %}"
+    )
 
     ones, zeros = (lambda *s: np.ones(s, np.float32)), (lambda *s: np.zeros(s, np.float32))
-    rand = lambda *s: (rng.standard_normal(s) * 0.02).astype(np.float32)   # noqa: E731
+    rand = lambda *s: (rng.standard_normal(s) * 0.02).astype(np.float32)  # noqa: E731
     w.add_tensor("token_embd.weight", emb)
     w.add_tensor("output_norm.weight", ones(n_embd))
     w.add_tensor("output.weight", out_w)

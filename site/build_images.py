@@ -3,6 +3,7 @@ usage: python3 site/build_images.py   (needs: pip install playwright && playwrig
 Writes site/public/favicon.ico, apple-touch-icon.png and og.png, docs/social-preview.png and the Mac app's icon,
 mac/AppIcon.icns.
 GitHub can't read a repo's preview image from the repo: upload social-preview.png under Settings > General > Social preview."""
+
 import base64
 import os
 import struct
@@ -37,29 +38,52 @@ img{position:absolute;right:${right}px;top:${top}px}
 
 def card(w, h, size=500):
     # The mark is drawn between x 14 and 50 of its 64-unit box: offset the box so the drawing sits 100 px from the right edge.
-    return CARD.substitute(font=FONT, icon=ICON, headline=HEADLINE, w=w, h=h, size=size, right=100 - 14 * size // 64,
-                           top=(h - size) // 2, ink=INK, ink2=INK2, paper=PAPER)
+    return CARD.substitute(
+        font=FONT,
+        icon=ICON,
+        headline=HEADLINE,
+        w=w,
+        h=h,
+        size=size,
+        right=100 - 14 * size // 64,
+        top=(h - size) // 2,
+        ink=INK,
+        ink2=INK2,
+        paper=PAPER,
+    )
 
 
 def icon_page(size, background="transparent", pad=0):
-    return (f'<body style="margin:0;background:{background}"><img src="{ICON}" width="{size - 2 * pad}" height="{size - 2 * pad}" '
-            f'style="display:block;margin:{pad}px"></body>')
+    return (
+        f'<body style="margin:0;background:{background}"><img src="{ICON}" width="{size - 2 * pad}" height="{size - 2 * pad}" '
+        f'style="display:block;margin:{pad}px"></body>'
+    )
 
 
 # macOS puts every app's icon in one rounded-square shape (Apple's grid: an 824 px square with 185 px corners, in a
 # 1024 px canvas, with a soft shadow below), so the Mac app's icon is the mark on paper in that shape.
 def mac_icon_page(size):
     k = size / 1024
-    return (f'<body style="margin:0;background:transparent"><div style="position:absolute;left:{100 * k}px;top:{100 * k}px;'
-            f'width:{824 * k}px;height:{824 * k}px;border-radius:{185 * k}px;background:{PAPER};'
-            f'box-shadow:0 {10 * k}px {20 * k}px rgba(0,0,0,.3)"><img src="{ICON}" style="position:absolute;'
-            f'left:{92 * k}px;top:{92 * k}px;width:{640 * k}px;height:{640 * k}px"></div></body>')
+    return (
+        f'<body style="margin:0;background:transparent"><div style="position:absolute;left:{100 * k}px;top:{100 * k}px;'
+        f"width:{824 * k}px;height:{824 * k}px;border-radius:{185 * k}px;background:{PAPER};"
+        f'box-shadow:0 {10 * k}px {20 * k}px rgba(0,0,0,.3)"><img src="{ICON}" style="position:absolute;'
+        f'left:{92 * k}px;top:{92 * k}px;width:{640 * k}px;height:{640 * k}px"></div></body>'
+    )
 
 
 def icns(pngs):
     """An .icns that holds PNGs, which macOS reads at every size."""
-    kinds = {16: [b"icp4"], 32: [b"icp5", b"ic11"], 64: [b"icp6", b"ic12"], 128: [b"ic07"], 256: [b"ic08", b"ic13"],
-             512: [b"ic09", b"ic14"], 1024: [b"ic10"]}    # the second of each pair is the size below it, at 2x
+    # the second of each pair is the size below it, at 2x
+    kinds = {
+        16: [b"icp4"],
+        32: [b"icp5", b"ic11"],
+        64: [b"icp6", b"ic12"],
+        128: [b"ic07"],
+        256: [b"ic08", b"ic13"],
+        512: [b"ic09", b"ic14"],
+        1024: [b"ic10"],
+    }
     body = b"".join(kind + struct.pack(">I", len(png) + 8) + png for size, png in pngs for kind in kinds[size])
     return b"icns" + struct.pack(">I", len(body) + 8) + body
 
@@ -94,5 +118,7 @@ with sync_playwright() as p:
     save("site/public/apple-touch-icon.png", render(icon_page(180, SIGNAL, 18), 180, 180))
     save("site/public/og.png", render(card(1200, 630), 1200, 630))
     save("docs/social-preview.png", render(card(1280, 640), 1280, 640))
-    save("mac/AppIcon.icns", icns([(s, render(mac_icon_page(s), s, s, True)) for s in (16, 32, 64, 128, 256, 512, 1024)]))
+    save(
+        "mac/AppIcon.icns", icns([(s, render(mac_icon_page(s), s, s, True)) for s in (16, 32, 64, 128, 256, 512, 1024)])
+    )
     browser.close()

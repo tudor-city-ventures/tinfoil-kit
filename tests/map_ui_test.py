@@ -1,6 +1,7 @@
 """Drive the real portal map in headless Chrome: real MapLibre + Protomaps style + embedded fonts/icons,
 against mock tile / address / routing servers and a mock tool-calling AI. Home and pins are kept in the kit by its
 notes and pins server, which the launcher starts (on 18095)."""
+
 import json
 import os
 import re
@@ -31,21 +32,31 @@ def kept(method="GET", path="/places", body=None):
 
 
 def watch(page, errors, warnings):
-    page.on("console", lambda m: (errors if m.type == "error" else warnings if m.type == "warning" else []).append(m.text))
+    page.on(
+        "console", lambda m: (errors if m.type == "error" else warnings if m.type == "warning" else []).append(m.text)
+    )
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("response", lambda r: print("   HTTP", r.status, r.url[:120]) if r.status >= 400 else None)
 
 
 with sync_playwright() as p:
-    b = p.chromium.launch(args=["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
+    b = p.chromium.launch(
+        args=["--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
+    )
     page = b.new_page(viewport={"width": 1280, "height": 860})
     errors, warnings = [], []
     watch(page, errors, warnings)
     page.goto(BASE + "/?model=Tiny&ai=18080&data=18095")
-    page.wait_for_function("document.getElementById('mapStatus').textContent.includes('Directions: ready')", timeout=30000)
-    check("map services detected", "Address search: ready" in page.inner_text("#mapStatus"), page.inner_text("#mapStatus"))
+    page.wait_for_function(
+        "document.getElementById('mapStatus').textContent.includes('Directions: ready')", timeout=30000
+    )
+    check(
+        "map services detected", "Address search: ready" in page.inner_text("#mapStatus"), page.inner_text("#mapStatus")
+    )
     page.click("nav a[data-tab=map]")
-    page.wait_for_function("window.__kitMap && window.__kitMap.loaded() && window.__kitMap.isStyleLoaded()", timeout=60000)
+    page.wait_for_function(
+        "window.__kitMap && window.__kitMap.loaded() && window.__kitMap.isStyleLoaded()", timeout=60000
+    )
     check("map loads (style, sprite, tiles)", True)
     page.wait_for_timeout(1500)
     hits = page.evaluate("window.__kitHits")
@@ -65,7 +76,10 @@ with sync_playwright() as p:
     check("address suggestions", "100 Main Street" in first, first.replace("\n", " "))
     page.click("#placeResults button[data-i]")
     page.wait_for_timeout(1200)
-    check("result marker + popup", page.locator(".maplibregl-marker").count() == 2 and page.locator(".maplibregl-popup").count() == 1)
+    check(
+        "result marker + popup",
+        page.locator(".maplibregl-marker").count() == 2 and page.locator(".maplibregl-popup").count() == 1,
+    )
     page.wait_for_timeout(800)
     hits = page.evaluate("window.__kitHits")
     check("label fonts served from the page itself", hits["glyph"] >= 1, str(hits))
@@ -107,10 +121,18 @@ with sync_playwright() as p:
 
     # set home
     page.click("#setHome")
-    check("set home to map center", page.inner_text("#homeLabel").startswith("Map point"), page.inner_text("#homeLabel"))
+    check(
+        "set home to map center", page.inner_text("#homeLabel").startswith("Map point"), page.inner_text("#homeLabel")
+    )
     page.reload()
-    page.wait_for_function("document.getElementById('pinsWhere').textContent.includes('saved in the kit')", timeout=10000)
-    check("home remembered after reload", page.inner_text("#homeLabel").startswith("Map point"), page.inner_text("#homeLabel"))
+    page.wait_for_function(
+        "document.getElementById('pinsWhere').textContent.includes('saved in the kit')", timeout=10000
+    )
+    check(
+        "home remembered after reload",
+        page.inner_text("#homeLabel").startswith("Map point"),
+        page.inner_text("#homeLabel"),
+    )
     check("home kept in the kit", (kept().get("home") or {}).get("label", "").startswith("Map point"), str(kept()))
 
     # coordinates, then a pin with a note
@@ -132,15 +154,23 @@ with sync_playwright() as p:
     page.mouse.click(box["x"] + box["width"] / 2 + 160, box["y"] + box["height"] / 2 + 90)
     page.wait_for_selector(".maplibregl-popup", timeout=5000)
     pop = page.inner_text(".maplibregl-popup")
-    check("clicking the map shows its coordinates", pop.startswith("Map point") and bool(re.search(r"\d+\.\d{5}, -\d+\.\d{5}", pop)),
-          pop.replace("\n", " | "))
+    check(
+        "clicking the map shows its coordinates",
+        pop.startswith("Map point") and bool(re.search(r"\d+\.\d{5}, -\d+\.\d{5}", pop)),
+        pop.replace("\n", " | "),
+    )
     page.click(".maplibregl-popup button[data-act=pin]")
     page.fill(".pin-form input", "Meeting place")
     page.fill(".pin-form textarea", "Behind the school gym\nBring water")
     page.click(".pin-form button[type=submit]")
     page.wait_for_selector(".maplibregl-popup .pin-note", timeout=5000)
-    check("pin saved with its note", page.inner_text(".maplibregl-popup").startswith("Meeting place") and
-          page.locator(".maplibregl-marker[data-pin]").count() == 1 and "Meeting place" in page.inner_text("#pinList"), page.inner_text("#pinList"))
+    check(
+        "pin saved with its note",
+        page.inner_text(".maplibregl-popup").startswith("Meeting place")
+        and page.locator(".maplibregl-marker[data-pin]").count() == 1
+        and "Meeting place" in page.inner_text("#pinList"),
+        page.inner_text("#pinList"),
+    )
     page.wait_for_timeout(1200)
     check("pin label drawn", page.evaluate("window.__kitMap.querySourceFeatures('pins').length") >= 1)
     page.screenshot(path=os.path.join(SHOTS, "shot_map_pin.png"))
@@ -149,20 +179,30 @@ with sync_playwright() as p:
     page.wait_for_selector(".maplibregl-popup .pin-note", timeout=5000)
     check("clicking a pin opens it", page.inner_text(".maplibregl-popup").startswith("Meeting place"))
     page.reload()
-    page.wait_for_function("window.__kitMap && window.__kitMap.loaded() && document.querySelectorAll('.maplibregl-marker[data-pin]').length == 1",
-                           timeout=60000)
+    page.wait_for_function(
+        "window.__kitMap && window.__kitMap.loaded() && document.querySelectorAll('.maplibregl-marker[data-pin]').length == 1",
+        timeout=60000,
+    )
     check("pin kept after reload", "Meeting place" in page.inner_text("#pinList"))
     pin = next((x for x in kept()["pins"] if x["name"] == "Meeting place"), {})
     check("pin kept in the kit, with its note", pin.get("note") == "Behind the school gym\nBring water", str(kept()))
     page.fill("#placeQ", "meeting")
     page.wait_for_selector("#placeResults button[data-i]", timeout=10000)
     first = page.inner_text("#placeResults button[data-i]")
-    check("search finds the pin first", first.startswith("Meeting place") and "Pin: Behind the school gym" in first, first.replace("\n", " | "))
+    check(
+        "search finds the pin first",
+        first.startswith("Meeting place") and "Pin: Behind the school gym" in first,
+        first.replace("\n", " | "),
+    )
     page.press("#placeQ", "Escape")
     page.fill("#dirTo", "our meeting place")
     page.click("#dirGo")
     page.wait_for_function("document.getElementById('dirSteps').children.length > 0", timeout=10000)
-    check("directions to a pin by name", "to Meeting place" in page.inner_text("#dirSummary"), page.inner_text("#dirSummary"))
+    check(
+        "directions to a pin by name",
+        "to Meeting place" in page.inner_text("#dirSummary"),
+        page.inner_text("#dirSummary"),
+    )
     page.click("#pinList button[data-id]")
     page.click(".maplibregl-popup button[data-act=edit]")
     page.fill(".pin-form input", "Family meeting place")
@@ -171,11 +211,15 @@ with sync_playwright() as p:
     check("edit renames the pin", "Family meeting place" in page.inner_text("#pinList"), page.inner_text("#pinList"))
     page.click(".maplibregl-popup button[data-act=del]")
     page.click(".maplibregl-popup button[data-act=yes]")
-    check("delete removes the pin", page.locator(".maplibregl-marker[data-pin]").count() == 0 and page.inner_text("#pinList") == "")
+    check(
+        "delete removes the pin",
+        page.locator(".maplibregl-marker[data-pin]").count() == 0 and page.inner_text("#pinList") == "",
+    )
     page.wait_for_timeout(500)
     check("and from the kit", kept()["pins"] == [], str(kept()))
     page.evaluate("localStorage.clear()")
-    kept("PUT", "/places/home", {"lat": 40.7128, "lon": -74.006, "label": "New York, NY", "zoom": 10})   # where the next pages start
+    # where the next pages start
+    kept("PUT", "/places/home", {"lat": 40.7128, "lon": -74.006, "label": "New York, NY", "zoom": 10})
 
     errors = [e for e in errors if "favicon" not in e]
     check("no JS errors on the map", not errors, "; ".join(errors)[:600])
@@ -187,8 +231,11 @@ with sync_playwright() as p:
     e2, w2 = [], []
     watch(p2, e2, w2)
     p2.goto(BASE + "/?model=Mock-Tools&ai=18081&data=18095")
-    p2.wait_for_function("document.getElementById('aiStatus').textContent.includes('ready') && "
-                         "document.getElementById('mapStatus').textContent.includes('Directions: ready')", timeout=30000)
+    p2.wait_for_function(
+        "document.getElementById('aiStatus').textContent.includes('ready') && "
+        "document.getElementById('mapStatus').textContent.includes('Directions: ready')",
+        timeout=30000,
+    )
     p2.fill("#q", "What's the nearest hospital and how do I get there?")
     p2.click("#askBtn")
     p2.wait_for_function("document.getElementById('progress').textContent.startsWith('Done')", timeout=30000)
@@ -199,16 +246,25 @@ with sync_playwright() as p:
     p2.wait_for_function("window.__kitMap && window.__kitMap.loaded()", timeout=60000)
     p2.wait_for_timeout(1500)
     steps = p2.eval_on_selector_all("#dirSteps li", "els => els.map(e => e.textContent)")
-    check("AI route shown on the map", len(steps) == 3 and p2.evaluate("window.__kitMap.querySourceFeatures('route').length") >= 1,
-          p2.inner_text("#dirSummary"))
+    check(
+        "AI route shown on the map",
+        len(steps) == 3 and p2.evaluate("window.__kitMap.querySourceFeatures('route').length") >= 1,
+        p2.inner_text("#dirSummary"),
+    )
     p2.screenshot(path=os.path.join(SHOTS, "shot_ask_map.png"))
     p2.click("nav a[data-tab=ask]")
-    p2.fill("#q", "Where is the Shire in the story?")     # looks like a map question; the AI answers without the map
+    p2.fill("#q", "Where is the Shire in the story?")  # looks like a map question; the AI answers without the map
     p2.click("#askBtn")
-    p2.wait_for_function("document.getElementById('progress').textContent.startsWith('Done in') || "
-                         "document.getElementById('progress').textContent.includes('Nothing')", timeout=60000)
-    check("AI skips the map -> library answers", "Library answer" in p2.inner_text("#answer") and p2.locator("#openMap").count() == 0,
-          p2.inner_text("#progress") + " | " + p2.inner_text("#answer")[:80])
+    p2.wait_for_function(
+        "document.getElementById('progress').textContent.startsWith('Done in') || "
+        "document.getElementById('progress').textContent.includes('Nothing')",
+        timeout=60000,
+    )
+    check(
+        "AI skips the map -> library answers",
+        "Library answer" in p2.inner_text("#answer") and p2.locator("#openMap").count() == 0,
+        p2.inner_text("#progress") + " | " + p2.inner_text("#answer")[:80],
+    )
     e2 = [e for e in e2 if "favicon" not in e]
     check("no JS errors (AI map flow)", not e2, "; ".join(e2)[:600])
 
@@ -216,10 +272,15 @@ with sync_playwright() as p:
     p3 = b.new_page(viewport={"width": 1280, "height": 860})
     e3, w3 = [], []
     watch(p3, e3, w3)
-    p3.add_init_script("localStorage.setItem('kit.pins', JSON.stringify([{id: 'a1', name: 'Meeting place', note: '', lat: 40.7306, lon: -73.9866}]))")
+    p3.add_init_script(
+        "localStorage.setItem('kit.pins', JSON.stringify([{id: 'a1', name: 'Meeting place', note: '', lat: 40.7306, lon: -73.9866}]))"
+    )
     p3.goto(BASE + "/?model=Tiny&ai=18999&data=18095")
-    p3.wait_for_function("document.getElementById('aiStatus').textContent.includes('off') && "
-                         "document.getElementById('mapStatus').textContent.includes('Directions: ready')", timeout=30000)
+    p3.wait_for_function(
+        "document.getElementById('aiStatus').textContent.includes('off') && "
+        "document.getElementById('mapStatus').textContent.includes('Directions: ready')",
+        timeout=30000,
+    )
     p3.fill("#q", "where is the nearest pharmacy?")
     p3.click("#askBtn")
     p3.wait_for_function("document.getElementById('progress').textContent.startsWith('Done')", timeout=30000)
@@ -228,18 +289,32 @@ with sync_playwright() as p:
     p3.fill("#q", "directions to Kestrel Bay Medical Center")
     p3.click("#askBtn")
     p3.wait_for_function("document.getElementById('answer').textContent.includes('Driving to')", timeout=30000)
-    check("directions without AI", "Turn left onto Heron Road" in p3.inner_text("#answer"), p3.inner_text("#answer")[:140].replace("\n", " "))
+    check(
+        "directions without AI",
+        "Turn left onto Heron Road" in p3.inner_text("#answer"),
+        p3.inner_text("#answer")[:140].replace("\n", " "),
+    )
     p3.fill("#q", "directions to the meeting place")
     p3.click("#askBtn")
     p3.wait_for_function("document.getElementById('answer').textContent.includes('Driving to')", timeout=30000)
-    check("Ask finds a pin by name", "Driving to Meeting place" in p3.inner_text("#answer"), p3.inner_text("#answer")[:140].replace("\n", " "))
-    check("a pin this browser kept moves into the kit", [x["id"] for x in kept()["pins"]] == ["a1"]
-          and p3.evaluate("localStorage.getItem('kit.pins')") is None, str(kept()))
-    p3.fill("#q", "where is Zzyzx Nowhere Road?")         # map-looking, nothing on the map -> library instead
+    check(
+        "Ask finds a pin by name",
+        "Driving to Meeting place" in p3.inner_text("#answer"),
+        p3.inner_text("#answer")[:140].replace("\n", " "),
+    )
+    check(
+        "a pin this browser kept moves into the kit",
+        [x["id"] for x in kept()["pins"]] == ["a1"] and p3.evaluate("localStorage.getItem('kit.pins')") is None,
+        str(kept()),
+    )
+    p3.fill("#q", "where is Zzyzx Nowhere Road?")  # map-looking, nothing on the map -> library instead
     p3.click("#askBtn")
     p3.wait_for_function("!document.getElementById('progress').textContent.startsWith('Looking')", timeout=60000)
-    p3.wait_for_function("document.getElementById('progress').textContent.includes('passages') || "
-                         "document.getElementById('progress').textContent.includes('Nothing')", timeout=60000)
+    p3.wait_for_function(
+        "document.getElementById('progress').textContent.includes('passages') || "
+        "document.getElementById('progress').textContent.includes('Nothing')",
+        timeout=60000,
+    )
     check("nothing on the map -> library", p3.locator("#openMap").count() == 0, p3.inner_text("#progress"))
     p3.fill("#q", "directions to Zzyzx Nowhere")
     p3.click("#askBtn")
@@ -247,21 +322,32 @@ with sync_playwright() as p:
     check("unknown destination explained", "Couldn't find" in p3.inner_text("#answer"), p3.inner_text("#answer")[:120])
     p3.fill("#q", "how do I purify water?")
     p3.click("#askBtn")
-    p3.wait_for_function("document.getElementById('progress').textContent.includes('passages') || "
-                         "document.getElementById('progress').textContent.includes('Nothing')", timeout=60000)
-    check("non-map questions still go to the library", "Water purification" in p3.inner_text("#answer") or "8 drops" in p3.inner_text("#answer"),
-          p3.inner_text("#progress"))
-    e3 = [e for e in e3 if "favicon" not in e and "ERR_CONNECTION_REFUSED" not in e]   # the AI is off on purpose
+    p3.wait_for_function(
+        "document.getElementById('progress').textContent.includes('passages') || "
+        "document.getElementById('progress').textContent.includes('Nothing')",
+        timeout=60000,
+    )
+    check(
+        "non-map questions still go to the library",
+        "Water purification" in p3.inner_text("#answer") or "8 drops" in p3.inner_text("#answer"),
+        p3.inner_text("#progress"),
+    )
+    e3 = [e for e in e3 if "favicon" not in e and "ERR_CONNECTION_REFUSED" not in e]  # the AI is off on purpose
     check("no JS errors (no-AI flow)", not e3, "; ".join(e3)[:600])
 
     # maps not installed: clear message instead of a broken map
     p4 = b.new_page()
     p4.route("**/*", lambda route: route.continue_())
-    p4.add_init_script("Object.defineProperty(window, 'KIT_MAPS', {set(v){}, get(){ return {available:false, reason:'Not downloaded yet: map tiles. Run ./kit sync while online.'}; }})")
+    p4.add_init_script(
+        "Object.defineProperty(window, 'KIT_MAPS', {set(v){}, get(){ return {available:false, reason:'Not downloaded yet: map tiles. Run ./kit sync while online.'}; }})"
+    )
     p4.goto(BASE + "/?model=Tiny&ai=18080&data=18095")
     p4.click("nav a[data-tab=map]")
-    check("maps-missing message", p4.is_visible("#mapOff") and "kit sync" in p4.inner_text("#mapOff") and not p4.is_visible("#mapWrap"),
-          p4.inner_text("#mapOff"))
+    check(
+        "maps-missing message",
+        p4.is_visible("#mapOff") and "kit sync" in p4.inner_text("#mapOff") and not p4.is_visible("#mapWrap"),
+        p4.inner_text("#mapOff"),
+    )
     b.close()
 
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")

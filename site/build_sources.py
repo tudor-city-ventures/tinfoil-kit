@@ -5,6 +5,7 @@ usage: python3 site/build_sources.py [plan.json]
 plan.json (optional) is the output of `./kit plan --json`: live sizes for every item. Without it,
 sizes measured by the last run are kept; anything never measured comes from the "~N GB" in each kit.json note.
 """
+
 import json
 import re
 import sys
@@ -24,7 +25,10 @@ COPY = {
     "mdwiki_en_all_maxi": ("WikiMed", "A medical encyclopedia: conditions, drugs, procedures."),
     "zimgit-medicine_en": ("Field medicine books", "First aid and medicine for when help is far away."),
     "irp.fas.org_en_military-medicine": ("Military medicine", "Trauma care manuals from the US military."),
-    "medlineplus.gov_en_all": ("MedlinePlus", "Plain-language guides to illnesses, tests and medicines, from the US National Library of Medicine."),
+    "medlineplus.gov_en_all": (
+        "MedlinePlus",
+        "Plain-language guides to illnesses, tests and medicines, from the US National Library of Medicine.",
+    ),
     "wwwnc.cdc.gov_en_all": ("CDC Travelers' Health", "The CDC's guide to diseases, vaccines and safe food and water."),
     "zimgit-post-disaster_en": ("Post-disaster guides", "Shelter, sanitation and recovery after a disaster."),
     "zimgit-water_en": ("Water treatment", "How to find, filter and disinfect drinking water."),
@@ -32,13 +36,22 @@ COPY = {
     "zimgit-knots_en": ("Knots", "Illustrated knots for rope, tarps and rescue."),
     "ready.gov_en_all": ("Ready.gov", "FEMA's guides for every kind of emergency."),
     "urban-prepper_en_all": ("Urban Prepper", "Getting through an emergency in a city."),
-    "lrnselfreliance_en_all": ("Learning Self-Reliance", "Videos on homesteading, beekeeping and getting ready for emergencies."),
+    "lrnselfreliance_en_all": (
+        "Learning Self-Reliance",
+        "Videos on homesteading, beekeeping and getting ready for emergencies.",
+    ),
     "ifixit_en_all": ("iFixit", "Step-by-step repair guides for phones, appliances, cars and tools."),
     "appropedia_en_all_maxi": ("Appropedia", "Off-grid and low-tech solutions: solar, water, building."),
-    "cd3wdproject.org_en_all": ("CD3WD", "Over 900 practical manuals on farming, water, health and building, from aid groups."),
+    "cd3wdproject.org_en_all": (
+        "CD3WD",
+        "Over 900 practical manuals on farming, water, health and building, from aid groups.",
+    ),
     "energypedia_en_all_nopic": ("Energypedia", "Solar panels, batteries and small power systems."),
     "armypubs_en_all": ("US Army publications", "Field manuals on survival, first aid, navigation and more."),
-    "wikipedia_en_all_maxi": ("Wikipedia, with images", "All of English Wikipedia. The reference for nearly any question."),
+    "wikipedia_en_all_maxi": (
+        "Wikipedia, with images",
+        "All of English Wikipedia. The reference for nearly any question.",
+    ),
     "wiktionary_en_all_nopic": ("Wiktionary", "A full dictionary and thesaurus."),
     "wikibooks_en_all_maxi": ("Wikibooks", "Open textbooks and how-tos."),
     "wikivoyage_en_all_maxi": ("Wikivoyage", "Travel guides for places you might need to go."),
@@ -54,21 +67,36 @@ COPY = {
     "libretexts.org_en_geo": ("LibreTexts Earth Science", "Geology, weather and climate textbooks."),
     "libretexts.org_en_math": ("LibreTexts Math", "Math textbooks from arithmetic to calculus and statistics."),
     "diy.stackexchange.com_en_all": ("Home improvement Q&A", "Plumbing, wiring, heating and repairs around the house."),
-    "gardening.stackexchange.com_en_all": ("Gardening Q&A", "Growing food, plant problems and soil, answered by gardeners."),
-    "cooking.stackexchange.com_en_all": ("Cooking Q&A", "Food safety, substitutions and techniques, answered by cooks."),
+    "gardening.stackexchange.com_en_all": (
+        "Gardening Q&A",
+        "Growing food, plant problems and soil, answered by gardeners.",
+    ),
+    "cooking.stackexchange.com_en_all": (
+        "Cooking Q&A",
+        "Food safety, substitutions and techniques, answered by cooks.",
+    ),
     "outdoors.stackexchange.com_en_all": ("Outdoors Q&A", "Camping, hiking, navigation and wilderness safety."),
     "electronics.stackexchange.com_en_all": ("Electronics Q&A", "Circuits, batteries, solar and fixing electronics."),
     "ham.stackexchange.com_en_all": ("Amateur radio Q&A", "Ham radio licenses, antennas and emergency communication."),
     "mechanics.stackexchange.com_en_all": ("Car repair Q&A", "Diagnosing and fixing cars, answered by mechanics."),
-    "bicycles.stackexchange.com_en_all": ("Bicycle repair Q&A", "Keeping a bike running when it's your only way around."),
-    "sustainability.stackexchange.com_en_all": ("Sustainable living Q&A", "Saving energy and water, composting, living on less."),
+    "bicycles.stackexchange.com_en_all": (
+        "Bicycle repair Q&A",
+        "Keeping a bike running when it's your only way around.",
+    ),
+    "sustainability.stackexchange.com_en_all": (
+        "Sustainable living Q&A",
+        "Saving energy and water, composting, living on less.",
+    ),
     "medicalsciences.stackexchange.com_en_all": ("Medical sciences Q&A", "How the body, diseases and medicines work."),
 }
 
 GROUPS = [
     ("Medical", r"med|mdwiki|cdc\."),
     ("Preparedness", r"ready|prepper|reliance|post-disaster|water|food|knots|army|outdoors"),
-    ("Repair and skills", r"ifixit|appropedia|cd3wd|energypedia|diy|gardening|cooking|electronics|ham\.|mechanics|bicycles|sustainab"),
+    (
+        "Repair and skills",
+        r"ifixit|appropedia|cd3wd|energypedia|diy|gardening|cooking|electronics|ham\.|mechanics|bicycles|sustainab",
+    ),
     ("Books and courses", r"gutenberg|survivor|khan|libretexts|wikiversity|wikibooks"),
     ("Reference", r"."),
 ]
@@ -121,23 +149,43 @@ def main():
     def add(sid, group, note, enabled, essential):
         title, why = COPY.get(sid, (None, None))
         size = live.get(sid) or size_from_note(note)
-        out.append({"id": sid, "group": group, "title": title or note.split(":")[0].split("(")[0].strip(),
-                    "why": why or note, "bytes": int(size) if size else None, "estimated": sid not in live,
-                    "presets": [p for p, on in (("essentials", essential), ("recommended", enabled),
-                                                 ("no-ai", enabled and group != "AI models"), ("everything", True)) if on]})
+        out.append(
+            {
+                "id": sid,
+                "group": group,
+                "title": title or note.split(":")[0].split("(")[0].strip(),
+                "why": why or note,
+                "bytes": int(size) if size else None,
+                "estimated": sid not in live,
+                "presets": [
+                    p
+                    for p, on in (
+                        ("essentials", essential),
+                        ("recommended", enabled),
+                        ("no-ai", enabled and group != "AI models"),
+                        ("everything", True),
+                    )
+                    if on
+                ],
+            }
+        )
 
     for m in cfg["models"]:
-        add(m["id"], "AI models", m.get("note", ""), m.get("enabled", True),
-            m["id"] in (default_model, "Gemma-4-E4B"))
+        add(m["id"], "AI models", m.get("note", ""), m.get("enabled", True), m["id"] in (default_model, "Gemma-4-E4B"))
     mp = cfg["maps"]
     regions = json.loads((ROOT / "tools" / "regions.json").read_text(encoding="utf-8"))
     place = next(r for r in regions["regions"] if r["id"] == mp["region"])
     add("maps", "Maps", place["name"], mp.get("enabled", True), True)
-    if "maps" not in live:     # the map viewer, fonts and icons, and the place's map, road data and address search
+    if "maps" not in live:  # the map viewer, fonts and icons, and the place's map, road data and address search
         out[-1]["bytes"] = int(0.1 * GB + sum(place["mb"].values()) * 1e6)
-    for z in cfg["library"]:    # Essentials takes Wikipedia too, in a smaller size (builder.jsx's WIKI_PRESET)
-        add(z["zim"], group_for(z["zim"]), z.get("note", ""), z.get("enabled", True),
-            z.get("enabled", True) and (z.get("priority", 9) == 1 or z["zim"].startswith("wikipedia_")))
+    for z in cfg["library"]:  # Essentials takes Wikipedia too, in a smaller size (builder.jsx's WIKI_PRESET)
+        add(
+            z["zim"],
+            group_for(z["zim"]),
+            z.get("note", ""),
+            z.get("enabled", True),
+            z.get("enabled", True) and (z.get("priority", 9) == 1 or z["zim"].startswith("wikipedia_")),
+        )
 
     site = ROOT / "site"
     (site / "sources.json").write_text(json.dumps({"default_model": default_model, "sources": out}, indent=1) + "\n")

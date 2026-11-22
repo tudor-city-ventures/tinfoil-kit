@@ -8,6 +8,7 @@ Wikipedia can come in there (Kiwix). Needs the internet; the "refresh builder si
 usage: python3 site/build_regions.py [--out FILE] [--cache DIR]
 --cache keeps the big downloads (Geofabrik's index, GeoNames' towns) in DIR between runs.
 """
+
 import argparse
 import base64
 import concurrent.futures
@@ -31,7 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 GEOFABRIK = os.environ.get("KIT_GEOFABRIK", "https://download.geofabrik.de").rstrip("/") + "/"
 KIWIX_CATALOG = os.environ.get("KIT_KIWIX_CATALOG", "https://library.kiwix.org/catalog/v2/entries?count=-1")
 PHOTON_DUMPS = os.environ.get("KIT_PHOTON_DUMPS", "https://download1.graphhopper.com/public/")
-EDITIONS = ("top_mini", "top_nopic", "top_maxi", "all_mini", "all_nopic", "all_maxi")    # Wikipedia's, as the kit's
+EDITIONS = ("top_mini", "top_nopic", "top_maxi", "all_mini", "all_nopic", "all_maxi")  # Wikipedia's, as the kit's
 USER_AGENT = "TinfoilKit/1.0 (+https://github.com/tudor-city-ventures/tinfoil-kit)"
 ZIM_RE = re.compile(r"^(?P<prefix>.+)_(?P<date>\d{4}-\d{2})\.zim$")
 INDEX = GEOFABRIK + "index-v1.json"
@@ -40,55 +41,154 @@ COUNTRIES = "https://download.geonames.org/export/dump/countryInfo.txt"
 STATES = "https://download.geonames.org/export/dump/admin1CodesASCII.txt"
 # Bigger extracts are offered as their parts: building the road network for directions needs too much memory.
 MAX_PBF = 2.2e9
-ALWAYS = {"us-northeast"}                       # kit.json's default
-US_GROUPS = ["us-northeast", "us-midwest", "us-south", "us-west"]    # for people near a state line
-SKIP = {"antarctica", "ile-de-clipperton", "great-britain"}  # nobody's home; the United Kingdom without Northern Ireland
+ALWAYS = {"us-northeast"}  # kit.json's default
+US_GROUPS = ["us-northeast", "us-midwest", "us-south", "us-west"]  # for people near a state line
+# nobody's home; the United Kingdom without Northern Ireland
+SKIP = {
+    "antarctica",
+    "ile-de-clipperton",
+    "great-britain",
+}
 IMPERIAL = {"us", "gb"}
 # What people call a country besides its name, for the search in SETUP.
-NICKNAMES = {"us": ["USA", "America", "United States"], "gb": ["UK", "Britain", "Great Britain"], "nl": ["Holland"],
-             "cz": ["Czechia"], "ae": ["UAE", "Emirates"], "kr": ["South Korea"], "kp": ["North Korea"],
-             "ci": ["Cote d'Ivoire"], "cd": ["DR Congo", "DRC"], "mm": ["Myanmar", "Burma"], "tl": ["Timor-Leste"]}
-# Languages offered where one isn't enough. Elsewhere: the first of GeoNames' languages that has a Wikipedia.
-LANGS = {"us": ["en", "es"], "ca": ["en", "fr"], "quebec": ["fr", "en"], "ch": ["de", "fr", "it"],
-         "be": ["nl", "fr"], "lu": ["fr", "de"], "fi": ["fi", "sv"], "in": ["en", "hi"], "sg": ["en", "zh"],
-         "za": ["en", "af"], "il": ["he", "ar"], "israel-and-palestine": ["he", "ar"], "ph": ["en", "tl"],
-         "ie": ["en", "ga"], "pk": ["ur", "en"], "no": ["nb", "no", "nn"]}
-NAMES = {   # code: (English, native)
-    "af": ("Afrikaans", "Afrikaans"), "am": ("Amharic", "አማርኛ"), "ar": ("Arabic", "العربية"),
-    "az": ("Azerbaijani", "Azərbaycanca"), "be": ("Belarusian", "Беларуская"), "bg": ("Bulgarian", "Български"),
-    "bn": ("Bengali", "বাংলা"), "bs": ("Bosnian", "Bosanski"), "ca": ("Catalan", "Català"), "cs": ("Czech", "Čeština"),
-    "cy": ("Welsh", "Cymraeg"), "da": ("Danish", "Dansk"), "de": ("German", "Deutsch"), "el": ("Greek", "Ελληνικά"),
-    "en": ("English", "English"), "eo": ("Esperanto", "Esperanto"), "es": ("Spanish", "Español"),
-    "et": ("Estonian", "Eesti"), "eu": ("Basque", "Euskara"), "fa": ("Persian", "فارسی"), "fi": ("Finnish", "Suomi"),
-    "fo": ("Faroese", "Føroyskt"), "fr": ("French", "Français"), "ga": ("Irish", "Gaeilge"), "gl": ("Galician", "Galego"),
-    "gu": ("Gujarati", "ગુજરાતી"), "ha": ("Hausa", "Hausa"), "he": ("Hebrew", "עברית"), "hi": ("Hindi", "हिन्दी"),
-    "hr": ("Croatian", "Hrvatski"), "ht": ("Haitian Creole", "Kreyòl ayisyen"), "hu": ("Hungarian", "Magyar"),
-    "hy": ("Armenian", "Հայերեն"), "id": ("Indonesian", "Bahasa Indonesia"), "ig": ("Igbo", "Igbo"),
-    "is": ("Icelandic", "Íslenska"), "it": ("Italian", "Italiano"), "ja": ("Japanese", "日本語"),
-    "ka": ("Georgian", "ქართული"), "kk": ("Kazakh", "Қазақша"), "km": ("Khmer", "ខ្មែរ"), "kn": ("Kannada", "ಕನ್ನಡ"),
-    "ko": ("Korean", "한국어"), "ky": ("Kyrgyz", "Кыргызча"), "lb": ("Luxembourgish", "Lëtzebuergesch"),
-    "lo": ("Lao", "ລາວ"), "lt": ("Lithuanian", "Lietuvių"), "lv": ("Latvian", "Latviešu"), "mg": ("Malagasy", "Malagasy"),
-    "mk": ("Macedonian", "Македонски"), "ml": ("Malayalam", "മലയാളം"), "mn": ("Mongolian", "Монгол"),
-    "mr": ("Marathi", "मराठी"), "ms": ("Malay", "Bahasa Melayu"), "mt": ("Maltese", "Malti"), "my": ("Burmese", "မြန်မာ"),
-    "ne": ("Nepali", "नेपाली"), "nl": ("Dutch", "Nederlands"), "no": ("Norwegian", "Norsk"), "pa": ("Punjabi", "ਪੰਜਾਬੀ"),
-    "pl": ("Polish", "Polski"), "ps": ("Pashto", "پښتو"), "pt": ("Portuguese", "Português"), "ro": ("Romanian", "Română"),
-    "ru": ("Russian", "Русский"), "rw": ("Kinyarwanda", "Ikinyarwanda"), "si": ("Sinhala", "සිංහල"),
-    "sk": ("Slovak", "Slovenčina"), "sl": ("Slovenian", "Slovenščina"), "so": ("Somali", "Soomaali"),
-    "sq": ("Albanian", "Shqip"), "sr": ("Serbian", "Српски"), "sv": ("Swedish", "Svenska"), "sw": ("Swahili", "Kiswahili"),
-    "ta": ("Tamil", "தமிழ்"), "te": ("Telugu", "తెలుగు"), "tg": ("Tajik", "Тоҷикӣ"), "th": ("Thai", "ไทย"),
-    "tk": ("Turkmen", "Türkmençe"), "tl": ("Tagalog", "Tagalog"), "tr": ("Turkish", "Türkçe"), "uk": ("Ukrainian", "Українська"),
-    "ur": ("Urdu", "اردو"), "uz": ("Uzbek", "Oʻzbekcha"), "vi": ("Vietnamese", "Tiếng Việt"), "yo": ("Yoruba", "Yorùbá"),
-    "zh": ("Chinese", "中文"), "zu": ("Zulu", "isiZulu"), "bi": ("Bislama", "Bislama"), "dv": ("Dhivehi", "ދިވެހި"),
-    "dz": ("Dzongkha", "རྫོང་ཁ"), "kl": ("Greenlandic", "Kalaallisut"), "ny": ("Chichewa", "Chicheŵa"),
-    "se": ("Northern Sami", "Davvisámegiella"), "sm": ("Samoan", "Gagana Samoa"), "tet": ("Tetum", "Tetun"),
-    "to": ("Tongan", "Lea faka-Tonga"), "nb": ("Norwegian", "Norsk bokmål"), "nn": ("Norwegian Nynorsk", "Norsk nynorsk"),
+NICKNAMES = {
+    "us": ["USA", "America", "United States"],
+    "gb": ["UK", "Britain", "Great Britain"],
+    "nl": ["Holland"],
+    "cz": ["Czechia"],
+    "ae": ["UAE", "Emirates"],
+    "kr": ["South Korea"],
+    "kp": ["North Korea"],
+    "ci": ["Cote d'Ivoire"],
+    "cd": ["DR Congo", "DRC"],
+    "mm": ["Myanmar", "Burma"],
+    "tl": ["Timor-Leste"],
 }
-ALIAS = {"fil": "tl", "cmn": "zh", "iw": "he", "in": "id"}   # GeoNames code -> Wikipedia's
-PHOTON_AREAS = {"australia-oceania": "Australia and Oceania"}   # Photon's folders for a region of the world
+# Languages offered where one isn't enough. Elsewhere: the first of GeoNames' languages that has a Wikipedia.
+LANGS = {
+    "us": ["en", "es"],
+    "ca": ["en", "fr"],
+    "quebec": ["fr", "en"],
+    "ch": ["de", "fr", "it"],
+    "be": ["nl", "fr"],
+    "lu": ["fr", "de"],
+    "fi": ["fi", "sv"],
+    "in": ["en", "hi"],
+    "sg": ["en", "zh"],
+    "za": ["en", "af"],
+    "il": ["he", "ar"],
+    "israel-and-palestine": ["he", "ar"],
+    "ph": ["en", "tl"],
+    "ie": ["en", "ga"],
+    "pk": ["ur", "en"],
+    "no": ["nb", "no", "nn"],
+}
+NAMES = {  # code: (English, native)
+    "af": ("Afrikaans", "Afrikaans"),
+    "am": ("Amharic", "አማርኛ"),
+    "ar": ("Arabic", "العربية"),
+    "az": ("Azerbaijani", "Azərbaycanca"),
+    "be": ("Belarusian", "Беларуская"),
+    "bg": ("Bulgarian", "Български"),
+    "bn": ("Bengali", "বাংলা"),
+    "bs": ("Bosnian", "Bosanski"),
+    "ca": ("Catalan", "Català"),
+    "cs": ("Czech", "Čeština"),
+    "cy": ("Welsh", "Cymraeg"),
+    "da": ("Danish", "Dansk"),
+    "de": ("German", "Deutsch"),
+    "el": ("Greek", "Ελληνικά"),
+    "en": ("English", "English"),
+    "eo": ("Esperanto", "Esperanto"),
+    "es": ("Spanish", "Español"),
+    "et": ("Estonian", "Eesti"),
+    "eu": ("Basque", "Euskara"),
+    "fa": ("Persian", "فارسی"),
+    "fi": ("Finnish", "Suomi"),
+    "fo": ("Faroese", "Føroyskt"),
+    "fr": ("French", "Français"),
+    "ga": ("Irish", "Gaeilge"),
+    "gl": ("Galician", "Galego"),
+    "gu": ("Gujarati", "ગુજરાતી"),
+    "ha": ("Hausa", "Hausa"),
+    "he": ("Hebrew", "עברית"),
+    "hi": ("Hindi", "हिन्दी"),
+    "hr": ("Croatian", "Hrvatski"),
+    "ht": ("Haitian Creole", "Kreyòl ayisyen"),
+    "hu": ("Hungarian", "Magyar"),
+    "hy": ("Armenian", "Հայերեն"),
+    "id": ("Indonesian", "Bahasa Indonesia"),
+    "ig": ("Igbo", "Igbo"),
+    "is": ("Icelandic", "Íslenska"),
+    "it": ("Italian", "Italiano"),
+    "ja": ("Japanese", "日本語"),
+    "ka": ("Georgian", "ქართული"),
+    "kk": ("Kazakh", "Қазақша"),
+    "km": ("Khmer", "ខ្មែរ"),
+    "kn": ("Kannada", "ಕನ್ನಡ"),
+    "ko": ("Korean", "한국어"),
+    "ky": ("Kyrgyz", "Кыргызча"),
+    "lb": ("Luxembourgish", "Lëtzebuergesch"),
+    "lo": ("Lao", "ລາວ"),
+    "lt": ("Lithuanian", "Lietuvių"),
+    "lv": ("Latvian", "Latviešu"),
+    "mg": ("Malagasy", "Malagasy"),
+    "mk": ("Macedonian", "Македонски"),
+    "ml": ("Malayalam", "മലയാളം"),
+    "mn": ("Mongolian", "Монгол"),
+    "mr": ("Marathi", "मराठी"),
+    "ms": ("Malay", "Bahasa Melayu"),
+    "mt": ("Maltese", "Malti"),
+    "my": ("Burmese", "မြန်မာ"),
+    "ne": ("Nepali", "नेपाली"),
+    "nl": ("Dutch", "Nederlands"),
+    "no": ("Norwegian", "Norsk"),
+    "pa": ("Punjabi", "ਪੰਜਾਬੀ"),
+    "pl": ("Polish", "Polski"),
+    "ps": ("Pashto", "پښتو"),
+    "pt": ("Portuguese", "Português"),
+    "ro": ("Romanian", "Română"),
+    "ru": ("Russian", "Русский"),
+    "rw": ("Kinyarwanda", "Ikinyarwanda"),
+    "si": ("Sinhala", "සිංහල"),
+    "sk": ("Slovak", "Slovenčina"),
+    "sl": ("Slovenian", "Slovenščina"),
+    "so": ("Somali", "Soomaali"),
+    "sq": ("Albanian", "Shqip"),
+    "sr": ("Serbian", "Српски"),
+    "sv": ("Swedish", "Svenska"),
+    "sw": ("Swahili", "Kiswahili"),
+    "ta": ("Tamil", "தமிழ்"),
+    "te": ("Telugu", "తెలుగు"),
+    "tg": ("Tajik", "Тоҷикӣ"),
+    "th": ("Thai", "ไทย"),
+    "tk": ("Turkmen", "Türkmençe"),
+    "tl": ("Tagalog", "Tagalog"),
+    "tr": ("Turkish", "Türkçe"),
+    "uk": ("Ukrainian", "Українська"),
+    "ur": ("Urdu", "اردو"),
+    "uz": ("Uzbek", "Oʻzbekcha"),
+    "vi": ("Vietnamese", "Tiếng Việt"),
+    "yo": ("Yoruba", "Yorùbá"),
+    "zh": ("Chinese", "中文"),
+    "zu": ("Zulu", "isiZulu"),
+    "bi": ("Bislama", "Bislama"),
+    "dv": ("Dhivehi", "ދިވެހި"),
+    "dz": ("Dzongkha", "རྫོང་ཁ"),
+    "kl": ("Greenlandic", "Kalaallisut"),
+    "ny": ("Chichewa", "Chicheŵa"),
+    "se": ("Northern Sami", "Davvisámegiella"),
+    "sm": ("Samoan", "Gagana Samoa"),
+    "tet": ("Tetum", "Tetun"),
+    "to": ("Tongan", "Lea faka-Tonga"),
+    "nb": ("Norwegian", "Norsk bokmål"),
+    "nn": ("Norwegian Nynorsk", "Norsk nynorsk"),
+}
+ALIAS = {"fil": "tl", "cmn": "zh", "iw": "he", "in": "id"}  # GeoNames code -> Wikipedia's
+PHOTON_AREAS = {"australia-oceania": "Australia and Oceania"}  # Photon's folders for a region of the world
 PBF_PATH = re.compile(r"^[a-z0-9][a-z0-9/_-]*-latest\.osm\.pbf$")
 SAFE = re.compile(r"^[a-z0-9][a-z0-9/_-]*$")
 warnings = []
-
 
 
 # ----------------------------------------------------------------------------- downloads and the pages it reads
@@ -98,8 +198,24 @@ class HttpError(Exception):
 
 def http_get(url, timeout=120):
     """A download, through curl as the kit's are."""
-    p = subprocess.run(["curl", "-fsSL", "--retry", "3", "--retry-delay", "2", "--connect-timeout", "20",
-                        "--max-time", str(timeout), "-A", USER_AGENT, url], capture_output=True)
+    p = subprocess.run(
+        [
+            "curl",
+            "-fsSL",
+            "--retry",
+            "3",
+            "--retry-delay",
+            "2",
+            "--connect-timeout",
+            "20",
+            "--max-time",
+            str(timeout),
+            "-A",
+            USER_AGENT,
+            url,
+        ],
+        capture_output=True,
+    )
     if p.returncode != 0:
         raise HttpError(f"{p.stderr.decode(errors='replace').strip() or f'curl exit {p.returncode}'} ({url})")
     return p.stdout
@@ -107,8 +223,11 @@ def http_get(url, timeout=120):
 
 def head_size(url):
     """A remote file's size from its headers (after redirects), or None when the server doesn't say."""
-    p = subprocess.run(["curl", "-fsSIL", "--connect-timeout", "20", "--max-time", "60", "-A", USER_AGENT, url],
-                       capture_output=True, text=True)
+    p = subprocess.run(
+        ["curl", "-fsSIL", "--connect-timeout", "20", "--max-time", "60", "-A", USER_AGENT, url],
+        capture_output=True,
+        text=True,
+    )
     if p.returncode != 0:
         raise HttpError(f"{p.stderr.strip() or 'HEAD failed'} ({url})")
     blocks = [b for b in re.split(r"\r?\n\r?\n", p.stdout.strip()) if b.strip()]
@@ -164,6 +283,7 @@ def tiles_estimate(bbox, maxzoom, roads_bytes=None):
         detail = min(detail, 2 * roads_bytes)
     return int(1e9 + detail * 0.4 ** max(0, 15 - int(maxzoom)))
 
+
 def warn(msg):
     warnings.append(msg)
     print("WARNING: " + msg, flush=True)
@@ -207,8 +327,10 @@ def sizes(urls):
         return dict(zip(urls, ex.map(head, urls)))
 
 
-PAGE_SIZE = re.compile(r'href="([^"]+-latest\.osm\.pbf)"[^>]*>\s*\[\.osm\.pbf\]\s*</a>\s*</td>\s*<td[^>]*>\s*'
-                       r'\(\s*([\d.,]+)\s*(?:&nbsp;|\s)*([KMGT]?)i?B\s*\)')
+PAGE_SIZE = re.compile(
+    r'href="([^"]+-latest\.osm\.pbf)"[^>]*>\s*\[\.osm\.pbf\]\s*</a>\s*</td>\s*<td[^>]*>\s*'
+    r"\(\s*([\d.,]+)\s*(?:&nbsp;|\s)*([KMGT]?)i?B\s*\)"
+)
 
 
 def page_sizes(pages):
@@ -223,7 +345,9 @@ def page_sizes(pages):
             warn(f"{page}: {e}")
             continue
         for href, num, unit in PAGE_SIZE.findall(html):
-            out[urllib.parse.urljoin(page, href)] = int(float(num.replace(",", "")) * {"": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}[unit])
+            out[urllib.parse.urljoin(page, href)] = int(
+                float(num.replace(",", "")) * {"": 1, "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12}[unit]
+            )
         time.sleep(0.3)
     return out, read
 
@@ -240,6 +364,7 @@ def fold(s):
 
 
 # ----------------------------------------------------------------------------- outlines
+
 
 def polygons(geom):
     if not geom:
@@ -287,6 +412,7 @@ def in_polys(x, y, polys):
 
 # ----------------------------------------------------------------------------- sources
 
+
 def load_towns(data):
     """GeoNames towns of 1,000 people or more, by country, biggest first."""
     by_cc = {}
@@ -303,7 +429,7 @@ def load_towns(data):
 
 
 def load_states(data):
-    """"DE.02" -> "Bavaria": the English names of states and provinces, keyed as towns' country and admin1 codes."""
+    """The English names of states and provinces, keyed as towns' country and admin1 codes: "DE.02" -> "Bavaria"."""
     out = {}
     for line in data.decode("utf-8").splitlines():
         c = line.split("\t")
@@ -333,6 +459,7 @@ def load_countries(data):
 def photon_db(cc, base, pages):
     """Where Photon's address database for a country is: (folder, file, fallback?). The same search the kit's program
     does: a country's own database, or else the one for the region of the world it's in."""
+
     def page(path):
         if path not in pages:
             try:
@@ -360,8 +487,11 @@ def photon_db(cc, base, pages):
         listing = http_get(base + folder).decode(errors="replace")
     except HttpError:
         listing = ""
-    found = sorted(set(re.findall(r"photon-db-" + re.escape(path[-1]) + r"-(\d+\.\d+)-latest\.tar\.bz2", listing)),
-                   key=version_key, reverse=True)
+    found = sorted(
+        set(re.findall(r"photon-db-" + re.escape(path[-1]) + r"-(\d+\.\d+)-latest\.tar\.bz2", listing)),
+        key=version_key,
+        reverse=True,
+    )
     if not found:
         warn(f"Photon folder {folder} lists no database file")
         return None
@@ -397,20 +527,28 @@ def main():
 
     pbf_url = {i: prop(i, "urls", {}).get("pbf", "") for i in feats}
     for i, u in pbf_url.items():
-        if u and not (u.startswith(GEOFABRIK) and PBF_PATH.match(u[len(GEOFABRIK):])):
+        if u and not (u.startswith(GEOFABRIK) and PBF_PATH.match(u[len(GEOFABRIK) :])):
             warn(f"{i}: unexpected download address {u}; left out")
             pbf_url[i] = ""
     wanted = [u for i, u in pbf_url.items() if u and i not in SKIP]
     # A region's page is its folder (europe/germany/), and lists its parts with their sizes.
-    pages = [GEOFABRIK] + [pbf_url[i].rsplit("/", 1)[0] + "/" for i in feats if kids.get(i) and pbf_url[i] and i not in SKIP]
+    pages = [GEOFABRIK] + [
+        pbf_url[i].rsplit("/", 1)[0] + "/" for i in feats if kids.get(i) and pbf_url[i] and i not in SKIP
+    ]
     t = time.time()
     pbf_size, read = page_sizes(pages)
-    print(f"Geofabrik's pages: {read} of {len(pages)} read, sizes for {sum(u in pbf_size for u in wanted)} of {len(wanted)} extracts "
-          f"in {time.time() - t:.0f} s", flush=True)
+    print(
+        f"Geofabrik's pages: {read} of {len(pages)} read, sizes for {sum(u in pbf_size for u in wanted)} of {len(wanted)} extracts "
+        f"in {time.time() - t:.0f} s",
+        flush=True,
+    )
     rest = [u for u in wanted if u not in pbf_size]
     pbf_size.update(sizes(rest))
-    print(f"Asked for the other {len(rest)}: {sum(pbf_size.get(u) is not None for u in rest)} answered "
-          f"({time.time() - t:.0f} s so far)", flush=True)
+    print(
+        f"Asked for the other {len(rest)}: {sum(pbf_size.get(u) is not None for u in rest)} answered "
+        f"({time.time() - t:.0f} s so far)",
+        flush=True,
+    )
     size = {i: pbf_size.get(u) for i, u in pbf_url.items()}
 
     picked = []
@@ -418,7 +556,7 @@ def main():
     def offer(ident):
         if ident in SKIP or not pbf_url[ident]:
             return
-        parts = [k for k in kids.get(ident, []) if k not in SKIP and k not in US_GROUPS]   # groups come below
+        parts = [k for k in kids.get(ident, []) if k not in SKIP and k not in US_GROUPS]  # groups come below
         if size[ident] is None:
             warn(f"{ident}: Geofabrik didn't say how big its road data is")
         if (size[ident] is not None and size[ident] <= MAX_PBF) or not parts:
@@ -445,8 +583,11 @@ def main():
     states = load_states(fetch(STATES, args.cache, "admin1CodesASCII.txt"))
     towns = load_towns(fetch(TOWNS, args.cache, "cities1000.zip"))
     catalog = parse_kiwix_catalog(http_get(KIWIX_CATALOG, timeout=900))
-    continents = [(prop(t, "name"), polygons(feats[t].get("geometry")))
-                  for t in kids.get(None, []) if t not in SKIP and t != "russia"]
+    continents = [
+        (prop(t, "name"), polygons(feats[t].get("geometry")))
+        for t in kids.get(None, [])
+        if t not in SKIP and t != "russia"
+    ]
     outline = {t: polygons(feats[t].get("geometry")) for t in kids.get(None, [])}
     every_town = sorted((t + (c,) for c, ts in towns.items() for t in ts), key=lambda t: -t[0])
     have = sorted({k.split("_")[1] for k in catalog if re.fullmatch(r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)", k)})
@@ -463,7 +604,7 @@ def main():
     photon_base = PHOTON_DUMPS.rstrip("/") + "/"
     for ident in picked:
         chain = [ident] + ancestors(ident)
-        country = next((a for a in chain if iso(a)), None)      # the extract that is the whole country
+        country = next((a for a in chain if iso(a)), None)  # the extract that is the whole country
         ccs = iso(country) if country else (["us"] if ident in US_GROUPS else [])
         polys = polygons(feats[ident].get("geometry"))
         box = bbox_of(polys, ident)
@@ -471,7 +612,7 @@ def main():
             warn(f"{ident}: no outline; left out")
             continue
 
-        inside = {}         # country code -> its biggest towns inside the outline
+        inside = {}  # country code -> its biggest towns inside the outline
         for c in ccs:
             inside[c] = []
             for t in towns.get(c, []):
@@ -482,8 +623,11 @@ def main():
         top = chain[-1]
         if not any(inside.values()):
             # An overseas region filed under its country (Réunion under France) has a country code of its own.
-            near = [t for t in every_town if box[1] <= t[2] <= box[3] and box[0] <= t[3] <= box[2]
-                    and in_polys(t[3], t[2], polys)][:3]
+            near = [
+                t
+                for t in every_town
+                if box[1] <= t[2] <= box[3] and box[0] <= t[3] <= box[2] and in_polys(t[3], t[2], polys)
+            ][:3]
             if near and not in_polys(near[0][3], near[0][2], outline[top]):
                 ccs, country = [near[0][5]], ident
                 inside = {ccs[0]: [t[:5] for t in near if t[5] == ccs[0]]}
@@ -497,14 +641,17 @@ def main():
             home = {"label": label, "lat": round(lat, 4), "lon": round(lon, 4)}
         else:
             warn(f"{ident}: no town found inside it; home is its middle")
-            home = {"label": prop(ident, "name"), "lat": round((box[1] + box[3]) / 2, 4),
-                    "lon": round((box[0] + box[2]) / 2, 4)}
+            home = {
+                "label": prop(ident, "name"),
+                "lat": round((box[1] + box[3]) / 2, 4),
+                "lon": round((box[0] + box[2]) / 2, 4),
+            }
 
         name = prop(ident, "name")
-        part = country != ident             # a state, province or region of a country, or a group of US states
+        part = country != ident  # a state, province or region of a country, or a group of US states
         if cc == "us":
             group = "United States"
-        elif country and any(iso(a) for a in chain[chain.index(country) + 1:]):
+        elif country and any(iso(a) for a in chain[chain.index(country) + 1 :]):
             # Overseas (Bermuda under the United Kingdom, Réunion under France): grouped where it is.
             group = next((n for n, ps in continents if in_polys(home["lon"], home["lat"], ps)), prop(top, "name"))
         else:
@@ -542,8 +689,17 @@ def main():
             also += [t[1] for t in biggest]
             if part and cc != "us" and biggest:
                 also += [states.get(f"{biggest[0][5]}.{biggest[0][4]}".lower(), "")]
-        r = {"id": ident, "name": name, "group": group, "pbf": pbf_url[ident][len(GEOFABRIK):], "bbox": box,
-             "country": cc, "home": home, "units": "imperial" if cc in IMPERIAL else "metric", "langs": langs}
+        r = {
+            "id": ident,
+            "name": name,
+            "group": group,
+            "pbf": pbf_url[ident][len(GEOFABRIK) :],
+            "bbox": box,
+            "country": cc,
+            "home": home,
+            "units": "imperial" if cc in IMPERIAL else "metric",
+            "langs": langs,
+        }
         also = sorted({a for a in also if a and fold(a) != fold(name)}, key=fold)
         if also:
             r["also"] = also
@@ -551,22 +707,33 @@ def main():
             r["photon"] = ph[0] + ph[1]
             # Address search covers the whole country, or the region of the world where a country has none of its own.
             area = ph[0].split("/")[0]
-            where = (PHOTON_AREAS.get(area, area.replace("-", " ").title()) if ph[2] else
-                     "the United States" if cc == "us" else countries.get(cc, (name,))[0])
+            where = (
+                PHOTON_AREAS.get(area, area.replace("-", " ").title())
+                if ph[2]
+                else "the United States"
+                if cc == "us"
+                else countries.get(cc, (name,))[0]
+            )
             if fold(where) != fold(name):
                 r["addresses"] = where
             if ph[2]:
-                r["addresses_wide"] = True      # the kit leaves it out of just the essentials
+                r["addresses_wide"] = True  # the kit leaves it out of just the essentials
         r["_pbf_bytes"] = size[ident]
         r["_polys"] = polys
         regions.append(r)
 
     # A group of US states says which: "US Northeast (CT, MA, ...)".
-    abbr = {r["id"]: [a for a in r.get("also", []) if re.fullmatch(r"[A-Z]{2}", a) and a != "US"]
-            for r in regions if r["country"] == "us" and r["id"] not in US_GROUPS}
+    abbr = {
+        r["id"]: [a for a in r.get("also", []) if re.fullmatch(r"[A-Z]{2}", a) and a != "US"]
+        for r in regions
+        if r["country"] == "us" and r["id"] not in US_GROUPS
+    }
     for g in [r for r in regions if r["id"] in US_GROUPS]:
-        covered = sorted(abbr[r["id"]][0] for r in regions
-                         if abbr.get(r["id"]) and in_polys(r["home"]["lon"], r["home"]["lat"], g["_polys"]))
+        covered = sorted(
+            abbr[r["id"]][0]
+            for r in regions
+            if abbr.get(r["id"]) and in_polys(r["home"]["lon"], r["home"]["lat"], g["_polys"])
+        )
         if covered:
             g["name"] += f" ({', '.join(covered)})"
     for r in regions:
@@ -588,11 +755,19 @@ def main():
         en, native = NAMES.get(code, (code, code))
         if code not in NAMES:
             warn(f"no name for language '{code}'; add it to NAMES")
-        languages[code] = {"name": en, "native": native, "zim": e["prefix"], "mb": round((e.get("size") or 0) / 1e6),
-                           "pictures": flavour == "maxi",
-                           # every edition Kiwix makes, for Wikipedia's sizes (EDITIONS)
-                           "sizes": {ed: round((catalog[f"wikipedia_{code}_{ed}"].get("size") or 0) / 1e6)
-                                     for ed in EDITIONS if f"wikipedia_{code}_{ed}" in catalog}}
+        languages[code] = {
+            "name": en,
+            "native": native,
+            "zim": e["prefix"],
+            "mb": round((e.get("size") or 0) / 1e6),
+            "pictures": flavour == "maxi",
+            # every edition Kiwix makes, for Wikipedia's sizes (EDITIONS)
+            "sizes": {
+                ed: round((catalog[f"wikipedia_{code}_{ed}"].get("size") or 0) / 1e6)
+                for ed in EDITIONS
+                if f"wikipedia_{code}_{ed}" in catalog
+            },
+        }
 
     order = {"United States": "0"}
     regions.sort(key=lambda r: (order.get(r["group"], "1" + r["group"]), fold(r["name"])))
@@ -600,32 +775,45 @@ def main():
 
     print("\nPhoton pages read:")
     for path, rows in sorted(photon_pages.items()):
-        print(f"  /{path}: " + "; ".join(f"{r['slug']}{'*' if r['db'] else ''} [{','.join(r['codes'][:6])}]" for r in rows[:40]))
+        print(
+            f"  /{path}: "
+            + "; ".join(f"{r['slug']}{'*' if r['db'] else ''} [{','.join(r['codes'][:6])}]" for r in rows[:40])
+        )
     print("\nPlaces:")
     for r in regions:
-        print(f"  {r['group'][:14]:<15}{r['id'][:28]:<29}{r['name'][:34]:<35}{r['mb']['roads']:>6} MB roads"
-              f"{r['mb']['addresses']:>7} MB addr  home {r['home']['label']}  {'/'.join(r['langs'])}  {r.get('photon', '-')}")
+        print(
+            f"  {r['group'][:14]:<15}{r['id'][:28]:<29}{r['name'][:34]:<35}{r['mb']['roads']:>6} MB roads"
+            f"{r['mb']['addresses']:>7} MB addr  home {r['home']['label']}  {'/'.join(r['langs'])}  {r.get('photon', '-')}"
+        )
     print("\nLanguages: " + ", ".join(f"{c} {v['zim']} {v['mb'] / 1000:.0f} GB" for c, v in languages.items()))
 
-    lines = ['{',
-             ' "_readme": "Made by site/build_regions.py from Geofabrik, Photon, Kiwix and GeoNames. Don\'t edit by hand: '
-             'set your own area in kit.json\'s maps instead.",',
-             ' "languages": {']
-    lines += [f'  {json.dumps(c)}: {json.dumps(v, ensure_ascii=False)}' + ("," if n < len(languages) - 1 else "")
-              for n, (c, v) in enumerate(languages.items())]
-    lines += [' },', ' "regions": [']
-    lines += ["  " + json.dumps(r, ensure_ascii=False) + ("," if n < len(regions) - 1 else "") for n, r in enumerate(regions)]
+    lines = [
+        "{",
+        ' "_readme": "Made by site/build_regions.py from Geofabrik, Photon, Kiwix and GeoNames. Don\'t edit by hand: '
+        "set your own area in kit.json's maps instead.\",",
+        ' "languages": {',
+    ]
+    lines += [
+        f"  {json.dumps(c)}: {json.dumps(v, ensure_ascii=False)}" + ("," if n < len(languages) - 1 else "")
+        for n, (c, v) in enumerate(languages.items())
+    ]
+    lines += [" },", ' "regions": [']
+    lines += [
+        "  " + json.dumps(r, ensure_ascii=False) + ("," if n < len(regions) - 1 else "") for n, r in enumerate(regions)
+    ]
     lines += [" ]", "}", ""]
     text = "\n".join(lines)
     json.loads(text)
     args.out.write_text(text, encoding="utf-8")
-    print(f"\nwrote {len(regions)} places and {len(languages)} languages to {args.out}" +
-          (f", with {len(warnings)} warnings" if warnings else ""))
+    print(
+        f"\nwrote {len(regions)} places and {len(languages)} languages to {args.out}"
+        + (f", with {len(warnings)} warnings" if warnings else "")
+    )
     if args.print:
         blob = base64.b64encode(gzip.compress(text.encode("utf-8"), 9)).decode()
         print("===== regions.json.gz.b64 begin =====")
         for i in range(0, len(blob), 76):
-            print(blob[i:i + 76])
+            print(blob[i : i + 76])
         print("===== regions.json.gz.b64 end =====")
 
 
@@ -641,8 +829,11 @@ def check(regions, languages):
         h = r["home"]
         if not (PBF_PATH.match(r["pbf"]) and ".." not in r["pbf"]):
             bad.append(f"{r['id']}: bad road data path {r['pbf']}")
-        if "photon" in r and not (SAFE.match(r["photon"].rsplit("/", 1)[0]) and ".." not in r["photon"]
-                                  and re.fullmatch(r"photon-db-[a-z0-9_-]+-\d+\.\d+-latest\.tar\.bz2", r["photon"].rsplit("/", 1)[1])):
+        if "photon" in r and not (
+            SAFE.match(r["photon"].rsplit("/", 1)[0])
+            and ".." not in r["photon"]
+            and re.fullmatch(r"photon-db-[a-z0-9_-]+-\d+\.\d+-latest\.tar\.bz2", r["photon"].rsplit("/", 1)[1])
+        ):
             bad.append(f"{r['id']}: bad address database path {r['photon']}")
         if not (-180 <= w < e <= 180 and -90 <= s < n <= 90):
             bad.append(f"{r['id']}: bad area {r['bbox']}")
