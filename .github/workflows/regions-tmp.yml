@@ -2,7 +2,7 @@ name: build regions (temporary, branch only)
 on:
   push:
     branches: [claude/project-thread-0smmv8]
-    paths: [site/build_regions.py, .github/workflows/regions-tmp.yml]
+    paths: [site/build_regions.py, .github/workflows/regions-tmp.yml, .github/probe/probe.py]
 permissions:
   contents: read
 jobs:
@@ -13,4 +13,4 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - run: python3 site/build_regions.py --print
+      - run: python3 .github/probe/probe.py
