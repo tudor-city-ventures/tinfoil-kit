@@ -61,34 +61,61 @@ jobs:
           ok = rest(new) == rest(old) and all(type(s["bytes"]) is int and type(s["estimated"]) is bool for s in new["sources"])
           sys.exit(0 if ok else "The new sources.json changes more than sizes, so it isn't committed. Run build_sources.py by hand.")
           PY
-          # A weekly refresh may change sizes, which files a place downloads (relative paths on Geofabrik and Photon,
-          # and Wikipedia's file names) and which languages it offers. Every id, name, nickname and home town, which
-          # SETUP prints and the site's agent prompt quotes, stays as a person last committed it: GeoNames, one of the
-          # sources, is edited by the public.
+          # From the new regions.json, take only what a weekly refresh may change: sizes, download paths on Geofabrik and
+          # Photon (each path segment checked), Wikipedia file names, and which known languages a place offers. Ids,
+          # names, nicknames and home towns stay as a person last committed them: SETUP prints them, the site's agent
+          # prompt quotes them, and GeoNames, one of their sources, is edited by the public. What's kept back is listed
+          # as warnings, so a person can rebuild the file by hand.
           python3 -I - "$REGIONS" tools/regions.json <<'PY'
           import json, re, sys
           new, old = (json.load(open(p, encoding="utf-8")) for p in sys.argv[1:])
           seg = r"[a-z0-9][a-z0-9_-]*"
-          pbf = re.compile(rf"{seg}(/{seg})*-latest\.osm\.pbf")
-          photon = re.compile(rf"{seg}(/{seg})*/photon-db-[a-z0-9_-]+-\d+\.\d+-latest\.tar\.bz2")
-          zim = re.compile(r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)")
-          def fixed(d):    # everything but sizes and what to download
-              return (d["_readme"], [{k: v for k, v in r.items() if k not in ("mb", "pbf", "photon", "langs")} for r in d["regions"]],
-                      {c: {k: v for k, v in l.items() if k not in ("zim", "mb", "pictures")} for c, l in d["languages"].items()})
-          def size(x):
-              return type(x) in (int, float) and x >= 0
-          langs = new["languages"]
-          ok = fixed(new) == fixed(old)
-          ok = ok and all(pbf.fullmatch(r["pbf"]) and (photon.fullmatch(r["photon"]) if "photon" in r else True)
-                          and type(r["langs"]) is list and all(c in langs for c in r["langs"])
-                          and all(size(v) for v in r["mb"].values()) for r in new["regions"])
-          ok = ok and all(zim.fullmatch(l["zim"]) and size(l["mb"]) and type(l["pictures"]) is bool for l in langs.values())
-          sys.exit(0 if ok else "The new regions.json changes more than sizes and downloads, or names something the kit "
-                   "shouldn't download, so it isn't committed. Run site/build_regions.py by hand and read its diff.")
+          paths = {"pbf": rf"{seg}(/{seg})*-latest\.osm\.pbf", "photon": rf"{seg}(/{seg})*/photon-db-[a-z0-9_-]+-\d+\.\d+-latest\.tar\.bz2",
+                   "zim": r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)"}
+          def path(k):
+              return lambda v: type(v) is str and re.fullmatch(paths[k], v) is not None
+          def size(v):
+              return type(v) in (int, float) and v >= 0
+          REGION = {"mb": lambda v: type(v) is dict and all(size(x) for x in v.values()), "pbf": path("pbf"), "photon": path("photon"),
+                    "langs": lambda v: type(v) is list and all(type(c) is str and c in old["languages"] for c in v)}
+          LANGUAGE = {"zim": path("zim"), "mb": size, "pictures": lambda v: type(v) is bool}
+          kept = []
+          def take(have, got, allowed, name):
+              for k, good in allowed.items():
+                  if k in got and good(got[k]):
+                      have[k] = got[k]
+                  elif k in got:
+                      kept.append(f"{name}: {k}")
+                  elif k == "photon":
+                      have.pop(k, None)    # Photon no longer publishes this place's addresses
+              other = sorted({re.sub(r"[^a-z_]", "?", str(k))[:20] for k in set(have) | set(got) if k not in allowed and got.get(k) != have.get(k)})
+              if other:
+                  kept.append(f"{name}: {', '.join(other)}")
+          for part, allowed in (("regions", REGION), ("languages", LANGUAGE)):
+              if part == "regions":
+                  have = {r["id"]: r for r in old[part]}
+                  fresh = {r["id"]: r for r in new[part] if type(r) is dict and type(r.get("id")) is str}
+              else:
+                  have, fresh = old[part], {c: v for c, v in new[part].items() if type(v) is dict}
+              for k, v in have.items():
+                  name = k if part == "regions" else f"language {k}"
+                  if k in fresh:
+                      take(v, fresh[k], allowed, name)
+                  else:
+                      kept.append(f"{name}: missing from the new list")
+              if set(fresh) - set(have):
+                  kept.append(f"{len(set(fresh) - set(have))} new {part}")
+          for line in kept[:30] + ([f"and {len(kept) - 30} more"] if len(kept) > 30 else []):
+              print(f"::warning title=regions.json kept as committed::{line}")
+          langs, regions = list(old["languages"].items()), old["regions"]
+          lines = ["{", ' "_readme": ' + json.dumps(old["_readme"], ensure_ascii=False) + ",", ' "languages": {']
+          lines += [f"  {json.dumps(c)}: {json.dumps(v, ensure_ascii=False)}" + ("," if n < len(langs) - 1 else "") for n, (c, v) in enumerate(langs)]
+          lines += [" },", ' "regions": [']
+          lines += ["  " + json.dumps(r, ensure_ascii=False) + ("," if n < len(regions) - 1 else "") for n, r in enumerate(regions)]
+          open(sys.argv[2], "w", encoding="utf-8").write("\n".join(lines + [" ]", "}", ""]))
           PY
           cp "$NEW" site/sources.json
-          cp "$REGIONS" tools/regions.json
-          cp "$REGIONS" site/regions.json
+          cp tools/regions.json site/regions.json
           git diff --quiet site/ tools/ && { echo "no change"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
