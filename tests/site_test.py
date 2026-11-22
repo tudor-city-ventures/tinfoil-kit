@@ -82,12 +82,14 @@ with sync_playwright() as p:
         before = page.evaluate(FRAME)
         page.wait_for_timeout(250)
         check(f"{name}: hero draws and moves", inked > 5000 and page.evaluate(FRAME) != before, f"{inked} inked pixels")
-        page.click(".viz-pause")
+        playing_clean = not page.is_visible(".viz-state")
+        page.click(".viz-toggle")
         page.evaluate("new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")   # let a queued redraw land
         before = page.evaluate(FRAME)
         page.wait_for_timeout(250)
-        check(f"{name}: Pause holds the hero still", page.evaluate(FRAME) == before and page.inner_text(".viz-pause") == "Play")
-        page.click(".viz-pause")
+        check(f"{name}: clicking the hero pauses it, and nothing but a paused hero shows a control", playing_clean
+              and page.evaluate(FRAME) == before and page.get_attribute(".viz-toggle", "aria-pressed") == "true" and page.is_visible(".viz-state"))
+        page.click(".viz-toggle")
         totals = {}
         for preset in ("essentials", "everything", "no-ai", "recommended"):
             page.click(f"[data-preset={preset}]")
@@ -222,7 +224,7 @@ with sync_playwright() as p:
     before = still.evaluate(FRAME)
     still.wait_for_timeout(300)
     check("reduced motion: the hero holds one still frame", still.evaluate(INKED) > 5000 and still.evaluate(FRAME) == before
-          and still.inner_text(".viz-pause") == "Play")
+          and still.get_attribute(".viz-toggle", "aria-pressed") == "true")
     still.close()
     nf = b.new_page()     # Vercel serves 404.html for any unknown address
     nf.goto(URL + "404.html")

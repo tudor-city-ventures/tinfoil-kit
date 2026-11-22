@@ -1,9 +1,9 @@
-// The hero figure: a dotted globe spins up and streams into the drive, the Wi-Fi drops, and the drive lights up what it holds.
+// The hero figure: a dotted globe spins up and streams down into the drive, the Wi-Fi drops, and the drive lights up what it holds.
 // Drawn on a canvas each frame from a 13-second timeline, so it can pause, hold a still frame, and stop when off screen.
 (function () {
   var fig = document.querySelector('.fig.viz');
   if (!fig || !window.ResizeObserver) return;
-  var cv = fig.querySelector('canvas'), ctx = cv.getContext('2d'), btn = fig.querySelector('.viz-pause');
+  var cv = fig.querySelector('canvas'), ctx = cv.getContext('2d'), btn = fig.querySelector('.viz-toggle');
   var INK = '#1C1F1A', SIG = '#D9531E', SIGT = '#9A3A10', OLIVE = '#4A5A2A', PAPER = '#F3F0E6', D = Math.PI / 180, TAU = 2 * Math.PI;
   var MONO = '"IBM Plex Mono", ui-monospace, monospace';
 
@@ -51,31 +51,25 @@
   function theta(t) { var f = t * HZ, j = Math.floor(f); return TH[j] + (TH[j + 1] - TH[j]) * (f - j); }
   function timeAt(r) { var lo = 0, hi = TH.length - 1; while (hi - lo > 1) { var m = (lo + hi) >> 1; if (TH[m] < r) lo = m; else hi = m; } return hi / HZ; }
 
-  // Two compositions: side by side, or stacked on narrow screens with a standing drive that fills from the bottom.
-  var L, slots = [], dpr = 1, scale = 1;
-  function layout() {
-    var w = cv.getBoundingClientRect().width || 600, tall = w < 440;
-    L = tall ? {
-      tall: true, W: 340, H: 480, g: { x: 170, y: 128, r: 98 }, peel: 70 * D,
-      d: { x: 118, y: 262, w: 104, h: 168, gx: 130, gy: 294, gw: 80, gh: 124 },
-      port: { x: 170, y: 256, dx: 0, dy: 1 }, wifi: { x: 22, y: 30 }
-    } : {
-      tall: false, W: 600, H: 380, g: { x: 150, y: 178, r: 120 }, peel: 62 * D,
-      d: { x: 322, y: 120, w: 250, h: 112, gx: 338, gy: 154, gw: 218, gh: 66 },
-      port: { x: 318, y: 176, dx: 1, dy: 0 }, wifi: { x: 26, y: 34 }
-    };
-    cv.style.aspectRatio = L.W + ' / ' + L.H;
-    dpr = Math.min(window.devicePixelRatio || 1, 2); scale = w / L.W;
-    cv.width = Math.round(w * dpr); cv.height = Math.round(w * L.H / L.W * dpr);
+  // One composition, the globe over a wide drive that fills from the left, scaled to the canvas.
+  // Text and the Wi-Fi icon grow back to a readable size when the canvas is small (ts).
+  var L = {
+    W: 440, H: 500, g: { x: 220, y: 172, r: 124 }, peel: 70 * D,
+    d: { x: 40, y: 346, w: 360, h: 112, gx: 56, gy: 380, gw: 328, gh: 66 },
+    port: { x: 220, y: 340, dx: 0, dy: 1 }, wifi: { x: 24, y: 30 }
+  }, slots = [], dpr = 1, scale = 1, ts = 1;
+  (function () {
     var d = L.d, s = Math.sqrt(d.gw * d.gh / N), a, b;
     for (;; s *= .99) { a = Math.floor(d.gw / s); b = Math.floor(d.gh / s); if (a * b >= N) break; }
-    d.s = s; d.cols = a; d.rows = b; slots = [];
-    var ox = d.gx + (d.gw - (a - 1) * s) / 2, oy = d.gy + (d.gh - (b - 1) * s) / 2;
-    for (var k = 0; k < N; k++) {
-      if (tall) slots.push({ x: ox + (k % a) * s, y: oy + (b - 1 - Math.floor(k / a)) * s });
-      else slots.push({ x: ox + Math.floor(k / b) * s, y: oy + (k % b) * s });
-    }
-    loopNo = -1;
+    d.s = s; d.cols = a; d.rows = b;
+    d.ox = d.gx + (d.gw - (a - 1) * s) / 2; d.oy = d.gy + (d.gh - (b - 1) * s) / 2;
+    for (var k = 0; k < N; k++) slots.push({ x: d.ox + Math.floor(k / b) * s, y: d.oy + (k % b) * s });
+  })();
+  function layout() {
+    var w = cv.getBoundingClientRect().width || L.W;
+    cv.style.aspectRatio = L.W + ' / ' + L.H;
+    dpr = Math.min(window.devicePixelRatio || 1, 2); scale = w / L.W; ts = Math.min(1.7, Math.max(1, .95 / scale));
+    cv.width = Math.round(w * dpr); cv.height = Math.round(w * L.H / L.W * dpr);
   }
 
   function clamp(u) { return u < 0 ? 0 : u > 1 ? 1 : u; }
@@ -118,14 +112,14 @@
   }
 
   function dots(list, r) { ctx.beginPath(); for (var i = 0; i < list.length; i += 2) { ctx.moveTo(list[i] + r, list[i + 1]); ctx.arc(list[i], list[i + 1], r, 0, TAU); } ctx.fill(); }
-  function text(s, x, y, size, color, weight, align) { ctx.font = (weight || 500) + ' ' + size + 'px ' + MONO; ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.fillText(s, x, y); }
+  function text(s, x, y, size, color, weight, align) { ctx.font = (weight || 500) + ' ' + size * ts + 'px ' + MONO; ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.fillText(s, x, y); }
   function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
   function line(x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
-  function wifi(x, y, bars, off) {
-    ctx.lineCap = 'round'; ctx.lineWidth = 1.7; ctx.strokeStyle = INK; ctx.fillStyle = INK;
-    for (var i = 0; i < 3; i++) { ctx.globalAlpha = i < bars ? 1 : .18; ctx.beginPath(); ctx.arc(x, y, 4 + i * 4, -Math.PI * .78, -Math.PI * .22); ctx.stroke(); }
-    ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(x, y, 1.7, 0, TAU); ctx.fill();
-    if (off > 0) { ctx.strokeStyle = SIG; ctx.lineWidth = 2.2; line(x - 9, y - 15, x - 9 + 18 * off, y - 15 + 18 * off); }
+  function wifi(x, y, bars, off, k) {
+    ctx.lineCap = 'round'; ctx.lineWidth = 1.7 * k; ctx.strokeStyle = INK; ctx.fillStyle = INK;
+    for (var i = 0; i < 3; i++) { ctx.globalAlpha = i < bars ? 1 : .18; ctx.beginPath(); ctx.arc(x, y, (4 + i * 4) * k, -Math.PI * .78, -Math.PI * .22); ctx.stroke(); }
+    ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(x, y, 1.7 * k, 0, TAU); ctx.fill();
+    if (off > 0) { ctx.strokeStyle = SIG; ctx.lineWidth = 2.2 * k; line(x - 9 * k, y - 15 * k, x + (18 * off - 9) * k, y + (18 * off - 15) * k); }
     ctx.lineCap = 'butt';
   }
 
@@ -200,12 +194,10 @@
     if (!live) { ctx.setLineDash([5, 5]); ctx.globalAlpha = .55; }
     ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
     ctx.fillStyle = INK;
-    if (L.tall) rrect(q.x - 12, d.y - 9, 24, 11, 3); else rrect(d.x - 9, q.y - 12, 11, 24, 3);
-    ctx.fill();
+    rrect(q.x - 12, d.y - 9, 24, 11, 3); ctx.fill();
     ctx.lineWidth = 1; ctx.globalAlpha = .45; line(d.x + 10, d.y + 26, d.x + d.w - 10, d.y + 26); ctx.globalAlpha = 1;
     var gb = t < T_PACK ? 0 : resetting ? (drain < 1 ? TOTAL : 0) : t > T_OUT ? TOTAL : Math.round(TOTAL * done / N);
-    if (L.tall) text('TINFOIL', d.x + 12, d.y + 17, 9.5, INK, 600);
-    else { text('TINFOIL KIT', d.x + 14, d.y + 17, 10, INK, 600); text(gb + ' GB', d.x + d.w - 30, d.y + 17, 10, INK, 600, 'right'); }
+    text('TINFOIL KIT', d.x + 14, d.y + 17, 10, INK, 600); text(gb + ' GB', d.x + d.w - 30, d.y + 17, 10, INK, 600, 'right');
     var led = t > T_PACK && !resetting ? (t > T_SAY && Math.sin(t * 21) < -.3 ? .3 : 1) : .2;
     ctx.globalAlpha = led; ctx.fillStyle = led > .5 ? SIG : INK; ctx.beginPath(); ctx.arc(d.x + d.w - 16, d.y + 13.5, 3.3, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
     if (t < T_PACK + 1) {                 // faint empty slots
@@ -214,37 +206,23 @@
       dots(gl, .7); ctx.globalAlpha = 1;
     }
     ctx.fillStyle = INK; ctx.globalAlpha = 1 - drain; dots(landed, .95); ctx.globalAlpha = 1;
-    if (L.tall) text(gb + ' GB', d.x + d.w / 2, d.y + d.h + 24, 11, INK, 600, 'center');
 
-    // offline: light each part of the drive in turn and label it
+    // offline: light each part of the drive in turn, and name it under the drive
     var say = t > T_SAY && !resetting ? t - T_SAY : resetting && drain < 1 ? 99 : -1, cum = 0, fade = 1 - drain;
     if (say >= 0) PARTS.forEach(function (P, j) {
-      var a0 = cum / TOTAL, a1 = (cum + P[1]) / TOTAL;
+      var c0 = Math.round(cum / TOTAL * d.cols), c1 = Math.max(c0 + 1, Math.round((cum + P[1]) / TOTAL * d.cols)), lit = [];
       cum += P[1];
-      var show = clamp((say - j * .9) / .3);
-      if (!show) return;
-      var per = L.tall ? d.cols : d.rows, lanes = L.tall ? d.rows : d.cols;
-      var c0 = Math.round(a0 * lanes), c1 = Math.max(c0 + 1, Math.round(a1 * lanes)), lit = [];
-      var current = say < (j + 1) * .9 || (j === PARTS.length - 1 && say < 4.2);
-      for (var s = c0 * per; s < Math.min(N, c1 * per); s++) lit.push(slots[s].x, slots[s].y);
-      ctx.globalAlpha = show * fade;
-      if (current) { ctx.fillStyle = SIG; dots(lit, 1.1); }
-      ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.fillStyle = INK;
-      var mid = (c0 + c1) / 2 * d.s, size = P[1] + ' GB', col = current ? SIGT : INK, lx, ax, ay, right;
-      if (L.tall) {                       // leaders out to the sides
-        ay = d.gy + d.gh - mid; right = j % 2 === 1;
-        ax = right ? d.gx + d.gw + 3 : d.gx - 3; lx = right ? d.x + d.w + 18 : d.x - 18;
-        line(ax, ay, lx + (right ? -4 : 4), ay);
-        ctx.beginPath(); ctx.arc(ax, ay, 2, 0, TAU); ctx.fill();
-        text(P[0], lx, ay - 1, 10.5, col, 600, right ? 'left' : 'right'); text(size, lx, ay + 12, 10.5, OLIVE, 500, right ? 'left' : 'right');
-      } else {                            // leaders up and down, labels clear of each other and of the label band
-        ax = d.gx + mid; var up = j % 2 === 0;
-        right = j >= 2;
-        var y0 = up ? d.y - 1 : d.gy + d.gh + 4, y1 = up ? d.y - 30 : d.y + d.h + 30;
-        line(ax, y0, ax, y1); ctx.beginPath(); ctx.arc(ax, y0, 2, 0, TAU); ctx.fill();
-        lx = right ? ax + 6 : ax - 6;
-        text(P[0], lx, up ? y1 - 9 : y1 + 3, 10, col, 600, right ? 'left' : 'right'); text(size, lx, up ? y1 + 4 : y1 + 16, 10, OLIVE, 500, right ? 'left' : 'right');
-      }
+      if (say < j * .9 || !(say < (j + 1) * .9 || (j === PARTS.length - 1 && say < 4.2))) return;
+      for (var s = c0 * d.rows; s < Math.min(N, c1 * d.rows); s++) lit.push(slots[s].x, slots[s].y);
+      ctx.globalAlpha = clamp((say - j * .9) / .3) * fade;
+      ctx.fillStyle = SIG; dots(lit, 1.1);
+      var x0 = d.ox + (c0 - .5) * d.s, x1 = d.ox + (c1 - .5) * d.s, by = d.y + d.h + 9;
+      ctx.strokeStyle = SIG; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x0, by - 4); ctx.lineTo(x0, by); ctx.lineTo(x1, by); ctx.lineTo(x1, by - 4); ctx.stroke();
+      var name = P[0] + '  ', size = P[1] + ' GB', fs = 11.5 * ts, nw, sw;
+      ctx.font = '600 ' + fs + 'px ' + MONO; nw = ctx.measureText(name).width;
+      ctx.font = '500 ' + fs + 'px ' + MONO; sw = ctx.measureText(size).width;
+      var lx = Math.max(8, Math.min(L.W - 8 - nw - sw, (x0 + x1) / 2 - (nw + sw) / 2)), ly = by + 7 + fs * .8;
+      text(name, lx, ly, 11.5, SIGT, 600); text(size, lx + nw, ly, 11.5, OLIVE, 500);
       ctx.globalAlpha = 1;
     });
 
@@ -255,22 +233,11 @@
     var w = L.wifi, bars = 3, off = clamp((t - T_OUT - .5) / .25) * (1 - clamp((t - T_RESET) / .2));
     if (t > T_OUT && !resetting) bars = 3 - Math.min(3, Math.floor(clamp((t - T_OUT) / .6) * 4));
     if (resetting) bars = Math.min(3, Math.floor(clamp((t - T_RESET - .2) / .6) * 4));
-    wifi(w.x, w.y, bars, off);
-    text(off > .5 ? 'WI-FI OFF' : 'ONLINE', w.x + 18, w.y - 2, 10.5, off > .5 ? SIGT : INK, 600);
-    if (off > .5) text('THE DRIVE STILL ANSWERS', w.x + 18, w.y + 12, 9.5, OLIVE, 500);
-
-    // the three steps
-    if (!L.tall) {
-      var step = t < T_PACK || t > T_RESET + .4 ? 0 : t < T_OUT ? 1 : 2;
-      ['01 THE INTERNET', '02 ONE DRIVE', '03 OFFLINE'].forEach(function (s, j) {
-        var x = [g.x, d.x + 70, d.x + 200][j];
-        text(s, x, 360, 10.5, j === step ? INK : OLIVE, j === step ? 600 : 500, 'center');
-        if (j === step) { ctx.fillStyle = SIG; ctx.fillRect(x - 44, 367, 88, 2.5); }
-      });
-    }
+    wifi(w.x, w.y, bars, off, ts);
+    text(off > .5 ? 'WI-FI OFF' : 'ONLINE', w.x + 18 * ts, w.y - 2 * ts, 11, off > .5 ? SIGT : INK, 600);
   }
 
-  // Playback: a Pause button, a still frame for reduced motion, and nothing drawn while off screen.
+  // Playback: clicking the figure pauses it (WCAG 2.2.2), a still frame for reduced motion, nothing drawn while off screen.
   var still = window.matchMedia('(prefers-reduced-motion: reduce)'), playing = !still.matches, visible = true;
   var STILL_AT = 5.4, clock = playing ? 0 : STILL_AT, last = 0, raf = 0;
   function frame() { if (L) draw(clock % LOOP, Math.floor(clock / LOOP)); }
@@ -281,8 +248,8 @@
     if (playing && visible) raf = requestAnimationFrame(tick);
   }
   function kick() { if (!raf && playing && visible) { last = 0; raf = requestAnimationFrame(tick); } }
-  function label() { btn.textContent = playing ? 'Pause' : 'Play'; btn.setAttribute('aria-label', (playing ? 'Pause' : 'Play') + ' the animation'); }
-  // dropping the queued frame makes Pause hold exactly what's on screen
+  function label() { btn.setAttribute('aria-pressed', String(!playing)); }
+  // dropping the queued frame makes a pause hold exactly what's on screen
   btn.addEventListener('click', function () { playing = !playing; cancelAnimationFrame(raf); raf = 0; label(); kick(); });
   still.addEventListener && still.addEventListener('change', function () { playing = !still.matches; if (!playing) clock = STILL_AT; label(); frame(); kick(); });
   new IntersectionObserver(function (es) { visible = es[0].isIntersecting; kick(); }).observe(cv);

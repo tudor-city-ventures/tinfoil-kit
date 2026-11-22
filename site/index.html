@@ -119,13 +119,13 @@ nav.links{margin-left:auto}
 .ctas .star svg{color:var(--signal);flex:none}
 @media (max-width:600px){.ctas{display:grid;grid-template-columns:1fr 1fr}.ctas .btn{justify-content:center;padding:0 12px}.ctas .star{grid-column:1/-1;justify-self:start}}
 @media (max-width:359px){.ctas{grid-template-columns:1fr}}
-.fig{flex:1 1 480px;min-width:0;margin:0;border:var(--rule);background:var(--paper2);padding:24px}
-.fig canvas{display:block;width:100%;height:auto;aspect-ratio:600/380}
-.fig figcaption{display:flex;justify-content:space-between;align-items:center;gap:12px;font:12px var(--mono);color:var(--ink2);margin-top:12px}
-.viz-pause{flex:none;min-height:28px;padding:0 10px;border:1px solid var(--ink);border-radius:3px;background:transparent;font:500 12px var(--mono);color:var(--ink);cursor:pointer}
-.viz-pause:hover{background:var(--paper)}
+.fig{position:relative;flex:1 1 480px;min-width:0;max-width:560px;margin:0;border:var(--rule);background:var(--paper2);padding:24px}
+.fig canvas{display:block;width:100%;height:auto;aspect-ratio:440/500}
+/* the whole figure is the pause control: no button showing until it's paused */
+.viz-toggle{position:absolute;inset:0;width:100%;padding:0;border:0;background:none;cursor:pointer}
+.viz-state{display:none;position:absolute;top:12px;right:12px;align-items:center;gap:6px;min-height:28px;padding:0 10px;border:1px solid var(--ink);border-radius:3px;background:var(--paper);font:500 12px var(--mono);letter-spacing:.06em;color:var(--ink)}
+.viz-toggle[aria-pressed=true] .viz-state{display:inline-flex}
 html:not(.js) .fig{display:none}
-@media (max-width:507px){.fig canvas{aspect-ratio:340/480}}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 .band{border-top:var(--rule);border-bottom:var(--rule);background:var(--paper2)}
 .section{padding-top:72px;padding-bottom:72px;display:flex;flex-direction:column;gap:28px}
@@ -311,7 +311,7 @@ Menu</button>
 </div>
 <figure class="fig viz">
 <canvas role="img" aria-label="A dotted globe spins up and streams into a drive until the drive holds the whole kit. Then the Wi-Fi goes off, the globe goes dark, and the drive lights up what it holds: Wikipedia, AI models, maps and guides."></canvas>
-<figcaption><span>FIG. 1 · About 300&nbsp;GB of the world on one SSD.</span><button type="button" class="viz-pause">Pause</button></figcaption>
+<button type="button" class="viz-toggle" aria-label="Pause the animation" aria-pressed="false"><span class="viz-state" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 0L10 5L1 10z" fill="currentColor"/></svg>PLAY</span></button>
 </figure>
 </section>
 
