@@ -108,6 +108,7 @@ export default function Download({ children }) {
     <>
       <div className="ctas">
         <SetupLink className="btn primary" id="askAI">Set up with your AI</SetupLink>
+        <span className="or">or</span>
         <a className="btn" id="getKit" href={mine ? `${RELEASES}/latest/download/${mine.file}` : `${RELEASES}/latest`} onClick={get}>{mine ? `Download for ${mine.name}` : 'Download free'}</a>
         {children}
       </div>
@@ -129,7 +130,7 @@ export default function Download({ children }) {
                 </li>
               ))}
             </ul>
-            <p className="dl-fine">It's the same kit on all three, and a kit on an exFAT drive starts on any of them. Intel Macs can't run it. Every version, and the source code: <a href={RELEASES}>GitHub releases</a>.</p>
+            <p className="dl-fine">It's the same kit on all three, and a kit on an exFAT drive starts on any of them. Every version, and the source code: <a href={RELEASES}>GitHub releases</a>.</p>
           </div>
           <div data-view="mac" hidden={view !== 'mac'}>
             <p>Your download has started. Here's what to click.</p>

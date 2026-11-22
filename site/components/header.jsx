@@ -29,7 +29,6 @@ export default function Header() {
           Menu
         </button>
         <nav className="links" id="sections" aria-label="Sections" onClick={(e) => e.target.closest('a') && setOpen(false)}>
-          <a href="#inside" data-for="human">What's inside</a>
           <a href="#builder" data-for="human">Build your kit</a>
           <a href="#prompts" data-for="human">Set up with AI</a>
           <a href="#trust" data-for="human">Is it safe?</a>

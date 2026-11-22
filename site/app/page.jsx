@@ -40,18 +40,6 @@ export const metadata = {
 };
 
 // What search engines and AI answer engines read about the kit. Keep its facts in step with the copy.
-// How it compares: what each kit is, from its own docs. Keep it factual, and say where Project NOMAD is ahead.
-const COMPARE = [
-  ["Runs on", "The Mac, Windows or Linux computer you have", "A PC running Ubuntu or Debian, usually one set aside for it"],
-  ["Setup", "Double-click, or paste one command. No Docker or admin password.", "One command, run as admin. It runs in Docker."],
-  ["Where it lives", "One folder, on an external drive or your computer. The drive works on any Mac, Windows or Linux computer.", "On that PC"],
-  ["Library", "Wikipedia, plus medical, preparedness and repair books, from Kiwix", "Kiwix collections too, plus Khan Academy courses through Kolibri"],
-  ["AI", "Answers from every book, with sources, and reads your notes. Nothing to index first.", "Chat that answers from your own documents and its books, once it indexes them"],
-  ["Maps", "Address search, driving and walking directions, the nearest hospital, and pins with notes", "Offline maps, with pins and notes"],
-  ["Sharing at home", "Off until you turn it on, then behind an access code", "Open to every device on the network, with no login, by design"],
-  ["Apps", "Just the library, the AI, the map and your notes", "An app catalog: CyberChef, notes, translation and more"],
-];
-
 const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
@@ -152,28 +140,6 @@ export default function Home() {
             </ol>
           </div>
         </section>
-        <section id="inside" className="band" data-for="human">
-          <div className="wrap section">
-            <div className="head-row">
-              <h2>What's inside</h2>
-              <p className="mono" style={{ fontSize: "14px", color: "var(--ink2)" }}>It opens in your browser like a website, but it all runs on your laptop.</p>
-            </div>
-            <div className="grid4">
-              <div className="tile">
-                <h3>Ask anything</h3>
-                <p>Ask a question and get a clear answer, with citations.</p>
-              </div>
-              <div className="tile">
-                <h3>Look it up</h3>
-                <p>All of Wikipedia, plus medical, repair and emergency guides.</p>
-              </div>
-              <div className="tile">
-                <h3>Find your way</h3>
-                <p>Search an address and get driving or walking directions.</p>
-              </div>
-            </div>
-          </div>
-        </section>
         <section id="builder" className="wrap section" data-for="human">
           <Builder>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -266,34 +232,6 @@ export default function Home() {
               <li><b>Every download is checked</b><span>Each program is pinned to an exact build and its checksum. The kit updates itself only from releases signed with the maintainer's key.</span></li>
               <li><b>Only you can reach it</b><span>It runs on your computer and answers only you. Sharing with your home network stays off until you turn it on, and then it asks for a code.</span></li>
             </ul>
-          </div>
-        </section>
-        <section id="compare" className="band" data-for="human">
-          <div className="wrap section">
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <p className="kicker">How it compares</p>
-              <h2>How it's different from Project NOMAD.</h2>
-              <p style={{ fontSize: "18px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "680px" }}><a href="https://github.com/Crosstalk-Solutions/project-nomad">Project NOMAD</a>, from Crosstalk Solutions, is another free, open-source way to keep knowledge offline. It turns a spare PC into an offline server. Tinfoil Kit goes on the laptop you have, or on a drive you can plug into any computer.</p>
-            </div>
-            <table className="compare" role="table">
-              <thead role="rowgroup">
-                <tr role="row">
-                  <td role="cell" />
-                  <th scope="col" role="columnheader">Tinfoil Kit</th>
-                  <th scope="col" role="columnheader">Project NOMAD</th>
-                </tr>
-              </thead>
-              <tbody role="rowgroup">
-                {COMPARE.map(([what, ours, theirs]) => (
-                  <tr key={what} role="row">
-                    <th scope="row" role="rowheader">{what}</th>
-                    <td role="cell" data-label="Tinfoil Kit">{ours}</td>
-                    <td role="cell" data-label="Project NOMAD">{theirs}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="compare-note">Pick Project NOMAD for a home server with apps, and an AI that reads your own documents. Pick Tinfoil Kit for the laptop you have, or a drive that works on any computer.</p>
           </div>
         </section>
         <section id="faq" className="wrap section" data-for="human">
@@ -393,7 +331,7 @@ export default function Home() {
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
               <summary itemProp="name">How is Tinfoil Kit different from Project NOMAD?</summary>
               <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
-                <p itemProp="text">Project NOMAD, from Crosstalk Solutions, is also free and open source. It turns a PC running Ubuntu or Debian into an offline server, in Docker, with an app catalog and an AI that can answer from your own documents. Tinfoil Kit runs on the Mac, Windows or Linux computer you have, with no Docker, from one folder that can live on a drive you plug into any of them. Its map finds addresses and gives directions, and sharing it at home takes an access code. <a href="#compare">The comparison above</a> has more.</p>
+                <p itemProp="text"><a href="https://github.com/Crosstalk-Solutions/project-nomad">Project NOMAD</a>, from Crosstalk Solutions, is also free and open source. It turns a PC running Ubuntu or Debian into an offline server, in Docker, with an app catalog and an AI that can answer from your own documents. Tinfoil Kit runs on the Mac, Windows or Linux computer you have, with no Docker, from one folder that can live on a drive you plug into any of them. Its map finds addresses and gives directions, and sharing it at home takes an access code. Pick Project NOMAD for a home server with apps. Pick Tinfoil Kit for the laptop you have, or a drive that works on any computer.</p>
               </div>
             </details>
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">

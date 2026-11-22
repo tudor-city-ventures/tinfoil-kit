@@ -64,6 +64,9 @@ INKED = """(() => { const c = document.querySelector('.fig canvas'), d = c.getCo
 STAR = """(() => { const r = s => document.querySelector(s).getBoundingClientRect(), s = r('.ctas .star'), g = r('.ctas .btn:not(.primary)'), n = r('.cta-note');
   if (!s.height || s.bottom > n.top) return 'misplaced';
   return Math.abs(s.top + s.height / 2 - g.top - g.height / 2) < 8 ? 'beside' : s.top >= g.bottom ? 'below' : 'misplaced'; })()"""
+# An 'or' between the two main buttons: downloading is the other way in, for people who'd rather not use an AI
+OR = """(() => { const r = s => document.querySelector(s).getBoundingClientRect(), a = r('#askAI'), o = r('.ctas .or'), g = r('#getKit');
+  return a.right <= o.left && o.right <= g.left ? 'beside' : a.bottom <= o.top && o.bottom <= g.top ? 'below' : 'neither' })()"""
 
 # Travis: never mention 2 TB; the drive's size isn't the point
 copy = glob.glob(os.path.join(SITE, "app", "**", "*.jsx"), recursive=True) + glob.glob(os.path.join(SITE, "components", "**", "*.js*"), recursive=True)
@@ -141,10 +144,10 @@ with sync_playwright() as p:
         check(f"{name}: Star on GitHub sits {'beside' if name == 'desktop' else 'under'} the main buttons",
               where == ("beside" if name == "desktop" else "below") and star.inner_text().strip() == "Star on GitHub"
               and star.get_attribute("href") == "https://github.com/tudor-city-ventures/tinfoil-kit", where)
+        between = page.evaluate(OR)
+        check(f"{name}: an 'or' between the two main buttons makes Download the other way",
+              page.inner_text(".ctas .or") == "or" and between == ("beside" if name == "desktop" else "below"), between)
         if name == "phone":
-            label = page.evaluate("getComputedStyle(document.querySelector('#compare tbody td'), '::before').content")
-            check("phone: How it compares shows a card per point, each answer labeled", label == '"Tinfoil Kit"'
-                  and page.evaluate("getComputedStyle(document.querySelector('#compare tbody tr')).display") == "block", label)
             page.set_viewport_size({"width": 320, "height": 640})    # the narrowest width WCAG asks a page to fit
             width = page.evaluate("document.documentElement.scrollWidth")
             check("320px phone: no sideways scroll", width <= 320, f"{width}px")
@@ -198,10 +201,9 @@ with sync_playwright() as p:
             ours = page.text_content("#installPrompt")
             check("Install ours: the AI asks about a drive and its format, then gives the command to run",
                   "external drive" in ours and "formatted" in ours and "give me the command" in ours)
-            heads = page.eval_on_selector_all("#compare thead th", "els => els.map(e => e.textContent)")
-            rows = page.eval_on_selector_all("#compare tbody th", "els => els.map(e => e.textContent)")
-            check("How it compares: Tinfoil Kit and Project NOMAD side by side, point by point",
-                  heads == ["Tinfoil Kit", "Project NOMAD"] and len(rows) >= 6 and rows[0] == "Runs on", str(rows))
+            check("Project NOMAD is one question in the FAQ, and there's no What's inside section",
+                  page.locator("#compare, #inside, a[href='#inside']").count() == 0
+                  and page.locator("#faq summary", has_text="Project NOMAD").count() == 1)
             old = b.new_page()    # a browser without the clipboard API (e.g. the page opened over plain http)
             old.add_init_script("Object.defineProperty(Navigator.prototype, 'clipboard', {get: () => undefined})")
             old.goto(URL)
