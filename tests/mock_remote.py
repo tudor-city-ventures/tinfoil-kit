@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import socketserver
 import sys
 from email.utils import formatdate
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -307,6 +308,13 @@ class H(BaseHTTPRequestHandler):
         self.send_error(404)
 
 
+class Server(ThreadingHTTPServer):
+    def server_bind(self):
+        # Without http.server's lookup of the address's name, which on a Mac can ask to find devices on local networks.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
 if __name__ == "__main__":
     print(f"mock remote on {BASE}", flush=True)
-    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+    Server(("127.0.0.1", PORT), H).serve_forever()
