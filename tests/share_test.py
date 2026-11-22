@@ -196,6 +196,19 @@ try:
     check("gate: llama-server's tools and web proxy stay off for the network, however they're spelled",
           all(r.status == 403 and b"feature_disabled" in d for r, d in answers) and len(Upstream.seen) == n,
           str([(r.status, d[:40]) for r, d in answers]))
+    # A browser sends its next request on the same connection: what the gate didn't read mustn't become part of it.
+    c = http.client.HTTPConnection("127.0.0.1", gport, timeout=20)
+    seq = []
+    for path, hdrs in (("/ai/tools", signed), ("/ai/v1/models", signed), ("/ai/v1/chat/completions", {}),
+                       ("/ai/v1/models", signed)):
+        c.request("POST" if "models" not in path else "GET", path,
+                  body=b'{"messages": []}' if "models" not in path else None, headers=hdrs)
+        r = c.getresponse()
+        r.read()
+        seq.append(r.status)
+    c.close()
+    check("gate: a request answered without reading its body doesn't spoil the next one on the connection",
+          seq == [403, 200, 401, 200], str(seq))
     r, data, _ = req("GET", "/ai", headers=signed)
     check("gate: /ai becomes /ai/", r.status == 303 and r.getheader("Location") == "/ai/")
     r, data, _ = req("GET", "/tiles/basemap/1/0/0.mvt?x=1", headers=signed)

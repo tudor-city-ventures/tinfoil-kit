@@ -523,6 +523,7 @@ class Gate(http.server.ThreadingHTTPServer):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    body_read = False
     server: Gate
 
     def version_string(self) -> str:
@@ -535,6 +536,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         sys.stderr.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {self.client_address[0]} {fmt % args}\n")
 
     def do_GET(self) -> None:
+        self.body_read = False
         try:
             self.respond()
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, socket.timeout):
@@ -549,6 +551,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         for k, v in (("Content-Type", ctype), ("Content-Length", str(len(body))), ("Cache-Control", "no-store"),
                      *headers):
             self.send_header(k, v)
+        if self.close_connection or not self.body_read and (self.headers.get("Transfer-Encoding") or
+                                   (self.headers.get("Content-Length") or "0").strip() not in ("", "0")):
+            # Answered without reading what the device sent (turned away, or llama-server's tools): the rest of
+            # it would be read as the next request on this connection, so close it instead.
+            self.send_header("Connection", "close")
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
@@ -576,6 +583,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # -- the access code
 
     def body(self) -> Optional[bytes]:
+        self.body_read = True
         if "chunked" in self.headers.get("Transfer-Encoding", "").lower():
             parts, total = [], 0
             while True:

@@ -133,7 +133,8 @@ with sync_playwright() as p:
         check("shared: nothing failed", not bad and not js, "; ".join(bad + js))
 
         # The AI chat link opens llama-server's own chat page, which asks for its API by paths of its own. It
-        # keeps a connection open, so the page never goes quiet: wait for the message box instead.
+        # keeps a connection open, so the page never goes quiet: wait for the message box instead (the visible one:
+        # the page has hidden text boxes too).
         bad.clear()
         pending = {}
         p3.on("request", lambda r: pending.__setitem__(r, r.url))
@@ -141,7 +142,7 @@ with sync_playwright() as p:
         p3.on("requestfailed", lambda r: pending.pop(r, None))
         try:
             p3.goto(share + "/ai/")
-            box = p3.locator("textarea").first
+            box = p3.locator("textarea:visible, [contenteditable=true]:visible").first
             box.wait_for(timeout=30000)
             with p3.expect_response(lambda r: "chat/completions" in r.url, timeout=120000) as reply:
                 box.fill("Hello")
@@ -150,8 +151,10 @@ with sync_playwright() as p:
             p3.wait_for_timeout(2000)
         except Exception as e:    # a timeout: say what was on screen and what was still loading
             answered = False
+            boxes = p3.evaluate("[...document.querySelectorAll('textarea, [contenteditable]')].map(e => e.tagName + ' '"
+                                " + e.offsetWidth + 'x' + e.offsetHeight + ' ' + getComputedStyle(e).visibility).join(', ')")
             why = (str(e).splitlines()[0] + " | on screen: " + " ".join(p3.inner_text("body").split())[:300]
-                   + " | still loading: " + ", ".join(sorted(set(pending.values())))[:300])
+                   + " | text boxes: " + boxes + " | still loading: " + ", ".join(sorted(set(pending.values())))[:300])
         p3.screenshot(path=os.path.join(SHOTS, "shot_share_ai_chat.png"))
         check("shared: AI chat answers through the gate", answered, why)
         # The page asks whether llama-server's own tools are on. They aren't, and the gate keeps them off.
