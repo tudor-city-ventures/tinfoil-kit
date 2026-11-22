@@ -1,7 +1,8 @@
 package main
 
 // kit.json and the kit's records in data/.kit are JSON that people read and edit. They're written the way Python's
-// json module writes them, with keys in the order they came, so a file looks the same whichever program wrote it.
+// json module writes them, with keys in the order they came, as the kit's first versions wrote them, so a person's
+// file keeps its layout across versions.
 
 import (
 	"encoding/json"

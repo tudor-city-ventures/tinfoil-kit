@@ -1,6 +1,6 @@
 """Mock of library.kiwix.org, download.kiwix.org, api.github.com and huggingface.co for testing.
 
-State "v1" = initial release; touch remote/STATE_V2 to simulate the world 3 months later
+State "v1" = initial release; touch remote/STATE_V2 to simulate the world months later
 (newer ZIM date, new llama.cpp build, re-uploaded model file).
 """
 

@@ -11,6 +11,22 @@
 //	tinfoilkit compare A B     whether two copies of the program are the same (build.sh verify asks)
 //	tinfoilkit list FILE [TAIL]  SETUP-Windows.bat's numbered choices
 //	tinfoilkit version
+//
+// Where things are:
+//
+//	main.go      which command to run, and on which kit folder
+//	kit.go       the kit's folders, output and logs, the command line, and the list of ./kit's commands
+//	plan.go      each item's newest version and files, from its publisher (plan)
+//	sync.go      downloading, several connections to a big file, checking and installing (sync)
+//	cmds.go      pick, remove, fit, plan, pins, sync, verify, status, search and test
+//	pick.go      where you live and Wikipedia's languages (region), what fits (estimate, space), essentials, starter
+//	setup.go     drives, place, kits, layout, update (signed releases), share and autostart
+//	open.go      starting the servers and opening the page (open)
+//	gate.go      sharing on the home network behind the access code (gate, banner), with qr.go's QR code
+//	data.go      the page's notes and the map's home and pins (data)
+//	pbf.go       merging places nearby's road data into one file for directions
+//	json.go      kit.json and the kit's records, read and written in the layout people see
+//	sys_*.go     what Windows does differently: memory, disk space, processes, locks
 package main
 
 import (

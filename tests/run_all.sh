@@ -1,7 +1,7 @@
 #!/bin/bash
 # End-to-end test of the kit against the mock internet. Run tests/build_fixtures.sh first.
 # Copies the kit onto a fake drive, syncs, tests, launches, drives the page, then simulates
-# an update 3 months later. Exits non-zero if anything failed.
+# an update months later. Exits non-zero if anything failed.
 set -u
 TESTS="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$TESTS")"
@@ -80,7 +80,7 @@ grep -q "Starting maps" "$L/launch2.out" && echo "FAIL: maps started" || echo "o
 grep -q "home network" "$L/launch2.out" && echo "FAIL: still shared after ./kit share off" || echo "ok: not shared"
 pgrep -f "mock_services.py (tiles|photon|graphhopper)" >/dev/null && echo "FAIL: map process running"
 cleanup 2>/dev/null
-step "update (3 months later)"; touch "$R/STATE_V2"; rm -f "$D/data/.kit/cache/kiwix-catalog.xml"
+step "update (months later)"; touch "$R/STATE_V2"; rm -f "$D/data/.kit/cache/kiwix-catalog.xml"
 touch -d "2027-02-03 06:00" "$R/geofabrik/us-northeast-latest.osm.pbf" "$R/photon/north-america/usa/photon-db-usa-1.3-latest.tar.bz2"
 ./kit sync -y > "$L/sync2.log" 2>&1; echo "exit $?"; grep -E "^\[[0-9]|removed|UPDATE" "$L/sync2.log" | head -30
 step "test after update"; timeout 600 ./kit test | tail -1

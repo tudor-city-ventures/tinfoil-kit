@@ -423,7 +423,7 @@ func tier(cfg *obj, essentials, starter bool) (bool, bool) {
 
 func nowISO() string { return time.Now().Format("2006-01-02T15:04:05") }
 
-// exitCode ends the kit with this code once deferred clean-ups have run, as Python's sys.exit did.
+// exitCode, panicked with, ends the kit with this code once deferred clean-ups have run.
 type exitCode int
 
 // interrupted is Ctrl-C, which stops the kit where it is, keeping what it has.

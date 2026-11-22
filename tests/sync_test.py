@@ -888,8 +888,8 @@ pathlib.Path(str(out) + ".aria2").unlink()
         out + str(sent),
     )
 
-    # Travis's rule: the app folder can be deleted any time for a new version's, and downloads/ and data/ stay as they
-    # are. The new version's changes to the standard list go into the person's kit.json, and their own choices stay.
+    # The app folder can be deleted any time for a new version's, and downloads/ and data/ stay as they are. The new
+    # version's changes to the standard list go into the person's kit.json, and their own choices stay.
     on_drive = sorted(p.relative_to(old).as_posix() for p in (old / "downloads").rglob("*"))
     shutil.rmtree(old / "app")
     new_kit(old)
@@ -994,7 +994,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
             f"{left}\n{out}",
         )
 
-    # Three months later. Plant leftovers an interrupted sync could have left behind:
+    # Months later. Plant leftovers an interrupted sync could have left behind:
     # a book download from an older edition, a model download of the old file under the same name,
     # and a download for a book that's switched off (kept, in case it's switched back on).
     old_book = drive / "downloads" / "library/testsurvival_en_2025-11.zim.partial"
@@ -3302,7 +3302,7 @@ Server(("::1", port), Page).serve_forever()
         rc == 0 and f"Address search: all of {wide['addresses']}" in out and "Just the essentials leave it out" in out,
         out,
     )
-    # Places nearby, after where you live (Travis: "Weird I can only select my state and not other states nearby")
+    # Places nearby, after where you live: someone near a state line wants the next state's streets and directions too
     rc, out = kit("region", "New York, New Jersey", root=rk)
     check(
         "region: places nearby after commas: maps and directions for each, home and address search from the first",

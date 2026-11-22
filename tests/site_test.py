@@ -70,13 +70,13 @@ STAR = """(() => { const r = s => document.querySelector(s).getBoundingClientRec
 OR = """(() => { const r = s => document.querySelector(s).getBoundingClientRect(), a = r('#askAI'), o = r('.ctas .or'), g = r('#getKit');
   return a.right <= o.left && o.right <= g.left ? 'beside' : a.bottom <= o.top && o.bottom <= g.top ? 'below' : 'neither' })()"""
 
-# Travis: never mention 2 TB; the drive's size isn't the point
+# Never 2 TB: the drive's size isn't the point
 copy = glob.glob(os.path.join(SITE, "app", "**", "*.jsx"), recursive=True) + glob.glob(
     os.path.join(SITE, "components", "**", "*.js*"), recursive=True
 )
 site_text = " ".join(open(f, encoding="utf-8").read() for f in copy + [os.path.join(SITE, "public", "llms.txt")])
 check("the site never mentions 2 TB", not re.search(r"\b2(\s|&nbsp;)*TB\b", site_text, re.I))
-# Travis: people update whenever they like, so no copy names a schedule
+# People update whenever they like, so no copy names a schedule
 check("the site names no update schedule", not re.search(r"\bmonths?\b|\bquarterly\b", site_text, re.I))
 # the check-the-code prompt sends people's AIs to these files, so they have to exist
 named = re.findall(
@@ -93,7 +93,7 @@ missing = [
     if f"`{s['id']}`" not in llms and not s["id"].startswith("wikipedia_")
 ]
 check("llms.txt lists every id the setup options take", not missing and "`wikipedia`" in llms, ", ".join(missing))
-# Travis: the AI looks for an external drive first, and checks it's formatted for both a Mac and a PC
+# The AI looks for an external drive first, and checks it's formatted for both a Mac and a PC
 setup = llms.split("## Set it up", 1)[-1].split("\n## ", 1)[0]
 check(
     "llms.txt: the AI gives the command instead of installing, and finds the drive and checks its format first",
@@ -229,7 +229,7 @@ with sync_playwright() as p:
                 "Copy puts the prompt on the clipboard",
                 page.evaluate("navigator.clipboard.readText()").startswith("I want to set up Tinfoil Kit"),
             )
-            # Travis: AI setup is the main button, Download the second; step 2 of How it works opens the same prompt
+            # AI setup is the main button, Download the second; step 2 of How it works opens the same prompt
             check(
                 "the hero's main button is Set up with your AI, then Download",
                 page.inner_text(".ctas .btn.primary") == "Set up with your AI"
@@ -258,7 +258,7 @@ with sync_playwright() as p:
                 str(steps),
             )
             page.keyboard.press("Escape")
-            # Travis: step 2 also says the installer is there for people who'd rather not use an AI
+            # Step 2 also says the installer is there for people who'd rather not use an AI
             page.click("#how small a")
             check(
                 "How it works: step 2's small print offers the installer, and its link lists the downloads",
@@ -508,8 +508,8 @@ with sync_playwright() as p:
                 and page.inner_text("#wikiLang").startswith("Georgian"),
                 us_georgia,
             )
-            # Places nearby (Travis: "Weird I can only select my state and not other states nearby"): the ones near where
-            # you live first; each goes on the map card, in SETUP's options after where you live, and in the prompt
+            # Places nearby, for someone near a state line: the ones near where you live first; each goes on the map
+            # card, in SETUP's options after where you live, and in the prompt
             choose(page, "#place", "Germany: Bayern")
             page.click("#nearby")
             first = page.locator("[role=listbox] [role=group]").first
@@ -691,8 +691,8 @@ with sync_playwright() as p:
     )
     axe(pg, "AI setup on a phone")
     ctx.close()
-    # Travis: a demo of the kit page, faked, so it costs nothing to run: answers written ahead of time, a sample
-    # town's map, the library, notes and AI chat, all in the page
+    # The demo of the kit page is faked, so it costs nothing to run: answers written ahead of time, a sample town's
+    # map, the library, notes and AI chat, all in the page
     demo, errs = b.new_page(viewport={"width": 1440, "height": 900}), []
     demo.on("pageerror", lambda e: errs.append(str(e)))
     demo.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)

@@ -24,7 +24,8 @@ def data_uri(path, mime):
 ICON = data_uri(os.path.join(SITE, "public", "icon.svg"), "image/svg+xml")
 FONT = data_uri(os.path.join(SITE, "app", "fonts", "plex-sans.woff2"), "font/woff2")
 
-# Link previews show the card at a quarter of its size or less, so it holds only the name, the headline and the mark, all large.
+# Link previews show the card at a quarter of its size or less, so it holds only the name, the headline and the mark,
+# all large.
 CARD = Template("""<style>
 @font-face{font-family:Sans;font-weight:400 700;src:url($font)}
 body{margin:0;width:${w}px;height:${h}px;position:relative;overflow:hidden;background:$paper;color:$ink;font-family:Sans}

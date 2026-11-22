@@ -780,7 +780,7 @@ func (r *resolver) routing(it *item) error {
 	return nil
 }
 
-// sizeOrNone is a size as Python showed one that might be None.
+// sizeOrNone is a size as a version, or "None" with no size: what older kits recorded, so their data still matches.
 func sizeOrNone(n int64) string {
 	if n == 0 {
 		return "None"

@@ -12,6 +12,22 @@ Thanks for helping. One person maintains the kit, so the process keeps their tim
 
 A bot closes issues filed without a form (with `gh` or the API, say), feature proposals with no picture or video, and pull requests that don't link an accepted issue. People who've had a pull request merged here needn't use a form or link an accepted issue, but the rest applies. Anyone without write access can have two pull requests open at a time. A pull request that changes the workflows, CODEOWNERS, Dependabot's settings, `.gitattributes`, the release key or how the Mac app is signed fails a check, and only the maintainer can merge it.
 
+## Setting up
+
+You need Go 1.21 or newer (`tools/tinfoilkit/build.sh` then fetches the exact version it pins), Node 22, Python 3.9 or newer and curl. The quick gate also runs shellcheck and ruff 0.17.5 (`pip install ruff==0.17.5`) when they're installed; CI always does.
+
+```bash
+git clone https://github.com/tudor-city-ventures/tinfoil-kit.git && cd tinfoil-kit
+npm ci --ignore-scripts   # Prettier, ESLint and axe-core, for the checks: nothing in the kit uses them
+tests/check.sh            # the quick gate: builds the kit's program, then runs the quick tests against mocks
+```
+
+A checkout is a kit too: `./kit` builds its program the first time, and `downloads/` and `data/` are git-ignored. But a real `./kit sync` downloads hundreds of GB, so the tests use mocks of every download source instead. To work on the website: `cd site && npm ci --ignore-scripts && npm run dev`.
+
+## Where things are
+
+The kit's program is in `tools/tinfoilkit/` (Go) and its page in `tools/portal.html`; `kit.json` lists what a kit downloads; the double-click scripts (`SETUP.command` and the rest) sit at the top; `mac/` is the Mac app, `site/` the website and `tests/` the tests. [AGENTS.md](../AGENTS.md#map) has the full map, and [docs/DESIGN.md](../docs/DESIGN.md) how it all works and why.
+
 ## Good places to start
 
 - **Library sources.** Suggest one with the feature form, with its exact name from `./kit search WORDS` and a screenshot of it. AGENTS.md has [the steps](../AGENTS.md#adding-or-replacing-a-library-source).
@@ -34,7 +50,7 @@ A check fails on pull requests with unsigned commits. Fix them with `git commit 
 
 ## Code rules
 
-[AGENTS.md](../AGENTS.md) has them, for people and agents alike: Go's standard library, bash 3.2, no symlinks, every download source overridable for the tests. Skip its Workflow section, which is for the maintainers.
+[AGENTS.md](../AGENTS.md#rules) has them, for people and agents alike: Go's standard library, bash 3.2, no symlinks, every download source overridable for the tests. Its Workflow section is for the maintainer's own agents; you follow this file instead.
 
 ## Also
 

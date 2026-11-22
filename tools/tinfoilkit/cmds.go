@@ -334,7 +334,7 @@ func readLine() string {
 	}
 }
 
-// ask prints a question and reads the answer, as Python's input() did.
+// ask prints a question and reads the answer.
 func ask(question string) string {
 	out(question)
 	return readLine()
