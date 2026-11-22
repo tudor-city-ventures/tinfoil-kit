@@ -373,6 +373,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # SETUP.command's choices, with a stand-in ./kit that exits as told. Its update rewrites SETUP.command in
     # place, the hard case for bash, which reads a script as it goes.
     stand_in = """#!/bin/bash
+case "$1" in drives|place) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
 echo "kit $1" >> calls.log
 case "$1" in
   estimate) echo "${ESTIMATE:-1}";;
@@ -383,7 +384,7 @@ case "$1" in
         [ $SYNC = 1 ] && printf 'Problems (everything else is done):\n  - models/Big: download failed\nRe-run ./kit sync\n' >> logs/sync-2026-01-01.log
         exit $SYNC;;
   test) exit $TEST;;
-esac"""
+esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     def kit_folder(path, git=False):
         """A kit's code as Download ZIP leaves it (or a git checkout), with the stand-in ./kit."""
@@ -436,7 +437,14 @@ esac"""
 
     # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
     # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.
+    roomy = work / "roomy"
+    roomy.mkdir()
+    (roomy / "df").write_text("#!/bin/sh\necho 'Filesystem 1024-blocks Used Available Capacity Mounted on'\n"
+                              "echo 'disk 2000000000 1000000000 1000000000 50% /'\n")
+    (roomy / "df").chmod(0o755)
+
     def first_run(answers, drives=(), git=False, home_kit=None, **env_extra):
+        """SETUP's first run, on a computer whose disk has 1 TB free (a stand-in df)."""
         place = work / "place"
         shutil.rmtree(place, ignore_errors=True)
         home, vols = place / "home", place / "Volumes"
@@ -453,8 +461,9 @@ esac"""
         (dl / "calls.log").write_text("")
         p = subprocess.run(["bash", str(dl / "SETUP.command")], input=answers, capture_output=True, text=True, timeout=60,
                            env={**os.environ, "HOME": str(home), "KIT_DRIVES": str(env_extra.pop("KIT_DRIVES", vols)),
+                                "PATH": f"{roomy}:{os.environ['PATH']}",
                                 "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0", **env_extra})
-        return p.returncode, p.stdout, dl, home, vols
+        return p.returncode, p.stdout + p.stderr, dl, home, vols    # ./kit place says what it did on stderr
 
     def placed_ok(where):
         log = where / "calls.log"
@@ -496,12 +505,12 @@ esac"""
         drv = Path(tempfile.mkdtemp(prefix="kit drives ", dir=shm))
         try:
             (drv / "USB DRIVE").mkdir()
-            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", KIT_DRIVES=drv)
+            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", KIT_DRIVES=drv, ESTIMATE="0")
             check("SETUP first run: a drive that's another disk: the kit is copied over, and the download removed",
                   rc == 0 and placed_ok(drv / "USB DRIVE" / "TinfoilKit") and not dl.exists() and "Moved the kit" in out
                   and not (drv / "USB DRIVE" / "TinfoilKit.partial").exists(), out)
             shutil.rmtree(drv / "USB DRIVE" / "TinfoilKit")
-            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", git=True, KIT_DRIVES=drv)
+            rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", git=True, KIT_DRIVES=drv, ESTIMATE="0")
             check("SETUP first run: a git checkout is copied to the drive, .git and all, and stays where it was",
                   rc == 0 and placed_ok(drv / "USB DRIVE" / "TinfoilKit") and (drv / "USB DRIVE" / "TinfoilKit" / ".git").is_dir()
                   and dl.exists() and "Use that copy from now on" in out, out)

@@ -36,7 +36,7 @@ jobs:
       # macOS still ships bash 3.2: run the sync test, which drives SETUP.command and the launcher, with it.
       - run: >-
           docker run --rm -v "$PWD:/kit" -w /kit bash:3.2
-          sh -c 'apk add -q python3 curl && ln -sf /usr/local/bin/bash /bin/bash && bash --version | head -1 && python3 tests/sync_test.py'
+          sh -c 'apk add -q python3 curl procps && ln -sf /usr/local/bin/bash /bin/bash && bash --version | head -1 && python3 tests/sync_test.py'
   site:
     runs-on: ubuntu-latest
     steps:

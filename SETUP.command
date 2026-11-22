@@ -25,17 +25,6 @@ free_gb() { df -Pk "$1" 2>/dev/null | awk 'NR == 2 {print int($4 * 1024 / 1e9)}'
 dev_of() { stat -c %d "$1" 2>/dev/null || stat -f %d "$1" 2>/dev/null; }    # Linux, then macOS
 same_disk() { [ "$(dev_of "$1")" = "$(dev_of "$2")" ]; }
 on_this_mac() { same_disk "$KIT" "$HOME"; }
-format_of() { # a drive's format, as macOS (or Linux) names it
-  if [ $MAC = 1 ]; then diskutil info "$1" 2>/dev/null | awk -F': *' '/File System Personality/ {print $2; exit}'
-  else stat -f -c %T "$1" 2>/dev/null; fi
-}
-problem_of() { # why the kit can't live on a drive of this format, if it can't
-  case "$1" in
-    *ExFAT*|*exFAT*|exfat) ;;
-    *FAT*|*MS-DOS*|msdos|vfat) echo "it's formatted as $1, which can't hold files over 4 GB, and the AI models and books are bigger" ;;
-    *NTFS*|*Windows*|ntfs*) echo "it's formatted as $1, which a Mac can read but can't save to" ;;
-  esac
-}
 drive_name() { # the name of the drive a folder is on
   local p="$1"
   case "$p" in
@@ -74,29 +63,18 @@ need_python() {
   done
 }
 
-# The drives plugged in, one mount point per line (KIT_DRIVES: look in that folder instead, for tests). In /Volumes
-# the Mac's own disk is a link to /. Disks that can't be written to (installer disk images, backups) are left out,
-# except NTFS ones, so we can say why those won't do.
-drives() {
-  local base v
-  if [ -n "${KIT_DRIVES:-}" ]; then set -- "$KIT_DRIVES"; else set -- /Volumes "/media/${USER:-none}" "/run/media/${USER:-none}"; fi
-  for base in "$@"; do
-    for v in "$base"/*; do
-      [ -d "$v" ] && [ ! -L "$v" ] || continue
-      if [ -w "$v" ]; then printf '%s\n' "$v"
-      else case "$(format_of "$v")" in *NTFS*|*Windows*|ntfs*) printf '%s\n' "$v" ;; esac; fi
-    done
-  done
-}
-
-# Lists the drives and sets VOL to the one picked. Returns 1 when the person would rather use this Mac.
+# Lists the drives (./kit drives: folder, format, GB free, and why it won't do, or -) and sets VOL to the one
+# picked. Returns 1 when the person would rather use this Mac.
 pick_drive() {
-  local list v n why free
+  local paths fmts frees whys p f g w n i
   while :; do
-    list=()
-    while IFS= read -r v; do list+=("$v"); done < <(drives)
+    paths=(); fmts=(); frees=(); whys=()
+    while IFS=$'\t' read -r p f g w; do
+      paths+=("$p"); fmts+=("$f"); frees+=("$g"); whys+=("$w")
+    done < <(./kit drives 2>/dev/null)
     say "Which drive?"
-    if [ ${#list[@]} -eq 0 ]; then
+    n=${#paths[@]}
+    if [ "$n" -eq 0 ]; then
       echo "No external drive is plugged in."
       echo "  1  Look again (plug the drive in first, and give it a few seconds)"
       echo "  2  Put the kit on $THIS instead"
@@ -104,22 +82,18 @@ pick_drive() {
       [ "$pick" = 2 ] && return 1
       continue
     fi
-    n=0
-    for v in "${list[@]}"; do
-      n=$((n + 1))
-      why="$(problem_of "$(format_of "$v")")"
-      if [ -n "$why" ]; then printf "  %d  %s (won't work: %s)\n" "$n" "${v##*/}" "$(format_of "$v")"
-      else printf "  %d  %s (%s, %s free)\n" "$n" "${v##*/}" "$(format_of "$v")" "$(gb "$(free_gb "$v")")"; fi
+    for ((i = 0; i < n; i++)); do
+      if [ "${whys[$i]}" != "-" ]; then printf "  %d  %s (won't work: %s)\n" $((i + 1)) "${paths[$i]##*/}" "${fmts[$i]}"
+      else printf "  %d  %s (%s, %s free)\n" $((i + 1)) "${paths[$i]##*/}" "${fmts[$i]}" "$(gb "${frees[$i]}")"; fi
     done
     echo "  $((n + 1))  Look again (just plugged one in?)"
     echo "  $((n + 2))  Put the kit on $THIS instead"
     choose "Type a number, then press Return:" $((n + 2))
     [ "$pick" = $((n + 2)) ] && return 1
     [ "$pick" = $((n + 1)) ] && continue
-    VOL="${list[$((pick - 1))]}"
-    why="$(problem_of "$(format_of "$VOL")")"
-    if [ -n "$why" ]; then
-      say "${VOL##*/} won't work: $why."
+    i=$((pick - 1)); VOL="${paths[$i]}"
+    if [ "${whys[$i]}" != "-" ]; then
+      say "${VOL##*/} won't work: ${whys[$i]}."
       echo "To use it, erase it as exFAT. Erasing deletes everything on it, so copy off anything you want to keep first."
       if [ $MAC = 1 ]; then
         echo "In Disk Utility: click ${VOL##*/} in the sidebar, click Erase, choose ExFAT as the format, and click Erase."
@@ -130,9 +104,8 @@ pick_drive() {
       printf '\nWhen the drive is ready, press Return to look again. '; read -r _ || exit 1
       continue
     fi
-    free="$(free_gb "$VOL")"
-    if [ "${free:-0}" -lt "$NEED" ]; then
-      say "${VOL##*/} has $(gb "${free:-0}") free, and the kit needs about $NEED GB."
+    if [ "${frees[$i]}" -lt "$NEED" ]; then
+      say "${VOL##*/} has $(gb "${frees[$i]}") free, and the kit needs about $NEED GB."
       echo "The most important things download first, and what doesn't fit is skipped. A bigger drive holds it all."
       ask "Use ${VOL##*/} anyway?" || continue
     fi
@@ -140,50 +113,14 @@ pick_drive() {
   done
 }
 
-# Carry on with the kit at a new place: the copy there runs the rest of the setup.
-carry_on() { mkdir -p "$1/.kit"; cd "$1" || exit 1; exec bash "$1/SETUP.command" --placed; }
-
-# Put the kit's own files (never downloads) at DEST, on WHERE (this Mac, or the drive NAME). A fresh download
-# is moved there, so there's one copy. A git checkout is a developer's: it stays put, and is copied to another disk.
-move_kit() { # DEST WHERE
-  local dest="$1" where="$2" f
-  if [ "$dest" = "$KIT" ] || [ "${dest%/*}" = "$KIT" ]; then mkdir -p .kit; return; fi
-  if [ -d .git ] && same_disk "$KIT" "${dest%/*}"; then mkdir -p .kit; return; fi
-  if [ -e "$dest" ]; then
-    if [ -f "$dest/kit" ] && [ -f "$dest/SETUP.command" ]; then
-      say "There's already a Tinfoil Kit on $where ($dest). Carrying on with that one."
-      carry_on "$dest"
-    fi
-    say "There's already a folder called $NAME on $where ($dest), and it isn't a Tinfoil Kit."
-    echo "Rename it or move it somewhere else, then double-click SETUP again."
-    finish 1
-  fi
-  if [ ! -d .git ] && same_disk "$KIT" "${dest%/*}" && mv "$KIT" "$dest" 2>/dev/null; then
-    say "Moved the kit to $where: $dest"
-    carry_on "$dest"
-  fi
-  rm -rf "$dest.partial"
-  if ! mkdir "$dest.partial" 2>/dev/null; then
-    say "Couldn't save anything on $where."
-    echo "If macOS asked whether Terminal may use files there, it needs a yes. Open System Settings > Privacy & Security >"
-    echo "Files and Folders, turn on Removable Volumes under Terminal, then double-click SETUP again."
-    finish 1
-  fi
-  # Without macOS's extended attributes: no ._ files on exFAT, and no "from the internet" marks on the copy.
-  for f in "$KIT"/* "$KIT"/.[!.]*; do
-    [ -e "$f" ] || continue
-    case "${f##*/}" in .kit|bin|installers|library|logs|maps|models|INVENTORY.md|._*) continue ;; esac
-    if [ $MAC = 1 ]; then cp -RX "$f" "$dest.partial/"; else cp -R "$f" "$dest.partial/"; fi || {
-      rm -rf "$dest.partial"; say "Copying the kit to $where stopped partway. Is the drive full, or was it unplugged?"; finish 1; }
-  done
-  mv "$dest.partial" "$dest" || finish 1
-  if [ -d .git ] || [ "$KIT" = "$HOME" ] || [ ! -f "$KIT/SETUP.command" ]; then
-    say "Copied the kit to $where: $dest. Use that copy from now on."
-  else
-    rm -rf "$KIT"    # the download isn't needed now that the kit is in its place
-    say "Moved the kit to $where: $dest"
-  fi
-  carry_on "$dest"
+# Put the kit at DEST: ./kit place moves it there (a git checkout is copied) and says so. If it's somewhere new,
+# the copy there runs the rest of the setup.
+put_kit() {
+  local new
+  new="$(./kit place "$1")" || finish 1
+  [ "$new" = "$KIT" ] && return
+  cd "$new" || exit 1
+  exec bash "$new/SETUP.command" --placed
 }
 
 # First run only: ask where the kit should live, then carry on from there.
@@ -203,7 +140,7 @@ place() {
   choose "Type 1 or 2, then press Return:" 2
   while :; do
     if [ "$pick" = 1 ] && pick_drive; then
-      move_kit "$VOL/$NAME" "the drive ${VOL##*/}"
+      put_kit "$VOL/$NAME"
       return
     fi
     pick=2
@@ -212,21 +149,23 @@ place() {
       echo "The most important things download first, and what doesn't fit is skipped."
       ask "Put the kit on $THIS anyway?" || { pick=1; continue; }
     fi
-    move_kit "$HOME/$NAME" "$THIS"
+    put_kit "$HOME/$NAME"
     return
   done
 }
 
 checks() {
-  local why=""
-  if [ $MAC = 1 ]; then
-    [ "$(uname -m)" = "arm64" ] || say "Note: this Mac doesn't have Apple Silicon (M1 or newer). The kit is built for those and may not run here."
-    case "$KIT" in /Volumes/*) why="$(problem_of "$(format_of "/Volumes/$(drive_name "$KIT")")")" ;; esac
-    if [ -n "$why" ]; then
-      say "The kit can't work on this drive: $why."
-      echo "Erase the drive as exFAT in Disk Utility (this deletes everything on it), copy this folder back, and run SETUP again."
-      finish 1
-    fi
+  local why
+  if [ $MAC = 1 ] && [ "$(uname -m)" != "arm64" ]; then
+    say "Note: this Mac doesn't have Apple Silicon (M1 or newer). The kit is built for those and may not run here."
+  fi
+  # The drive the kit is on, if its format can't hold the kit
+  why="$(./kit drives 2>/dev/null | awk -F'\t' -v k="$KIT/" 'index(k, $1 "/") == 1 && $4 != "-" {print $4; exit}')"
+  if [ -n "$why" ]; then
+    say "The kit can't work on this drive: $why."
+    if [ $MAC = 1 ]; then echo "Erase the drive as exFAT in Disk Utility (this deletes everything on it), copy this folder back, and run SETUP again."
+    else echo "Format the drive as exFAT (this deletes everything on it), copy this folder back, and run SETUP again."; fi
+    finish 1
   fi
   if ! ( : > .kit-write-test ) 2>/dev/null; then
     say "Can't save anything in $KIT. If it's on a drive, the drive may be locked or read-only."

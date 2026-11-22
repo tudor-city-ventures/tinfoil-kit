@@ -15,6 +15,10 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      your kit.json changes. SETUP.command runs it first.
   estimate           About how many GB this kit.json needs, from the sizes the website's kit
                      builder lists. Needs no internet. SETUP.command uses it.
+  drives [--json]    The plugged-in drives the kit could go on: folder, format, GB free, and why
+                     not (or -). --json adds this computer's free space and what the kit needs.
+  place DEST         Put the kit at DEST (a TinfoilKit folder at the top of a drive or in the home
+                     folder), ready to set up there. Prints its folder. SETUP.command uses it.
 
 Only needs python3 (3.9+) and curl, both standard on macOS. aria2c is used if installed
 (brew install aria2) for faster multi-connection downloads.
@@ -33,6 +37,7 @@ import json
 import math
 import os
 import platform
+import plistlib
 import re
 import shutil
 import socket
@@ -1530,6 +1535,167 @@ def prepare_folder(root: Path) -> None:
             pass
 
 
+# ----------------------------------------------------------------------------- where the kit lives
+
+KIT_FOLDER = "TinfoilKit"    # at the top of a drive, or in the home folder
+THIS = "this Mac" if sys.platform == "darwin" else "this computer"
+
+
+def drive_bases() -> List[Path]:
+    """Where plugged-in drives show up (KIT_DRIVES: that folder instead, for tests)."""
+    if os.environ.get("KIT_DRIVES"):
+        return [Path(os.environ["KIT_DRIVES"])]
+    if sys.platform == "darwin":
+        return [Path("/Volumes")]
+    user = os.environ.get("USER", "")
+    return [Path("/media", user), Path("/run/media", user)] if user else []
+
+
+def drive_format(path: Path) -> str:
+    """A drive's format as the system names it ("ExFAT", "MS-DOS (FAT32)", "exfat", "vfat"...), or "" if unknown."""
+    if sys.platform == "darwin":
+        try:
+            info = plistlib.loads(subprocess.run(["diskutil", "info", "-plist", str(path)],
+                                                 capture_output=True, timeout=30).stdout)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return ""
+        return info.get("FilesystemUserVisibleName") or info.get("FilesystemName") or ""
+    try:
+        mounts = Path("/proc/mounts").read_text().splitlines()
+    except OSError:
+        return ""
+    where, best, fs = str(path.resolve()), "", ""
+    for line in mounts:
+        f = line.split()
+        mnt = f[1].replace("\\040", " ") if len(f) > 2 else ""
+        if mnt and (where == mnt or where.startswith(mnt.rstrip("/") + "/")) and len(mnt) >= len(best):
+            best, fs = mnt, f[2]
+    return fs
+
+
+def drive_problem(fs: str) -> str:
+    """Why the kit can't live on a drive of this format, or "" if it can."""
+    f = fs.lower()
+    if "fat" in f.replace("exfat", "") or "ms-dos" in f or f == "msdos":
+        return f"it's formatted as {fs}, which can't hold files over 4 GB, and the AI models and books are bigger"
+    if sys.platform == "darwin" and ("ntfs" in f or "windows" in f):
+        return f"it's formatted as {fs}, which a Mac can read but can't save to"
+    return ""
+
+
+def list_drives() -> List[Dict[str, Any]]:
+    """The drives plugged in: folder, name, format, free bytes, whether a kit is there, and why the kit can't go there,
+    if it can't. Drives that can't be written to (installer disk images, backups) are left out, unless their format is
+    the reason, so SETUP can say why those won't do. In /Volumes the Mac's own disk is a link to /."""
+    found = []
+    for base in drive_bases():
+        try:
+            folders = sorted(base.iterdir())
+        except OSError:
+            continue
+        for v in folders:
+            if v.name.startswith(".") or v.is_symlink() or not v.is_dir():
+                continue
+            fs = drive_format(v)
+            problem = drive_problem(fs)
+            if not problem and not os.access(v, os.W_OK):
+                continue
+            try:
+                free = shutil.disk_usage(v).free
+            except OSError:
+                continue
+            found.append({"path": str(v), "name": v.name, "format": fs or "unknown", "free_bytes": free,
+                          "problem": problem or None, "has_kit": (v / KIT_FOLDER / "kit").is_file()})
+    return found
+
+
+def drive_name(path: Path) -> str:
+    """The name of the drive a folder is on."""
+    for base in drive_bases():
+        try:
+            return path.relative_to(base).parts[0]
+        except (ValueError, IndexError):
+            continue
+    while not os.path.ismount(path) and path.parent != path:
+        path = path.parent
+    return path.name or str(path)
+
+
+def where_is(folder: Path) -> str:
+    """"this Mac" or "the drive NAME", for messages."""
+    if not any(b == folder or b in folder.parents for b in drive_bases()) and on_this_computer(folder):
+        return THIS
+    return f"the drive {drive_name(folder)}"
+
+
+def copy_code(src: Path, dst: Path) -> None:
+    """Copy files and folders with their contents and permissions, never extended attributes (no ._ files on exFAT,
+    no "from the internet" marks) or timestamps, which some drive formats refuse."""
+    if src.is_dir():
+        dst.mkdir()
+        for c in sorted(src.iterdir()):
+            if not c.name.startswith("._"):
+                copy_code(c, dst / c.name)
+    else:
+        shutil.copyfile(src, dst)
+        with contextlib.suppress(OSError):
+            shutil.copymode(src, dst)
+
+
+def place_kit(root: Path, dest: Path) -> Tuple[Path, str]:
+    """Put the kit at dest, ready to set up there. Returns its folder and what happened, in words. A fresh download is
+    moved there, so there's one copy: renamed on the same disk, copied to another (the code, never downloads). A git
+    checkout is a developer's: it stays put, or is copied to another disk. A kit already at dest is used as it is.
+    On Windows it's always a copy, since Windows won't rename or delete a folder a running script is in."""
+    git = (root / ".git").exists()
+    if not dest.parent.is_dir():
+        raise RuntimeError(f"{dest.parent} isn't there. If it's a drive, is it plugged in?")
+    if dest == root or dest.parent == root or (git and root.stat().st_dev == dest.parent.stat().st_dev):
+        (root / ".kit").mkdir(exist_ok=True)
+        return root, ""
+    if root in dest.parents:
+        raise RuntimeError(f"The kit can't go inside its own folder ({dest}).")
+    where = where_is(dest.parent)
+    if dest.exists():
+        if (dest / "kit").is_file() and (dest / "tools" / "kit.py").is_file():
+            (dest / ".kit").mkdir(exist_ok=True)
+            return dest, f"There's already a Tinfoil Kit on {where} ({dest}). Carrying on with that one."
+        raise RuntimeError(f"There's already a folder called {dest.name} on {where} ({dest}), and it isn't a "
+                           "Tinfoil Kit.\nRename it or move it somewhere else, then double-click SETUP again.")
+    if not git and sys.platform != "win32" and root.stat().st_dev == dest.parent.stat().st_dev:
+        try:
+            root.rename(dest)
+        except OSError:
+            pass    # copy it instead
+        else:
+            (dest / ".kit").mkdir(exist_ok=True)
+            return dest, f"Moved the kit to {where}: {dest}"
+    partial = dest.with_name(dest.name + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    try:
+        partial.mkdir()
+    except OSError as e:
+        why = f"Couldn't save anything on {where} ({e.strerror or e})."
+        if sys.platform == "darwin":
+            why += ("\nIf macOS asked whether Terminal may use files there, it needs a yes. Open System Settings > "
+                    "Privacy & Security > Files and Folders, turn on Removable Volumes under Terminal, then try again.")
+        raise RuntimeError(why) from None
+    try:
+        for f in sorted(root.iterdir()):
+            if f.name not in KEEP - {".git"} and not f.name.startswith("._"):
+                copy_code(f, partial / f.name)
+        partial.rename(dest)
+    except OSError as e:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise RuntimeError(f"Copying the kit to {where} stopped partway ({e.strerror or e}). "
+                           "Is the drive full, or was it unplugged?") from None
+    (dest / ".kit").mkdir(exist_ok=True)
+    if git or root == Path.home() or sys.platform == "win32":
+        return dest, f"Copied the kit to {where}: {dest}. Use that copy from now on."
+    shutil.rmtree(root, ignore_errors=True)    # the download isn't needed now that the kit is in its place
+    return dest, f"Moved the kit to {where}: {dest}"
+
+
 def drive_bytes(rec: Dict[str, Any]) -> int:
     """What an item in state.json takes up on disk."""
     return sum(f.get("size", 0) for f in rec.get("files", {}).values()) + rec.get("unpacked_size", 0)
@@ -1905,10 +2071,9 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
         log(f"Kit version: {state['kit_version']}.")
 
 
-def cmd_estimate(root: Path, args: argparse.Namespace) -> None:
-    """Print about how many GB the switched-on items need, from the sizes the kit builder lists (site/sources.json),
-    plus about 1 GB of programs. Needs no internet, so SETUP can say how much room the kit needs before choosing where."""
-    cfg = load_config(root)
+def estimate_gb(root: Path, cfg: Dict[str, Any]) -> int:
+    """About how many GB the switched-on items need, from the sizes the kit builder lists (site/sources.json), plus
+    about 1 GB of programs. Needs no internet, so SETUP can say how much room the kit needs before choosing where."""
     try:
         listed = json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
         sizes = {s["id"]: s.get("bytes") or 0 for s in listed}
@@ -1918,7 +2083,37 @@ def cmd_estimate(root: Path, args: argparse.Namespace) -> None:
     on += [z["zim"] for z in cfg.get("library", []) if z.get("enabled", True)]
     if maps_settings(cfg)["enabled"]:
         on.append("maps")
-    print(math.ceil((sum(sizes.get(i, 0) for i in on) + GB) / GB))
+    return math.ceil((sum(sizes.get(i, 0) for i in on) + GB) / GB)
+
+
+def cmd_estimate(root: Path, args: argparse.Namespace) -> None:
+    print(estimate_gb(root, load_config(root)))
+
+
+def cmd_drives(root: Path, args: argparse.Namespace) -> None:
+    drives = list_drives()
+    if not args.json:
+        for d in drives:
+            print("\t".join([d["path"], d["format"], str(d["free_bytes"] // GB), d["problem"] or "-"]))
+        return
+    cfg, home = load_config(root), Path.home()
+    print(json.dumps({
+        "kit": str(root), "kit_on_this_computer": on_this_computer(root), "needs_gb": estimate_gb(root, cfg),
+        "this_computer": {"path": str(home / KIT_FOLDER), "free_bytes": shutil.disk_usage(home).free,
+                          "keeps_free_gb": float(cfg["settings"].get("keep_free_gb_this_computer", 50))},
+        "drives": [{**d, "kit_path": str(Path(d["path"]) / KIT_FOLDER)} for d in drives]}, indent=2))
+
+
+def cmd_place(root: Path, args: argparse.Namespace) -> None:
+    """Messages go to stderr, so a script can read the kit's new folder from stdout."""
+    try:
+        new, said = place_kit(root, Path(os.path.abspath(os.path.expanduser(args.dest))))
+    except RuntimeError as e:
+        print(f"\n{e}", file=sys.stderr)
+        sys.exit(1)
+    if said:
+        print(f"\n{said}", file=sys.stderr)
+    print(new)
 
 
 def cmd_search(root: Path, args: argparse.Namespace) -> None:
@@ -2254,12 +2449,17 @@ def main() -> None:
     p = sub.add_parser("update", help="install the newest version of the kit's own code, keeping kit.json changes")
     p.add_argument("--force", action="store_true", help="reinstall even if this is the newest version")
     sub.add_parser("estimate", help="about how many GB this kit.json needs (no internet needed)")
+    p = sub.add_parser("drives", help="the plugged-in drives the kit could go on")
+    p.add_argument("--json", action="store_true", help="with this computer's free space and what the kit needs")
+    p = sub.add_parser("place", help="put the kit at DEST, a TinfoilKit folder on a drive or in the home folder")
+    p.add_argument("dest")
     args = ap.parse_args()
     root = (args.root or ROOT).resolve()
     if not shutil.which("curl"):
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
-                "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate}
+                "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
+                "drives": cmd_drives, "place": cmd_place}
     if args.cmd not in commands:
         ap.print_help()
         return
