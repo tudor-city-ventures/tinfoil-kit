@@ -143,14 +143,17 @@ with sync_playwright() as p:
             # Where you live: sets the map card and Wikipedia's language, and goes into kit.json and the setup prompt
             wiki_titles = "[...document.querySelectorAll('.card strong')].map(e => e.textContent).filter(t => t.startsWith('Wikipedia'))"
             check("the builder starts at kit.json's place, with Wikipedia in English",
-                  page.input_value("#place").startswith("US Northeast") and page.evaluate(wiki_titles) == ["Wikipedia, with images"]
+                  page.input_value("#place") == "us-northeast" and page.evaluate(wiki_titles) == ["Wikipedia, with images"]
                   and page.locator("#wikiLang option").first.inner_text().startswith("English"), page.input_value("#place"))
+            groups = page.evaluate("[...document.querySelectorAll('#place optgroup')].map(g => [g.label, g.children.length])")
+            places = page.evaluate("fetch('regions.json').then(r => r.json()).then(d => d.regions.length)")
+            check("the place dropdown lists every place, by part of the world, the US first",
+                  groups[0][0] == "United States" and sum(n for _, n in groups) == places and len(groups) >= 6, str(groups))
             before = page.inner_text("#totalText")
-            page.fill("#place", "Bavaria")
-            page.dispatch_event("#place", "change")
+            page.select_option("#place", label="Germany: Bayern")
             maps_why = page.locator(".card", has_text="Offline maps").locator(".why").inner_text()
             check("a place sets the map card and offers its language first",
-                  page.input_value("#place") == "Germany: Bayern" and "Germany: Bayern" in maps_why
+                  page.input_value("#place") == "bayern" and "Germany: Bayern" in maps_why
                   and "address search for all of Germany" in maps_why
                   and page.locator("#wikiLang option").first.inner_text().startswith("German")
                   and page.evaluate(wiki_titles) == ["Wikipedia in German, with images"] and page.inner_text("#totalText") != before,
@@ -171,14 +174,12 @@ with sync_playwright() as p:
             page.wait_for_selector("#toast:has-text('Copied')", timeout=5000)
             check("the setup prompt says where you live, as a ./kit region command",
                   "./kit region bayern --wikipedia de" in page.evaluate("navigator.clipboard.readText()"))
-            for typed, says in (("Georgia", "more than one place"), ("Atlantis", "No place called")):
-                page.fill("#place", typed)
-                page.dispatch_event("#place", "change")
-                check(f"the builder: {typed} says {says}, and keeps the place", says in page.inner_text("#placeNote")
-                      and "Germany: Bayern" in page.locator(".card", has_text="Offline maps").locator(".why").inner_text())
-            page.fill("#place", "Georgia (Europe)")
-            check("the builder: a pick from the list", page.input_value("#place") == "Georgia"
-                  and "for Georgia" in page.locator(".card", has_text="Offline maps").locator(".why").inner_text())
+            page.select_option("#place", "georgia")
+            check("the builder: two places called Georgia, the country under Europe",
+                  page.locator("#place optgroup[label=Europe] option[value=georgia]").count() == 1
+                  and page.locator("#place optgroup[label='United States'] option[value='us/georgia']").count() == 1
+                  and "for Georgia" in page.locator(".card", has_text="Offline maps").locator(".why").inner_text()
+                  and page.locator("#wikiLang option").first.inner_text().startswith("Georgian"))
             page.locator(".where").screenshot(path=os.path.join(SHOTS, "site_place_picker.png"))
         # Read as: the human page is the default; AI agent shows the markdown with no images or icons, and the pick sticks
         def wide_enough(label):
