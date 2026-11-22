@@ -2,7 +2,8 @@ package main
 
 // Sharing the kit with the phones and laptops on a home network. The kit's servers only ever listen on 127.0.0.1.
 // With sharing on, this gate listens on the network instead: it asks for the access code, then hands each request
-// to a server by its path (/ai, /tiles, /geocoder and /routing; everything else is the library and the kit page).
+// to a server by its path (/ai, /data, /tiles, /geocoder and /routing; everything else is the library and the kit
+// page).
 
 import (
 	"bufio"
@@ -322,7 +323,7 @@ const (
 	textPlain   = "text/plain; charset=utf-8"
 )
 
-var routes = []string{"ai", "tiles", "geocoder", "routing"}
+var routes = []string{"ai", "data", "tiles", "geocoder", "routing"}
 
 // llama-server's own chat page may ask for its API at the root; the library has nothing at these paths.
 var aiPaths = []string{"/v1/", "/props", "/models", "/slots", "/health", "/completion", "/tokenize", "/detokenize",
@@ -337,8 +338,8 @@ const aiOffAnswer = `{"error": {"message": "this feature is disabled", "type": "
 var dropRequest = words("connection keep-alive proxy-authorization proxy-connection te trailer transfer-encoding " +
 	"upgrade host cookie authorization origin referer content-length expect")
 var dropResponse = words("connection keep-alive transfer-encoding server date trailer upgrade")
-var serverNames = map[string]string{"library": "The library", "ai": "The AI", "tiles": "The map",
-	"geocoder": "Address search", "routing": "Directions"}
+var serverNames = map[string]string{"library": "The library", "ai": "The AI", "data": "Saving notes and pins",
+	"tiles": "The map", "geocoder": "Address search", "routing": "Directions"}
 
 func words(s string) map[string]bool {
 	m := map[string]bool{}

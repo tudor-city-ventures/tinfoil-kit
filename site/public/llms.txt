@@ -38,7 +38,7 @@ The whole kit is one folder, TinfoilKit, with three inside: app (the kit's code 
 | Map | pmtiles | 8090 | Serves the map: street detail for a region, plus a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes |
-| Notes and pins | tools/data.py | 8095 | Keeps the Notes tab and the map's home and pins in data/ (notes.txt, places.json), so a new version keeps them and every browser on the kit sees the same ones. Without Python, they stay in the browser |
+| Notes and pins | tools/data.py | 8095 | Keeps the Notes tab and the map's home and pins in data/ (notes.txt, places.json), so a new version keeps them and every browser on the kit sees the same ones. The kit's own program (tools/tinfoilkit-*) does this itself; a kit without it runs tools/data.py on Python, and without either they stay in the browser |
 | Sharing (off by default) | tools/share.py | 8000 | Lets phones and laptops on the home network in with the access code, and passes their requests to the servers above |
 
 Photon and GraphHopper run on a Java that's in the kit. Every server listens only on 127.0.0.1; sharing is the one way in from the network.
@@ -256,7 +256,7 @@ Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's a
 - A file may be corrupt: `./kit verify` re-checks every file. `./kit verify --fix` removes bad ones, and the next sync replaces them.
 - A model won't load or is very slow: quit other apps, pick Gemma 4 E4B, or start with `--no-maps` to free about 5 GB. Advanced, with the person's password: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
 - The map says address search or directions are "not running": they take up to a minute to start. If they never do, read data/logs/geocoder.log and data/logs/routing.log. If `./kit test` fails on address search with a "lock" error in data/logs/test-geocoder.log, the exFAT format is the cause: reformat the drive as APFS and copy the kit back.
-- The Notes or Map tab says notes or pins are saved in this browser: the kit couldn't start tools/data.py, which runs on Python. On a Mac or Windows, running SETUP once while online gets one; on Linux, install python3. Otherwise read data/logs/data.log. They move into the kit the next time it starts.
+- The Notes or Map tab says notes or pins are saved in this browser: the kit couldn't start the server that keeps them. Read data/logs/data.log. A kit without its own program (tools/tinfoilkit-*) runs it on Python: running SETUP once while online gets one on a Mac or Windows; on Linux, install python3. They move into the kit the next time it starts.
 - Anything else: close the kit's window, start again, and read data/logs (sync-*.log for downloads, llama-server.log for the AI).
 - The previous version of each program stays in downloads/bin/ and starts automatically if the newest one won't.
 - If the library server won't start, the Kiwix app in downloads/installers/ opens the books in downloads/library/ directly.

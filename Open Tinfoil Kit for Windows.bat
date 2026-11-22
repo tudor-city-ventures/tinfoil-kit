@@ -201,7 +201,7 @@ if not defined PY (
   goto :eof
 )
 call :ours "http://127.0.0.1:%DATA_PORT%/" "\"notes\"" && goto :eof
-call :free_port DATA_PORT "notes and pins"
+call :free_port DATA_PORT "the notes and pins server"
 set "PYTHONUTF8=1"
 start "" /b "%PY%" "%APP%\tools\data.py" --data "%DATA%\." --port %DATA_PORT% --library %LIB_PORT% >> "%DATA%\logs\data.log" 2>&1
 set "DATA_ON=1"

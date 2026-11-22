@@ -1549,11 +1549,12 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           rc == 0 and stopped and not gone.exists() and "Stopping the kit" in out and "Press Return" not in out
           and "notes and pins" in out, out)
 
-    # The launcher's first model, by the computer's memory. A stand-in for a running kit answers on both
-    # server ports, so the launcher reuses them and only picks the model and prints the address.
+    # The launcher's first model, by the computer's memory. A stand-in for a running kit answers on its library, AI
+    # and notes ports, so the launcher reuses them and only picks the model and prints the address.
     class RunningKit(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
-            body = b'{"data": []}' if self.path.startswith("/v1/models") else b"<title>Tinfoil Kit</title>"
+            body = b'{"data": []}' if self.path.startswith("/v1/models") else \
+                b'{"name": "Tinfoil Kit", "notes": "/notes", "places": "/places"}'    # the library's page, and the notes
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -1569,7 +1570,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     (lk / "app" / "tools").mkdir(parents=True)
     shutil.copy(TESTS.parent / "tools" / "launch.sh", lk / "app" / "tools")
     (lk / "data").mkdir()
-    (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": rport, "ai_port": rport}}))
+    (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": rport, "ai_port": rport, "data_port": rport}}))
     for name, gb in (("Big", 18), ("Mid", 12), ("Small", 5)):
         (lk / "downloads" / "models" / name).mkdir(parents=True)
         with open(lk / "downloads" / "models" / name / f"{name}-Q4_K_M.gguf", "wb") as f:
@@ -1596,13 +1597,13 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     for who, prog in launchers:
         use(prog)
-        (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": rport, "ai_port": rport}}))
+        (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": rport, "ai_port": rport, "data_port": rport}}))
         for mem_gb, want in ((32, "Big"), (24, "Mid"), (16, "Small"), (4, "Small")):
             got, out = launch(mem_gb)
             check(f"{who}: {mem_gb} GB of memory starts {want}", got == want and (want == "Big" or f"{mem_gb} GB of memory" in out), out)
         got, out = launch(16, "--model=Big")
         check(f"{who}: --model wins over memory", got == "Big", out)
-        (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Gone", "library_port": rport, "ai_port": rport}}))
+        (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Gone", "library_port": rport, "ai_port": rport, "data_port": rport}}))
         got, out = launch(24)
         check(f"{who}: without the default model, the biggest that fits", got == "Mid" and "too little" not in out, out)
     use(None)
@@ -1803,7 +1804,7 @@ server.serve_forever()
     fake.chmod(0o755)
     (lk / "downloads" / "library").mkdir()
     (lk / "downloads" / "library" / "book.zim").touch()
-    (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": port, "ai_port": rport}}))
+    (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": port, "ai_port": rport, "data_port": rport}}))
     for who, prog in launchers:
         use(prog)
         p = subprocess.run(["bash", str(lk / "app" / "tools" / "launch.sh"), "--no-browser"], capture_output=True, text=True, timeout=60,
@@ -1848,7 +1849,7 @@ Server(("::1", port), Page).serve_forever()
         for who, prog in launchers:
             use(prog)
             lport = free_port()
-            (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": lport, "ai_port": rport}}))
+            (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": lport, "ai_port": rport, "data_port": rport}}))
             p = subprocess.Popen(["bash", str(lk / "app" / "tools" / "launch.sh"), "--no-browser"], stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, text=True, stdin=subprocess.DEVNULL,
                                  env={**os.environ, "KIT_KIWIX_TOOLS_BIN": str(refusing)})

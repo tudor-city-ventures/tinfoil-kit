@@ -1,7 +1,9 @@
-"""tools/data.py, the server that keeps the kit page's notes, pins and home in the kit's data folder: what it saves,
-what it turns away (other web pages, other names for this computer, bad input), and that a save is all or nothing."""
+"""The server that keeps the kit page's notes, pins and home in the kit's data folder: tools/data.py, then the kit's own
+program's (tools/tinfoilkit data), which must pass the same checks. What it saves, what it turns away (other web
+pages, other names for this computer, bad input), and that a save is all or nothing."""
 import http.client
 import json
+import platform
 import shutil
 import socket
 import subprocess
@@ -12,12 +14,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 fails = 0
+who = ""
 
 
 def check(name, ok, detail=""):
     global fails
+    name = f"{who}: {name}"
     print(("PASS  " + name) if ok else ("FAIL  " + name + (f": {detail}" if detail else "")))
     fails += 0 if ok else 1
+
+
+def program():
+    """The kit's own program for this computer (tools/tinfoilkit-*), if tools/tinfoilkit/build.sh has built it."""
+    name = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64",
+            ("Windows", "AMD64"): "windows-x64.exe"}.get((platform.system(), platform.machine()))
+    p = ROOT / "tools" / f"tinfoilkit-{name}"
+    return p if name and p.exists() else None
 
 
 def free_port():
@@ -26,12 +38,9 @@ def free_port():
         return s.getsockname()[1]
 
 
-work = Path(tempfile.mkdtemp(prefix="data-test-"))
-data, port, lib = work / "kit" / "data", free_port(), 18888
-data.mkdir(parents=True)
+lib = 18888
 PAGE = f"http://127.0.0.1:{lib}"
-server = subprocess.Popen([sys.executable, str(ROOT / "tools" / "data.py"), "--data", str(data), "--port", str(port),
-                           "--library", str(lib)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+port = 0
 
 
 def req(method, path, body=None, headers=None, raw=None):
@@ -53,7 +62,22 @@ def req(method, path, body=None, headers=None, raw=None):
     return r.status, got, {k.lower(): v for k, v in r.getheaders()}
 
 
-try:
+def checks(server_cmd):
+    global port
+    work = Path(tempfile.mkdtemp(prefix="data-test-"))
+    data, port = work / "kit" / "data", free_port()
+    data.mkdir(parents=True)
+    server = subprocess.Popen(server_cmd + ["--data", str(data), "--port", str(port), "--library", str(lib)],
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        run(server, server_cmd, work, data)
+    finally:
+        if server.poll() is None:
+            server.kill()
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def run(server, server_cmd, work, data):
     for _ in range(50):
         try:
             socket.create_connection(("127.0.0.1", port), timeout=1).close()
@@ -129,9 +153,10 @@ try:
     check("deleting a pin", s == 200 and [p["id"] for p in got["pins"]] == ["a1"] and got["home"]["label"] == "Our house", str(got))
     raw = json.loads((data / "places.json").read_text(encoding="utf-8"))
     raw["mine"] = {"kept": True}
-    (data / "places.json").write_text(json.dumps(raw), encoding="utf-8")
-    req("PUT", "/places/pins/c3", pin)
-    check("whatever else someone put in places.json stays", json.loads((data / "places.json").read_text(encoding="utf-8")).get("mine") == {"kept": True})
+    (data / "places.json").write_text("\ufeff" + json.dumps(raw), encoding="utf-8")    # as Notepad saves it
+    s, got, _ = req("PUT", "/places/pins/c3", pin)
+    check("whatever else someone put in places.json stays, even saved in Notepad",
+          s == 200 and json.loads((data / "places.json").read_text(encoding="utf-8")).get("mine") == {"kept": True}, f"{s} {got}")
     raw = json.loads((data / "places.json").read_text(encoding="utf-8"))
     raw["pins"] = [{"id": f"p{i}", "name": "x", "note": "", "lat": 1, "lon": 1} for i in range(1000)]
     (data / "places.json").write_text(json.dumps(raw), encoding="utf-8")
@@ -152,13 +177,19 @@ try:
     server.terminate()
     out = server.communicate(timeout=10)[0]
     check("it said where it keeps them, and logged what failed", f"Notes and pins on port {port}" in out and "couldn't save" in out, out[-300:])
-    p = subprocess.run([sys.executable, str(ROOT / "tools" / "data.py"), "--data", str(work / "nowhere"), "--port", str(port),
-                        "--library", str(lib)], capture_output=True, text=True, timeout=30)
+    p = subprocess.run(server_cmd + ["--data", str(work / "nowhere"), "--port", str(port), "--library", str(lib)],
+                       capture_output=True, text=True, timeout=30)
     check("without a data folder, it doesn't start", p.returncode != 0 and "no data folder" in p.stderr, p.stderr)
-finally:
-    if server.poll() is None:
-        server.kill()
-    shutil.rmtree(work, ignore_errors=True)
+
+
+who = "data.py"
+checks([sys.executable, str(ROOT / "tools" / "data.py")])
+PROGRAM = program()
+if PROGRAM:
+    who = "data (Go)"
+    checks([str(PROGRAM), "data"])
+else:
+    print("SKIP  the kit's own program: not built (tools/tinfoilkit/build.sh)")
 
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
 sys.exit(1 if fails else 0)

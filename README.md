@@ -65,7 +65,7 @@ Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build 
 | Map | `pmtiles` | 8090 | Serves the map: street detail where you live (a US state, a country, or part of a big one) and a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy (the whole US by default) |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
-| Notes and pins | `tools/data.py` | 8095 | Keeps the Notes tab and the map's home and pins in `data`, so a new version keeps them and every browser on the kit sees the same ones. It runs on the Python SETUP uses; without one, they stay in the browser |
+| Notes and pins | `tools/data.py` | 8095 | Keeps the Notes tab and the map's home and pins in `data`, so a new version keeps them and every browser on the kit sees the same ones. The kit's own program (`tools/tinfoilkit-*`) does this itself; a kit without it runs `tools/data.py` on the Python SETUP uses, and without either they stay in the browser |
 | Sharing (off by default) | `tools/share.py` | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on (`.\kit.cmd share on` on Windows), `--share` for one run |
 
 Photon and GraphHopper run on a Java that's in the kit. The kit has each program for Macs, Windows PCs and Linux PCs, so a drive set up on one starts on all three.

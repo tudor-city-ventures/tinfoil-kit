@@ -37,7 +37,7 @@ The logs are in data/logs: sync-*.log for downloads, llama-server.log for the AI
 - A program's publisher no longer has the build the kit names: `./kit update` first. If it says a program's file changed after the kit pinned it, don't work around it: report it at https://github.com/tudor-city-ventures/tinfoil-kit/security.
 - A model won't load or is very slow: quit other apps, pick Gemma 4 E4B on the Ask page, or open the kit with `--no-maps` to free about 5 GB of memory.
 - Address search or directions "not running": they take up to a minute to start. If they never do, read geocoder.log and routing.log. A "lock" error in test-geocoder.log means the drive's exFAT format is the cause.
-- The Notes or Map tab says notes or pins are saved in this browser: the kit couldn't start tools/data.py, which runs on Python. SETUP gets one on a Mac or Windows, on Linux install python3, or read data.log. They move into the kit the next time it starts.
+- The Notes or Map tab says notes or pins are saved in this browser: the kit couldn't start the server that keeps them. Read data.log. A kit without its own program (tools/tinfoilkit-*) runs it on Python: SETUP gets one on a Mac or Windows; on Linux, install python3. They move into the kit the next time it starts.
 - Linux, Fedora 45 or later: the AI needs `sudo dnf install openssl3-libs`, installed while there's internet.
 - The previous version of each program stays in downloads/bin and starts by itself if the newest won't. If the library won't start at all, the Kiwix app in downloads/installers opens the books in downloads/library.
 

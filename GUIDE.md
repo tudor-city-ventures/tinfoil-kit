@@ -63,8 +63,8 @@ The AI can be wrong. Treat it like a well-read friend, not a doctor: check the s
   or **Pin this place** with a name and a note, like where the family meets or a spring. Pins show on the map and
   under **Pins**, and search, directions and Ask find them by name ("directions to the meeting place").
   They're saved in the kit, like home (`data/places.json`), so a phone using the shared kit sees them too.
-  If the Map or Notes tab says they're saved in this browser, the kit couldn't start the part that keeps them
-  (it runs on the Python SETUP gets): they move into the kit the next time it can.
+  If the Map or Notes tab says they're saved in this browser, the kit couldn't start the part that keeps them:
+  run SETUP once while online, which gets what it needs, and they move into the kit the next time it starts.
 - **Directions**: fill in From (leave it blank for home) and To, pick Drive or Walk, press Go. Click a step to zoom to it.
 - **Nearest**: the buttons (Hospital, Pharmacy, Gas station...) list the closest ones to home, or to the From address.
 - **Set home** first: the laptop has no GPS, so "home" is where nearest-searches and directions start.

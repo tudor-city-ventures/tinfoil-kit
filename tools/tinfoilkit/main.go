@@ -1,9 +1,11 @@
-// Command tinfoilkit is Tinfoil Kit's own program. It starts the kit's servers and opens its page (open), and
-// shares the kit on the home network behind the access code (gate, banner). Standard library only, so anyone can
+// Command tinfoilkit is Tinfoil Kit's own program. It starts the kit's servers and opens its page (open), keeps the
+// page's notes and pins in the data folder (data), and shares the kit on the home network behind the access code
+// (gate, banner). Standard library only, so anyone can
 // build it and get the same bytes: tools/tinfoilkit/build.sh.
 //
 //	tinfoilkit open [--share] [--model=NAME] [--no-browser] [--no-maps] [--root KIT]
-//	tinfoilkit gate --root KIT --port 8000 --library 8888 --ai 8080 [--tiles N --geocoder N --routing N]
+//	tinfoilkit data --data KIT/data --port 8095 --library 8888
+//	tinfoilkit gate --root KIT --port 8000 --library 8888 --ai 8080 [--data N --tiles N --geocoder N --routing N]
 //	tinfoilkit banner --root KIT --port 8000 [--qr]
 //	tinfoilkit compare A B     whether two copies of the program are the same (build.sh verify asks)
 //	tinfoilkit version
@@ -35,6 +37,8 @@ func main() {
 	switch cmd {
 	case "open":
 		os.Exit(runOpen(args))
+	case "data":
+		os.Exit(runData(args))
 	case "gate":
 		os.Exit(runGate(args))
 	case "banner":
@@ -44,7 +48,7 @@ func main() {
 	case "version":
 		fmt.Printf("Tinfoil Kit's program for %s (%s)\n", plat(), runtime.Version())
 	default:
-		fmt.Fprintln(os.Stderr, "usage: tinfoilkit open | gate | banner | compare | version (tools/tinfoilkit/main.go says more)")
+		fmt.Fprintln(os.Stderr, "usage: tinfoilkit open | data | gate | banner | compare | version (tools/tinfoilkit/main.go says more)")
 		os.Exit(2)
 	}
 }

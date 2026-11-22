@@ -38,7 +38,7 @@ from typing import Any, Callable, Dict, Optional
 MAX_NOTES = 100_000     # characters, pages of them; Ask hands the AI the first few thousand
 MAX_PINS = 1000
 MAX_BODY = 1_000_000
-PIN_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+PIN_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")    # the whole id: fullmatch
 LOCAL = ("127.0.0.1", "localhost", "::1")
 
 
@@ -56,11 +56,15 @@ def write_file(path: Path, data: bytes) -> None:
     """All or nothing: a crash or a pulled drive leaves the old file, never half of the new one. Into the data folder
     as it is: if it's gone (the kit was removed, the drive unplugged), the save fails instead of starting a new one."""
     tmp = path.with_name(path.name + ".new")
-    with open(tmp, "wb") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, path)
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def number(v: Any, low: float, high: float) -> bool:
@@ -76,7 +80,7 @@ def spot(p: Any) -> bool:
 
 
 def pin_ok(p: Any) -> bool:
-    return spot(p) and isinstance(p.get("id"), str) and bool(PIN_ID.match(p["id"])) and words(p.get("name"), 200, True)
+    return spot(p) and isinstance(p.get("id"), str) and bool(PIN_ID.fullmatch(p["id"])) and words(p.get("name"), 200, True)
 
 
 class Store:
@@ -108,7 +112,7 @@ class Store:
     def raw_places(self) -> Dict[str, Any]:
         """places.json as it is, with anything else someone put in it, which a change keeps."""
         try:
-            raw = json.loads(self.places.read_text(encoding="utf-8"))
+            raw = json.loads(self.places.read_text(encoding="utf-8-sig"))
         except FileNotFoundError:
             return {}
         except (ValueError, UnicodeDecodeError):
@@ -271,7 +275,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if path == "/places/home" and self.command == "PUT":
                 return self.reply(200, store.put_home(self.body()), origin)
             pid = path[len("/places/pins/"):] if path.startswith("/places/pins/") else None
-            if pid is not None and not PIN_ID.match(pid):
+            if pid is not None and not PIN_ID.fullmatch(pid):
                 raise Refused(404, "No such pin.")
             if pid and self.command == "PUT":
                 return self.reply(200, store.put_pin(pid, self.body()), origin)

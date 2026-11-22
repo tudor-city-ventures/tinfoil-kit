@@ -1,7 +1,8 @@
 package main
 
 // Opening the kit: start the library server (kiwix-serve), the AI server (llama-server) and the map servers on
-// 127.0.0.1, share them on the home network if asked, then open the kit's page in the browser. Closing the window,
+// 127.0.0.1, keep the page's notes and pins (in this program), share them on the home network if asked, then open the
+// kit's page in the browser. Closing the window,
 // Ctrl-C or the Mac app's Quit stops them all. What it prints matches tools/launch.sh (the Mac app reads it) and
 // Open Tinfoil Kit for Windows.bat.
 
@@ -98,6 +99,7 @@ func (l *launcher) open(o openOptions) int {
 		return n
 	}
 	libPort, aiPort, sharePort := port("library_port", 8888), port("ai_port", 8080), port("share_port", 8000)
+	dataPort := port("data_port", 8095)
 	tilesPort, geoPort, routePort := port("tiles_port", 8090), port("geocoder_port", 2322), port("routing_port", 8989)
 	ctxSize := setting(l.conf, "context_size", "16384")
 	geoHeap, routeHeap := setting(l.conf, "geocoder_heap", "3g"), setting(l.conf, "routing_heap", "2g")
@@ -233,6 +235,23 @@ func (l *launcher) open(o openOptions) int {
 		say(fmt.Sprintf("  Starting AI (loading %s)...", model))
 	}
 
+	// --- notes and pins: the page keeps them in the data folder through this program, which a new version leaves
+	var notes *notesServer
+	if !ourNotes(dataPort) {
+		if taken(dataPort) {
+			p := freePort(dataPort)
+			say(fmt.Sprintf("  Another program is using port %d, so the notes and pins server uses %d.", dataPort, p))
+			dataPort = p
+		}
+		var w io.Writer = io.Discard
+		if f := l.logFile("data.log", true); f != nil {
+			w = f
+		}
+		if n, err := startNotes(l.data, w, dataPort, libPort); err == nil {
+			notes, dataPort = n, n.port
+		}
+	}
+
 	// --- maps: tiles, address search, directions
 	var mapsStarted []string
 	maps := filepath.Join(l.dl, "maps")
@@ -301,7 +320,7 @@ func (l *launcher) open(o openOptions) int {
 				}
 				sharePort = p
 			}
-			ports := map[string]int{"library": libPort, "ai": aiPort}
+			ports := map[string]int{"library": libPort, "ai": aiPort, "data": dataPort}
 			if withMaps {
 				ports["tiles"], ports["geocoder"], ports["routing"] = tilesPort, geoPort, routePort
 			}
@@ -349,7 +368,7 @@ func (l *launcher) open(o openOptions) int {
 		time.Sleep(time.Second)
 	}
 
-	url := fmt.Sprintf("http://%s/?model=%s&ai=%d", net.JoinHostPort(libAt, strconv.Itoa(libPort)), model, aiPort)
+	url := fmt.Sprintf("http://%s/?model=%s&ai=%d&data=%d", net.JoinHostPort(libAt, strconv.Itoa(libPort)), model, aiPort, dataPort)
 	logs := onThis("data/logs/", `data\logs\`)
 	say("")
 	if libOK {
@@ -390,13 +409,13 @@ func (l *launcher) open(o openOptions) int {
 	if windows {
 		os.Chdir(os.TempDir()) // out of the kit folder, so nothing here holds it open (UNINSTALL can delete it)
 	}
-	if len(running) == 0 && g == nil {
+	if len(running) == 0 && g == nil && notes == nil {
 		say("  (Nothing was started by this window.)")
 		if !windows { // a window Windows opened for this closes when it ends: leave it for the person to read
 			l.stop()
 		}
 	}
-	if g != nil || windows {
+	if g != nil || notes != nil || windows {
 		select {} // until the window closes
 	}
 	for _, p := range running {

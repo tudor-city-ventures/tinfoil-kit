@@ -312,10 +312,10 @@ fi
 # --- notes and pins: what the person writes on the page, kept in data/, which a new version never touches. Without
 # Python, the page keeps them in the browser instead.
 DATA_PID=""
-our_data() { get "http://127.0.0.1:$1/" | grep -q '"notes": "/notes"'; }
+our_data() { get "http://127.0.0.1:$1/" | grep -q '"notes": *"/notes"'; }
 if [ -f "$APP/tools/data.py" ] && [ -n "$PY" ] && ! our_data "$DATA_PORT"; then
   if taken "$DATA_PORT"; then
-    p="$(free_port "$DATA_PORT")"; say "  Another program is using port $DATA_PORT, so notes and pins use $p."; DATA_PORT="$p"
+    p="$(free_port "$DATA_PORT")"; say "  Another program is using port $DATA_PORT, so the notes and pins server uses $p."; DATA_PORT="$p"
   fi
   "$PY" "$APP/tools/data.py" --data "$DATA" --port "$DATA_PORT" --library "$LIB_PORT" >> "$DATA/logs/data.log" 2>&1 &
   DATA_PID=$!; PIDS+=($!)
