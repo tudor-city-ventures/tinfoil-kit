@@ -23,6 +23,16 @@ const check = (name, ok, detail) => { console.log(`${ok ? "PASS" : "FAIL"}  ${na
   check("markdown render + citations + escaping", rendered.includes("<ol>") && rendered.includes('href="#src-1"') &&
         rendered.includes('href="#src-2"') && !rendered.includes('href="#src-3"') && rendered.includes("&lt;script&gt;"), rendered.replace(/\n/g, " "));
   check("html to text", Kit.htmlToText("<html><body><h1>T</h1><script>x()</script><p>A &amp; B&nbsp;C</p><ul><li>one</li></ul></body></html>") === "T\nA & B C\n- one");
+  const noted = Kit.buildMessages("What can Sam take for a headache?", [], "  Sam is allergic to ibuprofen.\n");
+  check("the household's notes go to the AI with every question", noted[0].content.startsWith("You are the assistant") &&
+        noted[0].content.endsWith("<notes>\nSam is allergic to ibuprofen.\n</notes>"), JSON.stringify(noted[0].content.slice(-60)));
+  check("no notes, no notes in the prompt", !Kit.buildMessages("x", [], " \n").some(m => m.content.includes("<notes>")));
+  const long = Kit.withNotes("S", "a".repeat(5000));
+  check("long notes go to the AI cut to about a page", long.length < 4400 && long.includes("a\n[...]\n</notes>"), `${long.length} characters`);
+  const merge = [[{ text: "A", version: "v1" }, { text: "A B", since: "v1" }, "keep"], [{ text: "A", version: "v2" }, { text: "A B", since: "v1" }, "ask"],
+                 [{ text: "", version: "" }, { text: "B", since: "v1" }, "keep"], [{ text: "A", version: "v1" }, null, "drop"],
+                 [{ text: "A", version: "v2" }, { text: "A", since: "v1" }, "drop"]].map(([kit, typed, want]) => Kit.notesMerge(kit, typed) === want);
+  check("notes typed while the kit couldn't keep them: kept if the kit's are unchanged or empty, else asked", merge.every(Boolean), JSON.stringify(merge));
 
   // live: catalog + search + sources
   const books = Kit.parseCatalog(await (await fetch(LIB + "/catalog/v2/entries?count=-1")).text());

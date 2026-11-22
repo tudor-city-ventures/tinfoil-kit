@@ -2755,7 +2755,7 @@ class Lock:
 # before app/, downloads/ and data/.
 KEEP = {".git", ".kit", "bin", "installers", "library", "logs", "maps", "models", "INVENTORY.md"}
 NEEDED = ("kit", "kit.json", "SETUP.command", "Open Tinfoil Kit.command", "UNINSTALL.command", "tools/kit.py", "tools/launch.sh",
-          "tools/portal.html", "tools/share.py")
+          "tools/portal.html", "tools/share.py", "tools/data.py")
 MISSING = object()
 # A release is a tarball the maintainer built and signed on their own computer (.github/release.sh), so taking over
 # the kit's GitHub account isn't enough to put code on every drive. tools/release-signers holds the keys a drive
@@ -4255,6 +4255,18 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
                     except HttpError:
                         pass
                 check("full-text search works", hits > 0, f"{hits} results for 'water'")
+        # The page's notes, pins and home: tools/data.py keeps them in the data folder, on the Python running this
+        dport = free_port()
+        start_server(procs, logs_dir / "test-data.log", [sys.executable, app_dir(root) / "tools" / "data.py",
+                                                          "--data", data_dir(root), "--port", dport, "--library", "8888"])
+        up = wait_http(f"http://127.0.0.1:{dport}/", 15, procs[-1])
+        check("notes and pins server starts", up)
+        if up:
+            try:
+                notes, places = http_json(f"http://127.0.0.1:{dport}/notes"), http_json(f"http://127.0.0.1:{dport}/places")
+                check("notes and pins readable", True, f"{len(notes['text']):,} characters of notes, {len(places['pins'])} pins")
+            except (HttpError, ValueError, KeyError) as e:
+                check("notes and pins readable", False, str(e))
         if llama and models:
             lport = free_port()
             small = min(models, key=lambda m: sum(f.stat().st_size for f in files_in(m, "*.gguf")))

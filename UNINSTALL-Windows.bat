@@ -58,7 +58,7 @@ set "SIZE=under 1 GB"
 for /f %%g in ('powershell -NoProfile -Command "[math]::Round((Get-ChildItem -LiteralPath $env:TK -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1e9)" ^<nul 2^>nul') do if %%g geq 1 set "SIZE=%%g GB"
 echo(
 echo This deletes Tinfoil Kit !WHERE!: the folder !KIT!,
-echo with the AI models, books, maps and programs it downloaded, and your settings (!SIZE! in all).
+echo with the AI models, books, maps and programs it downloaded, and your settings, notes and pins (!SIZE! in all).
 echo It can't be undone. The files don't go to the Recycle Bin.
 if defined DRIVE echo Nothing else on the drive is touched.
 if defined YES goto delete
@@ -72,14 +72,15 @@ goto finish0
 
 :delete
 rem Stop the kit if it's running, so nothing holds its files open: its programs run from its downloads\bin folder
-rem (bin, before the three folders) and its tools folder (the kit's own program), sharing runs its tools\share.py,
-rem and the Open Tinfoil Kit window that started them goes too.
+rem (bin, before the three folders) and its tools folder (the kit's own program), sharing and the notes and pins run
+rem its tools\share.py and tools\data.py, and the Open Tinfoil Kit window that started them goes too.
 set "TK_BIN=%KIT%\downloads\bin\"
 if not exist "%KIT%\downloads\" set "TK_BIN=%KIT%\bin\"
 set "TK_TOOLS=%APP%\tools\"
 set "TK_GATE=%APP%\tools\share.py"
+set "TK_DATA=%APP%\tools\data.py"
 set "TK_START=%APP%\Open Tinfoil Kit for Windows.bat"
-powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and $c.IndexOf($env:TK_GATE, $k) -ge 0) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'Stopping the kit, which is running...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
+powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and (($_.Name -like 'python*' -and ($c.IndexOf($env:TK_GATE, $k) -ge 0 -or $c.IndexOf($env:TK_DATA, $k) -ge 0)) -or ($_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0)) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'Stopping the kit, which is running...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 rem And Windows no longer starts it as you sign in (kit.cmd autostart on), if this is the kit it starts.
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Tinfoil Kit.cmd"
 if exist "%STARTUP%" findstr /i /c:"%APP%\Open Tinfoil Kit for Windows.bat" "%STARTUP%" >nul && del "%STARTUP%"

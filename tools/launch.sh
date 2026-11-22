@@ -1,6 +1,7 @@
 #!/bin/bash
-# Starts the offline library server (kiwix-serve) and the AI server (llama-server),
-# then opens the portal in the browser. Started by Open Tinfoil Kit.command.
+# Starts the offline library server (kiwix-serve), the AI server (llama-server), the map servers and the one that keeps
+# the page's notes and pins in data/ (tools/data.py), then opens the portal in the browser. Started by Open Tinfoil
+# Kit.command.
 #
 #   bash tools/launch.sh [--share] [--model=NAME] [--no-browser] [--no-maps]
 #
@@ -57,6 +58,7 @@ ROUTE_PORT="$(setting routing_port 8989)"
 GEO_HEAP="$(setting geocoder_heap 3g)"
 ROUTE_HEAP="$(setting routing_heap 2g)"
 SHARE_PORT="$(setting share_port 8000)"
+DATA_PORT="$(setting data_port 8095)"
 [ "$(setting share_on_network false)" = true ] && SHARE=1
 
 case "$(uname -s)-$(uname -m)" in
@@ -173,7 +175,7 @@ fi
 # it asks for the access code, then passes requests on.
 HOST=127.0.0.1
 
-# Python, for the library's go-between below and for sharing: the one SETUP got for a Mac without one, or else
+# Python, for the library's go-between below, notes and pins, and sharing: the one SETUP got for a Mac without one, or else
 # python3 (as ./kit does). Until Apple's developer tools are installed, a Mac's /usr/bin/python3 only offers to
 # install them.
 PY="$HOME/Library/Application Support/TinfoilKit/python/bin/python3"
@@ -307,6 +309,21 @@ elif [ -n "$LLAMA" ] && [ ${#MODELS[@]} -gt 0 ]; then
   say "  Starting AI (loading $MODEL)..."
 fi
 
+# --- notes and pins: what the person writes on the page, kept in data/, which a new version never touches. Without
+# Python, the page keeps them in the browser instead.
+DATA_PID=""
+our_data() { get "http://127.0.0.1:$1/" | grep -q '"notes": "/notes"'; }
+if [ -f "$APP/tools/data.py" ] && [ -n "$PY" ] && ! our_data "$DATA_PORT"; then
+  if taken "$DATA_PORT"; then
+    p="$(free_port "$DATA_PORT")"; say "  Another program is using port $DATA_PORT, so notes and pins use $p."; DATA_PORT="$p"
+  fi
+  "$PY" "$APP/tools/data.py" --data "$DATA" --port "$DATA_PORT" --library "$LIB_PORT" >> "$DATA/logs/data.log" 2>&1 &
+  DATA_PID=$!; PIDS+=($!)
+elif [ -f "$APP/tools/data.py" ] && [ -z "$PY" ]; then
+  say "  Notes and pins stay in the browser: keeping them in the kit needs Python (on a Mac, double-click SETUP.command"
+  say "  while online: it gets it)."
+fi
+
 # --- maps: tiles, address search, directions
 newest() { local f last=""; for f in "$@"; do [ -f "$f" ] && last="$f"; done; printf '%s' "$last"; }  # sync keeps one copy
 MAPS_STARTED=""
@@ -359,7 +376,7 @@ if [ "$SHARE" = 1 ]; then
       say "  share_port in kit.json to a free port."
       SHARE_PORT="$p"
     fi
-    GARGS=(--root "$KIT" --port "$SHARE_PORT" --library "$LIB_PORT" --ai "$AI_PORT")
+    GARGS=(--root "$KIT" --port "$SHARE_PORT" --library "$LIB_PORT" --ai "$AI_PORT" --data "$DATA_PORT")
     [ "$NO_MAPS" = 0 ] && GARGS+=(--tiles "$TILES_PORT" --geocoder "$GEO_PORT" --routing "$ROUTE_PORT")
     "$PY" "$APP/tools/share.py" serve "${GARGS[@]}" > "$DATA/logs/share.log" 2>&1 &
     GATE_PID=$!; PIDS+=($!)
@@ -389,6 +406,10 @@ for _ in $(seq 1 30); do
   { [ -n "$AI_PID" ] && kill -0 "$AI_PID" 2>/dev/null; } || break
   sleep 1
 done
+for _ in $(seq 1 10); do    # (it starts in well under a second: so the page finds it)
+  { [ -n "$DATA_PID" ] && kill -0 "$DATA_PID" 2>/dev/null && ! our_data "$DATA_PORT"; } || break
+  sleep 0.5
+done
 if [ -n "$GATE_PID" ]; then
   for _ in $(seq 1 10); do
     our_gate "$SHARE_PORT" && { SHARE_OK=1; break; }
@@ -397,7 +418,7 @@ if [ -n "$GATE_PID" ]; then
   done
 fi
 
-URL="http://$LIB_AT:$LIB_PORT/?model=$MODEL&ai=$AI_PORT"
+URL="http://$LIB_AT:$LIB_PORT/?model=$MODEL&ai=$AI_PORT&data=$DATA_PORT"
 say ""
 if [ "$LIB_OK" = 1 ]; then say "  Library:  ready"
 else

@@ -1,9 +1,10 @@
 """Drive the real portal page in a headless browser against the live kit servers.
-KIT_BROWSER picks chromium (default), webkit (Safari's engine), msedge or chrome; KIT_LIBRARY_PORT and KIT_AI_PORT
-the ports. With KIT_SHARE_URL (the address the launcher shows for the home network) and KIT_SHARE_CODE, it also uses
+KIT_BROWSER picks chromium (default), webkit (Safari's engine), msedge or chrome; KIT_LIBRARY_PORT, KIT_AI_PORT and
+KIT_DATA_PORT (notes and pins) the ports. With KIT_SHARE_URL (the address the launcher shows for the home network) and KIT_SHARE_CODE, it also uses
 the kit the way a phone on the home network does: through the gate, with the access code, AI chat page included.
 With KIT_VIDEO (tests/drive.py record sets it), the page is in a window and goes at a person's pace for the drive
 test's videos: typing, pausing on answers, and also opening a source, AI chat, the map and Help."""
+import json
 import os
 import subprocess
 import sys
@@ -16,8 +17,10 @@ os.makedirs(SHOTS, exist_ok=True)
 
 LIB = os.environ.get("KIT_LIBRARY_PORT", "18888")
 AI = os.environ.get("KIT_AI_PORT", "18080")
+DATA = os.environ.get("KIT_DATA_PORT", "18095")
 BROWSER = os.environ.get("KIT_BROWSER", "chromium")
-URL = f"http://localhost:{LIB}/?model=Tiny&ai={AI}"   # localhost on purpose: must redirect to 127.0.0.1
+URL = f"http://localhost:{LIB}/?model=Tiny&ai={AI}&data={DATA}"   # localhost on purpose: must redirect to 127.0.0.1
+NOTES = "Sam is allergic to penicillin. If we're split up, we meet at the library on Main Street."
 VIDEO = bool(os.environ.get("KIT_VIDEO"))
 fails = 0
 
@@ -141,6 +144,18 @@ with sync_playwright() as p:
         popup(page, "#sources li a", lambda tab: pause(tab, 4))
         note("AI chat: llama.cpp's own chat page, for anything that isn't in the library")
         popup(page, "#chatLink", chat)
+    note("Notes: what your household needs to know. Ask reads them with every question")
+    page.click("nav a[data-tab=notes]")
+    page.wait_for_function("document.getElementById('notesWhere').textContent.length > 0", timeout=10000)
+    check("notes: kept in the kit's data folder", "saved in the kit's data folder" in page.inner_text("#notesWhere"),
+          page.inner_text("#notesWhere"))
+    type_in(page, "#notesText", NOTES)
+    page.wait_for_function("document.getElementById('notesStatus').textContent === 'Saved in the kit'", timeout=10000)
+    pause(page)
+    page.screenshot(path=os.path.join(SHOTS, "shot_notes.png"), full_page=True)
+    page.reload()
+    page.wait_for_function(f"document.getElementById('notesText').value === {json.dumps(NOTES)}", timeout=10000)
+    check("notes: saved in the kit, there after a reload", True)
     note("The Library tab: the books on this kit")
     page.click("nav a[data-tab=library]")
     pause(page)
@@ -167,10 +182,10 @@ with sync_playwright() as p:
     if os.environ.get("KIT_AXE"):     # axe-core's axe.min.js
         for scheme in ("light", "dark"):
             pa = b.new_page(color_scheme=scheme)
-            pa.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai={AI}")
+            pa.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai={AI}&data={DATA}")
             pa.wait_for_function("document.querySelectorAll('#scope option').length > 1", timeout=20000)
             pa.add_script_tag(path=os.environ["KIT_AXE"])
-            for tab in ("ask", "map", "library", "help"):
+            for tab in ("ask", "map", "library", "notes", "help"):
                 pa.click(f"nav a[data-tab={tab}]")
                 bad = pa.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
                 check(f"{scheme} mode, {tab} tab: no accessibility violations (axe)", not bad, ", ".join(bad))
@@ -179,7 +194,7 @@ with sync_playwright() as p:
     # AI down, on a phone (how family members use a shared kit): answers fall back to library passages
     page2 = b.new_page(viewport={"width": 390, "height": phone_height})
     note("On a phone, with the AI off: the answer is the library's best passages")
-    page2.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai=18999")    # nothing listens on 18999
+    page2.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai=18999&data={DATA}")    # nothing listens on 18999
     page2.wait_for_function("document.getElementById('aiStatus').textContent.includes('off')", timeout=15000)
     type_in(page2, "#q", "tourniquet placement")
     page2.click("#askBtn")
@@ -188,7 +203,7 @@ with sync_playwright() as p:
     check("AI-off fallback shows passages", "5 to 7 cm" in page2.inner_text("#answer"), page2.inner_text("#progress"))
     pause(page2, 4)
     page2.screenshot(path=os.path.join(SHOTS, "shot_ai_off.png"), full_page=True)
-    for tab in ("ask", "map", "library", "help"):
+    for tab in ("ask", "map", "library", "notes", "help"):
         page2.click(f"nav a[data-tab={tab}]")
         width = page2.evaluate("document.documentElement.scrollWidth")
         check(f"phone, {tab} tab: no sideways scroll", width <= 390, f"{width}px")
@@ -221,6 +236,9 @@ with sync_playwright() as p:
         check("shared: the AI's answer arrives intact through the gate", *intact(p3))
         r = p3.request.get(share + p3.get_attribute("#sources li a", "href"))
         check("shared: a source opens through the gate", r.ok and "8 drops" in r.text())
+        p3.click("nav a[data-tab=notes]")
+        p3.wait_for_function(f"document.getElementById('notesText').value === {json.dumps(NOTES)}", timeout=10000)
+        check("shared: a phone has the same notes, through the gate", "saved in the kit" in p3.inner_text("#notesWhere"))
         p3.click("nav a[data-tab=help]")
         check("shared: Help shows the address and the access code",
               share.split("//")[1] in p3.inner_text("#shareAddr") and p3.inner_text("#shareCode").replace(" ", "") == code,

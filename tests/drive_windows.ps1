@@ -103,11 +103,12 @@ function Get-RoomAnswer($dir, $place) {
   if ($room[0] -eq "tight") { "2" } elseif ($room[0] -ne "fits") { "1" }
 }
 
-# The kit's servers, its sharing gate, the kit's own program, and the Open Tinfoil Kit windows that started them.
+# The kit's servers, its sharing gate and notes server, the kit's own program, and the Open Tinfoil Kit windows that
+# started them.
 function Stop-Kit($kit, $proc) {
   Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith("$kit\downloads\bin\", "OrdinalIgnoreCase") -or
     $_.Path.StartsWith("$kit\app\tools\", "OrdinalIgnoreCase")) } | Stop-Process -Force
-  $mine = "$kit\app\tools\share.py", "$kit\app\Open Tinfoil Kit for Windows.bat"
+  $mine = "$kit\app\tools\share.py", "$kit\app\tools\data.py", "$kit\app\Open Tinfoil Kit for Windows.bat"
   Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and ($mine | Where-Object { $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }) } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   if ($proc) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
@@ -195,7 +196,7 @@ if ($Drive) {
     $bmp.Save("$work\shots\windows-desktop.png")
   } catch { "(no desktop screenshot here: $_)" }
   Step "the page in Edge"
-  $env:KIT_BROWSER = "msedge"; $env:KIT_LIBRARY_PORT = "8888"; $env:KIT_AI_PORT = "8080"
+  $env:KIT_BROWSER = "msedge"; $env:KIT_LIBRARY_PORT = "8888"; $env:KIT_AI_PORT = "8080"; $env:KIT_DATA_PORT = "8095"
   $env:KIT_TEST_SHOTS = "$work\shots\windows"
   python "$tests\ui_test.py"
   if ($LASTEXITCODE -ne 0) { Fail "the page in Edge" }

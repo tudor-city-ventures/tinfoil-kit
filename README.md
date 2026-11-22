@@ -8,13 +8,13 @@ An offline kit for when the internet goes down. One folder, on your computer or 
 - **An offline library** (Kiwix): Wikipedia, medical references, repair guides, preparedness manuals.
 - **Offline maps** with address search, driving and walking directions, and "nearest hospital".
 
-Open the kit's app folder (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library and Map tabs. No internet, account or install needed.
+Open the kit's app folder (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library, Map and Notes tabs. No internet, account or install needed.
 
 ![The Ask tab](docs/screenshots/shot_ask.png)
 
 ## How it works
 
-The whole kit is one folder, with three inside: `app` (the kit's code, as released), `downloads` (everything it downloads) and `data` (your settings and the kit's records). A new version replaces `app` and leaves the other two as they are. Put the kit on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows. On a Mac the Tinfoil Kit app, the website's Mac download, opens them for you: SETUP in Terminal the first time, then the kit, in a window that stops it when you close it.
+The whole kit is one folder, with three inside: `app` (the kit's code, as released), `downloads` (everything it downloads) and `data` (your settings, notes and pins, and the kit's records). A new version replaces `app` and leaves the other two as they are. Put the kit on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows. On a Mac the Tinfoil Kit app, the website's Mac download, opens them for you: SETUP in Terminal the first time, then the kit, in a window that stops it when you close it.
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 300}}}%%
@@ -32,10 +32,12 @@ flowchart TB
     start --> ai["AI<br/>llama-server"]
     start --> library["Library<br/>kiwix-serve"]
     start --> maps["Maps<br/>pmtiles, Photon,<br/>GraphHopper"]
+    start --> notes["Notes and pins<br/>tools/data.py"]
     ai --> page
     library --> page
     maps --> page
-    page["Kit page in your browser<br/>Ask, Map, Library, AI chat"]
+    notes --> page
+    page["Kit page in your browser<br/>Ask, Map, Library, AI chat, Notes"]
     start -.-> gate["Sharing, if on<br/>access code"]
     gate -.-> phones["Phones and laptops<br/>on your home network"]
   end
@@ -63,6 +65,7 @@ Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build 
 | Map | `pmtiles` | 8090 | Serves the map: street detail where you live (a US state, a country, or part of a big one) and a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy (the whole US by default) |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
+| Notes and pins | `tools/data.py` | 8095 | Keeps the Notes tab and the map's home and pins in `data`, so a new version keeps them and every browser on the kit sees the same ones. It runs on the Python SETUP uses; without one, they stay in the browser |
 | Sharing (off by default) | `tools/share.py` | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on (`.\kit.cmd share on` on Windows), `--share` for one run |
 
 Photon and GraphHopper run on a Java that's in the kit. The kit has each program for Macs, Windows PCs and Linux PCs, so a drive set up on one starts on all three.
@@ -70,7 +73,8 @@ Photon and GraphHopper run on a Java that's in the kit. The kit has each program
 The kit page (`tools/portal.html`) is one HTML file with no build step. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
 
 - **Ask:** the AI turns your question into short searches, `kiwix-serve` searches every book, and the AI answers from the top articles with numbered sources. With the AI off, Ask shows the best passages instead. Map questions ("nearest pharmacy", "directions to the hospital") skip the library: the AI gets three map tools (search places, find nearby, get directions), and the answer shows on the Map tab.
-- **Map:** MapLibre draws the map from `pmtiles`. Its search, directions and "nearest" buttons ask Photon and GraphHopper. Home and pins are saved in the browser.
+- **Map:** MapLibre draws the map from `pmtiles`. Its search, directions and "nearest" buttons ask Photon and GraphHopper. Home and pins are saved in the kit (`data/places.json`).
+- **Notes:** what the AI should know about your household (allergies, medicines, who to call, where to meet), in `data/notes.txt`, a plain text file. The AI reads them with every question on Ask, map questions included.
 
 ### What's in the folder
 
@@ -96,6 +100,8 @@ TinfoilKit/
 │   └── INVENTORY.md              what's installed, with versions and sizes
 └── data/                         yours: no new version touches it
     ├── kit.json                  what goes in your kit, and its settings
+    ├── notes.txt                 the Notes tab: what the AI should know about your household
+    ├── places.json               the map's home and pins
     ├── logs/                     what each sync and launch did
     └── .kit/                     download progress, caches, the built kit page, the access code
 ```

@@ -1518,7 +1518,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           rc == rc2 == 0 and not gone.exists() and not gone2.exists(), out + out2)
 
     def running_kit():
-        """A kit whose AI server and own program are running (stand-ins that sleep), removed with --yes."""
+        """A kit whose AI server, own program and notes server are running (stand-ins that sleep), removed with --yes."""
         gone = work / "gone" / "TinfoilKit"
         shutil.rmtree(gone.parent, ignore_errors=True)
         procs = []
@@ -1527,6 +1527,8 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
             srv.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(300)\n")
             srv.chmod(0o755)
             procs.append(subprocess.Popen([str(srv)]))
+        (gone / "app" / "tools" / "data.py").write_text("import time\ntime.sleep(300)\n")
+        procs.append(subprocess.Popen([sys.executable, str(gone / "app" / "tools" / "data.py")]))
         shutil.copy(TESTS.parent / "UNINSTALL.command", gone / "app")
         (gone / "app" / "kit").write_text("#!/bin/bash\n")
         (gone / "app" / "tools" / "kit.py").write_text("# kit\n")
@@ -1543,8 +1545,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         return p.returncode, p.stdout, gone, stopped
 
     rc, out, gone, stopped = running_kit()
-    check("UNINSTALL --yes: no question, stops the kit's running servers and its own program, removes it all",
-          rc == 0 and stopped and not gone.exists() and "Stopping the kit" in out and "Press Return" not in out, out)
+    check("UNINSTALL --yes: no question, stops the kit's running servers, its own program and its notes server, removes it all",
+          rc == 0 and stopped and not gone.exists() and "Stopping the kit" in out and "Press Return" not in out
+          and "notes and pins" in out, out)
 
     # The launcher's first model, by the computer's memory. A stand-in for a running kit answers on both
     # server ports, so the launcher reuses them and only picks the model and prints the address.

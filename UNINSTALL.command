@@ -54,7 +54,7 @@ size="$(du -sk "$KIT" 2>/dev/null | awk '{g = $1 * 1024 / 1e9; if (g < 1) print 
 if [ -n "$drive" ]; then where="from the drive $drive"; else where="from $THIS"; fi
 echo
 echo "This deletes Tinfoil Kit $where: the folder $KIT,"
-echo "with the AI models, books, maps and programs it downloaded, and your settings ($size in all)."
+echo "with the AI models, books, maps and programs it downloaded, and your settings, notes and pins ($size in all)."
 [ -d "$PY_HOME/python" ] && echo "Also the Python it downloaded for $THIS, in $PY_HOME."
 echo "It can't be undone. The files don't go to the Trash."
 [ -n "$drive" ] && echo "Nothing else on the drive is touched."
@@ -66,9 +66,10 @@ fi
 
 # A home server starts the kit with the computer (./kit autostart): undo that, which also stops it.
 ./kit autostart off >/dev/null 2>&1
-# Stop the kit if it's running (its servers run from its downloads, the kit's own program and the sharing gate from
-# its app folder), so nothing holds its files open or answers once it's gone.
-pids="$(ps -axo pid=,command= 2>/dev/null | awk -v a="$KIT/downloads/bin/" -v b="$KIT/bin/" -v c="$KIT/app/tools/" \
+# Stop the kit if it's running (its servers run from its downloads; the kit's own program, the notes and pins server
+# and the sharing gate from its app folder), so nothing holds its files open, and an open page can't save into a
+# folder that's gone.
+pids="$(ps -axo pid=,command= 2>/dev/null | awk -v a="$KIT/downloads/bin/" -v b="$KIT/bin/" -v c="$CODE/tools/" \
   'index($0, a) || index($0, b) || index($0, c) {print $1}')"
 if [ -n "$pids" ]; then
   echo "Stopping the kit, which is running..."

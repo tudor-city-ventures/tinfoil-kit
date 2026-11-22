@@ -46,10 +46,10 @@ const COMPARE = [
   ["Setup", "Double-click, or paste one command. No Docker or admin password.", "One command, run as admin. It runs in Docker."],
   ["Where it lives", "One folder, on an external drive or your computer. The drive works on any Mac, Windows or Linux computer.", "On that PC"],
   ["Library", "Wikipedia, plus medical, preparedness and repair books, from Kiwix", "Kiwix collections too, plus Khan Academy courses through Kolibri"],
-  ["AI", "Answers from every book, with sources. Nothing to index first.", "Chat that answers from your own documents and its books, once it indexes them"],
-  ["Maps", "Address search, driving and walking directions, the nearest hospital, and pins", "Offline maps, with pins and notes"],
+  ["AI", "Answers from every book, with sources, and reads your notes. Nothing to index first.", "Chat that answers from your own documents and its books, once it indexes them"],
+  ["Maps", "Address search, driving and walking directions, the nearest hospital, and pins with notes", "Offline maps, with pins and notes"],
   ["Sharing at home", "Off until you turn it on, then behind an access code", "Open to every device on the network, with no login, by design"],
-  ["Apps", "Just the library, the AI and the map", "An app catalog: CyberChef, notes, translation and more"],
+  ["Apps", "Just the library, the AI, the map and your notes", "An app catalog: CyberChef, notes, translation and more"],
 ];
 
 const jsonLd = {

@@ -34,6 +34,7 @@ In the kit's app folder (`.\kit.cmd` for `./kit` in PowerShell on Windows):
 
 ## Good to know
 
+- Every device sees the same notes (the Notes tab) and map pins, and can change them: anyone with the code can read them.
 - It's plain HTTP inside the home network: share it on the person's own Wi-Fi or hotspot, never a public one.
 - Only devices with home network addresses get in, and each gets 10 wrong codes per 10 minutes.
 - The gate listens on port 8000 (`share_port` in data/kit.json). Every server behind it listens only on 127.0.0.1.

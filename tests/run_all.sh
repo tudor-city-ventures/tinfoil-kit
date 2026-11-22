@@ -12,7 +12,7 @@ W="$KIT_TEST_WORK" R="$KIT_TEST_WORK/remote" L="$KIT_TEST_WORK/logs"
 mkdir -p "$L"
 D="$W/drive/TinfoilKit" A="$W/drive/TinfoilKit/app"    # the kit folder, and its code as a release has it
 
-cleanup() { pkill -f 'tools/launch.sh|tools/tinfoilkit-'; pkill -f "Open Tinfoil Kit"; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; pkill -f "share.py serve";
+cleanup() { pkill -f 'tools/launch.sh|tools/tinfoilkit-'; pkill -f "Open Tinfoil Kit"; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; pkill -f "share.py serve"; pkill -f tools/data.py;
             pkill -f "mock_services.py (tiles|photon|graphhopper|llama)"; }
 main() {
 cleanup 2>/dev/null

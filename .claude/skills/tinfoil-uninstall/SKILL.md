@@ -5,7 +5,7 @@ description: Remove a Tinfoil Kit and everything it downloaded. Use when someone
 
 # Remove Tinfoil Kit
 
-This deletes the kit for good: the files don't go to the Trash. Give the person the command only once they've said yes to deleting all of it, models, books, maps and their own settings. To find the kit, see the tinfoil-update skill.
+This deletes the kit for good: the files don't go to the Trash. Give the person the command only once they've said yes to deleting all of it, models, books, maps and their own settings, notes and pins. To find the kit, see the tinfoil-update skill.
 
 ## What it removes
 
@@ -24,6 +24,6 @@ On a drive: `bash /Volumes/NAME/TinfoilKit/app/UNINSTALL.command --yes`, or `E:\
 ## Before they run it
 
 - Close the kit's window first.
-- To keep their picks for a later kit, copy data/kit.json somewhere else first.
+- To keep their notes (the Notes tab), copy data/notes.txt somewhere else first: it's plain text. data/places.json holds the map's home and pins, and data/kit.json their picks, for a later kit.
 - The Mac app stays in Applications until it's dragged to the Trash.
 - To free some space and keep the kit, see the tinfoil-data skill instead.

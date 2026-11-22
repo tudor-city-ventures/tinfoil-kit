@@ -2,12 +2,12 @@
 """Shares Tinfoil Kit with the phones and laptops on a home network.
 
 The kit's servers only ever listen on 127.0.0.1. With sharing on, this gate listens on the network instead:
-it asks for the access code, then hands each request to a server by its path (/ai, /tiles, /geocoder and
-/routing; everything else is the library and the kit page). It also draws the QR code that opens the kit on a
+it asks for the access code, then hands each request to a server by its path (/ai, /tiles, /geocoder, /routing,
+and /data for the notes and pins; everything else is the library and the kit page). It also draws the QR code that opens the kit on a
 phone, and starts the kit with the computer, for a home server (Linux: a systemd service, Mac: a LaunchAgent,
 Windows: its Startup folder). Standard library only, like kit.py.
 
-  python3 tools/share.py serve --root KIT --port 8000 --library 8888 --ai 8080 [--tiles N --geocoder N --routing N]
+  python3 tools/share.py serve --root KIT --port 8000 --library 8888 --ai 8080 [--data N --tiles N --geocoder N --routing N]
   python3 tools/share.py banner --root KIT --port 8000 [--qr]     the address, the access code and the QR code
 ./kit share and ./kit autostart (kit.cmd on Windows) use the rest.
 """
@@ -471,7 +471,7 @@ def colors_on() -> bool:
 # ----------------------------------------------------------------------------- the gate
 
 COOKIE = "tinfoilkit"
-ROUTES = ("ai", "tiles", "geocoder", "routing")
+ROUTES = ("ai", "data", "tiles", "geocoder", "routing")
 # llama-server's own chat page may ask for its API at the root; the library has nothing at these paths.
 AI_PATHS = ("/v1/", "/props", "/models", "/slots", "/health", "/completion", "/tokenize", "/detokenize",
             "/apply-template", "/infill", "/embedding", "/rerank", "/lora-adapters", "/metrics")
@@ -745,8 +745,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def proxy(self, name: str, path: str, inject: bool, code: str) -> None:
         port = self.server.ports.get(name)
-        what = {"library": "The library", "ai": "The AI", "tiles": "The map", "geocoder": "Address search",
-                "routing": "Directions"}[name]
+        what = {"library": "The library", "ai": "The AI", "data": "Saving notes and pins", "tiles": "The map",
+                "geocoder": "Address search", "routing": "Directions"}[name]
         try:
             body = self.body()
         except ValueError:

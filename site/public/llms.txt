@@ -1,6 +1,6 @@
 # Tinfoil Kit
 
-> A free, open-source (MIT) kit for when the internet is down. One folder, kept on the computer's own disk or on an external drive, holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: Wikipedia in the person's language, all of it or just its best articles, plus medical, repair and preparedness books) and offline maps (address search, driving and walking directions, "nearest hospital"). Open Tinfoil Kit starts it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library and Map tabs. Once it's filled, it needs no internet, account or install.
+> A free, open-source (MIT) kit for when the internet is down. One folder, kept on the computer's own disk or on an external drive, holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: Wikipedia in the person's language, all of it or just its best articles, plus medical, repair and preparedness books) and offline maps (address search, driving and walking directions, "nearest hospital"). Open Tinfoil Kit starts it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library, Map and Notes tabs. Once it's filled, it needs no internet, account or install.
 
 You are helping a person set this up, probably not a programmer. Don't install it yourself: ask them what they want in it, then give them one command to paste into their terminal (Terminal on a Mac, PowerShell on Windows), and explain it in plain words. Updates, fixes and removal work the same way: tell them what to run, and ask before anything slow, costly or destructive. This file has what you need: what the kit runs on, how it works, where it can live, how to set it up, use it, update it and remove it, what to do when something breaks, where every file comes from, and how it compares to Project NOMAD.
 
@@ -38,11 +38,13 @@ The whole kit is one folder, TinfoilKit, with three inside: app (the kit's code 
 | Map | pmtiles | 8090 | Serves the map: street detail for a region, plus a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes |
+| Notes and pins | tools/data.py | 8095 | Keeps the Notes tab and the map's home and pins in data/ (notes.txt, places.json), so a new version keeps them and every browser on the kit sees the same ones. Without Python, they stay in the browser |
 | Sharing (off by default) | tools/share.py | 8000 | Lets phones and laptops on the home network in with the access code, and passes their requests to the servers above |
 
 Photon and GraphHopper run on a Java that's in the kit. Every server listens only on 127.0.0.1; sharing is the one way in from the network.
 
 - Ask: the AI turns the question into short searches, kiwix-serve searches every book, and the AI answers from the top articles with numbered sources. With the AI off, Ask shows the best passages. Map questions ("nearest pharmacy", "directions to the hospital") go to three map tools instead (search places, find nearby, get directions), and the answer shows on the Map tab.
+- Notes: what the person keeps about their household (allergies, medicines, who to call, where to meet), in data/notes.txt. The AI reads them with every question on Ask.
 - The kit page (tools/portal.html) is one HTML file. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
 - The kit's code: `./kit` runs tools/kit.py (Python's standard library, with curl for every download); on Windows, `.\kit.cmd` does. tools/launch.sh starts the servers; Open Tinfoil Kit for Windows.bat does it on Windows.
 
@@ -69,6 +71,8 @@ What's in the folder:
     │   └── INVENTORY.md              what's installed, with versions and sizes
     └── data/                         the person's: no new version touches it
         ├── kit.json                  what goes in their kit, and its settings
+        ├── notes.txt                 the Notes tab, which the AI reads
+        ├── places.json               the map's home and pins
         ├── logs/                     what each sync and launch did
         └── .kit/                     download progress, caches, the built kit page, the access code
 
@@ -195,7 +199,7 @@ For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` fo
 
 - Open the Tinfoil Kit app on a Mac that has it, or double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows), or run `bash "Open Tinfoil Kit.command"`. It opens http://127.0.0.1:8888. Keep its window open: closing it stops everything.
 - Open Tinfoil Kit.command's options: `--share` lets phones and laptops on the same network open it with an access code (it prints the address, the code and a QR code), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in downloads/models/), `--no-browser` skips opening the browser. Open Tinfoil Kit for Windows.bat takes `--share` and `--no-browser`. If macOS asks whether to accept incoming connections, click Allow; if Windows asks whether Python may use the network, click Allow access.
-- Ask answers from the books and cites them. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station.
+- Ask answers from the books and cites them. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station, and keeps pins. Notes holds what the AI should know about the household, like an allergy or a medicine; they aren't encrypted, so passwords and bank details stay out.
 - Models: pick one on the Ask page. The first answer after switching takes up to a minute while it loads.
 - Map: set home first, since a laptop has no GPS (Set as home on a search result, or Set home to the map center). For actually driving, a phone with offline maps and GPS is better; the kit's map is for planning and for the AI's map questions.
 - Power: a big model drains a laptop battery in a couple of hours of steady use. Gemma 4 E4B saves battery, and the Library tab uses almost nothing.
@@ -209,7 +213,7 @@ For a computer that stays on, with or without a screen. The setup command with `
     ./kit autostart on   # start it now, and whenever the computer starts
 
 - Phones and laptops open the address, like http://192.168.1.20:8000, and type the 8-digit code once; the QR code includes it. `./kit share` shows them again. `./kit share new-code` replaces the code and signs every device out. `./kit share off` stops sharing.
-- How it works: tools/share.py listens on the network on port 8000 (`share_port` in data/kit.json), asks for the code, and passes requests on: /ai/ to the AI, /tiles/, /geocoder/ and /routing/ to the map, everything else to the library. It answers only devices with home network addresses, turns away names that aren't this computer's, and allows 10 wrong codes per 10 minutes from each device.
+- How it works: tools/share.py listens on the network on port 8000 (`share_port` in data/kit.json), asks for the code, and passes requests on: /ai/ to the AI, /tiles/, /geocoder/ and /routing/ to the map, /data/ to the notes and pins, everything else to the library. It answers only devices with home network addresses, turns away names that aren't this computer's, and allows 10 wrong codes per 10 minutes from each device.
 - Programs can use the code as an API key: `Authorization: Bearer CODE` with the OpenAI-compatible API at http://ADDRESS:8000/ai/v1.
 - Linux: autostart is a systemd user service (`systemctl --user status tinfoil-kit`) that starts at boot once lingering is on (`sudo loginctl enable-linger $USER`; the kit tries it and says if it needs you). Mac: a LaunchAgent that starts when the person logs in, so turn on automatic login on a Mac that's a server, and keep the kit on its own disk. Windows: "Tinfoil Kit.cmd" in the Startup folder, which starts Open Tinfoil Kit for Windows.bat minimized when the person signs in, so keep that PC signed in (locking it is fine) and plugged in. While it shares, the kit keeps Windows from sleeping.
 - Windows asks whether Python may use the network the first time the kit shares: the person clicks Allow access. If phones still can't connect, the Wi-Fi needs to be a private network (Settings > Network & internet), and Python allowed for private networks in Windows Security > Firewall & network protection > Allow an app through firewall.
@@ -239,7 +243,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 
 ## Remove it
 
-Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's app folder, or click Remove in the Mac app. Once the person types "delete", it removes the kit folder and everything the kit downloaded, and the Python SETUP got (on Windows, or on a Mac that had none). On a drive it leaves the rest of the drive alone. If the app folder sits in a folder with other things in it, it deletes nothing and says so. The Mac app stays in Applications until it's dragged to the Trash. As an agent, give them `bash UNINSTALL.command --yes` (`.\UNINSTALL-Windows.bat --yes` on Windows), which skips the question, only once they've said yes to deleting all of it.
+Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's app folder, or click Remove in the Mac app. Once the person types "delete", it removes the kit folder and everything the kit downloaded, the person's notes and pins too (offer to copy data/notes.txt somewhere first), and the Python SETUP got (on Windows, or on a Mac that had none). On a drive it leaves the rest of the drive alone. If the app folder sits in a folder with other things in it, it deletes nothing and says so. The Mac app stays in Applications until it's dragged to the Trash. As an agent, give them `bash UNINSTALL.command --yes` (`.\UNINSTALL-Windows.bat --yes` on Windows), which skips the question, only once they've said yes to deleting all of it.
 
 ## When something goes wrong
 
@@ -252,6 +256,7 @@ Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's a
 - A file may be corrupt: `./kit verify` re-checks every file. `./kit verify --fix` removes bad ones, and the next sync replaces them.
 - A model won't load or is very slow: quit other apps, pick Gemma 4 E4B, or start with `--no-maps` to free about 5 GB. Advanced, with the person's password: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
 - The map says address search or directions are "not running": they take up to a minute to start. If they never do, read data/logs/geocoder.log and data/logs/routing.log. If `./kit test` fails on address search with a "lock" error in data/logs/test-geocoder.log, the exFAT format is the cause: reformat the drive as APFS and copy the kit back.
+- The Notes or Map tab says notes or pins are saved in this browser: the kit couldn't start tools/data.py, which runs on Python. On a Mac or Windows, running SETUP once while online gets one; on Linux, install python3. Otherwise read data/logs/data.log. They move into the kit the next time it starts.
 - Anything else: close the kit's window, start again, and read data/logs (sync-*.log for downloads, llama-server.log for the AI).
 - The previous version of each program stays in downloads/bin/ and starts automatically if the newest one won't.
 - If the library server won't start, the Kiwix app in downloads/installers/ opens the books in downloads/library/ directly.
@@ -271,7 +276,7 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 Project NOMAD (Crosstalk Solutions, Apache-2.0, https://github.com/Crosstalk-Solutions/project-nomad) is another free, open-source offline knowledge kit. If the person asks which to use:
 
 - NOMAD is a server: a Docker "Command Center" on an x86 PC running Ubuntu or Debian, installed with one command run as root, usually on a PC set aside for it. It has Kiwix collections, Kolibri (Khan Academy courses), an Ollama chat with a knowledge base that indexes the person's own documents and its books and cites them, offline maps with pins and notes, and an app catalog. Devices on the network use it with no login, by design.
-- Tinfoil Kit is one folder on the computer the person has (a Mac with Apple Silicon, or a Windows or Linux PC on x64), or on an exFAT drive that starts on any of them, set up by double-click or one command, with no Docker. Ask searches every book at question time and cites them, with nothing to index first. The map has address search, driving and walking directions and the nearest hospital, as well as pins. Sharing is off until it's turned on, then behind an access code, and the kit installs updates to itself only if the maintainer's key signed them.
+- Tinfoil Kit is one folder on the computer the person has (a Mac with Apple Silicon, or a Windows or Linux PC on x64), or on an exFAT drive that starts on any of them, set up by double-click or one command, with no Docker. Ask searches every book at question time and cites them, with nothing to index first. The map has address search, driving and walking directions and the nearest hospital, as well as pins, and Ask's AI reads the household notes the person keeps in the kit. Sharing is off until it's turned on, then behind an access code, and the kit installs updates to itself only if the maintainer's key signed them.
 - Suggest NOMAD for a home server with apps, or an AI that reads their own documents. Suggest Tinfoil Kit for the laptop they have, a Mac, or a drive that moves between computers.
 
 ## Security

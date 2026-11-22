@@ -6,7 +6,7 @@ step() { echo "== $*"; }
 run() { if "$@"; then :; else echo "FAIL: $*"; fail=1; fi; }
 
 step "python compiles"
-run python3 -m py_compile tools/kit.py tools/share.py tests/*.py site/*.py
+run python3 -m py_compile tools/kit.py tools/share.py tools/data.py tests/*.py site/*.py
 
 step "bash parses"
 SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command tools/launch.sh mac/app.sh mac/build.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles tools/tinfoilkit/build.sh)
@@ -108,6 +108,11 @@ echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 
 step "sharing on the home network: the gate, the QR code, ./kit share and autostart"
 out=$(python3 tests/share_test.py 2>&1); rc=$?
+echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+[ $rc -eq 0 ] || fail=1
+
+step "notes and pins: tools/data.py keeps them in the data folder, for the kit's page only"
+out=$(python3 tests/data_test.py 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 

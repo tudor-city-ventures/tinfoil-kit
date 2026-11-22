@@ -12,6 +12,7 @@
     "context_size": 16384,
     "library_port": 8888,
     "ai_port": 8080,
+    "data_port": 8095,
     "share_on_network": false,
     "share_port": 8000,
     "keep_free_gb": 25,

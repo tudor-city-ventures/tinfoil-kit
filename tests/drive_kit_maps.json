@@ -4,6 +4,7 @@
     "context_size": 4096,
     "library_port": 18888,
     "ai_port": 18080,
+    "data_port": 18095,
     "keep_free_gb": 0.1,
     "keep_free_gb_this_computer": 0.1,
     "keep_previous_runtime_versions": 1,

@@ -313,14 +313,26 @@
         background: var(--panel);
       }
 
-      /* Ask: the question in a box like the site's kit builder */
-      #askForm {
+      /* Ask: the question in a box like the site's kit builder, and Notes the same */
+      #askForm,
+      #notesForm {
         display: flex;
         flex-direction: column;
         gap: 12px;
         padding: 18px 20px 20px;
         border: 2px solid var(--line);
         background: var(--panel);
+      }
+      #notesText {
+        min-height: 18rem;
+      }
+      #notesStatus {
+        min-height: 1.4rem;
+        font: 13px/1.5 var(--mono);
+        color: var(--ink2);
+      }
+      #notesConflict p {
+        margin-top: 0;
       }
       #progress {
         min-height: 1.4rem;
@@ -827,6 +839,7 @@
         <a href="#ask" data-tab="ask" class="on" aria-current="page">Ask</a>
         <a href="#map" data-tab="map">Map</a>
         <a href="#library" data-tab="library">Library</a>
+        <a href="#notes" data-tab="notes">Notes</a>
         <a id="chatLink" target="_blank" rel="noopener">AI chat</a>
         <a href="#help" data-tab="help">Help</a>
       </nav>
@@ -877,6 +890,34 @@
         <div id="bookList"></div>
       </section>
 
+      <section id="notes">
+        <form id="notesForm">
+          <label for="notesText" class="label">Your notes</label>
+          <textarea
+            id="notesText"
+            maxlength="100000"
+            placeholder="e.g. Sam is allergic to penicillin. Dad takes his heart pills at 8 every morning. If we're split up, we meet at the library on Main Street."
+          ></textarea>
+          <div id="notesStatus" role="status"></div>
+        </form>
+        <div id="notesConflict" class="card" hidden>
+          <p role="alert">These notes changed on another device while you were writing here.</p>
+          <div class="row">
+            <button id="notesMine" type="button">Keep mine</button>
+            <button id="notesTheirs" type="button" class="secondary">Use theirs</button>
+          </div>
+        </div>
+        <p class="note">
+          Write down what you'd need to know in an emergency: who lives here, allergies and medicines, doctors, where to
+          meet, where the water shut-off is. Ask reads your notes with every question, so its answers fit your
+          household.
+        </p>
+        <p class="note">
+          <span id="notesWhere"></span> They aren't encrypted: anyone with this drive or computer, or with the kit's
+          access code when it's shared, can read them. Leave out passwords and bank details.
+        </p>
+      </section>
+
       <section id="map">
         <div id="mapOff" class="card" hidden></div>
         <div class="map-wrap" id="mapWrap">
@@ -909,8 +950,8 @@
             <h2>Pins</h2>
             <ul id="pinList"></ul>
             <p class="note">
-              Click the map to see its coordinates or pin a place, like where the family meets. Pins are saved in this
-              browser.
+              Click the map to see its coordinates or pin a place, like where the family meets.
+              <span id="pinsWhere"></span>
             </p>
             <p class="note" id="mapStatus"></p>
             <p class="note">
@@ -934,9 +975,14 @@
             more.
           </li>
           <li>
-            <b>AI chat</b> is a plain chat with the AI. It doesn't search your books, so check anything important on Ask
-            or in the Library. You can attach photos there, e.g. of a broken part or a label. Use a model that reads
-            photos (Inkling, Qwen, Gemma).
+            <b>Notes</b> is where you write down what matters to your household: allergies, medicines, doctors, where to
+            meet. Ask reads them with every question. They're saved in the kit's data folder as <b>notes.txt</b>, which
+            updates never touch, and they aren't encrypted.
+          </li>
+          <li>
+            <b>AI chat</b> is a plain chat with the AI. It doesn't search your books or read your notes, so check
+            anything important on Ask or in the Library. You can attach photos there, e.g. of a broken part or a label.
+            Use a model that reads photos (Inkling, Qwen, Gemma).
           </li>
           <li>
             Pick a different <b>model</b> for a second opinion. <b>Gemma-4-E4B</b> is the small one: use it to save
@@ -956,8 +1002,8 @@
           </li>
           <li>
             Click anywhere on the map for its coordinates, directions there, or a <b>pin</b> with a note, like where the
-            family meets. Pins are saved in this browser, and search, directions and Ask find them by name. The search
-            box also takes coordinates, e.g. 40.7128, -74.0060 or 40°42'46"N 74°0'22"W.
+            family meets. Pins and home are saved in the kit, and search, directions and Ask find pins by name. The
+            search box also takes coordinates, e.g. 40.7128, -74.0060 or 40°42'46"N 74°0'22"W.
           </li>
           <li>
             You can also ask in plain words on the Ask page, e.g. "How do I get to the nearest hospital?" or "Directions
@@ -988,10 +1034,10 @@
         <h2>If something doesn't work</h2>
         <ul>
           <li>Close the kit's Terminal window and double-click <b>Open Tinfoil Kit.command</b> again.</li>
-          <li>Logs are in the <b>logs</b> folder, inside the kit's folder.</li>
+          <li>Logs are in the kit's <b>data</b> folder, in <b>logs</b>.</li>
           <li>
-            If the AI won't start, the library still works. The Kiwix app in <b>installers</b> also opens the library
-            files directly.
+            If the AI won't start, the library still works. The Kiwix app in <b>downloads/installers</b> also opens the
+            library files directly.
           </li>
           <li>
             Big models need most of the computer's memory: quit other apps. If a model still won't load, use
@@ -1461,7 +1507,31 @@
           "For medical questions, first list the warning signs that mean urgent help is needed, keep any doses conservative, and never invent a dose. " +
           "Never tell the user a wild plant or mushroom is safe to eat based on a description or photo.";
 
-        function buildMessages(question, sources) {
+        var NOTES_MAX = 4000; // characters of the household's notes that go to the AI: about a page
+
+        /* The household's notes (the Notes tab) in a system message: the AI uses them when they bear on the question. */
+        function withNotes(system, notes) {
+          notes = String(notes || "").trim();
+          if (!notes) return system;
+          if (notes.length > NOTES_MAX) notes = notes.slice(0, NOTES_MAX) + "\n[...]";
+          return (
+            system +
+            "\n\nThe user keeps these notes about their household in the kit (people, health, plans, places). " +
+            "Use them when they bear on the question, like an allergy or a medicine, and don't bring them up otherwise.\n<notes>\n" +
+            notes +
+            "\n</notes>"
+          );
+        }
+
+        /* Notes typed while the kit couldn't keep them ({text, since}: the version they began from), now that it can:
+           "keep" them over the kit's (unchanged there since, or empty), "ask" which to keep, or "drop" them (the same). */
+        function notesMerge(kit, typed) {
+          if (!typed || typed.text === kit.text) return "drop";
+          if (typed.since === kit.version || !kit.text.trim()) return "keep";
+          return "ask";
+        }
+
+        function buildMessages(question, sources, notes) {
           var ctx = sources
             .map(function (s, i) {
               return "[" + (i + 1) + '] "' + s.title + '" (' + s.book + ")\n" + s.passages.join("\n...\n");
@@ -1478,7 +1548,7 @@
               ? 'Answer using the excerpts and cite them like [1] or [2]. If they don\'t cover something, say so, then answer from general knowledge and mark that part "(not from the library)".'
               : "Answer from general knowledge and say clearly that it is not from the library.");
           return [
-            { role: "system", content: SYSTEM },
+            { role: "system", content: withNotes(SYSTEM, notes) },
             { role: "user", content: user },
           ];
         }
@@ -2067,32 +2137,33 @@
 
         function mapSystemPrompt(opts) {
           var h = opts.home || {};
-          return (
+          return withNotes(
             "You are the map assistant in an offline emergency kit. The internet is down; you have offline maps, address search and directions" +
-            (opts.label ? " for " + opts.label : "") +
-            ". The user's home is " +
-            (h.label || "home") +
-            " (" +
-            h.lat +
-            ", " +
-            h.lon +
-            "). " +
-            (opts.pins && opts.pins.length
-              ? "The user pinned these places, which the tools find by name: " +
-                opts.pins
-                  .slice(0, 30)
-                  .map(function (p) {
-                    return p.name;
-                  })
-                  .join(", ") +
-                ". "
-              : "") +
-            "Always use the tools to look up places, distances and routes; never guess an address or a route. " +
-            "Use " +
-            (opts.units === "metric" ? "kilometres" : "miles") +
-            ". After the tools answer, reply briefly: what you found, the distance and time, " +
-            "and the main turn-by-turn steps (summarize very long routes to the key turns). " +
-            "Mention that the route is also shown on the Map tab. If a tool reports an error, say so plainly."
+              (opts.label ? " for " + opts.label : "") +
+              ". The user's home is " +
+              (h.label || "home") +
+              " (" +
+              h.lat +
+              ", " +
+              h.lon +
+              "). " +
+              (opts.pins && opts.pins.length
+                ? "The user pinned these places, which the tools find by name: " +
+                  opts.pins
+                    .slice(0, 30)
+                    .map(function (p) {
+                      return p.name;
+                    })
+                    .join(", ") +
+                  ". "
+                : "") +
+              "Always use the tools to look up places, distances and routes; never guess an address or a route. " +
+              "Use " +
+              (opts.units === "metric" ? "kilometres" : "miles") +
+              ". After the tools answer, reply briefly: what you found, the distance and time, " +
+              "and the main turn-by-turn steps (summarize very long routes to the key turns). " +
+              "Mention that the route is also shown on the Map tab. If a tool reports an error, say so plainly.",
+            opts.notes,
           );
         }
 
@@ -2206,6 +2277,8 @@
           makeQueries: makeQueries,
           gatherSources: gatherSources,
           buildMessages: buildMessages,
+          withNotes: withNotes,
+          notesMerge: notesMerge,
           streamChat: streamChat,
           render: render,
           escapeHtml: escapeHtml,
@@ -2265,8 +2338,12 @@
           }
           var aiPort = params.get("ai") || stored("ai") || "8080";
           var AI = GATE ? location.origin + "/ai" : location.protocol + "//" + location.hostname + ":" + aiPort;
+          // tools/data.py, which keeps the notes, the pins and home in the kit's data folder
+          var dataPort = params.get("data") || stored("data") || "8095";
+          var DATA = GATE ? location.origin + "/data" : location.protocol + "//" + location.hostname + ":" + dataPort;
           var preferredModel = params.get("model") || stored("model") || "";
           store("ai", aiPort);
+          store("data", dataPort);
           if (params.get("model")) store("model", params.get("model"));
           var $ = function (id) {
             return document.getElementById(id);
@@ -2305,13 +2382,16 @@
               s.classList.toggle("on", s.id === name);
             });
             document.querySelector("main").classList.toggle("wide", name === "map");
-            if (name === "map") {
-              initMap();
-              if (map)
-                setTimeout(function () {
-                  map.resize();
-                }, 0);
-            }
+            if (name === "notes") loadNotes();
+            if (name === "map")
+              // (with home and the pins as the kit has them, which may have changed on another device)
+              loadPlaces().then(function () {
+                initMap();
+                if (map)
+                  setTimeout(function () {
+                    map.resize();
+                  }, 0);
+              });
           }
           document.querySelectorAll("nav a[data-tab]").forEach(function (a) {
             a.addEventListener("click", function (ev) {
@@ -2322,7 +2402,7 @@
           });
           function tabInAddress() {
             var t = location.hash.slice(1);
-            return ["ask", "map", "library", "help"].indexOf(t) >= 0 ? t : "";
+            return ["ask", "map", "library", "notes", "help"].indexOf(t) >= 0 ? t : "";
           }
           window.addEventListener("hashchange", function () {
             if (tabInAddress()) showTab(tabInAddress());
@@ -2548,7 +2628,7 @@
                 if (!answer && !reasoning)
                   progress("Loading " + model + " into memory. The first answer can take up to a minute...");
               }, 6000);
-              await Kit.streamChat(opts, Kit.buildMessages(question, sources), function (c, r) {
+              await Kit.streamChat(opts, Kit.buildMessages(question, sources, notesBox.value), function (c, r) {
                 if (r) {
                   reasoning += r;
                   $("thinking").hidden = false;
@@ -2600,6 +2680,262 @@
               ROOT + "/search?books.filter.lang=" + encodeURIComponent(lang) + "&pattern=" + encodeURIComponent(q);
           });
 
+          /* ---------------------------------------------------------------- notes, pins and home, kept in the kit */
+          // tools/data.py keeps them in the kit's data folder (notes.txt, places.json), which a new version never
+          // touches, so they go where the kit goes and the phones at home see the same. Without it (no Python on this
+          // computer), they stay in this browser, and move into the kit the next time it can keep them.
+          async function dataApi(method, path, body) {
+            var c = new AbortController(),
+              t = setTimeout(function () {
+                c.abort();
+              }, 10000);
+            try {
+              var r = await fetch(DATA + path, {
+                method: method,
+                signal: c.signal,
+                cache: "no-store",
+                headers: body ? { "Content-Type": "application/json" } : {},
+                body: body ? JSON.stringify(body) : undefined,
+              });
+              var j = await r.json().catch(function () {
+                return null;
+              });
+              if (r.ok) return j;
+              var e = new Error((j && j.error) || "the kit answered " + r.status);
+              e.status = r.status;
+              e.body = j;
+              throw e;
+            } finally {
+              clearTimeout(t);
+            }
+          }
+          function fromBrowser(k) {
+            try {
+              return JSON.parse(stored(k) || "null");
+            } catch (e) {
+              return null;
+            }
+          }
+          function forget(k) {
+            try {
+              localStorage.removeItem("kit." + k);
+            } catch (e) {}
+          }
+
+          // Notes: saved as you type. Each save says which version it began from, so one device never quietly
+          // writes over what another saved in the meantime.
+          var notesBox = $("notesText"),
+            notes = { text: "", version: "", up: false, busy: false, again: false, timer: 0, theirs: null };
+          function notesSay(msg) {
+            if ($("notesStatus").textContent !== msg) $("notesStatus").textContent = msg;
+          }
+          function notesWhere(why) {
+            $("notesWhere").textContent = notes.up
+              ? "They're saved in the kit's data folder, as notes.txt, which updates never touch."
+              : "They're saved in this browser for now" +
+                (why ? " (" + why + ")" : "") +
+                ": the kit couldn't save them in its data folder. They move there the next time it can.";
+          }
+          function typedNotes() {
+            // what was typed while the kit couldn't keep the notes: the text, and the version it began from
+            var n = fromBrowser("notes");
+            return n && typeof n.text === "string" ? n : null;
+          }
+          async function loadNotes() {
+            if (notes.busy || !$("notesConflict").hidden) return;
+            var n, typed;
+            try {
+              n = await dataApi("GET", "/notes");
+            } catch (e) {
+              notes.up = false;
+              typed = typedNotes();
+              if (typed && notesBox.value === notes.text) {
+                notesBox.value = notes.text = typed.text;
+                notes.version = typed.since || "";
+              }
+              if (notesBox.value === notes.text) notesSay(notes.text ? "Saved in this browser" : "");
+              return notesWhere(e.status ? e.message : "");
+            }
+            notes.up = true;
+            notesWhere();
+            typed = typedNotes();
+            var plan = Kit.notesMerge(n, typed);
+            if (plan === "ask") return conflict(n, typed.text);
+            if (plan === "keep") {
+              notes.text = n.text;
+              notes.version = n.version;
+              notesBox.value = typed.text;
+              return saveNotes();
+            }
+            forget("notes");
+            if (notesBox.value === notes.text) {
+              // (typing not saved yet stays, with the version it began from)
+              notesBox.value = notes.text = n.text;
+              notes.version = n.version;
+              notesSay(n.text ? "Saved in the kit" : "");
+            }
+          }
+          async function saveNotes() {
+            clearTimeout(notes.timer);
+            if (notes.busy) return (notes.again = true);
+            if (!$("notesConflict").hidden) return;
+            var text = notesBox.value;
+            if (!notes.up) {
+              if (text !== notes.text) store("notes", JSON.stringify({ text: text, since: notes.version }));
+              notes.text = text;
+              return notesSay(text ? "Saved in this browser" : "");
+            }
+            if (text === notes.text) return notesSay(text ? "Saved in the kit" : "");
+            notes.busy = true;
+            notesSay("Saving...");
+            try {
+              var n = await dataApi("PUT", "/notes", { text: text, version: notes.version });
+              notes.text = n.text;
+              notes.version = n.version;
+              forget("notes");
+              notesSay("Saved in the kit");
+            } catch (e) {
+              if (e.status === 409 && e.body) conflict(e.body, text);
+              else if (e.status && e.status < 500) notesSay("Not saved: " + e.message);
+              else {
+                // the kit stopped, or can't save (its drive unplugged?): keep them in this browser until it can
+                notes.up = false;
+                store("notes", JSON.stringify({ text: text, since: notes.version }));
+                notes.text = text;
+                notesWhere(e.message);
+                notesSay("Saved in this browser");
+              }
+            } finally {
+              notes.busy = false;
+              if (notes.again) {
+                notes.again = false;
+                saveNotes();
+              }
+            }
+          }
+          function conflict(theirs, mine) {
+            notes.theirs = theirs;
+            notesBox.value = mine;
+            $("notesConflict").hidden = false;
+            notesSay("Not saved");
+          }
+          $("notesMine").addEventListener("click", function () {
+            notes.text = notes.theirs.text;
+            notes.version = notes.theirs.version;
+            $("notesConflict").hidden = true;
+            saveNotes();
+          });
+          $("notesTheirs").addEventListener("click", function () {
+            notesBox.value = notes.text = notes.theirs.text;
+            notes.version = notes.theirs.version;
+            forget("notes");
+            $("notesConflict").hidden = true;
+            notesSay("Saved in the kit");
+          });
+          notesBox.addEventListener("input", function () {
+            if ($("notesConflict").hidden) notesSay("Not saved yet");
+            clearTimeout(notes.timer);
+            notes.timer = setTimeout(saveNotes, 800);
+          });
+          notesBox.addEventListener("blur", saveNotes);
+          $("notesForm").addEventListener("submit", function (ev) {
+            ev.preventDefault();
+          });
+          document.addEventListener("visibilitychange", function () {
+            if (document.hidden && notesBox.value !== notes.text) saveNotes();
+          });
+
+          // Home and pins (the map tab draws them): changed here at once, then saved in the kit, which answers with
+          // all of them, so what another device added shows up too.
+          var placesUp = false,
+            homeSaved = null;
+          function placesWhere(why) {
+            $("pinsWhere").textContent = placesUp
+              ? "Pins and home are saved in the kit."
+              : "Pins and home are saved in this browser for now" + (why ? " (" + why + ")" : "") + ".";
+          }
+          function browserPins() {
+            var a = fromBrowser("pins");
+            return Array.isArray(a)
+              ? a.filter(function (p) {
+                  return p && p.id && p.name && isFinite(p.lat) && isFinite(p.lon);
+                })
+              : [];
+          }
+          function pinBody(p) {
+            return { name: p.name, note: p.note || "", lat: p.lat, lon: p.lon };
+          }
+          function homeBody(h) {
+            return {
+              lat: h.lat,
+              lon: h.lon,
+              label: String(h.label || "").slice(0, 200),
+              zoom: Math.min(22, Math.max(0, Math.round(h.zoom || 12))),
+            };
+          }
+          function placesChanged() {
+            updateHomeLabel();
+            drawHome();
+            drawPins();
+            renderPins();
+          }
+          async function loadPlaces() {
+            var got;
+            try {
+              got = await dataApi("GET", "/places");
+            } catch (e) {
+              if (placesUp) keepInBrowser(); // the kit stopped: what it had, in this browser until it's back
+              placesUp = false;
+              return placesWhere(e.status ? e.message : "");
+            }
+            try {
+              // what this browser kept while the kit couldn't: into the kit
+              var have = {};
+              got.pins.forEach(function (p) {
+                have[p.id] = true;
+              });
+              var mine = browserPins().filter(function (p) {
+                return !have[p.id];
+              });
+              for (var i = 0; i < mine.length; i++)
+                got = await dataApi("PUT", "/places/pins/" + encodeURIComponent(mine[i].id), pinBody(mine[i]));
+              var h = fromBrowser("home");
+              if (h && !got.home && isFinite(h.lat) && isFinite(h.lon))
+                got = await dataApi("PUT", "/places/home", homeBody(h));
+              forget("pins");
+              forget("home");
+            } catch (e) {} // (tried again next time)
+            placesUp = true;
+            pins = got.pins;
+            homeSaved = got.home;
+            placesWhere();
+            placesChanged();
+          }
+          function keepPlaces(method, path, body) {
+            placesChanged();
+            if (!placesUp) return store("pins", JSON.stringify(pins));
+            dataApi(method, path, body)
+              .then(function (got) {
+                pins = got.pins;
+                homeSaved = got.home;
+                placesChanged();
+              })
+              .catch(function (e) {
+                if (e.status && e.status < 500)
+                  return loadPlaces().then(function () {
+                    $("pinsWhere").textContent = "Not saved: " + e.message;
+                  });
+                // the kit stopped, or can't save: keep them in this browser until it can
+                placesUp = false;
+                keepInBrowser();
+                placesWhere(e.message);
+              });
+          }
+          function keepInBrowser() {
+            store("pins", JSON.stringify(pins));
+            if (homeSaved) store("home", JSON.stringify(homeSaved));
+          }
+
           /* ---------------------------------------------------------------- map tab */
           var KM = window.KIT_MAPS || {
             available: false,
@@ -2619,7 +2955,7 @@
             markers = [],
             homeMk = null,
             toPick = null;
-          var pins = loadPins(),
+          var pins = browserPins(),
             pinMarkers = [],
             openPop = null;
           var svc = { geocoder: false, routing: false };
@@ -2631,10 +2967,8 @@
             return Kit.fmtDist(m, units());
           }
           function getHome() {
-            try {
-              var h = JSON.parse(stored("home") || "null");
-              if (h && isFinite(h.lat) && isFinite(h.lon)) return h;
-            } catch (e) {}
+            var h = placesUp ? homeSaved : fromBrowser("home");
+            if (h && isFinite(h.lat) && isFinite(h.lon)) return h;
             return KM.home || { lat: 40.75, lon: -73.99, zoom: 10, label: "Home" };
           }
           function mapOpts(signal) {
@@ -2647,6 +2981,7 @@
               signal: signal,
               label: KM.label,
               pins: pins,
+              notes: notesBox.value,
             };
           }
           function mapsUsable() {
@@ -2833,13 +3168,13 @@
             $("homeLabel").textContent = getHome().label || "not set";
           }
           function setHome(p) {
-            store(
-              "home",
-              JSON.stringify({ lat: p.lat, lon: p.lon, label: p.name, zoom: map ? Math.round(map.getZoom()) : 12 }),
-            );
-            updateHomeLabel();
-            drawHome();
-            renderPins();
+            var h = homeBody({ lat: p.lat, lon: p.lon, label: p.name, zoom: map ? map.getZoom() : 12 });
+            if (!placesUp) {
+              store("home", JSON.stringify(h));
+              return placesChanged();
+            }
+            homeSaved = h;
+            keepPlaces("PUT", "/places/home", h);
           }
           function coordsHtml(p) {
             return (
@@ -3002,27 +3337,12 @@
             }
           }
 
-          /* Pins: places the person saved with a note, like where the family meets. Kept in this browser, like home;
-     search, directions and Ask find them by name. */
-          function loadPins() {
-            try {
-              var a = JSON.parse(stored("pins") || "[]");
-              if (Array.isArray(a))
-                return a.filter(function (p) {
-                  return p && p.id && p.name && isFinite(p.lat) && isFinite(p.lon);
-                });
-            } catch (e) {}
-            return [];
-          }
+          /* Pins: places the person saved with a note, like where the family meets. Kept in the kit, like home (see
+             keepPlaces); search, directions and Ask find them by name. */
           function pinById(id) {
             return pins.filter(function (p) {
               return p.id === id;
             })[0];
-          }
-          function savePins() {
-            store("pins", JSON.stringify(pins));
-            drawPins();
-            renderPins();
           }
           function drawPins() {
             if (!mapReady) return;
@@ -3077,6 +3397,7 @@
             });
           }
           function openPoint(ll) {
+            ll = ll.wrap(); // (a world copy east or west of this one says 190 for -170)
             var lat = +ll.lat.toFixed(6),
               lon = +ll.lng.toFixed(6),
               p = { name: Kit.fmtLatLon(lat, lon), address: "", lat: lat, lon: lon, kind: "point" };
@@ -3127,9 +3448,9 @@
                     row.querySelector("[data-act=yes]").addEventListener("click", function () {
                       close();
                       pins = pins.filter(function (x) {
-                        return x !== p;
+                        return x.id !== p.id;
                       });
-                      savePins();
+                      keepPlaces("DELETE", "/places/pins/" + encodeURIComponent(p.id));
                     });
                     row.querySelector("[data-act=no]").addEventListener("click", function () {
                       openPin(p.id);
@@ -3172,17 +3493,19 @@
                 f.addEventListener("submit", function (ev) {
                   ev.preventDefault();
                   if (!name.value.trim()) return;
-                  if (!p.id) {
-                    p = {
-                      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-                      lat: p.lat,
-                      lon: p.lon,
-                    };
-                    pins.push(p);
-                  }
-                  p.name = name.value.trim();
-                  p.note = note.value.trim();
-                  savePins();
+                  p = {
+                    id: p.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                    name: name.value.trim(),
+                    note: note.value.trim(),
+                    lat: p.lat,
+                    lon: p.lon,
+                  };
+                  var at = pins.findIndex(function (x) {
+                    return x.id === p.id;
+                  });
+                  if (at >= 0) pins[at] = p;
+                  else pins.push(p);
+                  keepPlaces("PUT", "/places/pins/" + encodeURIComponent(p.id), pinBody(p));
                   openPin(p.id);
                 });
                 name.focus();
@@ -3462,7 +3785,7 @@
             $("setHome").addEventListener("click", function (ev) {
               ev.preventDefault();
               if (!map) return;
-              var c = map.getCenter();
+              var c = map.getCenter().wrap();
               setHome({ lat: c.lat, lon: c.lng, name: "Map point " + c.lat.toFixed(4) + ", " + c.lng.toFixed(4) });
             });
             updateHomeLabel();
@@ -3471,6 +3794,8 @@
             setInterval(checkMapServices, 30000);
           }
 
+          loadPlaces();
+          loadNotes();
           if (tabInAddress()) showTab(tabInAddress());
           loadBooks().catch(function (e) {
             $("bookList").textContent = "Could not load the book list: " + e.message;

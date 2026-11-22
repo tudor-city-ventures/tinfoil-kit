@@ -1,14 +1,18 @@
 """Drive the real portal map in headless Chrome: real MapLibre + Protomaps style + embedded fonts/icons,
-against mock tile / address / routing servers and a mock tool-calling AI."""
+against mock tile / address / routing servers and a mock tool-calling AI. Home and pins are kept in the kit by its
+notes and pins server (tools/data.py, on 18095)."""
+import json
 import os
 import re
 import sys
+import urllib.request
 from playwright.sync_api import sync_playwright
 
 SHOTS = os.environ.get("KIT_TEST_SHOTS", os.path.join(os.path.dirname(__file__), "work", "shots"))
 os.makedirs(SHOTS, exist_ok=True)
 
 BASE = "http://127.0.0.1:18888"
+DATA = "http://127.0.0.1:18095"
 fails = 0
 
 
@@ -16,6 +20,14 @@ def check(name, ok, detail=""):
     global fails
     print(("PASS  " if ok else "FAIL  ") + name + (f": {detail}" if detail else ""))
     fails += 0 if ok else 1
+
+
+def kept(method="GET", path="/places", body=None):
+    """What the kit keeps, asked of its notes and pins server directly."""
+    data = json.dumps(body).encode() if body is not None else None
+    r = urllib.request.Request(DATA + path, data, {"Content-Type": "application/json"} if data else {}, method=method)
+    with urllib.request.urlopen(r, timeout=10) as resp:
+        return json.loads(resp.read())
 
 
 def watch(page, errors, warnings):
@@ -29,7 +41,7 @@ with sync_playwright() as p:
     page = b.new_page(viewport={"width": 1280, "height": 860})
     errors, warnings = [], []
     watch(page, errors, warnings)
-    page.goto(BASE + "/?model=Tiny&ai=18080")
+    page.goto(BASE + "/?model=Tiny&ai=18080&data=18095")
     page.wait_for_function("document.getElementById('mapStatus').textContent.includes('Directions: ready')", timeout=30000)
     check("map services detected", "Address search: ready" in page.inner_text("#mapStatus"), page.inner_text("#mapStatus"))
     page.click("nav a[data-tab=map]")
@@ -97,8 +109,9 @@ with sync_playwright() as p:
     page.click("#setHome")
     check("set home to map center", page.inner_text("#homeLabel").startswith("Map point"), page.inner_text("#homeLabel"))
     page.reload()
-    page.wait_for_function("document.getElementById('homeLabel').textContent.length > 0", timeout=10000)
+    page.wait_for_function("document.getElementById('pinsWhere').textContent.includes('saved in the kit')", timeout=10000)
     check("home remembered after reload", page.inner_text("#homeLabel").startswith("Map point"), page.inner_text("#homeLabel"))
+    check("home kept in the kit", (kept().get("home") or {}).get("label", "").startswith("Map point"), str(kept()))
 
     # coordinates, then a pin with a note
     page.context.grant_permissions(["clipboard-read", "clipboard-write"])
@@ -139,6 +152,8 @@ with sync_playwright() as p:
     page.wait_for_function("window.__kitMap && window.__kitMap.loaded() && document.querySelectorAll('.maplibregl-marker[data-pin]').length == 1",
                            timeout=60000)
     check("pin kept after reload", "Meeting place" in page.inner_text("#pinList"))
+    pin = next((x for x in kept()["pins"] if x["name"] == "Meeting place"), {})
+    check("pin kept in the kit, with its note", pin.get("note") == "Behind the school gym\nBring water", str(kept()))
     page.fill("#placeQ", "meeting")
     page.wait_for_selector("#placeResults button[data-i]", timeout=10000)
     first = page.inner_text("#placeResults button[data-i]")
@@ -157,7 +172,10 @@ with sync_playwright() as p:
     page.click(".maplibregl-popup button[data-act=del]")
     page.click(".maplibregl-popup button[data-act=yes]")
     check("delete removes the pin", page.locator(".maplibregl-marker[data-pin]").count() == 0 and page.inner_text("#pinList") == "")
+    page.wait_for_timeout(500)
+    check("and from the kit", kept()["pins"] == [], str(kept()))
     page.evaluate("localStorage.clear()")
+    kept("PUT", "/places/home", {"lat": 40.7128, "lon": -74.006, "label": "New York, NY", "zoom": 10})   # where the next pages start
 
     errors = [e for e in errors if "favicon" not in e]
     check("no JS errors on the map", not errors, "; ".join(errors)[:600])
@@ -168,7 +186,7 @@ with sync_playwright() as p:
     p2 = b.new_page(viewport={"width": 1280, "height": 860})
     e2, w2 = [], []
     watch(p2, e2, w2)
-    p2.goto(BASE + "/?model=Mock-Tools&ai=18081")
+    p2.goto(BASE + "/?model=Mock-Tools&ai=18081&data=18095")
     p2.wait_for_function("document.getElementById('aiStatus').textContent.includes('ready') && "
                          "document.getElementById('mapStatus').textContent.includes('Directions: ready')", timeout=30000)
     p2.fill("#q", "What's the nearest hospital and how do I get there?")
@@ -199,7 +217,7 @@ with sync_playwright() as p:
     e3, w3 = [], []
     watch(p3, e3, w3)
     p3.add_init_script("localStorage.setItem('kit.pins', JSON.stringify([{id: 'a1', name: 'Meeting place', note: '', lat: 40.7306, lon: -73.9866}]))")
-    p3.goto(BASE + "/?model=Tiny&ai=18999")
+    p3.goto(BASE + "/?model=Tiny&ai=18999&data=18095")
     p3.wait_for_function("document.getElementById('aiStatus').textContent.includes('off') && "
                          "document.getElementById('mapStatus').textContent.includes('Directions: ready')", timeout=30000)
     p3.fill("#q", "where is the nearest pharmacy?")
@@ -215,6 +233,8 @@ with sync_playwright() as p:
     p3.click("#askBtn")
     p3.wait_for_function("document.getElementById('answer').textContent.includes('Driving to')", timeout=30000)
     check("Ask finds a pin by name", "Driving to Meeting place" in p3.inner_text("#answer"), p3.inner_text("#answer")[:140].replace("\n", " "))
+    check("a pin this browser kept moves into the kit", [x["id"] for x in kept()["pins"]] == ["a1"]
+          and p3.evaluate("localStorage.getItem('kit.pins')") is None, str(kept()))
     p3.fill("#q", "where is Zzyzx Nowhere Road?")         # map-looking, nothing on the map -> library instead
     p3.click("#askBtn")
     p3.wait_for_function("!document.getElementById('progress').textContent.startsWith('Looking')", timeout=60000)
@@ -238,7 +258,7 @@ with sync_playwright() as p:
     p4 = b.new_page()
     p4.route("**/*", lambda route: route.continue_())
     p4.add_init_script("Object.defineProperty(window, 'KIT_MAPS', {set(v){}, get(){ return {available:false, reason:'Not downloaded yet: map tiles. Run ./kit sync while online.'}; }})")
-    p4.goto(BASE + "/?model=Tiny&ai=18080")
+    p4.goto(BASE + "/?model=Tiny&ai=18080&data=18095")
     p4.click("nav a[data-tab=map]")
     check("maps-missing message", p4.is_visible("#mapOff") and "kit sync" in p4.inner_text("#mapOff") and not p4.is_visible("#mapWrap"),
           p4.inner_text("#mapOff"))

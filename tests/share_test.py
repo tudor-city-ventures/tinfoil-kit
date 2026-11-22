@@ -24,6 +24,7 @@ TESTS = Path(__file__).resolve().parent
 ROOT = TESTS.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import share  # noqa: E402
+from data import Server as NotesServer, Store  # noqa: E402
 
 fails = 0
 
@@ -140,6 +141,7 @@ try:
     lib = start(http.server.ThreadingHTTPServer(("127.0.0.1", 0), Upstream))
     ai = start(http.server.ThreadingHTTPServer(("127.0.0.1", 0), Upstream))
     lib_port, ai_port, dead = lib.server_address[1], ai.server_address[1], free_port()
+    nport = start(NotesServer(0, Store(kit / "data"), lib_port)).server_address[1]
     gport = 0
 
     def req(method, path, body=None, headers=None, read=True):
@@ -232,6 +234,15 @@ try:
         check(f"{who}: a server the kit doesn't have says so", r.status == 502 and b"isn't part of this kit" in data)
         r, data, _ = req("GET", "/routing/health", headers=signed)
         check(f"{who}: a server that isn't up yet says so", r.status == 502 and b"isn't running yet" in data)
+        (kit / "data" / "notes.txt").unlink(missing_ok=True)
+        phone = {**signed, "Content-Type": "application/json", "Origin": f"http://192.168.1.20:{gport}"}
+        r, data, _ = req("PUT", "/data/notes", json.dumps({"text": "Written on a phone", "version": ""}).encode(), phone)
+        r2, data2, _ = req("GET", "/data/places", headers=signed)
+        check(f"{who}: /data/ keeps a phone's notes and pins in the kit's data folder",
+              r.status == 200 and (kit / "data" / "notes.txt").read_text(encoding="utf-8") == "Written on a phone"
+              and json.loads(data2) == {"home": None, "pins": []}, f"{r.status} {data} {data2}")
+        r, data, _ = req("GET", "/data/notes")
+        check(f"{who}: and only with the access code", r.status == 401, str(r.status))
         r, data, _ = req("GET", "/_kit/qr.svg", headers=signed)
         check(f"{who}: the QR code for the page", r.status == 200 and data.startswith(b"<svg") and r.getheader("Content-Type") == "image/svg+xml")
 
@@ -268,7 +279,7 @@ try:
         check(f"{who}: after {share.TRIES} wrong codes, a device waits, even with the right one",
               r.status == 429 and b"Too many tries" in data)
 
-    gate = start(share.Gate(kit, 0, {"library": lib_port, "ai": ai_port, "tiles": lib_port, "routing": dead}))
+    gate = start(share.Gate(kit, 0, {"library": lib_port, "ai": ai_port, "data": nport, "tiles": lib_port, "routing": dead}))
     gport = gate.server_address[1]
     gate_checks("gate")
     gate.failures.clear()
@@ -280,7 +291,7 @@ try:
     if PROGRAM:
         gport = free_port()
         go = subprocess.Popen([str(PROGRAM), "gate", "--root", str(kit), "--port", str(gport), "--library", str(lib_port),
-                               "--ai", str(ai_port), "--tiles", str(lib_port), "--routing", str(dead)],
+                               "--ai", str(ai_port), "--data", str(nport), "--tiles", str(lib_port), "--routing", str(dead)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         end = time.time() + 10
         while time.time() < end and share.gate_port(gport) != gport:
@@ -298,7 +309,7 @@ try:
     (k2 / "app" / "tools").mkdir(parents=True)
     for f in ("kit", "kit.json"):
         shutil.copy(ROOT / f, k2 / "app" / f)
-    for f in ("kit.py", "share.py", "launch.sh"):
+    for f in ("kit.py", "share.py", "data.py", "launch.sh"):
         shutil.copy(ROOT / "tools" / f, k2 / "app" / "tools" / f)
     mine = k2 / "data" / "kit.json"    # the person's kit.json, a copy of app/kit.json at first
     fake_bin = work / "bin"
@@ -435,9 +446,9 @@ http.server.HTTPServer(("127.0.0.1", int(sys.argv[sys.argv.index("--port") + 1])
     (k2 / "downloads" / "library" / "book.zim").touch()
     def launcher_checks(who, go):
         global gport
-        lport, sport = free_port(), free_port()
+        lport, sport, dport = free_port(), free_port(), free_port()
         cfg = json.loads(mine.read_text())
-        cfg["settings"].update(library_port=lport, ai_port=free_port(), share_port=sport, share_on_network=True)
+        cfg["settings"].update(library_port=lport, ai_port=free_port(), data_port=dport, share_port=sport, share_on_network=True)
         mine.write_text(json.dumps(cfg, indent=2))
         share.save_access(k2, {"code": "13572468", "key": "ef" * 32})
         p = subprocess.Popen(["bash", str(k2 / "app" / "tools" / "launch.sh"), "--no-browser", "--no-maps"], stdout=subprocess.PIPE,
@@ -461,15 +472,18 @@ http.server.HTTPServer(("127.0.0.1", int(sys.argv[sys.argv.index("--port") + 1])
         r2, data2, _ = req("GET", "/", headers={"Cookie": (r.getheader("Set-Cookie") or "").split(";")[0]})
         check(f"{who}, sharing on: the gate asks for the code, then serves the library",
               r.status == 303 and r2.status == 200 and b"library" in data2 and b"KIT_GATE" in data2, data2[:200])
+        r3, data3, _ = req("GET", "/data/notes", headers={"Cookie": (r.getheader("Set-Cookie") or "").split(";")[0]})
+        check(f"{who}: starts the notes and pins server, which the page finds at its address and the gate at /data/",
+              r3.status == 200 and json.loads(data3) == {"text": "", "version": ""} and f"&data={dport}" in out, f"{r3.status} {data3}")
         os.killpg(p.pid, 15)
         try:
             p.wait(timeout=15)
         except subprocess.TimeoutExpired:
             os.killpg(p.pid, 9)
         time.sleep(0.5)
-        with socket.socket() as s:
-            stopped = s.connect_ex(("127.0.0.1", sport)) != 0
-        check(f"{who}: closing it stops the gate too", stopped)
+        with socket.socket() as s, socket.socket() as s2:
+            stopped = s.connect_ex(("127.0.0.1", sport)) != 0 and s2.connect_ex(("127.0.0.1", dport)) != 0
+        check(f"{who}: closing it stops the gate and the notes server too", stopped)
 
     launcher_checks("launcher", False)
     if PROGRAM:

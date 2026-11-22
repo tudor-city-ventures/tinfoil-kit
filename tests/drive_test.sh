@@ -40,7 +40,7 @@ three_folders() { # KIT
   [ "$top" = "app data downloads " ] || fail "$1 holds $top, not just app, data and downloads"
 }
 # The kit's servers, gone before the next kit starts: a map server still answering would stand in for the next one's.
-SERVERS='llama-server|kiwix-serve|pmtiles serve|graphhopper-web|photon-'
+SERVERS='llama-server|kiwix-serve|pmtiles serve|graphhopper-web|photon-|tools/data.py'
 stop_kit() {
   pkill -f 'tools/launch.sh|tools/tinfoilkit-'; sleep 1; pkill -f "$SERVERS"
   for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "$SERVERS" > /dev/null || break; sleep 1; done
@@ -224,7 +224,7 @@ mac() {
   screencapture -x "$SHOTS/mac-desktop.png" 2> /dev/null || echo "(no desktop screenshot here)"
 
   step "the page in WebKit, Safari's engine"
-  KIT_BROWSER=webkit KIT_LIBRARY_PORT=8888 KIT_AI_PORT=8080 KIT_TEST_SHOTS="$SHOTS/mac" \
+  KIT_BROWSER=webkit KIT_LIBRARY_PORT=8888 KIT_AI_PORT=8080 KIT_DATA_PORT=8095 KIT_TEST_SHOTS="$SHOTS/mac" \
     python3 "$TESTS/ui_test.py" > "$L/mac_ui.log" 2>&1 || fail "the page in WebKit (logs/mac_ui.log)"
   grep -E "^(FAIL|\(video only)" "$L/mac_ui.log"; tail -1 "$L/mac_ui.log"
 
@@ -382,7 +382,7 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
     step "the page in Chrome"
     if python3 -c "import playwright" 2> /dev/null; then
       KIT_BROWSER="$(command -v google-chrome > /dev/null && echo chrome || echo chromium)" KIT_LIBRARY_PORT=8888 \
-        KIT_AI_PORT=8080 KIT_TEST_SHOTS="$SHOTS/linux" python3 "$TESTS/ui_test.py" > "$L/linux_ui.log" 2>&1 ||
+        KIT_AI_PORT=8080 KIT_DATA_PORT=8095 KIT_TEST_SHOTS="$SHOTS/linux" python3 "$TESTS/ui_test.py" > "$L/linux_ui.log" 2>&1 ||
         fail "the page in Chrome (logs/linux_ui.log)"
       grep -E "^(FAIL|\(video only)" "$L/linux_ui.log"; tail -1 "$L/linux_ui.log"
     else

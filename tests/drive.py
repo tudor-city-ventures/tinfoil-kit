@@ -214,7 +214,7 @@ def kit_json(out, maps=False):
     t["models"] = ([{**m, "starter": True} for m in t["models"] if m["id"] == "Tiny"]
                    + [{**m, "enabled": False, "starter": True} for m in t["models"] if m["id"] == "Two"])
     t["library"] = [{**z, "starter": True} for z in t["library"] if z["zim"] in ("testmed_en_all_maxi", "testsurvival_en")]
-    t["settings"].update(library_port=8888, ai_port=8080)
+    t["settings"].update(library_port=8888, ai_port=8080, data_port=8095)
     Path(out).write_text(json.dumps(t, indent=2), encoding="utf-8")
 
 

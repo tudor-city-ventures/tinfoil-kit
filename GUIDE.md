@@ -31,6 +31,10 @@ Nothing here needs the internet, an account, or an install.
 - **Library**: browse or search every book yourself.
 - **Map**: search an address or place, get driving or walking directions, or find the nearest hospital, pharmacy,
   gas station and more. See [Maps](#maps).
+- **Notes**: write down what you'd need to know in an emergency: who lives here, allergies and medicines, doctors,
+  where to meet. The AI reads them with every question on Ask. They're saved in the kit, in `data/notes.txt` (a
+  plain text file you can also open in any text editor), and every browser and phone on the kit sees the same notes.
+  They aren't encrypted, so leave out passwords and bank details.
 - **AI chat**: plain chat with the AI. You can attach a photo (a broken part, a label). It doesn't search the
   library, so check anything important there, and never eat a wild plant or mushroom because an AI said it was safe.
 - **Models**: pick from the list on the Ask page.
@@ -58,7 +62,9 @@ The AI can be wrong. Treat it like a well-read friend, not a doctor: check the s
 - **Coordinates and pins**: click anywhere on the map to see its coordinates (with **Copy**), get directions there,
   or **Pin this place** with a name and a note, like where the family meets or a spring. Pins show on the map and
   under **Pins**, and search, directions and Ask find them by name ("directions to the meeting place").
-  They're saved in this browser on this computer, like home: another computer or browser won't have them.
+  They're saved in the kit, like home (`data/places.json`), so a phone using the shared kit sees them too.
+  If the Map or Notes tab says they're saved in this browser, the kit couldn't start the part that keeps them
+  (it runs on the Python SETUP gets): they move into the kit the next time it can.
 - **Directions**: fill in From (leave it blank for home) and To, pick Drive or Walk, press Go. Click a step to zoom to it.
 - **Nearest**: the buttons (Hospital, Pharmacy, Gas station...) list the closest ones to home, or to the From address.
 - **Set home** first: the laptop has no GPS, so "home" is where nearest-searches and directions start.
@@ -100,7 +106,7 @@ has until that one is a year old. Then pull the plug on Wi-Fi and open the kit o
 A newer download of the kit (a new ZIP, or a new Mac app) finds this kit and updates it, so nothing it has
 downloads again. SETUP shows what's new before anything downloads: say no, and the kit keeps working with what it
 has. You can also delete the kit's `app` folder any time and put a new download's `app` folder in its place: what
-the kit downloaded (`downloads`) and your settings (`data`) stay as they are.
+the kit downloaded (`downloads`) and your settings, notes and pins (`data`) stay as they are.
 
 Other commands:
 
@@ -177,7 +183,8 @@ essentials, how much of Wikipedia, which AI models and books, and sharing on the
 
 Click **Remove** in the Mac app, or double-click `UNINSTALL.command` in the kit's app folder (`UNINSTALL-Windows.bat` on
 Windows; on Linux, `bash UNINSTALL.command`). It shows what it will delete and how much space that frees, and deletes the kit and
-everything it downloaded only after you type `delete`. The files don't go to the Trash. On a drive, nothing else on
+everything it downloaded, your notes and pins too, only after you type `delete`. The files don't go to the Trash.
+To keep your notes, copy `data/notes.txt` somewhere else first. On a drive, nothing else on
 the drive is touched. It also removes the Python SETUP got, on Windows or on a Mac that didn't have one.
 To remove the Mac app too, drag it from Applications to the Trash.
 
@@ -258,4 +265,6 @@ Windows).
 | `downloads/INVENTORY.md` | What's in the kit right now, with versions |
 | `data/` | Yours: no new version touches it |
 | `data/kit.json` | Your list of what to keep, with your changes |
+| `data/notes.txt` | Your notes (the Notes tab) |
+| `data/places.json` | The map's home and pins |
 | `data/logs/` | What each update and start did |

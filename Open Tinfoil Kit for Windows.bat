@@ -1,6 +1,8 @@
 @echo off
 rem Double-click me (Windows) to start Tinfoil Kit: the library, the AI and the map, then the kit's page in a
 rem browser. No internet needed. Close this window to stop everything. tools\launch.sh does the same on a Mac or Linux.
+rem It needs no Python. With it (SETUP-Windows.bat gets it), the page's notes and pins are kept in the kit's data
+rem folder, and the kit can be shared on the home network.
 rem   --share       also serve phones and laptops on the home network, behind the access code (this time only;
 rem                 kit.cmd share on turns it on for good: data\kit.json's share_on_network)
 rem   --no-browser  don't open the browser (how Windows starts the kit as you sign in, after kit.cmd autostart on)
@@ -48,6 +50,7 @@ call :setting ROUTE_PORT routing_port 8989
 call :setting GEO_HEAP geocoder_heap 3g
 call :setting ROUTE_HEAP routing_heap 2g
 call :setting SHARE_PORT share_port 8000
+call :setting DATA_PORT data_port 8095
 call :setting SHARE_ON share_on_network false
 if /i "%SHARE_ON%"=="true" set "SHARE=1"
 call :find KIWIX kiwix-tools kiwix-serve.exe
@@ -86,6 +89,9 @@ rem --- AI
 call :ours "http://127.0.0.1:%AI_PORT%/v1/models" "\"data\"" && (
   echo   AI already running on port %AI_PORT%.
 ) || if defined LLAMA if defined MODEL call :start_ai
+rem --- notes and pins, kept in data\, which a new version never touches (without Python, the page keeps them in the browser)
+set "DATA_ON=" & set "DATA_OK=0"
+if exist "%APP%\tools\data.py" call :start_data
 rem --- maps: tiles, address search, directions
 set "MAPS="
 if exist "%DL%\maps\" call :start_maps
@@ -103,10 +109,11 @@ if not defined CURL (
 )
 if defined CURL for /l %%i in (1,1,60) do if !LIB_OK!==0 call :ours "http://127.0.0.1:%LIB_PORT%/" "Tinfoil Kit" && (set "LIB_OK=1") || ping -n 2 127.0.0.1 >nul
 if defined CURL if defined AI_ON for /l %%i in (1,1,30) do if !AI_OK!==0 call :ours "http://127.0.0.1:%AI_PORT%/v1/models" "\"data\"" && (set "AI_OK=1") || ping -n 2 127.0.0.1 >nul
+if defined DATA_ON if defined CURL for /l %%i in (1,1,10) do if !DATA_OK!==0 call :ours "http://127.0.0.1:!DATA_PORT!/" "\"notes\"" && (set "DATA_OK=1") || ping -n 2 127.0.0.1 >nul
 if defined GATE if defined CURL for /l %%i in (1,1,10) do if !SHARE_OK!==0 call :ours "http://127.0.0.1:!SHARE_PORT!/" "Tinfoil Kit" && (set "SHARE_OK=1") || ping -n 2 127.0.0.1 >nul
 if defined GATE if not defined CURL set "SHARE_OK=1"
 
-set "URL=http://127.0.0.1:%LIB_PORT%/?model=%MODEL%&ai=%AI_PORT%"
+set "URL=http://127.0.0.1:%LIB_PORT%/?model=%MODEL%&ai=%AI_PORT%&data=%DATA_PORT%"
 echo(
 if !LIB_OK!==1 (echo   Library:  ready) else (echo   Library:  NOT running ^(see data\logs\kiwix-serve.log^))
 if !AI_OK!==1 (
@@ -187,6 +194,19 @@ if defined JAVA if defined GH_JAR if exist "%DL%\maps\routing\graph-cache\proper
 if defined MAPS echo   Starting maps:!MAPS! (address search and directions take up to a minute)...
 goto :eof
 
+:start_data
+call :python
+if not defined PY (
+  echo   Notes and pins stay in the browser: keeping them in the kit needs Python. Run SETUP-Windows.bat once while online: it gets it.
+  goto :eof
+)
+call :ours "http://127.0.0.1:%DATA_PORT%/" "\"notes\"" && goto :eof
+call :free_port DATA_PORT "notes and pins"
+set "PYTHONUTF8=1"
+start "" /b "%PY%" "%APP%\tools\data.py" --data "%DATA%\." --port %DATA_PORT% --library %LIB_PORT% >> "%DATA%\logs\data.log" 2>&1
+set "DATA_ON=1"
+goto :eof
+
 :start_share
 call :python
 if not defined PY (
@@ -204,7 +224,7 @@ if not "%SHARE_PORT%"=="%WANT%" echo   For an address that stays the same, set s
 set "MAP_PORTS="
 if exist "%DL%\maps\" set "MAP_PORTS=--tiles %TILES_PORT% --geocoder %GEO_PORT% --routing %ROUTE_PORT%"
 set "PYTHONUTF8=1"
-start "" /b "%PY%" "%APP%\tools\share.py" serve --root "%KIT%\." --port %SHARE_PORT% --library %LIB_PORT% --ai %AI_PORT% %MAP_PORTS% > "%DATA%\logs\share.log" 2>&1
+start "" /b "%PY%" "%APP%\tools\share.py" serve --root "%KIT%\." --port %SHARE_PORT% --library %LIB_PORT% --ai %AI_PORT% --data %DATA_PORT% %MAP_PORTS% > "%DATA%\logs\share.log" 2>&1
 set "GATE=1"
 echo   Starting sharing on the home network...
 echo   If Windows asks whether Python may use the network, allow it, or phones and laptops can't reach the kit.
@@ -280,7 +300,7 @@ for %%f in ("%~1\*.gguf") do (
 )
 goto :eof
 
-rem Python for sharing: the one SETUP-Windows.bat got, or else this PC's own, 3.9 or newer. (Windows' stand-in
+rem Python for notes and pins, and sharing: the one SETUP-Windows.bat got, or else this PC's own, 3.9 or newer. (Windows' stand-in
 rem python.exe only offers to install one from the Store.)
 :python
 set "PY="
