@@ -1,14 +1,14 @@
 import Builder, { CopySetup, Groups, PlaceSelect, Preset, SetupText, Total, WikiSelect } from '@/components/builder';
 import { CopyButton, Toast } from '@/components/copy';
-import Download from '@/components/download';
+import Download, { SetupLink } from '@/components/download';
 import Header from '@/components/header';
 import Hero from '@/components/hero';
-import { INSTALL_PROMPT, OWN_PROMPT } from '@/components/prompts';
+import { AUDIT_PROMPT, INSTALL_PROMPT, OWN_PROMPT } from '@/components/prompts';
 import ReadAs, { AgentDoc } from '@/components/read-as';
 
 export const metadata = {
   title: "Tinfoil Kit: the internet's down, your AI isn't",
-  description: "A free, open-source kit that keeps an AI, all of Wikipedia, medical and repair guides, and maps with directions on your laptop or an external drive. No internet needed.",
+  description: "A free, open-source kit that keeps an AI, all of Wikipedia, medical and repair guides, and maps with directions on an external drive or your laptop. No internet needed.",
   alternates: {
     canonical: "https://tinfoilkit.com/",
     types: {
@@ -22,7 +22,7 @@ export const metadata = {
   },
   openGraph: {
     title: "Tinfoil Kit",
-    description: "The internet's down. Your AI isn't. An AI, Wikipedia, medical guides and maps on your laptop or one drive. Free and open source.",
+    description: "The internet's down. Your AI isn't. An AI, Wikipedia, medical guides and maps on one drive or your laptop. Free and open source.",
     type: "website",
     url: "https://tinfoilkit.com/",
     images: [
@@ -52,7 +52,7 @@ const jsonLd = {
       "@type": "SoftwareApplication",
       name: "Tinfoil Kit",
       url: "https://tinfoilkit.com/",
-      description: "A free, open-source kit that keeps an AI, all of Wikipedia, medical and repair guides, and maps with directions on your laptop or an external drive. No internet needed.",
+      description: "A free, open-source kit that keeps an AI, all of Wikipedia, medical and repair guides, and maps with directions on an external drive or your laptop. No internet needed.",
       applicationCategory: "UtilitiesApplication",
       operatingSystem: "macOS, Windows, Linux",
       softwareRequirements: "A Mac with an M chip (M1 or newer), or a Windows 10 or 11 or Linux PC with an Intel or AMD chip. The kit goes on the computer's own disk or an external SSD, and on a drive formatted exFAT it starts on all three.",
@@ -93,7 +93,6 @@ export default function Home() {
             <h1>The internet's down.<br /> Your AI isn't.</h1>
             <p className="lede">An opinionated, easy-to-install local AI with the world's knowledge built in. Ask anything, look up first aid, fix a leak, find the nearest hospital.</p>
             <Download>
-              <a className="btn" href="https://github.com/tudor-city-ventures/tinfoil-kit">View on GitHub</a>
               <a className="star" href="https://github.com/tudor-city-ventures/tinfoil-kit"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2L14.6 9L21.9 9.4L16.2 14L18.1 21L12 17L5.9 21L7.8 14L2.1 9.4L9.4 9z" fill="currentColor" /></svg>Star on GitHub</a>
             </Download>
           </div>
@@ -114,6 +113,33 @@ export default function Home() {
             <AgentDoc>The setup instructions for AI agents are at https://tinfoilkit.com/llms.txt</AgentDoc>
           </div>
         </section>
+        <section id="how" className="how" data-for="human">
+          <div className="wrap section">
+            <div className="head-row">
+              <h2>How it works</h2>
+              <p className="mono" style={{ fontSize: "14px", color: "var(--ink2)" }}>Set it up once. Use it on any computer.</p>
+            </div>
+            <ol className="how-steps">
+              <li>
+                <b>01 · GET A DRIVE</b>
+                <h3>Buy an external SSD</h3>
+                <p>A portable USB drive with room for the kit, about 300&nbsp;GB. Everything goes on it.</p>
+                <small>No drive? It can go straight on your Mac, Windows or Linux computer instead.</small>
+              </li>
+              <li>
+                <b>02 · TELL YOUR AI</b>
+                <h3>Have your AI set it up</h3>
+                <p>Paste our prompt into ChatGPT, Claude or any AI chat. It asks what you want, then tells you what to run to put Tinfoil Kit on the drive.</p>
+                <SetupLink>Get the prompt</SetupLink>
+              </li>
+              <li>
+                <b>03 · PLUG IN ANYWHERE</b>
+                <h3>Use it on any computer</h3>
+                <p>Plug the drive into any Mac, Windows or Linux computer and open Tinfoil Kit. The AI, the library and the maps work with no internet.</p>
+              </li>
+            </ol>
+          </div>
+        </section>
         <section id="inside" className="band" data-for="human">
           <div className="wrap section">
             <div className="head-row">
@@ -132,24 +158,6 @@ export default function Home() {
               <div className="tile">
                 <h3>Find your way</h3>
                 <p>Search an address and get driving or walking directions.</p>
-              </div>
-            </div>
-            <div className="steps">
-              <div className="step">
-                <b>01 · INSTALL</b>
-                <p>Download Tinfoil Kit and open it. It asks where you live, and whether to keep it on your laptop or an external drive.</p>
-              </div>
-              <div className="step">
-                <b>02 · LET IT FILL</b>
-                <p>It downloads the AI, the books and the maps. The essentials come first, then the rest over a few hours. Keep your laptop plugged in.</p>
-              </div>
-              <div className="step">
-                <b>03 · TRY IT OFFLINE</b>
-                <p>Turn off Wi-Fi and open Tinfoil Kit. Everything still works.</p>
-              </div>
-              <div className="step">
-                <b>04 · KEEP IT FRESH</b>
-                <p>Update it whenever you're online. Only what's new downloads.</p>
               </div>
             </div>
           </div>
@@ -218,6 +226,32 @@ export default function Home() {
             </div>
           </div>
         </section>
+        <section id="trust" className="oss" data-for="human">
+          <div className="wrap">
+            <div style={{ flex: "1 1 520px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <p className="kicker" style={{ color: "#E0884F" }}>Open source, MIT license</p>
+              <h2>Don't trust us? Good. Read every line.</h2>
+              <p>Or have your AI read it for you. Before you install anything, paste this into ChatGPT, Claude or any AI chat. It reads the code and tells you what the kit does, without running it.</p>
+            </div>
+            <a className="btn primary" style={{ minHeight: "60px", fontSize: "19px", padding: "0 28px", borderColor: "var(--signal)" }} href="https://github.com/tudor-city-ventures/tinfoil-kit"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3.1-.3 6.4-1.5 6.4-7a5.4 5.4 0 0 0-1.5-3.7 5 5 0 0 0-.1-3.8s-1.2-.3-3.9 1.5a13.4 13.4 0 0 0-7 0C6.3 1.7 5.1 2 5.1 2a5 5 0 0 0-.1 3.8A5.4 5.4 0 0 0 3.5 9.5c0 5.4 3.3 6.6 6.4 7a3.4 3.4 0 0 0-.9 2.6V22" /></svg> View the code on GitHub</a>
+            <div className="prompt">
+              <div className="bar">
+                <div>
+                  <b>Check the code</b>
+                  <span>Your AI reads it and reports back. Nothing gets installed.</span>
+                </div>
+                <CopyButton target="auditPrompt" />
+              </div>
+              <pre id="auditPrompt" tabIndex={0}>{AUDIT_PROMPT}</pre>
+            </div>
+            <ul className="facts">
+              <li><b>Every line is public</b><span>The kit's code and this website's are on GitHub. The README's <a href="https://github.com/tudor-city-ventures/tinfoil-kit#security">Security section</a> says what it protects against, and what it can't.</span></li>
+              <li><b>Nothing leaves your laptop</b><span>No account, no tracking. It goes online only to set up or update, and then only to the publishers it downloads from.</span></li>
+              <li><b>Every download is checked</b><span>Each program is pinned to an exact build and its checksum. The kit updates itself only from releases signed with the maintainer's key.</span></li>
+              <li><b>Only you can reach it</b><span>It runs on your computer and answers only you. Sharing with your home network stays off until you turn it on, and then it asks for a code.</span></li>
+            </ul>
+          </div>
+        </section>
         <section id="faq" className="wrap section" data-for="human">
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <p className="kicker">Questions</p>
@@ -227,7 +261,7 @@ export default function Home() {
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
               <summary itemProp="name">What is Tinfoil Kit?</summary>
               <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
-                <p itemProp="text">Tinfoil Kit is a free, open-source kit for when the internet goes down. It puts an AI, all of Wikipedia, medical and repair guides, and maps with directions on your laptop or an external drive. You set it up while you're online, and after that it all works with no internet.</p>
+                <p itemProp="text">Tinfoil Kit is a free, open-source kit for when the internet goes down. It puts an AI, all of Wikipedia, medical and repair guides, and maps with directions on an external drive or your laptop. You set it up while you're online, and after that it all works with no internet.</p>
               </div>
             </details>
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
@@ -304,7 +338,7 @@ export default function Home() {
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
               <summary itemProp="name">How do I know it's safe?</summary>
               <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
-                <p itemProp="text">All the code is public, and you don't have to trust a server of ours. The kit installs updates to itself only if they're signed with the maintainer's key, which never touches GitHub. Every model, book, map and program comes straight from its publisher, checked against the publisher's checksum when there is one. Nothing outside your computer can reach the kit unless you turn on sharing, which asks for a code. The <a href="https://github.com/tudor-city-ventures/tinfoil-kit#security">README's Security section</a> says what it protects against, what it can't, and how to report a problem.</p>
+                <p itemProp="text">All the code is public, and you don't have to trust a server of ours. Before you install, you can have your AI read the code and tell you what it does: this page has a prompt for that. The kit installs updates to itself only if they're signed with the maintainer's key, which never touches GitHub. Every model, book, map and program comes straight from its publisher, checked against the publisher's checksum when there is one. Nothing outside your computer can reach the kit unless you turn on sharing, which asks for a code. The <a href="https://github.com/tudor-city-ventures/tinfoil-kit#security">README's Security section</a> says what it protects against, what it can't, and how to report a problem.</p>
               </div>
             </details>
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
@@ -381,16 +415,6 @@ export default function Home() {
               <li><a className="name" href="https://github.com/komoot/photon">Photon</a><span>Finds addresses.</span></li>
             </ul>
             <p style={{ fontSize: "16px", lineHeight: "1.5", color: "var(--ink2)", maxWidth: "760px" }}>The AI models come from Thinking Machines, Alibaba's Qwen team and Google, the road data from Geofabrik, and the books from Wikipedia's sister sites, iFixit, LibreTexts, Stack Exchange, the US Army, FEMA and more. <a href="https://github.com/tudor-city-ventures/tinfoil-kit/blob/main/THIRD-PARTY.md">Every source and its license</a>.</p>
-          </div>
-        </section>
-        <section className="oss" data-for="human">
-          <div className="wrap">
-            <div style={{ flex: "1 1 520px", display: "flex", flexDirection: "column", gap: "16px" }}>
-              <p className="kicker" style={{ color: "#E0884F" }}>Open source, MIT license</p>
-              <h2>Don't trust us? Good. Read every line.</h2>
-              <p>No account, no subscription, no tracking. All the code is public, and your kit keeps working no matter what happens to us.</p>
-            </div>
-            <a className="btn primary" style={{ minHeight: "60px", fontSize: "19px", padding: "0 28px", borderColor: "var(--signal)" }} href="https://github.com/tudor-city-ventures/tinfoil-kit"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3.1-.3 6.4-1.5 6.4-7a5.4 5.4 0 0 0-1.5-3.7 5 5 0 0 0-.1-3.8s-1.2-.3-3.9 1.5a13.4 13.4 0 0 0-7 0C6.3 1.7 5.1 2 5.1 2a5 5 0 0 0-.1 3.8A5.4 5.4 0 0 0 3.5 9.5c0 5.4 3.3 6.6 6.4 7a3.4 3.4 0 0 0-.9 2.6V22" /></svg> View the code on GitHub</a>
           </div>
         </section>
       </main>

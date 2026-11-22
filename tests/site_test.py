@@ -70,6 +70,10 @@ site_text = " ".join(open(f, encoding="utf-8").read() for f in copy + [os.path.j
 check("the site never mentions 2 TB", not re.search(r"\b2(\s|&nbsp;)*TB\b", site_text, re.I))
 # Travis: people update whenever they like, so no copy names a schedule
 check("the site names no update schedule", not re.search(r"\bmonths?\b|\bquarterly\b", site_text, re.I))
+# the check-the-code prompt sends people's AIs to these files, so they have to exist
+named = re.findall(r"SETUP\.command|SETUP-Windows\.bat|tools/\w+\.py|mac/", open(os.path.join(SITE, "components", "prompts.js"), encoding="utf-8").read())
+gone = [f for f in named if not os.path.exists(os.path.join(SITE, "..", f))]
+check("the check-the-code prompt names files that exist", len(named) >= 5 and not gone, ", ".join(gone))
 
 
 
@@ -151,6 +155,27 @@ with sync_playwright() as p:
             page.click("[data-copy=installPrompt]")
             page.wait_for_selector("[data-copy=installPrompt]:text-is('Copied')", timeout=5000)   # (the CSP blocks wait_for_function)
             check("Copy puts the prompt on the clipboard", page.evaluate("navigator.clipboard.readText()").startswith("I want to set up Tinfoil Kit"))
+            # Travis: AI setup is the main button, Download the second; step 2 of How it works opens the same prompt
+            check("the hero's main button is Set up with your AI, then Download",
+                  page.inner_text(".ctas .btn.primary") == "Set up with your AI" and page.locator(".ctas .btn").nth(1).get_attribute("id") == "getKit")
+            page.evaluate("navigator.clipboard.writeText('')")
+            page.click("#askAI")
+            opened = page.evaluate("document.getElementById('aiSetup').open") and not page.is_visible("#aiSetup .dl-phone")
+            page.click("#copyHero")
+            page.wait_for_selector("#copyHero:text-is('Copied')", timeout=5000)
+            check("Set up with your AI shows the setup prompt, and Copy copies it", opened
+                  and page.evaluate("navigator.clipboard.readText()") == page.text_content("#installPrompt"))
+            page.keyboard.press("Escape")
+            steps = page.locator("#how .how-steps h3").all_inner_texts()
+            page.click("#how a[href='#prompts']")
+            check("How it works: get a drive, have your AI set it up, use it anywhere; step 2 opens the prompt",
+                  len(steps) == 3 and "external" in steps[0] and "AI" in steps[1] and page.evaluate("document.getElementById('aiSetup').open"), str(steps))
+            page.keyboard.press("Escape")
+            page.click("[data-copy=auditPrompt]")
+            page.wait_for_selector("[data-copy=auditPrompt]:text-is('Copied')", timeout=5000)
+            audit = page.evaluate("navigator.clipboard.readText()")
+            check("Check the code: the prompt has the AI read the code and run nothing",
+                  "https://github.com/tudor-city-ventures/tinfoil-kit" in audit and "Don't install or run anything" in audit)
             for pid, label in (("installPrompt", "Install ours"), ("ownPrompt", "Build your own")):
                 text = page.text_content("#" + pid).lower()
                 missing = [w for w in ("opt in or out", "ai", "maps", "wikipedia", "medical", "preparedness", "repair",
@@ -293,11 +318,17 @@ with sync_playwright() as p:
     pg.click("#getKit")
     check("phone: Download lists every computer's file and says it runs on a laptop",
           pg.evaluate("document.getElementById('downloads').open") and pg.evaluate(VIEWS) == ["all"]
-          and pg.is_visible(".dl-phone") and pg.inner_text("#getKit") == "Download free")
+          and pg.is_visible("#downloads .dl-phone") and pg.inner_text("#getKit") == "Download free")
     box = pg.locator("#downloads").bounding_box()
     check("phone: the dialog fits the screen", box and box["x"] >= 0 and box["x"] + box["width"] <= 393, str(box))
     axe(pg, "All downloads on a phone")
     pg.screenshot(path=os.path.join(SHOTS, "site_download_all_phone.png"))
+    pg.keyboard.press("Escape")
+    pg.click("#askAI")
+    check("phone: Set up with your AI says to do it on the computer", pg.is_visible("#aiSetup .dl-phone"))
+    box = pg.locator("#aiSetup").bounding_box()
+    check("phone: the AI setup dialog fits the screen", box and box["x"] >= 0 and box["x"] + box["width"] <= 393, str(box))
+    axe(pg, "AI setup on a phone")
     ctx.close()
     deep = b.new_page()        # a shared link opens the version it names
     deep.goto(URL + "?for=agent")

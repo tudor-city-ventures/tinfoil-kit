@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
+import { copyText, selectNode } from '@/components/copy';
+import { INSTALL_PROMPT } from '@/components/prompts';
 
 const RELEASES = 'https://github.com/tudor-city-ventures/tinfoil-kit/releases';
 const DOWNLOADS = [
@@ -19,9 +21,66 @@ function detectOS() {
   return '';
 }
 
-// Download: the hero button gets this computer's file, All downloads lists them all, and once a download starts the
+// Set up with your AI: the hero's main button, and step 2 of How it works, open a dialog with the setup prompt to copy
+// into any AI chat. Before the script runs, they go to the prompts further down the page.
+let openSetup = null;
+export function SetupLink(props) {
+  return <a {...props} href="#prompts" aria-haspopup="dialog" onClick={(e) => openSetup && openSetup(e)} />;
+}
+
+function SetupDialog({ phone }) {
+  const dialog = useRef(null);
+  const [label, setLabel] = useState('Copy prompt');
+  const reset = useRef(0);
+  useEffect(() => () => clearTimeout(reset.current), []);
+  function open(e) {
+    if (!dialog.current.showModal) return;
+    e.preventDefault();
+    setLabel('Copy prompt');
+    dialog.current.showModal();
+  }
+  function copy() {
+    const node = document.getElementById('heroPrompt');
+    copyText(INSTALL_PROMPT).then(() => setLabel('Copied'), () => {   // leave it selected, so Cmd-C copies it
+      selectNode(node);
+      setLabel(/Mac|iPhone|iPad/.test(navigator.userAgent) ? 'Press Cmd-C' : 'Press Ctrl-C');
+    });
+    clearTimeout(reset.current);
+    reset.current = setTimeout(() => setLabel('Copy prompt'), 4000);
+  }
+  const close = () => dialog.current.close();
+  useEffect(() => {
+    openSetup = open;
+    return () => { openSetup = null; };
+  });
+  return (
+    <dialog id="aiSetup" className="dl" aria-labelledby="aiTitle" ref={dialog} onClick={(e) => e.target === dialog.current && close()}>
+      <div className="dl-box">
+        <div className="dl-head">
+          <h2 id="aiTitle">Set up with your AI</h2>
+          <button type="button" className="dl-x" aria-label="Close" onClick={close}><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" strokeWidth="2.5" /></svg></button>
+        </div>
+        <div className="dl-body">
+          <p className="dl-phone" hidden={!phone}>Tinfoil Kit runs on a laptop or desktop, so do this on that computer.</p>
+          <p>Your AI asks what you want in your kit, then tells you exactly what to do.</p>
+          <ol className="dl-steps">
+            <li>
+              <span className="dl-row">Copy this prompt. <button type="button" className="btn primary" id="copyHero" onClick={copy}>{label}</button></span>
+              <pre className="dl-prompt" id="heroPrompt" tabIndex={0}>{INSTALL_PROMPT}</pre>
+            </li>
+            <li>Paste it into ChatGPT, Claude or any AI chat, and send it.</li>
+            <li>Answer its questions. It tells you what to click or paste, one step at a time.</li>
+          </ol>
+          <p className="dl-fine">Want to choose what goes in first? Use the <a href="#builder" onClick={close}>kit builder</a>. Want to check the code before you run it? <a href="#trust" onClick={close}>Have your AI read it</a>.</p>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+// Download: the second button gets this computer's file, All downloads lists them all, and once a download starts the
 // dialog says what to click next. Before the script runs, the button opens the release page, which lists every file.
-// The children are the hero's other links, beside the button.
+// The children are the hero's other links, beside the buttons.
 export default function Download({ children }) {
   const dialog = useRef(null);
   const [os, setOS] = useState('');
@@ -48,10 +107,12 @@ export default function Download({ children }) {
   return (
     <>
       <div className="ctas">
-        <a className="btn primary" id="getKit" href={mine ? `${RELEASES}/latest/download/${mine.file}` : `${RELEASES}/latest`} onClick={get}>{mine ? `Download for ${mine.name}` : 'Download free'}</a>
+        <SetupLink className="btn primary" id="askAI">Set up with your AI</SetupLink>
+        <a className="btn" id="getKit" href={mine ? `${RELEASES}/latest/download/${mine.file}` : `${RELEASES}/latest`} onClick={get}>{mine ? `Download for ${mine.name}` : 'Download free'}</a>
         {children}
       </div>
       <p className="cta-note"><span id="getFor">{mine ? mine.note : 'For Mac, Windows and Linux.'}</span> <button type="button" className="all-dl" id="allDl" aria-haspopup="dialog" onClick={() => show('all')}>All downloads</button></p>
+      <SetupDialog phone={os === 'phone'} />
       <dialog id="downloads" className="dl" aria-labelledby="dlTitle" ref={dialog} onClick={(e) => e.target === dialog.current && dialog.current.close()}>
         <div className="dl-box">
           <div className="dl-head">
@@ -80,7 +141,7 @@ export default function Download({ children }) {
               </li>
               <li>It offers to move itself to your Applications folder, where you'll look for it in an outage: click <b>Move to Applications</b>. Then click <b>Set Up</b>.</li>
             </ol>
-            <p>Setup runs in a Terminal window. It asks where you live, and whether the kit goes on this Mac or an external drive, with what fits on each. If your Mac asks whether Terminal may use files on a removable volume, click Allow. The essentials come first, so the kit works long before the rest arrives over the next few hours. In an outage, open Tinfoil Kit from Applications.</p>
+            <p>Setup runs in a Terminal window. It asks where you live, and whether the kit goes on this Mac or an external drive, with what fits on each. If your Mac asks whether Terminal may use files on a removable volume, click Allow. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes on your connection. To get the rest, click <b>Update</b> in the app. In an outage, open Tinfoil Kit from Applications.</p>
             <button type="button" className="dl-back" onClick={() => show('all')}>All downloads</button>
           </div>
           <div data-view="windows" hidden={view !== 'windows'}>
@@ -90,7 +151,7 @@ export default function Download({ children }) {
               <li>In the new TinfoilKit folder, double-click <b>SETUP-Windows</b>.</li>
               <li>If Windows says it protected your PC, click <b>More info</b>, then <b>Run anyway</b>. It only asks once.</li>
             </ol>
-            <p>SETUP then gets the Python the kit's tools run on (about 15&nbsp;MB), and asks where you live and whether the kit goes on this PC or an external drive, with what fits on each. The essentials come first, so the kit works long before the rest arrives over the next few hours.</p>
+            <p>SETUP then gets the Python the kit's tools run on (about 15&nbsp;MB), and asks where you live and whether the kit goes on this PC or an external drive, with what fits on each. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes on your connection. To get the rest, double-click <b>SETUP-Windows</b> again.</p>
             <button type="button" className="dl-back" onClick={() => show('all')}>All downloads</button>
           </div>
           <div data-view="linux" hidden={view !== 'linux'}>
@@ -102,7 +163,7 @@ export default function Download({ children }) {
             </ul>
             <p>Then unpack the kit and start SETUP:</p>
             <pre className="dl-cmd">{'cd ~/Downloads && tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command'}</pre>
-            <p>It asks where you live, and whether the kit goes on this computer or an external drive, with what fits on each.</p>
+            <p>It asks where you live, and whether the kit goes on this computer or an external drive, with what fits on each. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes on your connection, and how to get it.</p>
             <button type="button" className="dl-back" onClick={() => show('all')}>All downloads</button>
           </div>
         </div>
