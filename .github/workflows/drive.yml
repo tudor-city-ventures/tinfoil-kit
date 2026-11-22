@@ -261,7 +261,7 @@ jobs:
           pattern: raw-video-*
           path: tests/work/video
           merge-multiple: true
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core > /dev/null
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core tesseract-ocr > /dev/null
       - run: python3 tests/drive.py videos tests/work/video
       # One file each, not zipped (archive: false), so the link on the run's page downloads the video itself.
       - id: mac

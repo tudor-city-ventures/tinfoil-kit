@@ -11,7 +11,8 @@ For the videos of a run, which people watch to see the kit set up and used on ea
   drive.py record NAME -- CMD...    run CMD while recording the screen, captioned with its "=== step" lines
   drive.py type LOG ANSWERS -- CMD...
                                     run CMD in this terminal and type its answers the way a person would
-  drive.py videos FOLDER            make MP4s of the recordings (the videos job; needs ffmpeg)
+  drive.py videos FOLDER            make MP4s of the recordings, and log how each step ended (the videos job;
+                                    needs ffmpeg, and tesseract to read the screen)
   drive.py summary NAME=URL...      the run page's list of videos, in Markdown
 """
 import codecs
@@ -19,6 +20,7 @@ import http.client
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import struct
@@ -219,8 +221,9 @@ TITLES = {
              "the page in Chrome; then a home server, and uninstall",
 }
 # How the scripts' questions end, so `type` knows when to answer: "[Y/n] ", "[y/N] ", "then press Return: ", "press
-# Enter to close this window. " A line that ends in a plain full stop is news, not a question.
-QUESTION = re.compile(r"(\[y/n\]|:|\b(Return|Enter)\b.*[.:])\s*$", re.I)
+# Enter to close this window. ", "Type where you live: ". A line that names no key ("Right now: ", with the place
+# still to come) is news, not a question.
+QUESTION = re.compile(r"(\[y/n\]|\b(Return|Enter)\b.*[.:]|\btype\b.*:)\s*$", re.I)
 ESCAPES = re.compile(r"\x1b(\[[0-9;?<=>]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)?|[()][0-9A-Za-z]|[=>78DEHMc])")
 
 
@@ -242,9 +245,9 @@ def record(name, cmd):
     rec, screen = None, None
     try:
         if sys.platform == "darwin":
-            # The Mac's own recorder. Control-C stops it and finishes the file; -V stops it after an hour anyway.
-            rec = subprocess.Popen(["screencapture", "-v", "-C", "-k", "-x", "-V", "3600", str(VIDEO / f"{name}.mov")],
-                                   stdin=subprocess.DEVNULL, stdout=log, stderr=log)
+            # The Mac's own recorder. Control-C stops it and finishes the file (it ignores keys typed to it).
+            rec = subprocess.Popen(["screencapture", "-v", "-C", "-k", str(VIDEO / f"{name}.mov")],
+                                   stdin=subprocess.PIPE, stdout=log, stderr=log)
         else:
             if os.name == "nt":
                 grab = ["-f", "gdigrab", "-framerate", "10", "-i", "desktop"]
@@ -262,6 +265,8 @@ def record(name, cmd):
         print(f"(no screen recording here: {e})", flush=True)
     started = time.time() + 0.5    # about when the first frame is taken
     time.sleep(1)
+    if rec and rec.poll() is not None:
+        print(f"(the screen recorder stopped at once, exit {rec.returncode}: {said(log)})", flush=True)
     steps.write_text(f"{started:.2f}\t\n", encoding="utf-8")
     def relay(out):
         for line in iter(out.readline, b""):
@@ -294,7 +299,13 @@ def record(name, cmd):
         if screen:
             screen.terminate()
         made = [f"{f.name} ({f.stat().st_size // 1024} KB)" for f in VIDEO.glob(f"{name}.m*")]
-        print(f"(screen recording: {', '.join(made) or 'none'})", flush=True)
+        print(f"(screen recording: {', '.join(made) or 'none. The recorder said: ' + said(log)})", flush=True)
+
+
+def said(log):
+    """The end of what the recorder wrote to LOG, for the job's log: its artifacts are harder to get at."""
+    log.flush()
+    return Path(log.name).read_text(encoding="utf-8", errors="replace")[-600:].strip() or "nothing"
 
 
 def typed(log, answers, cmd):
@@ -447,6 +458,16 @@ def clock(seconds):
     return f"{int(seconds // 60)}:{int(seconds % 60):02d}"
 
 
+def screen_text(path, at):
+    """The words on a frame, read by tesseract when it's installed."""
+    if not shutil.which("tesseract"):
+        return ""
+    png = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{at:.1f}", "-i", str(path), "-frames:v", "1", "-f", "image2",
+                          "-c:v", "png", "-"], capture_output=True).stdout
+    text = subprocess.run(["tesseract", "-", "-"], input=png, capture_output=True).stdout.decode("utf-8", "replace")
+    return "\n".join(line.rstrip() for line in text.splitlines() if len(line.strip()) > 2)
+
+
 def ascii_frame(path, at, width=110):
     """A frame as text, for the job log: whoever can read the log but not download the video can still check
     that windows were on screen."""
@@ -489,8 +510,11 @@ def make_videos(folder):
                         "-movflags", "+faststart", f"{name}.mp4"], cwd=steps.parent, check=True)
         mp4 = steps.with_suffix(".mp4")
         print(f"\n######## {mp4.name}: {clock(length)}, {mp4.stat().st_size // 1024} KB")
-        for t, text in ([(0.0, "start")] + marks)[:40]:
-            print(f"\n---- {clock(t)} {text}\n{ascii_frame(mp4, min(t + 3, max(length - 0.5, 0)))}")
+        shown = [(0.0, "start")] + marks
+        for i, (t, text) in enumerate(shown[:40]):
+            end = shown[i + 1][0] if i + 1 < len(shown) else length
+            at = min(max(t + 1, end - 1.5), max(length - 0.5, 0))    # how the step ended
+            print(f"\n---- {clock(at)}, the end of: {text}\n{ascii_frame(mp4, at)}\n{screen_text(raw, at)}")
 
 
 def srt_time(t):
@@ -503,7 +527,7 @@ def summary(pairs):
     out = ["## Videos of this run", "",
            "Each video is the screen of one machine while the drive test ran on it, captioned with what it was "
            "doing. Click one to download it; it plays in QuickTime or a browser. The AI in them is a tiny test "
-           "model, so its answers are nonsense: what matters is that it answers.", ""]
+           "model that gives the same answer to every question.", ""]
     for pair in pairs:
         name, url = pair.split("=", 1)
         mp4 = VIDEO / f"{name}.mp4"
