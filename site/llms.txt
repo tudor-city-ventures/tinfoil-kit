@@ -113,12 +113,14 @@ Go through "Where it can live" with the person, with the numbers from step 1:
 - A drive with a problem is FAT32 (it can't hold files over 4 GB) or, on a Mac, NTFS (a Mac can't write to it; Windows and Linux can). It needs erasing as exFAT first: on a Mac, in Disk Utility, select the drive, click Erase and choose ExFAT. On Windows, in File Explorer, right-click the drive, choose Format and pick exFAT. Erasing deletes everything on the drive: confirm which disk it is and get the person's explicit yes first.
 - A drive with has_kit already holds a kit: offer to update that one instead (see "Update it").
 
-### 3. Choose what goes in it (optional)
+### 3. Choose what goes in it
+
+Go through each part with the person and let them opt in or out. For each, say what it's for, about how big it is and what you'd recommend for their computer, and keep the default for anything they don't mind: where they live and Wikipedia's languages, the AI and which of its models, the maps, each group of the library, the whole kit or just the essentials, and whether to share it with the phones and laptops at home (see "A home server"). Run `./kit estimate` after changes. If they pasted picks from the website's builder (a list of sources and a `./kit region` line), those are their answers for the AI, the maps and the library: switch on only those, run the region line, and ask only about the rest.
 
 kit.json lists everything. The default kit:
 
 - AI models, all of which read photos: Inkling 2 Mini (the default, fast, about 18 GB), Qwen3.8 27B (a second opinion from another lab, slower, 17.5 GB), Gemma 4 26B-A4B (a third opinion, 15.7 GB), Gemma 4 12B (mid-size, for 16 to 24 GB, 7.2 GB) and Gemma 4 E4B (small, saves battery, for 8 GB, 5.3 GB).
-- Library: all of English Wikipedia with images (about 115 GB), WikiMed, field and military medicine manuals, LibreTexts textbooks, iFixit repair guides, Ready.gov, US Army publications, Wikibooks, Wiktionary, Wikivoyage, Wikiversity, Appropedia, Energypedia, and Stack Exchange Q&A on home improvement, cooking, gardening, car and bicycle repair, electronics, amateur radio and more. Off by default because they're huge: Survivor Library (232 GB), Khan Academy videos (168 GB) and Project Gutenberg (206 GB).
+- Library, in the builder's groups: Reference (all of English Wikipedia with images, about 127 GB; Wiktionary; Wikivoyage), Medical (WikiMed, field and military medicine manuals, LibreTexts Medicine, medical Q&A; about 4 GB), Preparedness (post-disaster, water and food guides, knots, Ready.gov, Urban Prepper, US Army publications, outdoors Q&A; about 13 GB), Repair and skills (iFixit, Appropedia, Energypedia, and Stack Exchange Q&A on home improvement, gardening, cooking, electronics, amateur radio, car and bicycle repair; about 13 GB) and Books and courses (Wikibooks, Wikiversity, LibreTexts textbooks; about 15 GB). Off by default because they're huge: Survivor Library (220 GB), Khan Academy videos (180 GB) and Project Gutenberg (221 GB).
 - Maps: street detail, addresses and directions for one place, address search for that place's whole country, and a low-detail world map. Where nobody publishes address search for the country alone (much of Europe, the Caribbean), it covers the whole region of the world, 16 to 32 GB, and just the essentials (`./kit essentials on`) leave it out. Out of the box the place is the US Northeast (New England, New York, New Jersey, Pennsylvania); set where the person lives (below). 5 to 30 GB, depending on the place.
 
 To change it:
@@ -130,7 +132,6 @@ To change it:
 - Add a book: `./kit search WORDS` finds Kiwix books and prints a line to paste into library.
 - Where the person lives: ask them, then `./kit region PLACE`, with a US state or a country in English ("Texas", "Ontario", "Germany: Bayern"; nicknames like "UK" and big towns like "Lyon" work too). It sets the map's street detail, directions, address search, home and units, and prints what it set. A big country comes in parts (US states, Canadian provinces, German states): pick the person's part. When a name fits more than one place, it lists them: `./kit region --find WORDS` prints the matches as id, name and group (no words: every place), and `./kit region ID` takes the one meant. `./kit region` alone says what's set now.
 - Wikipedia in the person's language: `./kit region --languages PLACE` lists the choices for that place (codes, name, GB). `./kit region PLACE --wikipedia de` (or `de,en` for two) swaps Wikipedia for those, and sync removes the old one once the new one is in.
-- Or make a kit.json with the builder at https://tinfoilkit.com/#builder and put it in the kit folder, replacing the one there.
 
 Run `./kit estimate` again after any change.
 
