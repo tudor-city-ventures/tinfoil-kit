@@ -37,13 +37,9 @@ print(json.dumps(t, indent=2))
 EOF
   xattr -r -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$1"
 }
-# Where SETUP lists a drive: it lists the disks in /Volumes it can write to, but not the Mac's own.
-drive_number() { # NAME
-  local v i=0
-  for v in /Volumes/*; do
-    [ -d "$v" ] && [ ! -L "$v" ] && [ -w "$v" ] || continue
-    i=$((i + 1)); [ "${v##*/}" = "$1" ] && { echo "$i"; return; }
-  done
+# Where SETUP lists a drive: its line in ./kit drives (folder, format, GB free, problem, name).
+drive_number() { # KIT NAME
+  "$1/kit" drives | awk -F'\t' -v n="$2" '$5 == n {print NR; exit}'
 }
 # SETUP with the mock internet, a stock Mac's PATH and bash, and these answers.
 setup() { # FOLDER LOG ANSWERS
@@ -67,7 +63,7 @@ mac() {
   step "SETUP.command in the unzipped download: pick the drive; it moves the kit there and sets it up"
   src="$W/Downloads/tinfoilkit-main" kit="$vol/TinfoilKit"
   download_kit "$src"
-  n="$(drive_number TINFOIL)"
+  n="$(drive_number "$src" TINFOIL)"
   echo "SETUP lists TINFOIL as drive ${n:-(not at all)}"
   # Answers: an external drive, TINFOIL, start downloading, don't open the kit, close.
   setup "$src" setup.log "1\n${n:-1}\ny\nn\n\n"
