@@ -1,8 +1,17 @@
 #!/bin/bash
 # Tinfoil Kit command line:  ./kit plan | sync | verify | status | search WORDS | test
 DIR="$(cd "$(dirname "$0")" && pwd)"
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "This needs python3. On a Mac run:  xcode-select --install   (then try again)"
-  exit 1
+# The Python SETUP got for a Mac without one, or else python3. Until Apple's developer tools are installed, a Mac's
+# /usr/bin/python3 only offers to install them.
+PY="$HOME/Library/Application Support/TinfoilKit/python/bin/python3"
+if [ ! -x "$PY" ]; then
+  PY="$(command -v python3)"
+  if [ "$(uname -s)" = Darwin ] && { [ -z "$PY" ] || { [ "$PY" = /usr/bin/python3 ] && ! xcode-select -p >/dev/null 2>&1; }; }; then
+    echo "The kit needs Python. Double-click SETUP.command: it gets it."
+    exit 1
+  elif [ -z "$PY" ]; then
+    echo "The kit needs python3 (3.9 or newer). Install it (Debian, Ubuntu: sudo apt install python3), then try again."
+    exit 1
+  fi
 fi
-exec python3 "$DIR/tools/kit.py" --root "$DIR" "$@"
+exec "$PY" "$DIR/tools/kit.py" --root "$DIR" "$@"

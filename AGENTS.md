@@ -9,9 +9,9 @@ The repo root is the kit itself, so cloning it onto a drive or into `~/TinfoilKi
 | Path | What it is |
 | --- | --- |
 | `kit.json` | Single source of truth: settings, runtimes, models, maps, library, extras |
-| `kit` | Wrapper for `python3 tools/kit.py --root <kit folder>` |
-| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`, `estimate`, `drives`, `place`, `share`, `autostart`) |
-| `SETUP.command`, `UNINSTALL.command` | Double-click setup and update: the first run asks for a drive or this computer and moves the kit there (`drives`, `place`), then every run does `update`, `sync`, `test`. Removal deletes the kit folder after a typed `delete` |
+| `kit` | Wrapper for `python3 tools/kit.py --root <kit folder>`, on the Python SETUP got if this Mac has none |
+| `tools/kit.py` | Sync engine and CLI (`plan`, `sync`, `verify`, `status`, `search`, `test`, `update`, `estimate`, `fit`, `space`, `essentials`, `drives`, `place`, `share`, `autostart`) |
+| `SETUP.command`, `UNINSTALL.command` | Double-click setup and update: on a Mac without Python it first gets a pinned, checksum-checked one into `~/Library/Application Support/TinfoilKit`. The first run says which AI fits (`fit`), asks for a drive or this computer with what fits where (`drives`, `space`, `essentials`) and moves the kit there (`place`), then every run does `update`, `sync`, `test` (the first time, the essentials first). Removal deletes the kit folder, and that Python, after a typed `delete` |
 | `tools/launch.sh` | Offline launcher, starts every server |
 | `tools/share.py` | Sharing on the home network (off by default): the gate on port 8000 that asks for the access code and passes requests to the servers, its QR code, and starting the kit with the computer (systemd user service, LaunchAgent). `SETUP.command --home-server` turns both on |
 | `tools/portal.html` | The browser page, one file, no build step. Logic lives in a `Kit` object exported for node tests |

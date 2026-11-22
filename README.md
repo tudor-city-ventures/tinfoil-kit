@@ -44,13 +44,13 @@ flowchart TB
 
 ### Setting up (online)
 
-The first time, SETUP asks where the kit goes: an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free, and on a Mac stays out of Time Machine). `./kit drives` lists the drives with their format and free space, and `./kit place` moves the kit there. Then, that time and every time after, it runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl):
+The first time, SETUP says which AI model the computer can run (`./kit fit`), then asks where the kit goes: an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free, and on a Mac stays out of Time Machine). `./kit drives` lists the drives with their format, and `./kit space` says whether all of the kit, or just its essentials, fits on each with 10% of the computer's disk (5% of a drive) left free. When all of it won't fit, or leaves less than that, SETUP offers the essentials only (`./kit essentials on`: the AI, the medical, preparedness and repair books, and the map). `./kit place` moves the kit there. Then, that time and every time after, it runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl). The first time, it gets and checks the essentials before the rest, so the kit works hours earlier.
 
 1. **Update** (`./kit update`): installs the kit's own code from the newest Tinfoil Kit release on GitHub, keeping your changes to `kit.json`. It installs only a release signed with the maintainer's key, and shows what's new and asks first.
 2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in [kit.json](kit.json) and downloads only what changed. A big book can wait for its next edition: Wikipedia (115 GB) keeps the one it has until it's a year old (`refresh_days` in kit.json). Downloads resume after a break, every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
 3. **Check** (`./kit test`): starts every server offline and checks that each one answers.
 
-Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build from nuget.org (about 15 MB, checked against its SHA-256) and keeps it in `%LOCALAPPDATA%\TinfoilKit`, outside the kit. The kit on a drive doesn't need it: START-HERE uses only the programs in the kit.
+Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build from nuget.org (about 15 MB, checked against its SHA-256) and keeps it in `%LOCALAPPDATA%\TinfoilKit`, outside the kit. A Mac's python3 only offers to install Apple's Command Line Tools (several GB) until they're installed, so on a Mac without them `SETUP.command` gets a standalone Python from python-build-standalone on GitHub (about 25 MB, checked against its SHA-256) and keeps it in `~/Library/Application Support/TinfoilKit`, outside the kit (its symlinks wouldn't fit on exFAT). The kit on a drive doesn't need either: START-HERE uses only the programs in the kit.
 
 ### Using it (offline)
 
@@ -111,7 +111,7 @@ Download the kit (**Code > Download ZIP** on GitHub) and unzip it. Then, in the 
 - **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat`. If Windows says it protected your PC, click **More info**, then **Run anyway**.
 - **Linux:** run `bash SETUP.command` in a terminal. It needs python3 and curl.
 
-SETUP asks whether the kit goes on an external drive or on this computer, moves it there, downloads everything and tests it. Or from a terminal on a Mac or Linux:
+SETUP asks whether the kit goes on an external drive or on this computer, says how much room each has, moves it there, downloads the essentials and tests them, then gets the rest and tests again. Or from a terminal on a Mac or Linux:
 
 ```sh
 git clone https://github.com/tudor-city-ventures/tinfoilkit ~/TinfoilKit    # or /Volumes/<drive>/TinfoilKit
@@ -129,7 +129,7 @@ Double-click SETUP again whenever you want the newest models, books and maps, or
 
 ## Remove
 
-Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. On Windows it also removes the Python SETUP got. `--yes` skips the question.
+Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. It also removes the Python SETUP got, on Windows or on a Mac without its own. `--yes` skips the question.
 
 ## Home server
 
@@ -142,7 +142,7 @@ The kit downloads programs and runs them on your computer, so here is what prote
 - **Signed updates.** `./kit update` installs new code only if the maintainer's release key signed it, checked against `tools/release-signers` in the copy you already have. That key never goes near GitHub, so someone who broke into the GitHub account or its Actions still couldn't ship an update your kit accepts. A new key arrives only in a release the old one signed, and the kit shows what's new and asks before it installs anything.
 - **Downloads straight from their publishers,** over HTTPS (the list is in [THIRD-PARTY.md](THIRD-PARTY.md)). This project hosts none of them. A file whose publisher posts a checksum, as most do, is checked against it before it replaces the old version. Files without one, like the map tiles and fonts, rely on HTTPS alone.
 - **No telemetry.** No accounts, analytics or reports home, in the kit or on tinfoilkit.com. The kit goes online only when you run SETUP, `./kit sync` or `./kit update`, and then only to GitHub and the places it downloads from.
-- **No administrator password.** The kit runs as you, and starts only when you start it unless you set up a home server. UNINSTALL undoes everything setup did, except Apple's Command Line Tools, which other apps use too. The site's "What does setup change on my computer?" lists every change outside the kit folder.
+- **No administrator password.** The kit runs as you, and starts only when you start it unless you set up a home server. UNINSTALL undoes everything setup did. The site's "What does setup change on my computer?" lists every change outside the kit folder.
 - **Servers on 127.0.0.1.** The AI, library and maps answer only this computer. A website open while the kit runs can still reach them, as browsers allow: it could read the books and maps and use the AI as the kit page does (the directions server answers any page, and DNS rebinding opens the rest). Chrome asks your permission before a website reaches your computer's own servers; other browsers may not.
 - **Sharing is off until you turn it on.** Then one gate, on port 8000 by default, stands in front of everything: it asks for an 8-digit code, stops answering a device after 10 wrong tries in 10 minutes, and refuses addresses and names outside a home network, so other websites can't reach it. It's plain HTTP, so share on your own Wi-Fi or hotspot: anyone on a public network who watches the traffic could read the code.
 - **Readable code.** Python's standard library, shell scripts and one HTML page, with no packages to install and no build step. It's written with AI coding tools; the tests in `tests/` run it against mocks of every download source and server on every change.

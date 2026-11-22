@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build everything the end-to-end suite's mock internet serves, into tests/work/remote.
 # With "drive", also the real Mac, Windows and Linux Vulkan builds the drive test installs (tests/drive_test.sh),
-# and the Python SETUP-Windows.bat gets (tests/drive_windows.ps1).
+# and the Pythons SETUP.command (on a Mac without one) and SETUP-Windows.bat get.
 # Linux x86_64 only. Needs internet (GitHub, download.kiwix.org, npm, PyPI) the first time.
 # Python deps: pip install gguf numpy libzim playwright && playwright install chromium
 set -eo pipefail
@@ -135,6 +135,13 @@ print("kiwix-tools_%s-%s.%s" % (plat, newest, ext))' "$TMP/kiwix.html" "$plat")
   mkdir -p "$R/nuget" && cp "$DL/python.$pyv.nupkg" "$R/nuget/python.nupkg"
   python3 -c 'import hashlib, sys; sys.exit(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() != sys.argv[2])' \
     "$R/nuget/python.nupkg" "$pysha" || { echo "python.$pyv.nupkg doesn't match the checksum in SETUP-Windows.bat"; exit 1; }
+  # and the very Python SETUP.command gets for a Mac without one
+  pyurl=$(sed -n 's/^PY_URL="${KIT_MAC_PYTHON_URL:-\(.*\)}"$/\1/p' "$TESTS/../SETUP.command")
+  pysha=$(sed -n 's/^PY_SHA256="${KIT_MAC_PYTHON_SHA256:-\(.*\)}"$/\1/p' "$TESTS/../SETUP.command")
+  get "$pyurl" "$DL/${pyurl##*/}"
+  mkdir -p "$R/pbs" && cp "$DL/${pyurl##*/}" "$R/pbs/python.tar.gz"
+  python3 -c 'import hashlib, sys; sys.exit(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() != sys.argv[2])' \
+    "$R/pbs/python.tar.gz" "$pysha" || { echo "${pyurl##*/} doesn't match the checksum in SETUP.command"; exit 1; }
 
   echo "== drive test: the real map programs for Windows, Andorra's roads, and a map build with tiles at zoom 0-5"
   # They replace the e2e's stand-ins: pmtiles and Java for Windows, GraphHopper (the e2e's fake jar)
