@@ -184,7 +184,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     server: Server
 
     def version_string(self) -> str:
-        return "TinfoilKit"
+        return "TinfoilKit-notes"    # not the gate's "TinfoilKit", which ./kit share looks for near share_port
 
     def log_request(self, code: object = "-", size: object = "-") -> None:
         pass

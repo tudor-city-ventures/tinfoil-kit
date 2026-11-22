@@ -87,6 +87,7 @@ def run(server, server_cmd, work, data):
     s, got, h = req("GET", "/")
     check("it answers the kit's page, and says what it is", s == 200 and got == {"name": "Tinfoil Kit", "notes": "/notes", "places": "/places"}
           and h.get("access-control-allow-origin") == PAGE, f"{s} {got} {h}")
+    check("it doesn't answer as the gate, which ./kit share looks for near share_port", h.get("server") == "TinfoilKit-notes", str(h))
     s, got, h = req("GET", "/", headers={"Origin": None})
     check("and a program on this computer (no Origin), without a CORS header", s == 200 and "access-control-allow-origin" not in h)
     s, got, _ = req("GET", "/notes", headers={"Origin": "http://evil.example"})

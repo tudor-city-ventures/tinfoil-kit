@@ -438,7 +438,7 @@ func (n *notesServer) reply(w http.ResponseWriter, r *http.Request, status int, 
 	}
 	h.Set("Cache-Control", "no-store")
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Server", "TinfoilKit")
+	h.Set("Server", "TinfoilKit-notes") // not the gate's "TinfoilKit", which ./kit share looks for near share_port
 	if origin != "" {
 		h.Set("Access-Control-Allow-Origin", origin)
 		h.Set("Vary", "Origin")
