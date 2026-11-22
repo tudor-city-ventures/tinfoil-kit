@@ -3093,6 +3093,9 @@ def main() -> None:
     except KeyboardInterrupt:
         log("\nStopped.")
         sys.exit(130)
+    except BrokenPipeError:    # piped into head or the like, which stopped reading: not an error worth a traceback
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        sys.exit(1)
 
 
 if __name__ == "__main__":

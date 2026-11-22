@@ -23,6 +23,7 @@ import ipaddress
 import json
 import os
 import plistlib
+import posixpath
 import re
 import secrets
 import shutil
@@ -431,11 +432,23 @@ ROUTES = ("ai", "tiles", "geocoder", "routing")
 # llama-server's own chat page may ask for its API at the root; the library has nothing at these paths.
 AI_PATHS = ("/v1/", "/props", "/models", "/slots", "/health", "/completion", "/tokenize", "/detokenize",
             "/apply-template", "/infill", "/embedding", "/rerank", "/lora-adapters", "/metrics")
+# llama-server features that run things on this computer (tools, a web proxy). The kit leaves them off; if someone
+# turns them on for themselves, they still stay off for the network. Same answer llama-server gives when they're off.
+AI_OFF = ("/tools", "/cors-proxy")
+AI_OFF_ANSWER = b'{"error": {"message": "this feature is disabled", "type": "feature_disabled"}}'
+
 DROP_REQUEST = {"connection", "keep-alive", "proxy-authorization", "proxy-connection", "te", "trailer",
                 "transfer-encoding", "upgrade", "host", "cookie", "authorization", "origin", "referer", "content-length"}
 DROP_RESPONSE = {"connection", "keep-alive", "transfer-encoding", "server", "date", "trailer", "upgrade"}
 MAX_BODY = 64 * 10**6           # a photo for the AI goes up as base64
 TRIES, TRIES_WINDOW = 10, 600   # wrong codes allowed from one address in 10 minutes
+
+
+def ai_off(path: str) -> bool:
+    """Is this one of AI_OFF, however it's spelled? llama-server decodes %74ools as /tools."""
+    p = re.sub("/+", "/", "/" + urllib.parse.unquote(path.split("?", 1)[0].split("#", 1)[0]))
+    return posixpath.normpath(p) in AI_OFF
+
 
 LOGIN = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -657,6 +670,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             if url.path.startswith(AI_PATHS):
                 name = "ai"
+        if name == "ai" and ai_off(path):
+            return self.send(403, "application/json", AI_OFF_ANSWER)
         self.proxy(name, path, inject=(name == "library" and url.path == "/" and self.command == "GET"), code=code)
 
     def proxy(self, name: str, path: str, inject: bool, code: str) -> None:
