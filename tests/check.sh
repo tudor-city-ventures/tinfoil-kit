@@ -31,6 +31,12 @@ subprocess.run([sys.executable, 'site/build_sources.py'], check=True, stdout=sub
 stale = [f for f, b in zip(files, before) if open(f, encoding='utf-8').read() != b]
 sys.exit('stale: ' + ', '.join(stale) + ': run python3 site/build_sources.py' if stale else 0)"
 
+step "agent skills (site/skills.py) never run a command or pre-approve a tool when they load"
+run python3 -c "
+import sys; sys.path.insert(0, 'site'); from skills import tame
+md = tame('---\\nname: x\\nallowed-tools: Bash(npx x *)\\nhooks:\\n  PreToolUse:\\n    - x\\ndescription: y\\n---\\nRun !\\x60npx x info\\x60 now.\\n')
+sys.exit(0 if md.startswith('---\\nname: x\\ndescription: y\\n---\\n') and 'npx x info' in md and '!\\x60' not in md else 'not tamed: ' + md)"
+
 step "archives of the kit stamp kit.py with their commit (./kit update needs it)"
 if git rev-parse --git-dir >/dev/null 2>&1; then
   run grep -q '^KIT_COMMIT = "\$Format:%H\$"' tools/kit.py
