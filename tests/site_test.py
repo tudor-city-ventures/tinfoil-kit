@@ -188,6 +188,14 @@ with sync_playwright() as p:
             check("How it works: get a drive, have your AI set it up, use it anywhere; step 2 opens the prompt",
                   len(steps) == 3 and "external" in steps[0] and "AI" in steps[1] and page.evaluate("document.getElementById('aiSetup').open"), str(steps))
             page.keyboard.press("Escape")
+            # Travis: step 2 also says the installer is there for people who'd rather not use an AI
+            page.click("#how small a")
+            check("How it works: step 2's small print offers the installer, and its link lists the downloads",
+                  "installer" in page.inner_text("#how .how-steps li:nth-child(2) small")
+                  and page.evaluate("document.getElementById('downloads').open") and page.is_visible("#downloads .dl-list"))
+            page.keyboard.press("Escape")
+            check("Is it safe?: has your AI audit the code, rather than asking you to read it",
+                  "audit the code" in page.inner_text("#trust h2") and "every line" not in page.inner_text("#trust h2").lower())
             page.click("[data-copy=auditPrompt]")
             page.wait_for_selector("[data-copy=auditPrompt]:text-is('Copied')", timeout=5000)
             audit = page.evaluate("navigator.clipboard.readText()")

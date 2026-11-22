@@ -1,6 +1,6 @@
 import Builder, { CopySetup, Groups, PlaceSelect, Preset, SetupText, SizeSelect, Total, WikiSelect } from '@/components/builder';
 import { CopyButton, Toast } from '@/components/copy';
-import Download, { SetupLink } from '@/components/download';
+import Download, { DownloadLink, SetupLink } from '@/components/download';
 import Header from '@/components/header';
 import Hero from '@/components/hero';
 import { AUDIT_PROMPT, INSTALL_PROMPT, OWN_PROMPT } from '@/components/prompts';
@@ -131,6 +131,7 @@ export default function Home() {
                 <h3>Have your AI set it up</h3>
                 <p>Paste our prompt into ChatGPT, Claude or any AI chat. It asks what you want, then tells you what to run to put Tinfoil Kit on the drive.</p>
                 <SetupLink>Get the prompt</SetupLink>
+                <small>Rather not use an AI? <DownloadLink>Download the installer</DownloadLink> instead. It asks you the same questions.</small>
               </li>
               <li>
                 <b>03 · PLUG IN ANYWHERE</b>
@@ -212,8 +213,8 @@ export default function Home() {
           <div className="wrap">
             <div style={{ flex: "1 1 520px", display: "flex", flexDirection: "column", gap: "16px" }}>
               <p className="kicker" style={{ color: "#E0884F" }}>Open source, MIT license</p>
-              <h2>Don't trust us? Good. Read every line.</h2>
-              <p>Or have your AI read it for you. Before you install anything, paste this into ChatGPT, Claude or any AI chat. It reads the code and tells you what the kit does, without running it.</p>
+              <h2>Don't trust us? Good. Have your AI audit the code.</h2>
+              <p>Before you install anything, paste this into ChatGPT, Claude or any AI chat. It reads the code and tells you what the kit does, without running it.</p>
             </div>
             <a className="btn primary" style={{ minHeight: "60px", fontSize: "19px", padding: "0 28px", borderColor: "var(--signal)" }} href="https://github.com/tudor-city-ventures/tinfoil-kit"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-.9-2.6c3.1-.3 6.4-1.5 6.4-7a5.4 5.4 0 0 0-1.5-3.7 5 5 0 0 0-.1-3.8s-1.2-.3-3.9 1.5a13.4 13.4 0 0 0-7 0C6.3 1.7 5.1 2 5.1 2a5 5 0 0 0-.1 3.8A5.4 5.4 0 0 0 3.5 9.5c0 5.4 3.3 6.6 6.4 7a3.4 3.4 0 0 0-.9 2.6V22" /></svg> View the code on GitHub</a>
             <div className="prompt">

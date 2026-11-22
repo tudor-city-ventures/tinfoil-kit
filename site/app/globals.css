@@ -98,6 +98,7 @@ html:not(.js) .fig{display:none}
 .how-steps p{font-size:16px;line-height:1.5;color:var(--ink2)}
 .how-steps small{font-size:14px;line-height:1.45;color:var(--mute)}
 .how-steps a{align-self:flex-start;margin-top:auto;font:600 15px/44px var(--mono)}
+.how-steps small a{margin:0;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:3px}
 @media (max-width:900px){.how-steps li{border-right:0;border-bottom:var(--rule)}.how-steps li:last-child{border-bottom:0}}
 .presets{display:inline-flex;flex-wrap:wrap;border:var(--rule);border-radius:4px;overflow:hidden;align-self:flex-start}
 .presets button{min-height:44px;padding:0 20px;border:0;border-right:var(--rule);background:transparent;font:500 15px var(--mono);color:var(--ink);cursor:pointer}

@@ -28,6 +28,12 @@ export function SetupLink(props) {
   return <a {...props} href="#prompts" aria-haspopup="dialog" onClick={(e) => openSetup && openSetup(e)} />;
 }
 
+// The download, from step 2 of How it works: the dialog that lists every computer's, this one's first.
+let openDownloads = null;
+export function DownloadLink(props) {
+  return <a {...props} href={`${RELEASES}/latest`} aria-haspopup="dialog" onClick={(e) => openDownloads && openDownloads(e)} />;
+}
+
 function SetupDialog({ phone }) {
   const dialog = useRef(null);
   const [label, setLabel] = useState('Copy prompt');
@@ -97,6 +103,14 @@ export default function Download({ children }) {
     if (!dialog.current.open) dialog.current.showModal();
     dialog.current.querySelector('.dl-box').scrollTop = 0;
   }
+  useEffect(() => {
+    openDownloads = (e) => {
+      if (!dialog.current.showModal) return;
+      e.preventDefault();
+      show('all');
+    };
+    return () => { openDownloads = null; };
+  });
   function get(e) {
     if (mine) return show(mine.os);   // the download starts, and the dialog says what to click
     if (!dialog.current.showModal) return;   // the release page lists every file
