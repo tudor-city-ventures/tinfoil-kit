@@ -135,6 +135,49 @@ print("kiwix-tools_%s-%s.%s" % (plat, newest, ext))' "$TMP/kiwix.html" "$plat")
   mkdir -p "$R/nuget" && cp "$DL/python.$pyv.nupkg" "$R/nuget/python.nupkg"
   python3 -c 'import hashlib, sys; sys.exit(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() != sys.argv[2])' \
     "$R/nuget/python.nupkg" "$pysha" || { echo "python.$pyv.nupkg doesn't match the checksum in SETUP-Windows.bat"; exit 1; }
+
+  echo "== drive test: the real map programs for Windows, Monaco's roads, and a map build with tiles at zoom 0-5"
+  # They replace the e2e's stand-ins: pmtiles and Java for Windows, GraphHopper (the e2e's fake jar)
+  url=$(curl -fsSL "${GH_AUTH[@]}" https://api.github.com/repos/protomaps/go-pmtiles/releases/latest |
+        python3 -c 'import json, sys; print(next(a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if a["name"].endswith("_Windows_x86_64.zip")))')
+  get "$url" "$DL/$(basename "$url")"
+  cp "$DL/$(basename "$url")" "$R/gh2/go-pmtiles_1.31.2_Windows_x86_64.zip"
+  url=$(curl -fsSL "https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse" |
+        python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["binary"]["package"]["link"])')
+  get "$url" "$DL/$(basename "$url")"
+  cp "$DL/$(basename "$url")" "$R/adoptium/"
+  ghv=$(curl -fsSL https://repo1.maven.org/maven2/com/graphhopper/graphhopper-web/maven-metadata.xml | python3 -c '
+import re, sys
+print(max((v for v in re.findall(r"<version>([0-9.]+)</version>", sys.stdin.read()) if v.startswith("11.")),
+          key=lambda v: [int(x) for x in v.split(".")]))')
+  get "https://repo1.maven.org/maven2/com/graphhopper/graphhopper-web/$ghv/graphhopper-web-$ghv.jar" "$DL/graphhopper-web-$ghv.jar"
+  G="$R/maven/com/graphhopper/graphhopper-web/11.1"
+  cp "$DL/graphhopper-web-$ghv.jar" "$G/graphhopper-web-11.1.jar"
+  sha1sum "$G/graphhopper-web-11.1.jar" | cut -d' ' -f1 > "$G/graphhopper-web-11.1.jar.sha1"
+  get https://download.geofabrik.de/europe/monaco-latest.osm.pbf "$DL/monaco-latest.osm.pbf"
+  cp "$DL/monaco-latest.osm.pbf" "$R/geofabrik/" && md5 "$R/geofabrik/monaco-latest.osm.pbf"
+  # pmtiles' own one-tile fixture, as every tile from zoom 0 to 5: one directory entry whose run covers them all
+  mkdir -p "$R/protomaps"
+  python3 - "$W/test_fixture_1.pmtiles" "$R/protomaps/build.pmtiles" <<'PY'
+import gzip, struct, sys
+src = open(sys.argv[1], "rb").read()
+data_off, data_len = struct.unpack("<QQ", src[56:72])
+tile = src[data_off:data_off + data_len]
+def varint(n):
+    out = b""
+    while n >= 0x80:
+        out, n = out + bytes([n & 0x7F | 0x80]), n >> 7
+    return out + bytes([n])
+maxz = 5
+tiles = (4 ** (maxz + 1) - 1) // 3
+root = gzip.compress(varint(1) + varint(0) + varint(tiles) + varint(len(tile)) + varint(1))   # id 0, run, length, offset+1
+meta = gzip.compress(b'{"name":"drive test","vector_layers":[{"id":"test_fixture_1pmtiles","fields":{}}]}')
+off = 127 + len(root) + len(meta)
+header = b"PMTiles" + bytes([3]) + struct.pack("<11Q", 127, len(root), 127 + len(root), len(meta), off, 0, off, len(tile),
+                                               tiles, 1, 1)
+header += struct.pack("<6B4iBii", 1, 2, 2, 1, 0, maxz, -1800000000, -850511287, 1800000000, 850511287, 0, 0, 0)
+open(sys.argv[2], "wb").write(header + root + meta + tile)
+PY
 fi
 
 rm -rf "$TMP"

@@ -1,6 +1,7 @@
 # The drive test's Windows setup: SETUP-Windows.bat from a fresh download, against the mock internet, the way
 # a person double-clicking it would answer. First onto this PC (~\TinfoilKit), then onto an exFAT drive. Each
 # time START-HERE-Windows.bat must serve the library and the AI, and UNINSTALL-Windows.bat must remove it all.
+# Last, ./kit sync builds a small real map with the real map programs, and START-HERE-Windows.bat must serve it.
 # CI runs it (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive, in tests\work\remote.
 $ErrorActionPreference = "Stop"
 $tests = $PSScriptRoot
@@ -69,8 +70,29 @@ function Test-Kit($kit, $name) {
     netstat -ano | Select-String "LISTENING" | Select-String ":8[0-9]{3} "
     foreach ($f in "kiwix-serve.log", "llama-server.log") { "--- $f"; Get-Content "$kit\logs\$f" -Tail 15 -ErrorAction SilentlyContinue }
   }
+  if (Test-Path "$kit\maps\routing") { Test-Map $kit }
   Stop-Kit $kit $p
   Copy-Item -Recurse "$kit\logs" "$logs\$($name -replace '\W', '-')-logs" -ErrorAction SilentlyContinue
+}
+
+# The map servers START-HERE-Windows.bat started: street-level tiles, and directions across Monaco. There's no
+# small real address database to test Photon with, so the test kit's Photon is a stand-in that Java must have tried.
+function Test-Map($kit) {
+  try {
+    $tj = Invoke-RestMethod http://127.0.0.1:8090/basemap.json -TimeoutSec 10
+    $tile = Invoke-WebRequest http://127.0.0.1:8090/basemap/5/16/11.mvt -TimeoutSec 10 -UseBasicParsing
+    "PASS  map tiles: zoom $($tj.minzoom) to $($tj.maxzoom), and a street-level tile ($($tile.RawContentLength) bytes)"
+  } catch { Fail "map tiles: $_"; Get-Content "$kit\logs\tiles.log" -Tail 15 -ErrorAction SilentlyContinue }
+  $route = $null
+  for ($i = 0; $i -lt 60 -and -not $route; $i++) {
+    try { $route = Invoke-RestMethod "http://127.0.0.1:8989/route?point=43.7280,7.4150&point=43.7396,7.4277&profile=car&points_encoded=false" -TimeoutSec 10 }
+    catch { Start-Sleep 2 }
+  }
+  if ($route -and $route.paths[0].distance -gt 0) {
+    "PASS  directions across Monaco: $([math]::Round($route.paths[0].distance)) m in $($route.paths[0].instructions.Count) steps"
+  } else { Fail "directions didn't answer"; Get-Content "$kit\logs\routing.log" -Tail 20 -ErrorAction SilentlyContinue }
+  if (Select-String -Quiet -Path "$kit\logs\geocoder.log" -Pattern "jarfile") { "PASS  address search: Java ran Photon's jar" }
+  else { Fail "START-HERE didn't start Photon"; Get-Content "$kit\logs\geocoder.log" -Tail 10 -ErrorAction SilentlyContinue }
 }
 
 function Invoke-Uninstall($kit, $log) {
@@ -134,6 +156,20 @@ Step "UNINSTALL-Windows.bat --yes on the drive: the kit goes, and nothing else o
 Invoke-Uninstall $kit "uninstall-windows-drive.log"
 if (-not (Test-Path "${letter}:\keep-me.txt")) { Fail "UNINSTALL deleted something else on the drive" }
 Dismount-DiskImage -ImagePath $vhd | Out-Null
+
+Step "the map: ./kit sync builds Monaco's with the real pmtiles, Java and GraphHopper for Windows"
+Get-Kit $dl
+python "$tests\drive.py" kitjson "$dl\kit.json" maps
+Get-ChildItem -Recurse -File $dl | Unblock-File    # no SETUP here to do it, and START-HERE starts with a double-click
+python "$dl\tools\kit.py" --root $dl sync --yes *> "$logs\sync-windows-map.log"
+"exit $LASTEXITCODE"
+Get-Content "$logs\sync-windows-map.log" | Select-String "map|road|GraphHopper|address|FAIL|failed|rror" |
+  Select-Object -Last 25 | ForEach-Object { $_.Line }
+foreach ($f in "maps\tiles\basemap.pmtiles", "maps\routing\graph-cache\properties", "maps\geocoder\photon_data") {
+  if (-not (Test-Path "$dl\$f")) { Fail "sync didn't make $f (logs\sync-windows-map.log)" }
+}
+Test-Kit $dl "the map"
+Remove-Item -Recurse -Force $dl
 
 Stop-Process -Id $mock.Id -Force -ErrorAction SilentlyContinue
 ""
