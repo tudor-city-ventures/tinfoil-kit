@@ -40,6 +40,16 @@ If they pasted options from the website's kit builder (like `--region bayern --w
 
 ## 3. Give them the command
 
+First tell them how long the downloads take. Find their internet speed: on a Mac, if you can run commands, `networkQuality` measures it in about 20 seconds (read Downlink capacity); otherwise ask them (their plan's speed, or a speed test site like fast.com). Hours = GB × 2.2 ÷ Mbps, at best, so round up:
+
+| What downloads | Size | 10 Mbps | 100 Mbps | 500 Mbps |
+| --- | --- | --- | --- | --- |
+| The kit to try | about 10 GB | 2 hours | 15 minutes | 3 minutes |
+| Just the essentials | 35 to 55 GB | 8 to 12 hours | about an hour | 10 to 15 minutes |
+| All of it | about 300 GB | about 3 days | 7 hours | 1.5 hours |
+
+The command gets just the kit to try, unless it has `--all`, `--essentials` or `--home-server`, which go straight on to the rest: then say how long all of it takes too. SETUP also times the connection before it downloads anything, says how long it takes, and shows the time left as it goes.
+
 Mac or Linux:
 
     mkdir -p ~/Downloads && cd ~/Downloads && curl -fsSL https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit.tar.gz | tar -xz && bash TinfoilKit/app/SETUP.command --region texas --drive /Volumes/Kit --yes
@@ -68,12 +78,12 @@ Then tell them:
 
 - How to open the terminal: on a Mac, Cmd-Space, type Terminal, press Return. On Windows, open Start, type PowerShell, press Enter. Paste the command and press Return.
 - Keep the laptop plugged in and the terminal open.
-- What success looks like: "The try-it kit works", how big the rest is and how long it takes on their connection, and "When you're ready for it:" with the command for the rest. Then the kit opens (on Linux, SETUP prints the command that opens it).
+- What success looks like: how long it takes, before it downloads; then "The try-it kit works", how big the rest is and how long it takes on their connection, and "When you're ready for it:" with the command for the rest. Then the kit opens (on Linux, SETUP prints the command that opens it).
 - If it stops, or the laptop sleeps, run the same command again: it picks up where it left off.
 
 ## 4. The rest
 
-When they've tried it and are ready, give them the command SETUP printed: `bash "/Volumes/Kit/TinfoilKit/app/SETUP.command" --yes`, or on Windows `& "E:\TinfoilKit\app\SETUP-Windows.bat" --yes` (in ~/TinfoilKit on this computer). It gets everything they picked, a few hours for all of it, checks every file, and deletes the try-it files their picks left out. Add `--all` to get all of it even if that leaves less free space than SETUP likes, or `--essentials` for just those.
+When they've tried it and are ready, tell them how long the rest takes (SETUP said it; `./kit estimate --rest` in the kit's app folder prints it again: GB, a tab, then how long), and give them the command SETUP printed: `bash "/Volumes/Kit/TinfoilKit/app/SETUP.command" --yes`, or on Windows `& "E:\TinfoilKit\app\SETUP-Windows.bat" --yes` (in ~/TinfoilKit on this computer). It gets everything they picked, checks every file, and deletes the try-it files their picks left out. Add `--all` to get all of it even if that leaves less free space than SETUP likes, or `--essentials` for just those.
 
 ## When it fails
 

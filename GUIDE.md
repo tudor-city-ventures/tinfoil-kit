@@ -164,16 +164,18 @@ new in the kit's own list (`app/kit.json`).
      unplugging, especially with exFAT. If macOS asks whether Terminal may access files on a removable volume, say yes.
    - **This computer**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder and leaves 50 GB free
      for the computer. On a Mac what it downloads stays out of Time Machine backups; your settings don't.
-5. It gets a small kit to try first (about 10 GB: a small AI, a few medical and how-to books, and your area's map),
+5. Before it downloads, it times your connection for a few seconds and says how long the kit to try and all of it take.
+   It gets a small kit to try first (about 10 GB: a small AI, a few medical and how-to books, and your area's map),
    starts each part offline to check it answers, and offers to open it. Turn off Wi-Fi and try it: from then on, the kit
    works. It also says how big the rest is and how long it takes on your connection.
 6. When you're ready for the rest, start SETUP again (or click **Update** in the Mac app). It asks what you want in the
-   kit, the same choices as the kit builder on tinfoilkit.com, shows what that comes to, then gets it (about 280 to 330
-   GB for the recommended kit, a few hours; maps are 5 to 30 GB of that) and checks again. Then it removes the try-it
-   files you didn't pick. Leave the laptop plugged in; it stays awake while this runs, and the kit works the whole time.
-   If you stop it, start SETUP in the kit's app folder again and it picks up where it left off. If it ends with "some
-   downloads didn't finish", the kit already works with what it has: run SETUP again later for the rest. With just the
-   essentials, a later SETUP offers the rest once there's room. `./kit essentials off` asks for it any time.
+   kit, the same choices as the kit builder on tinfoilkit.com, shows what that comes to and how long it takes, then gets
+   it (about 280 to 330 GB for the recommended kit; maps are 5 to 30 GB of that), showing the time left as it goes, and
+   checks again. Then it removes the try-it files you didn't pick. Leave the laptop plugged in; it stays awake while
+   this runs, and the kit works the whole time. If you stop it, start SETUP in the kit's app folder again and it picks
+   up where it left off. If it ends with "some downloads didn't finish", the kit already works with what it has: run
+   SETUP again later for the rest. With just the essentials, a later SETUP offers the rest once there's room.
+   `./kit essentials off` asks for it any time.
 7. Turn off Wi-Fi and start the kit (see the top of this page).
 
 In a terminal, SETUP takes every answer as an option, and with `--yes` it asks nothing: for example

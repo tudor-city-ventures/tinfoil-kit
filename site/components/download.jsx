@@ -294,9 +294,9 @@ export default function Download({ lead = "download", children }) {
             <p>
               Setup runs in a Terminal window. It asks where you live, and whether the kit goes on this Mac or an
               external drive, with what fits on each. If your Mac asks whether Terminal may use files on a removable
-              volume, click Allow. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last
-              message says how big the rest is and how long it takes on your connection. To get the rest, click{" "}
-              <b>Update</b> in the app. In an outage, open Tinfoil Kit from Applications.
+              volume, click Allow. Then it says how long the downloads take on your connection, gets a small kit to try,
+              about 10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes.
+              To get the rest, click <b>Update</b> in the app. In an outage, open Tinfoil Kit from Applications.
             </p>
             <button type="button" className="dl-back" onClick={() => show("all")}>
               All downloads
@@ -318,9 +318,9 @@ export default function Download({ lead = "download", children }) {
             </ol>
             <p>
               SETUP then asks where you live and whether the kit goes on this PC or an external drive, with what fits on
-              each. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last message says how
-              big the rest is and how long it takes on your connection. To get the rest, double-click{" "}
-              <b>SETUP-Windows</b> again.
+              each. Then it says how long the downloads take on your connection, gets a small kit to try, about
+              10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes. To get
+              the rest, double-click <b>SETUP-Windows</b> again.
             </p>
             <button type="button" className="dl-back" onClick={() => show("all")}>
               All downloads
@@ -351,8 +351,9 @@ export default function Download({ lead = "download", children }) {
             </pre>
             <p>
               It asks where you live, and whether the kit goes on this computer or an external drive, with what fits on
-              each. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last message says how
-              big the rest is and how long it takes on your connection, and how to get it.
+              each. Then it says how long the downloads take on your connection, gets a small kit to try, about
+              10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes, and
+              how to get it.
             </p>
             <button type="button" className="dl-back" onClick={() => show("all")}>
               All downloads

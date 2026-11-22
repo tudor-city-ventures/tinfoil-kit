@@ -40,7 +40,7 @@ The ids are in "What goes in" at https://tinfoilkit.com/llms.txt, and in data/ki
 
 - `--skip` and `--add` take ids, `maps`, or a whole part (`models`, `library`, `extras`). A book's name up to its first underscore catches every book that starts with it (`wikipedia` is Wikipedia in any language), and a site's name catches all its books (`stackexchange`, `libretexts`). A wrong name changes nothing and lists the right ones.
 - `--skip` and `--add` change only what they name. `--models` and `--no-ai` replace the whole set of models.
-- Then `./kit sync -y`. Big downloads take hours, so give the person that command to run. `./kit sync -y --only ID` gets just one item.
+- Then `./kit sync -y`. Big downloads take hours: `./kit plan` says how long, so tell the person, then give them that command to run. `./kit sync -y --only ID` gets just one item.
 
 ## What happens to files already downloaded
 

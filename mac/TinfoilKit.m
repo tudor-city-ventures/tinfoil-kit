@@ -142,7 +142,8 @@ static void heard(int sig) { (void)sig; }
     if (pick != 1) { [self quit]; return; }
   }
   NSString *text = @"Setup asks a few questions in a Terminal window: where you live, and whether the kit goes on an external drive or on this Mac. "
-                   @"Then it downloads an offline AI, library and maps, which takes hours. Keep your Mac plugged in.";
+                   @"Then it gets a small kit to try. All of it takes hours to download, and setup says how long on your connection before it starts. "
+                   @"Keep your Mac plugged in.";
   if (!unplugged.count) text = [text stringByAppendingString:@"\n\nAlready set one up on a drive? Plug it in, then open Tinfoil Kit again."];
   if ([self ask:@"Set up Tinfoil Kit" text:text buttons:@[@"Set Up", @"Cancel"]] == 0)
     [self run:@[@"setup"]];
@@ -297,7 +298,7 @@ static void heard(int sig) { (void)sig; }
 
 - (void)update:(id)sender {
   if ([self ask:@"Update Tinfoil Kit?"
-           text:@"This stops the kit. Then, in a Terminal window, setup gets the newest AI models, books and maps, and only what changed. You need to be online."
+           text:@"This stops the kit. Then, in a Terminal window, setup gets the newest AI models, books and maps, and only what changed. It says how long that takes before it starts. You need to be online."
         buttons:@[@"Update", @"Cancel"]] != 0) return;
   [self stopKit];
   [self run:@[@"update", kit]];

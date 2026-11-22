@@ -39,7 +39,7 @@ A kit is one folder with three inside, so a new version can replace the code wit
 
 `./kit --help` lists them. What each one decides:
 
-- `./kit plan [--only WORDS]`: preview what sync would do.
+- `./kit plan [--only WORDS]`: preview what sync would do, and how long it takes. Before a kit's first big download (no `download_speed` yet), it times the connection: a few seconds of the biggest book or model it needs, over eight connections as sync gets it, thrown away (`measureSpeed`; models and books only, since their hosts serve most of the kit). It skips that while a sync holds the kit.
 - `./kit sync [-y] [--force] [--only WORDS]`: download and update everything. `--force` ignores the free-space margin.
 - `./kit verify [--quick] [--fix]`: re-check checksums. `--quick` checks sizes only; `--fix` deletes corrupt files so the next sync replaces them.
 - `./kit status`: what's installed, and the size of each item.
@@ -47,7 +47,7 @@ A kit is one folder with three inside, so a new version can replace the code wit
 - `./kit test [--model NAME]`: start every server offline and check that each one answers.
 - `./kit update [--force] [--yes]`: install the newest signed release of the kit's own code, keeping kit.json changes. At a keyboard it shows what's new and asks first; `--yes` doesn't ask. `--force` reinstalls the current one.
 - `./kit pins`: write `tools/pins.json`, the newest build of every program with its SHA-256 (before a release; the `pin program builds` workflow runs it weekly).
-- `./kit estimate [--essentials|--starter|--rest]`: the GB this kit.json needs, from the builder's sizes, offline. `--rest` (for SETUP): the GB a try-it kit doesn't have yet, a tab, and how long that takes at the speed the last sync measured (`download_speed` in state.json, bytes a second, kept once a sync has downloaded 100 MB).
+- `./kit estimate [--essentials|--starter|--rest]`: the GB this kit.json needs, from the builder's sizes, offline. `--rest` (for SETUP): the GB a try-it kit doesn't have yet, a tab, and how long that takes at the speed the last sync measured (`download_speed` in state.json, bytes a second, kept once a sync has downloaded 100 MB, or plan's timing before that).
 - `./kit fit [--ask|--skip|--restore|--json]`: which AI model this computer runs, and the enabled ones too big for its memory (a model may use 60% of memory, as the launcher decides). `--ask` asks whether to get those (SETUP does); `--skip` and `--restore` switch them off and back on in kit.json. Skipped ones go in kit.json's `models_off_for_memory`, so SETUP offers them back on a bigger computer.
 - `./kit space PATH [--json]`: whether all of the kit, and just the essentials, fit at PATH: `fits` (leaves 10% of the computer's disk or 5% of a drive free), `tight` (fits, leaving less) or `no`, then GB free, in all, needed and worth leaving free.
 - `./kit essentials [on|off]`: get just the essentials from now on, or everything again (kit.json's `essentials_only`: the programs, the maps, priority-1 books, the model this computer runs and the smallest one). `plan` and `sync` take `--essentials` for one run.
@@ -110,6 +110,7 @@ A drive set up once would otherwise keep its `tools/` and `kit.json` forever, so
 - Every remote endpoint can be overridden with an environment variable, which is how the tests point the kit at mocks: `KIT_KIWIX_CATALOG`, `KIT_KIWIX_RELEASES`, `KIT_GITHUB_API`, `KIT_HF`, `KIT_ADOPTIUM_API`, `KIT_MAVEN`, `KIT_NPM`, `KIT_GITHUB_WEB`, `KIT_PROTOMAPS_BUILDS`, `KIT_PROTOMAPS_BUILD_BASE`, `KIT_PHOTON_DUMPS`, `KIT_GEOFABRIK` (`tests/env.sh`).
 - At the end of every sync, `data/.kit/portal.html` is rebuilt from the template with the map assets embedded.
 - `plan` shows `~` before a size it estimates (map tiles) and `?` when the size is unknown.
+- While a big file downloads, sync shows what has arrived, the speed and the time left, for the file and for everything after it in this sync (`progressLine`). On a terminal that line is written over every second, so the part for everything is left out when it wouldn't fit on one line.
 
 ## Starting the kit
 

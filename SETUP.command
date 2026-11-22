@@ -538,7 +538,7 @@ if [ "${1:-}" != "--updated" ]; then
     else
       say "TINFOIL KIT SETUP"
       echo "This gets an offline AI, library and maps ready for when the internet is down, then checks that they work."
-      echo "The first time takes a few hours. Later runs only download what changed."
+      echo "The first time takes hours, and SETUP says how long before it downloads. Later runs only download what changed."
     fi
     [ $MAC = 1 ] || echo "Tinfoil Kit on Linux is experimental for now: it's tested less than on a Mac, so expect rough edges."
     need_tools
@@ -596,11 +596,12 @@ elif [ $TRY = 0 ]; then
   esac
 fi
 
-# Before a download: whose files they are, and how to keep it going. $1 says how long it takes. Returns 1 if the
-# person would rather not start.
+# Before a download, after ./kit plan has said how long it takes: $1, whose files they are, and how to keep it going.
+# Returns 1 if the person would rather not start.
 before_download() {
+  say "$1"
   say "Each item comes from its publisher under its own license, listed in THIRD-PARTY.md. Downloading means you accept them."
-  echo "$1 Keep $THIS plugged in with the lid open: it won't go to sleep while this runs."
+  echo "Keep $THIS plugged in with the lid open: it won't go to sleep while this runs."
   echo "You can stop any time (press Control-C, or close this window) and double-click SETUP later to carry on."
   on_battery && say "This Mac is running on battery. Plug it in before you start."
   [ -n "${KIT_YES:-}" ] || ask "Start downloading?" || return 1
@@ -623,6 +624,19 @@ get() {
   ./kit test
   tested=$?
   [ $tested -eq 130 ] && { say "Stopped."; finish 130; }
+}
+
+# The first time, once ./kit plan has timed the connection and said how long the try-it kit takes: how long all of it
+# takes, which comes next with --all, --essentials or --home-server, or else once the try-it kit has been tried.
+whole_kit() {
+  local all took what="The whole kit is"
+  IFS=$'\t' read -r all took < <(./kit estimate --rest 2>/dev/null)
+  [ "$ONLY" = essentials ] && what="The essentials are"
+  if [ -z "$took" ]; then    # (it couldn't time it)
+    if [ $REST = 1 ]; then echo "The kit to try takes minutes on a fast connection, the rest hours."
+    else echo "It takes minutes on a fast connection."; fi
+  elif [ $REST = 1 ]; then echo "Then it gets the rest. $what about $(gb "${all:-0}"): $took."
+  else echo "$what about $(gb "${all:-0}"): $took. That comes later, after you've tried this."; fi
 }
 
 # The try-it kit works: how big the rest is, how long it takes at the speed just measured, and how to get it. Then
@@ -692,8 +706,7 @@ ending() {
 if [ $FIRST = 1 ]; then
   step "a small kit to try first (about $(gb "$(./kit estimate)")). Here's what it gets:"
   ./kit plan || finish 1
-  if [ $REST = 1 ]; then before_download "The kit to try takes minutes on a fast connection, the rest hours." || finish
-  else before_download "It takes minutes on a fast connection." || finish; fi
+  before_download "$(whole_kit)" || finish
   get
   [ $tested -eq 0 ] && [ $rc -eq 0 ] || ending
   [ $REST = 1 ] || try_it
@@ -722,7 +735,7 @@ if [ $TRY = 1 ]; then    # the rest, now that the try-it kit works
 else
   step "download. Here's what will change:"
   ./kit plan || finish 1
-  before_download "Big downloads take hours." || finish
+  before_download "The kit keeps working while it downloads." || finish
   get
 fi
 ending

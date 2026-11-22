@@ -23,7 +23,7 @@ You are helping a person set this up, probably not a programmer. Don't install i
 - Memory decides which AI runs: a model may take 60% of it. 32 GB or more runs the default model, Inkling 2 Mini, and the other big models; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B. `./kit fit` says which one this computer runs (`--json` for agents). `./kit fit --skip` switches off the models it can't run, which saves about 50 GB on a 16 or 24 GB laptop, and `./kit fit --restore` switches them back on for a computer with more memory. SETUP asks about them itself (`./kit fit --ask`). `sysctl -n hw.memsize` prints the memory in bytes.
 - On Windows and Linux the AI uses the graphics card through Vulkan. Without a good one it's slow: pick Gemma 4 E4B.
 - Space: about 300 GB for the default kit, or 35 to 55 GB for just the essentials: the programs, the map, the most important books (medical, preparedness, repair), Wikipedia's best 50,000 articles as text and the AI this computer runs plus the smallest. `./kit estimate` (`--essentials` for those) prints the number for the current kit.json, with no internet. Sync always leaves 50 GB free on the computer's own disk and 25 GB on a drive, and SETUP warns before leaving less than 10% of the computer's disk or 5% of a drive.
-- Setup needs the internet for a few hours, the laptop on its charger, and curl, which Macs and Windows come with (on Linux: `sudo apt install curl`). The kit's own program, in every download, does the rest, so nothing else gets installed. After that, nothing needs the internet.
+- Setup needs the internet for hours (how many depends on their connection: see "Give them the command"), the laptop on its charger, and curl, which Macs and Windows come with (on Linux: `sudo apt install curl`). The kit's own program, in every download, does the rest, so nothing else gets installed. After that, nothing needs the internet.
 
 ## How it works
 
@@ -131,6 +131,20 @@ https://tinfoilkit.com/sources.json has the same list with each item's size, and
 
 ### 3. Give them the command
 
+First tell them how long the downloads take, so they can plan around them:
+
+- Find their internet speed. If you can run commands on a Mac, `networkQuality` (built into macOS 12 and later) measures it in about 20 seconds: read Downlink capacity. Otherwise ask them: their internet plan's speed, or what a speed test site like fast.com shows.
+- Hours = GB × 2.2 ÷ Mbps, at best. Wi-Fi and busy servers often make it slower, so round up:
+
+| What downloads | Size | 10 Mbps | 50 Mbps | 100 Mbps | 500 Mbps |
+| --- | --- | --- | --- | --- | --- |
+| The kit to try | about 10 GB | 2 hours | 30 minutes | 15 minutes | 3 minutes |
+| Just the essentials | 35 to 55 GB | 8 to 12 hours | 1.5 to 2.5 hours | about an hour | 10 to 15 minutes |
+| All of it | about 300 GB | about 3 days | 13 hours | 7 hours | 1.5 hours |
+
+- The command gets just the kit to try, unless it has `--all`, `--essentials` or `--home-server`: then it goes straight on to the rest, so say how long that takes too.
+- SETUP times the connection itself before it downloads anything, says how long the kit to try and all of it take, and shows the time left while it downloads.
+
 Put their answers in as options. Mac or Linux, in Terminal:
 
     mkdir -p ~/Downloads && cd ~/Downloads && curl -fsSL https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit.tar.gz | tar -xz && bash TinfoilKit/app/SETUP.command --region texas --drive /Volumes/Kit --yes
@@ -166,14 +180,14 @@ Then tell them:
 
 ### 4. When it works, give them the rest
 
-SETUP's last message says how big the rest is, how long it takes at the speed it measured, and the command that gets it. When they're ready, give them that command: `bash ~/TinfoilKit/app/SETUP.command --yes` (on a drive, `bash /Volumes/NAME/TinfoilKit/app/SETUP.command --yes`), or on Windows `& "$HOME\TinfoilKit\app\SETUP-Windows.bat" --yes` (on a drive, `E:\TinfoilKit\app\SETUP-Windows.bat --yes`). It gets the rest of what they picked, a few hours for all of it, checks it, and deletes the try-it files their picks left out.
+SETUP's last message says how big the rest is, how long it takes at the speed it measured, and the command that gets it. If you can run commands, `./kit estimate --rest` in the kit's app folder prints the same again: GB, a tab, then how long. Tell them how long before they start it. When they're ready, give them that command: `bash ~/TinfoilKit/app/SETUP.command --yes` (on a drive, `bash /Volumes/NAME/TinfoilKit/app/SETUP.command --yes`), or on Windows `& "$HOME\TinfoilKit\app\SETUP-Windows.bat" --yes` (on a drive, `E:\TinfoilKit\app\SETUP-Windows.bat --yes`). It gets the rest of what they picked, checks it, and deletes the try-it files their picks left out.
 
 - Add `--all` to get all of it even if that leaves less free space than SETUP likes, or `--essentials` for just those. Without either, SETUP takes all of it if it fits with room to spare, or else the essentials, and says so.
 - Double-clicking SETUP again (Update, in the Mac app) gets the rest too. Without `--yes`, it asks the kit builder's questions first (`./kit pick --ask`), unless what goes in was picked already.
 
 ### For people who'd rather click
 
-Download it from https://tinfoilkit.com: the Download button picks the computer's file from the latest release (TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, or TinfoilKit.tar.gz for Linux), and the page says what to do next. On a Mac, open the download (Safari unzips it into the Tinfoil Kit app), double-click Tinfoil Kit, click Open when macOS asks about an app from the internet, let it move itself to Applications and click Set Up: SETUP runs in a Terminal window. On Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat in TinfoilKit\app. On Linux, run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/app/SETUP.command`. The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), any places nearby for the map, and how much of Wikipedia they want, then "An external drive (recommended)" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it gets a small kit to try (about 10 GB), tests it, opens it and says how long the rest takes on this connection. Running SETUP again gets the rest, after asking what goes in the kit (the website builder's choices). On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks its questions as it goes; the options above answer them ahead of time.
+Download it from https://tinfoilkit.com: the Download button picks the computer's file from the latest release (TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, or TinfoilKit.tar.gz for Linux), and the page says what to do next. On a Mac, open the download (Safari unzips it into the Tinfoil Kit app), double-click Tinfoil Kit, click Open when macOS asks about an app from the internet, let it move itself to Applications and click Set Up: SETUP runs in a Terminal window. On Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat in TinfoilKit\app. On Linux, run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/app/SETUP.command`. The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), any places nearby for the map, and how much of Wikipedia they want, then "An external drive (recommended)" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it times the connection and says how long the downloads take, gets a small kit to try (about 10 GB), tests it, opens it and says how long the rest takes. Running SETUP again gets the rest, after asking what goes in the kit (the website builder's choices). On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks its questions as it goes; the options above answer them ahead of time.
 
 ### By hand
 
@@ -184,7 +198,7 @@ For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` fo
     ./kit region PLACE --wikipedia de --wikipedia-size top-text   # --sizes: the sizes in those languages, with GB
     KIT="$(./kit place "/Volumes/<drive>/TinfoilKit")" && cd "$KIT/app"   # or ~/TinfoilKit, for this computer
     ./kit pick            # what's on, and the size of all of it and of just the essentials (--ask: the kit builder's questions)
-    ./kit plan            # every item, version and size
+    ./kit plan            # every item, version and size, and how long it takes to download
     ./kit sync -y --starter && ./kit test   # the try-it kit, about 10 GB
     ./kit sync -y && ./kit test             # everything picked; then it removes the try-it files nobody picked
 
@@ -193,6 +207,7 @@ For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` fo
 - `./kit place` moves the download there (to another disk it copies the kit, then removes the download) and prints the kit's new folder as its only output. If a kit is already there, it carries on with that one, and puts this app folder in it if its own was deleted. On Windows it copies the kit and leaves the download to delete. When it can't, it exits 1 and says why.
 - Skip an item by setting "enabled": false on it in data/kit.json (never app/kit.json: a new version replaces it), or get just the essentials with `./kit essentials on`. `./kit search WORDS` finds more Kiwix books and prints a line to paste into library. Run `./kit estimate` after any change.
 - `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit already works with what it has.
+- Before a kit's first big download, `./kit plan` times the connection for a few seconds on its biggest book or model (`download_speed` in data/.kit/state.json, which each sync updates), so the plan says how long it takes. Sync shows the time left as it goes, for each big file and for everything.
 - Sync fetches the most important items first, each big file over eight connections at once, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
 - Developers can `git clone https://github.com/tudor-city-ventures/tinfoil-kit` straight into the chosen place instead, and update with `git pull`. A checkout is its own app folder: downloads and data go inside it.
 
@@ -227,7 +242,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 
     ./kit update   # the kit's newest version, into the app folder, with any models and sources added since. data/kit.json keeps the person's changes.
                    # Installs only a release signed with the kit's key, and asks first at a keyboard (--yes doesn't).
-    ./kit plan     # what's new or changed, and how much will download
+    ./kit plan     # what's new or changed, how much will download, and how long that takes
     ./kit sync -y  # download it, check every file, then remove the old versions
     ./kit test
 

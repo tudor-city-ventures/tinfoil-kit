@@ -1086,6 +1086,9 @@ func cmdPlan(root string, a *cliArgs) {
 	}
 	starter, essentials := tier(cfg, a.flag("essentials"), a.flag("starter"))
 	items := buildPlan(root, cfg, state, a.list("only"), essentials, starter)
+	if !offline(items) {
+		timeConnection(root, items)
+	}
 	printPlan(root, items, state, cfg)
 	if offline(items) {
 		exit(1)
@@ -1100,6 +1103,40 @@ func cmdPlan(root string, a *cliArgs) {
 		log(fmt.Sprintf("\n%d item(s) to download. Run ./kit sync to do it.", pending))
 	} else {
 		log("\nEverything is up to date.")
+	}
+}
+
+// timeConnection: before a kit's first big download, a few seconds of its biggest book or model say how fast this
+// connection is, so the plan can say how long the download takes. After that, each sync's downloads keep it current.
+func timeConnection(root string, items []*item) {
+	if loadState(root).has("download_speed") {
+		return
+	}
+	var big *remoteFile
+	var size int64
+	for _, i := range items {
+		if !i.enabled() || (i.section != "models" && i.section != "library") {
+			continue // (books and models: their hosts serve most of the kit)
+		}
+		for _, f := range i.need {
+			if n := max(f.size, f.estimate); n > size {
+				big, size = f, n
+			}
+		}
+	}
+	if big == nil || size < connections*partMin {
+		return
+	}
+	unlock, ok := tryLockKit(root)
+	if !ok {
+		return // a sync is downloading, and times it as it goes
+	}
+	defer unlock()
+	log("\nChecking how fast this connection is (a few seconds)...")
+	if bps := measureSpeed(big.url, size); bps > 0 {
+		state := loadState(root)
+		state.set("download_speed", int64(pyRound(bps)))
+		saveState(root, state)
 	}
 }
 
@@ -1336,6 +1373,11 @@ func cmdSync(root string, a *cliArgs) {
 				}
 			}()
 			for n, it := range todo {
+				var after int64
+				for _, next := range todo[n+1:] {
+					after += need[next]
+				}
+				syncAfter.Store(after)
 				log(fmt.Sprintf("\n[%d/%d] %s  (%s)", n+1, len(todo), it.key(), it.version))
 				was := stateItems(state).child(it.key())
 				sample := starter // (a try-it sync's new items are samples)

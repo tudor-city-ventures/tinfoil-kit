@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
+	"context"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -29,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -43,6 +45,10 @@ var (
 )
 
 const partMax = 512 * 1024 * 1024
+
+// syncAfter is how much this sync downloads after the file it's on, for the time left in all: what the items after
+// this one need (cmdSync), and this item's files after this one (fetchFile).
+var syncAfter atomic.Int64
 
 func envInt(key string, def int64) int64 {
 	if n, err := strconv.ParseInt(os.Getenv(key), 10, 64); err == nil && n > 0 {
@@ -95,6 +101,83 @@ func exactSize(url string) int64 {
 	if m := contentRange.FindStringSubmatch(last); m != nil && partialReply.MatchString(last) {
 		n, _ := strconv.ParseInt(m[1], 10, 64)
 		return n
+	}
+	return 0
+}
+
+// measureSpeed is how fast url downloads, in bytes a second: a few seconds of it, over as many connections as sync
+// uses for a big file, thrown away. size is about the file's size. 0 when it can't tell.
+func measureSpeed(url string, size int64) float64 {
+	per := min(size/connections, 2*partMin) // each connection's stretch of the file: 256 MB at most in all
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	var got atomic.Int64
+	var wg sync.WaitGroup
+	for i := int64(0); i < connections; i++ {
+		off := i * (size / connections)
+		args := []string{"-sL", "--fail", "--connect-timeout", "10", "--max-time", "20", "-A", userAgent,
+			"-H", fmt.Sprintf("Range: bytes=%d-%d", off, off+per-1)}
+		for _, h := range authHeaders(url) {
+			args = append(args, "-H", h[0]+": "+h[1])
+		}
+		cmd := exec.CommandContext(ctx, "curl", append(args, url)...)
+		pipe, err := cmd.StdoutPipe()
+		if err != nil || cmd.Start() != nil {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			buf := make([]byte, 64*1024)
+			for n := int64(0); n < per; { // (a server that won't send parts sends the whole file: stop there)
+				k, err := pipe.Read(buf)
+				n += int64(k)
+				got.Add(int64(k))
+				if err != nil {
+					break
+				}
+			}
+			cmd.Process.Kill()
+			cmd.Wait()
+		}()
+	}
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	// Connections take a moment to get up to speed: count from a second after the first bytes, for five seconds.
+	t0 := time.Now()
+	var first, from time.Time
+	var before int64
+	tick := time.NewTicker(50 * time.Millisecond)
+	defer tick.Stop()
+wait:
+	for {
+		select {
+		case <-done:
+			break wait
+		case <-tick.C:
+		}
+		now, n := time.Now(), got.Load()
+		if first.IsZero() && n > 0 {
+			first = now
+		}
+		if from.IsZero() && !first.IsZero() && now.Sub(first) >= time.Second {
+			from, before = now, n
+		}
+		if now.Sub(t0) >= 15*time.Second || (!from.IsZero() && now.Sub(from) >= 5*time.Second) {
+			break wait
+		}
+	}
+	end, n := time.Now(), got.Load()
+	stop()
+	wg.Wait()
+	switch {
+	case !from.IsZero() && end.Sub(from) >= time.Second:
+		return float64(n-before) / end.Sub(from).Seconds()
+	case n > 0: // it all came within a second or so: a fast connection, or a small file
+		return float64(n) / end.Sub(t0).Seconds()
 	}
 	return 0
 }
@@ -493,11 +576,13 @@ loop:
 				speeds = speeds[1:]
 			}
 			rate := float64(speeds[len(speeds)-1].bytes-speeds[0].bytes) / max(now.Sub(speeds[0].t).Seconds(), 0.001)
-			gone := left()
-			msg := "    " + fmtBytes(total-gone) + " of " + fmtBytes(total)
-			if rate > 0 && gone > 0 {
-				msg += ", " + fmtSize(rate) + "/s, " + fmtTime(float64(gone)/rate) + " left"
+			cols := 0
+			if tty {
+				if cols = terminalWidth(); cols == 0 {
+					cols = 80
+				}
 			}
+			msg := progressLine(total-left(), total, syncAfter.Load(), rate, cols)
 			if tty {
 				fmt.Fprint(os.Stderr, "\r"+padRight(msg, width))
 				width = max(width, len([]rune(msg)))
@@ -523,6 +608,20 @@ loop:
 		return gone, ok, diskError(partial)
 	}
 	return gone, ok, nil
+}
+
+// progressLine is how a download is going: what's arrived, how fast, and the time left, for the file and for
+// everything this sync downloads after it, which a line cols wide leaves out if it doesn't fit (0: any width).
+func progressLine(got, total, after int64, rate float64, cols int) string {
+	msg := "    " + fmtBytes(got) + " of " + fmtBytes(total)
+	if left := total - got; rate > 0 && left > 0 {
+		msg += ", " + fmtSize(rate) + "/s, " + fmtTime(float64(left)/rate) + " left"
+		all := " (" + strings.TrimPrefix(fmtTime(float64(left+after)/rate), "about ") + " in all)"
+		if after > 0 && (cols == 0 || len(msg+all) < cols) { // (a line that wraps can't be written over)
+			msg += all
+		}
+	}
+	return msg
 }
 
 // keepPrefix turns a download in parts into one a single connection can carry on: keep what arrived from the start
@@ -868,6 +967,9 @@ func fetchFile(root string, state *obj, it *item, f *remoteFile, cfg *obj, force
 		resume = ", resuming at " + fmtBytes(have)
 	}
 	log(fmt.Sprintf("    downloading %s (%s)%s", label, fmtSizeOr(want), resume))
+	rest := it.after(f) // (for the time left in all)
+	syncAfter.Add(rest)
+	defer syncAfter.Add(-rest)
 	return partial, download(f.url, partial, size, pyStr(cfg.child("settings").getOr("downloader", "auto")))
 }
 
@@ -2200,19 +2302,28 @@ func keepAwake() func() {
 
 // lockKit keeps two syncs from working on one kit at once. It returns the function that lets go.
 func lockKit(root string) func() {
+	unlock, ok := tryLockKit(root)
+	if !ok {
+		die("another ./kit sync is already running on this kit")
+	}
+	return unlock
+}
+
+// tryLockKit is lockKit for what can do without: false while a sync has the kit.
+func tryLockKit(root string) (func(), bool) {
 	p := filepath.Join(metaDir(root), "lock")
 	os.MkdirAll(filepath.Dir(p), 0o755)
 	// Read and write, not append: Windows locks only a file opened for one of those (Go opens an appending one for
 	// neither). Not truncated: Windows won't empty a file another sync has locked.
 	f, err := os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
-		return func() {}
+		return func() {}, true
 	}
 	if err := lockFile(f); errors.Is(err, errLocked) {
 		f.Close()
-		die("another ./kit sync is already running on this kit")
+		return nil, false
 	} // (a drive format without locks: carry on)
-	return func() { f.Close() }
+	return func() { f.Close() }, true
 }
 
 var errLocked = errors.New("locked")

@@ -75,6 +75,16 @@ func (i *item) needs(f *remoteFile) bool {
 	return false
 }
 
+// after is how much i downloads after f, as far as the plan knows.
+func (i *item) after(f *remoteFile) (n int64) {
+	if i.needs(f) {
+		for k := len(i.need) - 1; i.need[k] != f; k-- {
+			n += max(i.need[k].size, i.need[k].estimate)
+		}
+	}
+	return n
+}
+
 // partial is where f is downloaded to; an interrupted download resumes from here.
 func (i *item) partial(root string, f *remoteFile) string {
 	if i.kind == "archive" || i.typ() == "photon_db" {

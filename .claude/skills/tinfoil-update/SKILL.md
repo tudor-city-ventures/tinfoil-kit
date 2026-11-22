@@ -5,7 +5,7 @@ description: Update a Tinfoil Kit. Install the newest signed release of the kit'
 
 # Update Tinfoil Kit
 
-There's no schedule: update whenever the person wants, while online. It's safe to stop at any point and run again: it picks up where it left off, and the old files keep working until the new ones check out. Updates take from minutes to hours, so give the person the command to run in their own terminal.
+There's no schedule: update whenever the person wants, while online. It's safe to stop at any point and run again: it picks up where it left off, and the old files keep working until the new ones check out. Updates take from minutes to hours: `./kit plan` says how long, so tell the person, then give them the command to run in their own terminal.
 
 ## Find the kit
 
@@ -23,7 +23,7 @@ On a drive: `bash /Volumes/NAME/TinfoilKit/app/SETUP.command --yes`, or `E:\Tinf
 Step by step, in the app folder:
 
     ./kit update -y   # the newest release of the kit's code, only if it's signed with the kit's release key
-    ./kit plan        # what's new or changed, and how much will download
+    ./kit plan        # what's new or changed, how much will download, and how long that takes
     ./kit sync -y     # download it, check every file, then remove the old versions
     ./kit test        # start everything offline and check that it answers
 

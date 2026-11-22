@@ -107,7 +107,7 @@ if defined UPDATE (
 ) else (
   echo TINFOIL KIT SETUP
   echo This gets an offline AI, library and maps ready for when the internet is down, then checks that they work.
-  echo The first time takes a few hours. Later runs only download what changed.
+  echo The first time takes hours, and SETUP says how long before it downloads. Later runs only download what changed.
 )
 echo Tinfoil Kit on Windows is experimental for now: it's tested less than on a Mac, so expect rough edges.
 call :runtime || call :finish 1
@@ -183,8 +183,20 @@ for /f "usebackq delims=" %%g in ("%OUT%") do set "SMALL=%%g"
 call :gb SMALL
 call :step "a small kit to try first (about !SMALL_GB!). Here's what it gets:"
 call :kit plan || call :finish 1
-set "TAKES=It takes minutes on a fast connection."
-if defined REST set "TAKES=The kit to try takes minutes on a fast connection, the rest hours."
+rem kit plan timed the connection and said how long the try-it kit takes: now how long all of it takes, which comes
+rem next with --all, --essentials or --home-server, or else once the try-it kit has been tried.
+set "ALL=0" & set "TOOK="
+"%TK%" --root "%KIT%" estimate --rest > "%OUT%" 2>nul
+for /f "usebackq tokens=1,2 delims=	" %%a in ("%OUT%") do (set "ALL=%%a" & set "TOOK=%%b")
+call :gb ALL
+set "WHAT=The whole kit is"
+if "!ONLY!"=="essentials" set "WHAT=The essentials are"
+set "TAKES=!WHAT! about !ALL_GB!: !TOOK!. That comes later, after you've tried this."
+if defined REST set "TAKES=Then it gets the rest. !WHAT! about !ALL_GB!: !TOOK!."
+if not defined TOOK (
+  set "TAKES=It takes minutes on a fast connection."
+  if defined REST set "TAKES=The kit to try takes minutes on a fast connection, the rest hours."
+)
 call :before_download "!TAKES!" || call :finish 0
 call :get
 if not "!TESTED!/!RC!"=="0/0" goto results
@@ -224,7 +236,7 @@ goto results
 :update_all
 call :step "download. Here's what will change:"
 call :kit plan || call :finish 1
-call :before_download "Big downloads take hours." || call :finish 0
+call :before_download "The kit keeps working while it downloads." || call :finish 0
 call :get
 
 :results
@@ -327,13 +339,15 @@ echo(
 call :kit share
 goto :eof
 
-rem Before a download: whose files they are, and how to keep it going. Its argument says how long it takes. Returns 1
-rem if the person would rather not start.
+rem Before a download, after kit plan has said how long it takes: its argument, whose files they are, and how to keep
+rem it going. Returns 1 if the person would rather not start.
 :before_download
 set "TAKES=%~1"
 echo(
+echo(!TAKES!
+echo(
 echo Each item comes from its publisher under its own license, listed in THIRD-PARTY.md. Downloading means you accept them.
-echo !TAKES! Keep this PC plugged in with the lid open: it won't go to sleep while this runs.
+echo Keep this PC plugged in with the lid open: it won't go to sleep while this runs.
 echo You can stop any time (press Ctrl+C, or close this window) and double-click SETUP later to carry on.
 call :ask "Start downloading?" || exit /b 1
 call :stop_kit

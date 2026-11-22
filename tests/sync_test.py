@@ -300,6 +300,18 @@ try:
         )
     )
     rc, out = kit("plan", root=tk)
+    st = json.loads((tk / "data" / ".kit" / "state.json").read_text())
+    rc2, out2 = kit("plan", root=tk)
+    check(
+        "plan before a kit's first download: times the connection on the biggest file, once, and says how long it takes",
+        rc == 0
+        and "Checking how fast this connection is" in out
+        and "That takes about a minute at this connection's speed" in out
+        and st.get("download_speed", 0) > 0
+        and "Checking how fast" not in out2
+        and "That takes about a minute" in out2,
+        out + out2,
+    )
     rc2, out2 = kit("estimate", root=tk)
     check(
         "plan on a try-it kit: the AI and books marked starter, even one that's switched off, and nothing else",
@@ -1594,9 +1606,10 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # SETUP.command's choices, with a stand-in ./kit that exits as told. Its update rewrites SETUP.command in
     # place, the hard case for bash, which reads a script as it goes. Its space says what SPACE does (all of it, the
     # essentials, GB free, GB in all, GB all of it needs, GB the essentials need, GB worth leaving free), or for a
-    # drive what SPACE_DRIVE does, and its estimate says 8 GB, or with --rest 380 GB in about 4 hours. Calls go in the
-    # kit's data/calls.log (essentials on as essentials-on, starter off as starter-off), all but space, estimate and
-    # --help (SETUP's check that the kit's program runs), and every call goes in data/args.log with its options.
+    # drive what SPACE_DRIVE does, and its estimate says 8 GB, or with --rest 380 GB in about 4 hours (TOOK, if set,
+    # says how long instead: "" when it couldn't time the connection). Calls go in the kit's data/calls.log
+    # (essentials on as essentials-on, starter off as starter-off), all but space, estimate and --help (SETUP's check
+    # that the kit's program runs), and every call goes in data/args.log with its options.
     def space(*v):
         return "\t".join(map(str, v))
 
@@ -1611,9 +1624,10 @@ echo "$*" >> data/args.log
 c="$1"; case " $* " in *" --essentials "*) c="$1-essentials";; esac
 case "$1" in essentials|starter) c="$1-$2";; esac
 case "$1" in space|estimate|--help) ;; *) echo "kit $c" >> data/calls.log;; esac
+took="about 4 hours at this connection's speed (24.0 MB/s)"    # (an apostrophe in a case breaks bash's parse)
 case "$1" in
   space) case "$2" in "${KIT_DRIVES:-/nowhere}"/*) echo "${SPACE_DRIVE:-$SPACE}";; *) echo "$SPACE";; esac;;
-  estimate) case " $* " in *" --rest "*) printf '%s\t%s\n' 380 "about 4 hours at this connection's speed (24.0 MB/s)";;
+  estimate) case " $* " in *" --rest "*) printf '%s\t%s\n' 380 "${TOOK-$took}";;
                                      *) echo 8;; esac;;
   essentials|starter) python3 - "$1" "$2" <<'PY'
 import json, sys
@@ -1692,6 +1706,10 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         and '"starter_only": true' in mine.read_text()
         and "Step 1 of 2: the kit is on" in out
         and "Step 2 of 2: a small kit to try first (about 8 GB)" in out
+        and "The whole kit is about 380 GB: about 4 hours at this connection's speed (24.0 MB/s). That comes later, "
+        "after you've tried this."
+        in out
+        and out.index("The whole kit is about 380 GB") < out.index("Start downloading?")
         and "The try-it kit works" in out
         and "Turn off Wi-Fi and try it" in out
         and "The rest of the kit is about 380 GB more: about 4 hours at this connection's speed (24.0 MB/s)" in out
@@ -1726,6 +1744,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         rc == 0
         and "TINFOIL KIT UPDATE" in out
         and "TINFOIL KIT SETUP" not in out
+        and "The kit keeps working while it downloads." in out
         and "Step 3 of 3: start everything" in out
         and "whenever you want the newest AI models" in out
         and calls == update_calls,
@@ -1949,6 +1968,15 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         rc == 1 and calls == first[:4] and "Start downloading" not in out,
         out,
     )
+    rc, out, calls = run_setup(TOOK="")
+    check(
+        "SETUP the first time, when the connection couldn't be timed: the kit to try takes minutes on a fast one",
+        rc == 0
+        and "It takes minutes on a fast connection." in out
+        and "The whole kit is" not in out
+        and calls == first,
+        out,
+    )
     home = ["share on", "autostart on", "share"]
     check(
         "SETUP: a normal setup doesn't share the kit or start it with the computer",
@@ -1961,6 +1989,8 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         rc == 0
         and calls == first + rest + ["share", "autostart", "share"]
         and (setup / "data" / "home.log").read_text().splitlines() == home
+        and "Then it gets the rest. The whole kit is about 380 GB: about 4 hours at this connection's speed (24.0 MB/s)."
+        in out
         and "Step 3 of 3: the rest of the kit" in out
         and "Home server" in out
         and "Open the kit now" not in out

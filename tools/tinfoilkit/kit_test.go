@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -930,6 +931,65 @@ func TestDownloadRoundedSize(t *testing.T) {
 		if got, _ := os.ReadFile(part); err != nil || !bytes.Equal(got, book) {
 			t.Errorf("run %d: %v", i+1, err)
 		}
+	}
+}
+
+// measureSpeed: about the speed a server sends at, over as many connections as sync uses, in a few seconds; 0 when it
+// can't download at all.
+func TestMeasureSpeed(t *testing.T) {
+	saved := partMin
+	defer func() { partMin = saved }()
+	partMin = 64 * 1024 // so each connection asks for more than it gets in the time
+	var conns atomic.Int32
+	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/big.gguf" {
+			http.NotFound(w, r)
+			return
+		}
+		conns.Add(1)
+		for range 1024 { // 8 KB a second
+			if _, err := w.Write(make([]byte, 1024)); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+			time.Sleep(125 * time.Millisecond)
+		}
+	}))
+	defer web.Close()
+	t0 := time.Now()
+	bps, took := measureSpeed(web.URL+"/big.gguf", 1<<30), time.Since(t0)
+	if want := 8.0 * 1024 * connections; bps < 0.6*want || bps > 1.4*want || took > 10*time.Second || conns.Load() != connections {
+		t.Errorf("%.0f bytes a second (want about %.0f) in %s, over %d connections", bps, want, took, conns.Load())
+	}
+	if bps := measureSpeed(web.URL+"/gone.gguf", 1<<30); bps != 0 {
+		t.Errorf("a download that fails: %.0f bytes a second", bps)
+	}
+}
+
+// The line a download shows as it goes: with the time left for everything after it too, when that fits.
+func TestProgressLine(t *testing.T) {
+	for _, c := range []struct {
+		got, after int64
+		rate       float64
+		cols       int
+		want       string
+	}{
+		{1.2e9, 0, 12e6, 80, "    1.2 GB of 7.1 GB, 12.0 MB/s, about 8 minutes left"},
+		{1.2e9, 280e9, 12e6, 80, "    1.2 GB of 7.1 GB, 12.0 MB/s, about 8 minutes left (6.5 hours in all)"},
+		{1.2e9, 280e9, 12e6, 70, "    1.2 GB of 7.1 GB, 12.0 MB/s, about 8 minutes left"},
+		{1.2e9, 280e9, 12e6, 0, "    1.2 GB of 7.1 GB, 12.0 MB/s, about 8 minutes left (6.5 hours in all)"},
+		{1.2e9, 280e9, 0, 80, "    1.2 GB of 7.1 GB"},
+	} {
+		if got := progressLine(c.got, 7.1e9, c.after, c.rate, c.cols); got != c.want {
+			t.Errorf("progressLine(%d, %d, %.0f, %d) = %q, want %q", c.got, c.after, c.rate, c.cols, got, c.want)
+		}
+	}
+	// The time left in all counts the item's own files still to come: a model's mmproj after its weights.
+	weights, mmproj, mtp := &remoteFile{size: 900}, &remoteFile{estimate: 90}, &remoteFile{size: 9}
+	it := &item{need: []*remoteFile{weights, mmproj, mtp}}
+	if a, b, c, d := it.after(weights), it.after(mmproj), it.after(mtp), it.after(&remoteFile{size: 5}); a != 99 || b != 9 ||
+		c != 0 || d != 0 {
+		t.Errorf("after = %d, %d, %d, %d; want 99, 9, 0, 0", a, b, c, d)
 	}
 }
 

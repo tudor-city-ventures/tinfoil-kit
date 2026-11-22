@@ -121,7 +121,7 @@ export default function Home() {
                 <h3>Download and open it</h3>
                 <p>
                   It asks where you live and what you want in it. First it gets a small kit to try, and when you're
-                  ready, the rest: a few hours of downloading.
+                  ready, the rest: hours of downloading. It says how long before it starts.
                 </p>
                 <DownloadLink>Download Tinfoil Kit</DownloadLink>
                 <small>
@@ -334,7 +334,7 @@ export default function Home() {
             <Question q="What's the catch?">
               None. It's free and open source (MIT license), with no account, no tracking in the kit and no analytics on
               this site. It's a side project from the team behind{" "}
-              <a href="https://dotheysupportit.com">DoTheySupportIt</a>. It costs you disk space and a few hours of
+              <a href="https://dotheysupportit.com">DoTheySupportIt</a>. It costs you disk space and hours of
               downloading.
             </Question>
             <Question q="How is Tinfoil Kit different from Project NOMAD?">
