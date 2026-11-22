@@ -148,7 +148,7 @@ export default function Download({ children }) {
             <p>Your download has started. Here's what to click.</p>
             <ol className="dl-steps">
               <li>In your Downloads folder, right-click <b>TinfoilKit-Windows</b>, choose <b>Extract All</b>, then <b>Extract</b>.</li>
-              <li>In the new TinfoilKit folder, double-click <b>SETUP-Windows</b>.</li>
+              <li>In the new TinfoilKit folder, open <b>app</b> and double-click <b>SETUP-Windows</b>.</li>
               <li>If Windows says it protected your PC, click <b>More info</b>, then <b>Run anyway</b>. It only asks once.</li>
             </ol>
             <p>SETUP then gets the Python the kit's tools run on (about 15&nbsp;MB), and asks where you live and whether the kit goes on this PC or an external drive, with what fits on each. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes on your connection. To get the rest, double-click <b>SETUP-Windows</b> again.</p>
@@ -162,7 +162,7 @@ export default function Download({ children }) {
               <li><span>Arch, Manjaro</span><code>sudo pacman -S python curl</code></li>
             </ul>
             <p>Then unpack the kit and start SETUP:</p>
-            <pre className="dl-cmd">{'cd ~/Downloads && tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command'}</pre>
+            <pre className="dl-cmd">{'cd ~/Downloads && tar -xf TinfoilKit.tar.gz && bash TinfoilKit/app/SETUP.command'}</pre>
             <p>It asks where you live, and whether the kit goes on this computer or an external drive, with what fits on each. Then it gets a small kit to try, about 10&nbsp;GB, and offers to open it. Its last message says how big the rest is and how long it takes on your connection, and how to get it.</p>
             <button type="button" className="dl-back" onClick={() => show('all')}>All downloads</button>
           </div>

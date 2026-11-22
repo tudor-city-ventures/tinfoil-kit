@@ -10,15 +10,16 @@ on your computer or on an external drive. Print this page and keep it handy (wit
 
 1. If the kit is on a drive, plug it in: any Mac, Windows PC or Linux PC will do (ideally 32 GB memory).
    Plug the laptop into power if you can.
-2. Open the kit folder: on a drive, the `TinfoilKit` folder on the drive. On the computer itself, `TinfoilKit` in
-   your home folder (Mac: in Finder choose **Go > Home**. Windows: in File Explorer, your user folder, `C:\Users\<you>`).
+2. Open the kit's `app` folder: on a drive, the `TinfoilKit` folder on the drive, then `app`. On the computer
+   itself, `TinfoilKit` in your home folder, then `app` (Mac: in Finder choose **Go > Home**. Windows: in File
+   Explorer, your user folder, `C:\Users\<you>`).
 3. Start it:
    - **Mac**: open the **Tinfoil Kit** app if this Mac has it (in Applications, or search for it with Spotlight).
      Otherwise double-click **`Open Tinfoil Kit.command`**. If macOS won't open it, open Terminal and type `bash `
      (with a space), drag `Open Tinfoil Kit.command` into the window, and press Return. That always works.
    - **Windows**: double-click **`Open Tinfoil Kit for Windows.bat`**. If Windows says it protected your PC, click
      **More info**, then **Run anyway**.
-   - **Linux**: open a terminal in the folder and run `bash "Open Tinfoil Kit.command"`.
+   - **Linux**: open a terminal in the app folder and run `bash "Open Tinfoil Kit.command"`.
 4. A browser tab opens. **Keep the kit's window open** while you use it. Closing it stops everything.
 
 Nothing here needs the internet, an account, or an install.
@@ -40,11 +41,11 @@ Nothing here needs the internet, an account, or an install.
   - `Gemma-4-E4B`: small. Use it to **save battery**. On an 8 GB laptop the kit starts with it.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
 - **Share with family**: start with `bash "Open Tinfoil Kit.command" --share` (on Windows, `& ".\Open Tinfoil Kit for Windows.bat" --share`
-  in PowerShell in the kit folder). It shows an address, an access code and a QR code. Phones and laptops on the same
+  in PowerShell in the app folder). It shows an address, an access code and a QR code. Phones and laptops on the same
   Wi-Fi open the address and type the code, or scan the QR code. No internet needed, only a Wi-Fi network: your
   router on a battery backup, a small battery-powered travel router, or a phone's hotspot (an iPhone's may not turn on
   without cell service). Nobody without the code gets in. To share every time the kit starts, run `./kit share on`
-  once in the kit folder (`.\kit.cmd share on` on Windows). If macOS asks whether to accept incoming connections,
+  once in the app folder (`.\kit.cmd share on` on Windows). If macOS asks whether to accept incoming connections,
   click **Allow**. If Windows asks about Python, click **Allow access**.
 
 The AI can be wrong. Treat it like a well-read friend, not a doctor: check the sources, and get trained help whenever you can.
@@ -77,10 +78,10 @@ The kit's map is the backup, and it's handy for planning on a big screen and for
 
 ## Update it (whenever you like, while you have internet)
 
-There's no schedule. Click **Update** in the Mac app, or double-click `SETUP.command` in the kit folder
+There's no schedule. Click **Update** in the Mac app, or double-click `SETUP.command` in the kit's app folder
 (`SETUP-Windows.bat` on Windows; on Linux, `bash SETUP.command`). It gets the newest version of the kit itself, with any models and books added since, then the
 newest editions of everything, checks every file, and starts it all once offline to make sure it works. Or open a
-terminal in the kit folder (Mac: drag the `TinfoilKit` folder onto the Terminal icon; Windows: right-click the folder,
+terminal in the app folder (Mac: drag the `app` folder onto the Terminal icon; Windows: right-click the folder,
 **Open in Terminal**) and run these (on Windows, `.\kit.cmd` in place of `./kit`):
 
 ```
@@ -98,7 +99,8 @@ until that one is a year old. Then pull the plug on Wi-Fi and open the kit once 
 
 A newer download of the kit (a new ZIP, or a new Mac app) finds this kit and updates it, so nothing it has
 downloads again. SETUP shows what's new before anything downloads: say no, and the kit keeps working with what it
-has.
+has. You can also delete the kit's `app` folder any time and put a new download's `app` folder in its place: what
+the kit downloaded (`downloads`) and your settings (`data`) stay as they are.
 
 Other commands:
 
@@ -111,7 +113,7 @@ Other commands:
 
 ## Changing what's in the kit
 
-Everything the kit keeps is listed in **`kit.json`** (open it in any text editor):
+Everything the kit keeps is listed in **`data/kit.json`** (open it in any text editor):
 
 - Turn something off: set `"enabled": false` on its line. Turn every model off and the kit runs without the AI:
   the library and the map work as usual, and Ask shows the best passages from the books.
@@ -120,7 +122,8 @@ Everything the kit keeps is listed in **`kit.json`** (open it in any text editor
   match exactly one file. A new model generation every few months is normal; check which GGUF models fit a
   32 GB laptop (about 20 GB or less) before swapping.
 
-Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit itself keep these changes.
+Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit itself keep these changes, and add
+what's new in the kit's own list (`app/kit.json`).
 
 ## First-time setup
 
@@ -131,10 +134,10 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
    - **Mac**: double-click **Tinfoil Kit** and click **Open** when macOS asks about an app from the internet. It
      offers to move itself to Applications: say yes. Then click **Set Up**, and SETUP starts in a Terminal window.
      On a Mac without Python, it first gets one for the kit's tools (about 25 MB, once).
-   - **Windows**: double-click **`SETUP-Windows.bat`** in the TinfoilKit folder. If Windows says it protected your
+   - **Windows**: double-click **`SETUP-Windows.bat`** in the TinfoilKit folder's `app` folder. If Windows says it protected your
      PC, click **More info**, then **Run anyway**. First it gets Python, which the kit's tools run on (about 15 MB,
      once).
-   - **Linux**: open a terminal in the TinfoilKit folder and run `bash SETUP.command`. It needs python3 and curl.
+   - **Linux**: open a terminal in `TinfoilKit/app` and run `bash SETUP.command`. It needs python3 and curl.
 3. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works
    too). That sets the maps' area, directions, address search and home, and offers Wikipedia in your language.
 4. SETUP says which AI model this computer can run, and asks before downloading any that are too big for it. Then
@@ -148,7 +151,7 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
      Always eject the drive before unplugging, especially with exFAT. If macOS asks whether Terminal may access
      files on a removable volume, say yes.
    - **This computer**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder and leaves 50 GB
-     free for the computer. On a Mac it stays out of Time Machine backups.
+     free for the computer. On a Mac what it downloads stays out of Time Machine backups; your settings don't.
 5. It gets a small kit to try first (about 10 GB: a small AI, a few medical and how-to books, and your area's map),
    starts each part offline to check it answers, and offers to open it. Turn off Wi-Fi and try it: from then on,
    the kit works. It also says how big the rest is and how long it takes on your connection.
@@ -156,7 +159,7 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
    the kit, the same choices as the kit builder on tinfoilkit.com, shows what that comes to, then gets it (about 280
    to 330 GB for the recommended kit, a few hours; maps are 5 to 30 GB of that) and checks again. Then it removes
    the try-it files you didn't pick. Leave the laptop plugged in; it stays awake while this runs, and the kit works
-   the whole time. If you stop it, start SETUP in the kit's folder again and it picks up where it left off. If it
+   the whole time. If you stop it, start SETUP in the kit's app folder again and it picks up where it left off. If it
    ends with "some downloads didn't finish", the kit already works with what it has: run SETUP again later for the
    rest. With just the essentials, a later SETUP offers the rest once there's room. `./kit essentials off` asks for
    it any time.
@@ -164,12 +167,12 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
 
 In a terminal, SETUP takes every answer as an option, and with `--yes` it asks nothing: for example
 `bash SETUP.command --region texas --this-computer --yes` (on Windows, `.\SETUP-Windows.bat` with the same options)
-gets the kit to try, and `bash ~/TinfoilKit/SETUP.command --yes` the rest. `--help` lists them: a drive, just the
+gets the kit to try, and `bash ~/TinfoilKit/app/SETUP.command --yes` the rest. `--help` lists them: a drive, just the
 essentials, which AI models and books, and sharing on the home network.
 
 ## Removing it
 
-Click **Remove** in the Mac app, or double-click `UNINSTALL.command` in the kit folder (`UNINSTALL-Windows.bat` on
+Click **Remove** in the Mac app, or double-click `UNINSTALL.command` in the kit's app folder (`UNINSTALL-Windows.bat` on
 Windows; on Linux, `bash UNINSTALL.command`). It shows what it will delete and how much space that frees, and deletes the kit and
 everything it downloaded only after you type `delete`. The files don't go to the Trash. On a drive, nothing else on
 the drive is touched. It also removes the Python SETUP got, on Windows or on a Mac that didn't have one.
@@ -186,7 +189,7 @@ and the Library tab (no AI) uses almost nothing.
 - Close the kit's window and start it again.
 - Terminal says "Operation not permitted": macOS is keeping it off the drive. Open **System Settings > Privacy &
   Security > Files and Folders**, turn on **Removable Volumes** under Terminal, and start again.
-- Logs are in the `logs` folder.
+- Logs are in `data/logs`.
 - Phones can't open the shared address: they need the same Wi-Fi as the computer (a guest network often keeps
   devices apart). `./kit share` shows the address and the access code again. On Windows, set the Wi-Fi as a private
   network (**Settings > Network & internet**, then the Wi-Fi's properties), and if Python was refused, allow it in
@@ -194,11 +197,12 @@ and the Library tab (no AI) uses almost nothing.
 - If a model won't load or is very slow, quit other apps (big models need most of a 32 GB laptop's memory), or use `Gemma-4-E4B`.
   Starting with `bash "Open Tinfoil Kit.command" --no-maps` frees about 5 GB by not starting the map servers.
 - Map says address search or directions are "not running": they take up to a minute to start. If they never do,
-  see `logs/geocoder.log` and `logs/routing.log`. If `./kit test` fails on address search with a "lock" error in
-  `logs/test-geocoder.log`, the exFAT format is the cause: reformat the drive as APFS and copy the kit back.
+  see `data/logs/geocoder.log` and `data/logs/routing.log`. If `./kit test` fails on address search with a "lock"
+  error in `data/logs/test-geocoder.log`, the exFAT format is the cause: reformat the drive as APFS and copy the kit back.
   Advanced, on a Mac: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
-- The previous version of each program is kept in `bin/` as a fallback and is used automatically if the newest one won't start.
-- The Kiwix app in `installers/` opens the `.zim` books in `library/` directly, without the rest of the kit.
+- The previous version of each program is kept in `downloads/bin/` as a fallback and is used automatically if the newest one won't start.
+- The Kiwix app in `downloads/installers/` opens the `.zim` books in `downloads/library/` directly, without the rest
+  of the kit.
 
 ## On another computer
 
@@ -219,7 +223,7 @@ bash SETUP.command --home-server
 (on Windows, `.\SETUP-Windows.bat --home-server` in a terminal there) and choose "This computer". It sets the kit up
 as usual, then shares it on the home network behind an access code and starts it whenever the computer starts. At
 the end it shows the address, the access code and a QR code; `./kit share` shows them again. Without the questions,
-in the kit folder: `./kit sync -y && ./kit test`, then `./kit share on` and `./kit autostart on` (`.\kit.cmd` on
+in the app folder: `./kit sync -y && ./kit test`, then `./kit share on` and `./kit autostart on` (`.\kit.cmd` on
 Windows).
 
 - On Linux the kit runs as a systemd user service, from boot. On a Mac it starts when you log in, so turn on
@@ -227,23 +231,28 @@ Windows).
   plugged in, and sign in again after a restart. Keep it on the computer's own disk.
 - `./kit share new-code` makes a new code (every phone types it again), `./kit share off` stops sharing, and
   `./kit autostart off` stops the kit starting by itself. UNINSTALL does both.
-- Another program already using port 8000: set `share_port` in `kit.json` to a free port.
+- Another program already using port 8000: set `share_port` in `data/kit.json` to a free port.
 - In an outage the router needs power too, even with no internet: keep it and the server on a battery backup.
 
 ## What's where
 
 | Folder / file | What it is |
 |---|---|
-| `Open Tinfoil Kit.command` | Starts everything (Mac, Linux) |
-| `SETUP.command` | Sets the kit up, and updates it whenever you like (needs internet) |
-| `UNINSTALL.command` | Removes the kit and everything it downloaded |
-| `Open Tinfoil Kit for Windows.bat`, `SETUP-Windows.bat`, `UNINSTALL-Windows.bat` | The same three, for Windows |
-| `kit` (`kit.cmd` on Windows), `kit.json` | Update tool and the list of what to keep |
-| `INVENTORY.md` | What's in the kit right now, with versions |
-| `library/` | The books (`.zim` files) |
-| `models/` | The AI models (`.gguf` files) |
-| `maps/` | Map tiles, the address database, the road network for directions, and the map display code |
-| `bin/` | The programs: llama.cpp (AI), kiwix-serve (library), and for maps pmtiles, Photon, GraphHopper and Java |
-| `installers/` | Optional apps (Kiwix for Mac) |
-| `tools/` | The kit's own scripts and web page |
-| `THIRD-PARTY.md` | Where each model, book, map and program comes from, and its license |
+| `app/` | The kit itself, as released. A new version replaces it, and it can be deleted any time for a new download's |
+| `app/Open Tinfoil Kit.command` | Starts everything (Mac, Linux) |
+| `app/SETUP.command` | Sets the kit up, and updates it whenever you like (needs internet) |
+| `app/UNINSTALL.command` | Removes the kit and everything it downloaded |
+| `app/Open Tinfoil Kit for Windows.bat`, `SETUP-Windows.bat`, `UNINSTALL-Windows.bat` | The same three, for Windows |
+| `app/kit` (`kit.cmd` on Windows), `app/kit.json` | Update tool, and the kit's own list of what to keep |
+| `app/tools/` | The kit's own scripts and web page |
+| `app/THIRD-PARTY.md` | Where each model, book, map and program comes from, and its license |
+| `downloads/` | Everything the kit downloaded. New versions use it as it is |
+| `downloads/library/` | The books (`.zim` files) |
+| `downloads/models/` | The AI models (`.gguf` files) |
+| `downloads/maps/` | Map tiles, the address database, the road network for directions, and the map display code |
+| `downloads/bin/` | The programs: llama.cpp (AI), kiwix-serve (library), and for maps pmtiles, Photon, GraphHopper and Java |
+| `downloads/installers/` | Optional apps (Kiwix for Mac) |
+| `downloads/INVENTORY.md` | What's in the kit right now, with versions |
+| `data/` | Yours: no new version touches it |
+| `data/kit.json` | Your list of what to keep, with your changes |
+| `data/logs/` | What each update and start did |

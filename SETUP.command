@@ -50,11 +50,14 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-KIT="$(pwd)"
+CODE="$(pwd)"    # the kit's code: the app folder, the copy of it a new version replaces
+KIT="$CODE"      # the kit folder, with app, downloads (what sync downloads) and data (the person's): or a git checkout
+case "$(basename "$CODE" | tr '[:upper:]' '[:lower:]')" in app) [ -e .git ] || KIT="$(dirname "$CODE")" ;; esac
+MINE="$KIT/data/kit.json"    # what goes in the kit, and its settings
 NAME=TinfoilKit    # the kit's folder: at the top of a drive, or in the home folder
 MAC=0; [ "$(uname -s)" = Darwin ] && MAC=1
 THIS="this computer"; [ $MAC = 1 ] && THIS="this Mac"
-FIRST=1; grep -q '"last_sync"' .kit/state.json 2>/dev/null && FIRST=0    # 0: set up before, so this run is an update
+FIRST=1; grep -q '"last_sync"' "$KIT/data/.kit/state.json" 2>/dev/null && FIRST=0    # 0: set up before, so this run is an update
 # Steps are counted across the times this script starts itself again (after moving or updating the kit).
 case "${1:-}" in --placed|--updated) ;; *) KIT_STEP=0; KIT_STEPS=3; export KIT_STEP KIT_STEPS ;; esac
 # A Mac without Python gets this build of it (python-build-standalone, checked against its SHA-256), kept in the
@@ -97,7 +100,7 @@ where_kit() { if on_this_mac; then echo "on $THIS"; else echo "on the drive $(dr
 on_battery() { [ $MAC = 1 ] && pmset -g batt 2>/dev/null | grep -q "Battery Power"; }
 # The list of what failed, from the newest sync log: the sync's own copy has scrolled far up by now.
 problems() {
-  log="$(ls -t logs/sync-*.log 2>/dev/null | head -1)"
+  log="$(ls -t "$KIT"/data/logs/sync-*.log 2>/dev/null | head -1)"
   [ -n "$log" ] && awk '/^===== sync started/ {buf = ""; on = 0} /^Problems/ {on = 1}
                         on && /^  - / {buf = buf $0 "\n"} /^Re-run/ {on = 0} END {printf "%s", buf}' "$log"
 }
@@ -336,7 +339,7 @@ given_region() {
 }
 picked() { [ -n "${KIT_NO_AI:-}${KIT_MODELS:-}${KIT_SKIP:-}${KIT_ADD:-}" ]; }
 # Whether someone has said what goes in the kit, now or before (./kit pick sets "picked").
-chosen() { picked || grep -q '"picked": *true' kit.json 2>/dev/null; }
+chosen() { picked || grep -q '"picked": *true' "$MINE" 2>/dev/null; }
 # Whether the first run goes on to the rest of the kit right after the kit to try, instead of stopping there.
 goes_on() { case "${KIT_HOW_MUCH:-}" in all|essentials) true ;; *) [ "${KIT_HOME_SERVER:-}" = 1 ] ;; esac; }
 given_parts() {
@@ -360,8 +363,17 @@ put_kit() {
   export KIT_ESSENTIALS=off; [ "$ONLY" = essentials ] && KIT_ESSENTIALS=on    # the copy there says so in its kit.json
   new="$(./kit place "$1")" || finish 1
   [ "$new" = "$KIT" ] && { ./kit essentials "$KIT_ESSENTIALS" >/dev/null; return; }
-  cd "$new" || exit 1
-  exec bash "$new/SETUP.command" --placed
+  setup_in "$new" --placed
+}
+
+# Carry on with the copy of this script in the kit folder $1 (in its app folder, or at its top: a git checkout, or a
+# kit from before the app folder), with the rest of the arguments.
+setup_in() {
+  local k="$1"
+  shift
+  [ -f "$k/app/SETUP.command" ] && k="$k/app"
+  cd "$k" || exit 1
+  exec bash "$k/SETUP.command" "$@"
 }
 
 # A new download of the kit, where one was set up before: SETUP carries on with that one, so what it has stays and
@@ -374,8 +386,9 @@ other_kit() {
   say "There's a Tinfoil Kit on $where already: $k ($gb GB$([ "$when" = - ] || echo ", last updated $when"))."
   echo "SETUP can update that one: everything it has stays, and only what's new downloads."
   ask "Update it?" || { echo "Then this sets up another kit."; return 0; }
-  cd "$k" || exit 1
-  exec bash "$k/SETUP.command"
+  # (one whose app folder was deleted, for a new version's, gets this one)
+  if [ ! -f "$k/app/SETUP.command" ] && [ ! -f "$k/SETUP.command" ]; then k="$(./kit place "$k")" || finish 1; fi
+  setup_in "$k"
 }
 
 # First run only: ask where the kit should live, then carry on from there.
@@ -453,13 +466,13 @@ checks() {
     else echo "Format the drive as exFAT (this deletes everything on it), copy this folder back, and run SETUP again."; fi
     finish 1
   fi
-  if ! ( : > .kit-write-test ) 2>/dev/null; then
+  if ! ( : > "$KIT/.kit-write-test" ) 2>/dev/null; then
     say "Can't save anything in $KIT. If it's on a drive, the drive may be locked or read-only."
     if [ $MAC = 1 ]; then echo "Check the drive in Disk Utility (First Aid), or move this folder somewhere else, and run SETUP again."
     else echo "Check that the drive isn't mounted read-only, or move this folder somewhere else, and run SETUP again."; fi
     finish 1
   fi
-  rm -f .kit-write-test
+  rm -f "$KIT/.kit-write-test"
 }
 
 all_set() {
@@ -470,20 +483,22 @@ all_set() {
     echo "In an outage: open Tinfoil Kit, in Applications. No internet needed."
   elif [ -n "$APP" ]; then
     echo "In an outage: plug in the drive and open Tinfoil Kit, in Applications. No internet needed. On another"
-    echo "computer, open the drive's ${KIT##*/} folder and double-click Open Tinfoil Kit."
+    echo "computer, open the drive's ${KIT##*/}/app folder and double-click Open Tinfoil Kit."
   elif on_this_mac && [ "$KIT" = "$HOME/$NAME" ] && [ $MAC = 1 ]; then
-    echo "In an outage: in Finder choose Go > Home, open $NAME and double-click Open Tinfoil Kit.command. No internet needed."
+    echo "In an outage: in Finder choose Go > Home, open $NAME/app and double-click Open Tinfoil Kit.command. No internet needed."
   elif on_this_mac; then
-    echo "In an outage: open that folder and double-click Open Tinfoil Kit.command. No internet needed."
+    echo "In an outage: open the kit's app folder and double-click Open Tinfoil Kit.command. No internet needed."
   else
-    echo "In an outage: plug in the drive, open its ${KIT##*/} folder and double-click Open Tinfoil Kit.command. No internet needed."
+    echo "In an outage: plug in the drive, open ${KIT##*/}/app and double-click Open Tinfoil Kit.command. No internet needed."
   fi
   if [ $MAC = 1 ]; then again="double-click it again"; else again="run it again"; fi
   echo
-  echo "Also in that folder:"
+  echo "Also in the app folder:"
   echo "  GUIDE.md           a short guide. Print it and keep it handy."
   echo "  SETUP.command      $again whenever you want the newest AI models, books and maps (needs internet)."
   echo "  UNINSTALL.command  removes the kit and everything it downloaded."
+  echo "Beside it, downloads holds what the kit downloaded, and data your settings. A new version's app folder can"
+  echo "replace this one any time: those two stay."
   [ $MAC = 1 ] && open "$KIT" 2>/dev/null    # show where it lives
 }
 
@@ -504,6 +519,17 @@ home_server() {
   ./kit share
 }
 
+# A kit from before the app, downloads and data folders, with this version's code at its top (its old ./kit update put
+# it there and started this script): ./kit layout moves it into them, by renaming, and the copy of this script in app/
+# carries on. At the top of a kit with an app folder, that folder's copy takes over.
+if [ "$CODE" = "$KIT" ] && [ ! -e .git ]; then
+  if [ -f tools/kit.py ]; then
+    need_python
+    ./kit layout || finish 1
+  fi
+  [ -f app/SETUP.command ] && setup_in "$KIT" "$@"
+fi
+
 # --placed: the first run's copy of this script chose this place and moved the kit here.
 # --updated: the previous copy of this script did the checks and installed this one.
 if [ "${1:-}" != "--updated" ]; then
@@ -518,7 +544,7 @@ if [ "${1:-}" != "--updated" ]; then
       echo "The first time takes a few hours. Later runs only download what changed."
     fi
     need_python
-    if [ -d .kit ]; then
+    if [ -d "$KIT/downloads" ]; then
       [ $FIRST = 1 ] && { KIT_STEPS=2; goes_on && KIT_STEPS=3; }
       step "the kit is $(where_kit), in $KIT"
       [ -n "${KIT_PLACE:-}" ] && [ "$(given_dest)" != "$KIT" ] && echo "It stays there: --this-computer and --drive choose where a new kit goes."
@@ -535,7 +561,7 @@ if [ "${1:-}" != "--updated" ]; then
   [ $MAC = 1 ] && { mkdir -p "$PY_HOME" && printf '%s\n' "$KIT" > "$PY_HOME/last-kit"; } 2>/dev/null
   echo
   ./kit update ${KIT_YES:+--yes}
-  [ $? -eq 3 ] && exec bash "$KIT/SETUP.command" --updated
+  [ $? -eq 3 ] && exec bash "$CODE/SETUP.command" --updated
 fi
 # The answers that came with SETUP, after ./kit update so that new items can be left out too. The first run said
 # them before moving the kit, and says them again quietly in case a kit was already where it landed.
@@ -547,11 +573,11 @@ else
 fi
 [ -n "${KIT_REGION_ASKED:-}" ] || pick_region    # (after ./kit update, so a kit from before this question gets it)
 
-ONLY=all; grep -q '"essentials_only": *true' kit.json 2>/dev/null && ONLY=essentials
+ONLY=all; grep -q '"essentials_only": *true' "$MINE" 2>/dev/null && ONLY=essentials
 # The first time, SETUP gets the try-it kit (./kit starter): a few GB, checked, then the kit opens to be tried. The
 # rest comes when SETUP runs again (that's saying it's ready), or right after the try-it kit with --all,
 # --essentials or --home-server. After that, SETUP updates what's there.
-TRY=0; { [ $FIRST = 1 ] || grep -q '"starter_only": *true' kit.json 2>/dev/null; } && TRY=1
+TRY=0; { [ $FIRST = 1 ] || grep -q '"starter_only": *true' "$MINE" 2>/dev/null; } && TRY=1
 REST=0; { [ $FIRST = 0 ] || goes_on; } && REST=1    # with TRY: the rest, in this run
 LATER=0; [ $TRY = 1 ] && [ $FIRST = 0 ] && LATER=1   # the rest, on a run after the try-it kit's: it asks what goes in
 [ -n "${KIT_FIT_ASKED:-}" ] || [ $LATER = 1 ] || fit_ai    # an update can bring models too big for this computer
@@ -612,15 +638,15 @@ try_it() {
   [ "$ONLY" = essentials ] && what="The rest of the essentials"
   say "$what is about $(gb "${left:-0}") more${took:+: $took}. You can use the kit while it downloads."
   chosen && then="it gets it"
-  if [ -n "${KIT_YES:-}" ]; then echo "When you're ready for it: bash \"$KIT/SETUP.command\" --yes"
+  if [ -n "${KIT_YES:-}" ]; then echo "When you're ready for it: bash \"$CODE/SETUP.command\" --yes"
   elif [ -n "$APP" ]; then echo "When you're ready, click Update in Tinfoil Kit: $then."
-  elif [ $MAC = 1 ]; then echo "When you're ready, double-click SETUP again: $then."
-  else echo "When you're ready, run bash SETUP.command again: $then."; fi
+  elif [ $MAC = 1 ]; then echo "When you're ready, open the kit's app folder and double-click SETUP again: $then."
+  else echo "When you're ready, run bash \"$CODE/SETUP.command\" again: $then."; fi
   [ -n "${KIT_SHARE:-}" ] && share_home
   if [ -n "${KIT_YES:-}" ]; then    # (in a window of its own, so a command an AI runs doesn't wait for it)
     if [ -n "$APP" ]; then open -a "$APP"
     elif [ $MAC = 1 ]; then open "Open Tinfoil Kit.command"
-    else echo "To open it: bash \"$KIT/Open Tinfoil Kit.command\""; fi
+    else echo "To open it: bash \"$CODE/Open Tinfoil Kit.command\""; fi
     finish
   fi
   if ask "Open the kit now?"; then
@@ -659,7 +685,7 @@ ending() {
     fi
     finish 1
   fi
-  say "Some checks failed. The messages above say which; logs are in the logs folder."
+  say "Some checks failed. The messages above say which; logs are in the kit's data/logs folder."
   [ $rc -eq 0 ] || problems
   echo "Running SETUP again often fixes a download that was cut off."
   finish 1

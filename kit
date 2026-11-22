@@ -1,6 +1,8 @@
 #!/bin/bash
 # Tinfoil Kit command line:  ./kit plan | sync | verify | status | search WORDS | test
 DIR="$(cd "$(dirname "$0")" && pwd)"
+KIT="$DIR"    # the kit folder: the app folder's, or a git checkout itself
+case "$(basename "$DIR" | tr '[:upper:]' '[:lower:]')" in app) [ -e "$DIR/.git" ] || KIT="$(dirname "$DIR")" ;; esac
 # The Python SETUP got for a Mac without one, or else python3. Until Apple's developer tools are installed, a Mac's
 # /usr/bin/python3 only offers to install them.
 PY="$HOME/Library/Application Support/TinfoilKit/python/bin/python3"
@@ -14,4 +16,4 @@ if [ ! -x "$PY" ]; then
     exit 1
   fi
 fi
-exec "$PY" "$DIR/tools/kit.py" --root "$DIR" "$@"
+exec "$PY" "$DIR/tools/kit.py" --root "$KIT" "$@"

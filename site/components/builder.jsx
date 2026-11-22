@@ -229,7 +229,7 @@ function setupPrompt(state, cards) {
   return INSTALL_PROMPT
     + '\n\nI already picked what goes in with the kit builder on tinfoilkit.com. Take these as my answers for the AI, '
     + "the maps and the library: switch on only these, and tell me if any won't fit my computer. Ask me about the rest:\n" + list
-    + (r ? `\n\nI live in ${r.name}, and want Wikipedia in ${langName(state.data.regions, state.wiki)}. In the kit folder, that's: `
+    + (r ? `\n\nI live in ${r.name}, and want Wikipedia in ${langName(state.data.regions, state.wiki)}. In the kit's app folder, that's: `
          + `./kit region ${r.id} --wikipedia ${state.wiki.join(',')}` : '');
 }
 

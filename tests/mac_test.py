@@ -21,13 +21,15 @@ def check(name, ok, detail=""):
     fails += 0 if ok else 1
 
 
-def make_kit(folder, books=False):
+def make_kit(folder, books=False, flat=False):
+    """A kit folder: its code in app/ and its books in downloads/, or all at its top (flat: a kit from before app/,
+    or the copy of the code inside the app)."""
     for f in ("kit", "tools/kit.py", "SETUP.command", "UNINSTALL.command"):
-        (folder / f).parent.mkdir(parents=True, exist_ok=True)
-        (folder / f).write_text(f)
+        (folder / ("" if flat else "app") / f).parent.mkdir(parents=True, exist_ok=True)
+        (folder / ("" if flat else "app") / f).write_text(f)
     if books:
-        (folder / "library").mkdir()
-        (folder / "library" / "wikipedia.zim").write_text("zim")
+        (folder / ("" if flat else "downloads") / "library").mkdir(parents=True)
+        (folder / ("" if flat else "downloads") / "library" / "wikipedia.zim").write_text("zim")
     return folder
 
 
@@ -38,7 +40,7 @@ try:
     for d in (home, volumes, bin_, res):
         d.mkdir(parents=True)
     shutil.copy(ROOT / "mac" / "app.sh", res / "app.sh")
-    make_kit(res / "kit")
+    make_kit(res / "kit", flat=True)
     (res / "kit" / "GUIDE.md").write_text("guide")
     log = work / "calls.log"
     for name, body in {
@@ -93,19 +95,30 @@ try:
     stale.mkdir(parents=True)
     (stale / "left-over").write_text("from a setup that stopped")
     rc, _, calls = app("setup")
-    check("setup: copies the kit out of the app, fresh", rc == 0 and (stale / "SETUP.command").is_file()
-          and (stale / "GUIDE.md").read_text() == "guide" and not (stale / "left-over").exists(), calls)
+    check("setup: copies the kit out of the app, fresh, as a kit folder's app folder",
+          rc == 0 and (stale / "app" / "SETUP.command").is_file() and (stale / "app" / "GUIDE.md").read_text() == "guide"
+          and not (stale / "left-over").exists(), calls)
     check("setup: lifts the downloaded mark from the copy, then opens its SETUP in Terminal",
-          calls.splitlines() == [f"xattr -dr com.apple.quarantine {stale}", f"xattr -d com.apple.quarantine {stale}/SETUP.command",
-                                 f"open {stale}/SETUP.command"], calls)
+          calls.splitlines() == [f"xattr -dr com.apple.quarantine {stale}",
+                                 f"xattr -d com.apple.quarantine {stale}/app/SETUP.command",
+                                 f"open {stale}/app/SETUP.command"], calls)
     check("setup: leaves the Python SETUP got", (support / "python" / "bin" / "python3").is_file())
 
     rc, _, calls = app("setup", str(home_kit))
-    check("setup KIT: carries on with that kit, copying nothing", rc == 0 and calls.splitlines()[-1] == f"open {home_kit}/SETUP.command", calls)
+    check("setup KIT: carries on with that kit, copying nothing",
+          rc == 0 and calls.splitlines()[-1] == f"open {home_kit}/app/SETUP.command", calls)
     _, _, calls = app("update", str(home_kit))
-    check("update: SETUP in Terminal", calls.splitlines()[-1] == f"open {home_kit}/SETUP.command", calls)
+    check("update: SETUP in Terminal", calls.splitlines()[-1] == f"open {home_kit}/app/SETUP.command", calls)
     _, _, calls = app("remove", str(home_kit))
-    check("remove: UNINSTALL in Terminal", calls.splitlines()[-1] == f"open {home_kit}/UNINSTALL.command", calls)
+    check("remove: UNINSTALL in Terminal", calls.splitlines()[-1] == f"open {home_kit}/app/UNINSTALL.command", calls)
+
+    old_kit = make_kit(volumes / "Old" / "TinfoilKit", books=True, flat=True)
+    check("find: a kit from before the app folder, with its books at its top, is ready",
+          ("ready", str(old_kit), "the drive Old") in found(), found())
+    _, _, calls = app("update", str(old_kit))
+    check("update: an older kit's own SETUP, which moves it into the app, downloads and data folders",
+          calls.splitlines()[-1] == f"open {old_kit}/SETUP.command", calls)
+    shutil.rmtree(old_kit.parent)
 
     old = work / "Applications" / "Tinfoil Kit.app"
     (old / "Contents").mkdir(parents=True)

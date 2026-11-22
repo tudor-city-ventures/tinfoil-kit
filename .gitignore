@@ -1,4 +1,7 @@
-# Created by ./kit sync on a drive
+# A checkout is its own app folder: what sync downloads goes in downloads/, the person's settings and the kit's
+# records in data/. The rest are where a kit from before those folders kept them.
+/downloads/
+/data/
 .kit/
 logs/
 bin/

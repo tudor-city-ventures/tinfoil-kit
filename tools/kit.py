@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tinfoil Kit: keeps an offline AI + knowledge library up to date, on an external drive or this computer.
 
-Commands (run from the kit folder, e.g.  ./kit sync):
+Commands (run from the kit's app folder, e.g.  ./kit sync):
   plan [--json]      Show what would be downloaded or updated. Changes nothing.
                      --json prints every item's size, disabled ones too.
   sync [-y]          Download/update everything enabled in kit.json, verify every file
@@ -51,6 +51,11 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      those), --skip IDS, --add IDS. --ask asks the kit builder's questions instead.
                      Either one sets "picked" in kit.json, so SETUP doesn't ask again.
                      Without options, says what's on, its size, and the time to download it.
+  layout             Move a kit from before its app, downloads and data folders into them, by
+                     renaming: nothing downloads again. Every command does it first; SETUP runs it.
+
+The kit folder holds app/ (this code, as released: replace it with a new version's any time),
+downloads/ (what sync downloads) and data/ (your kit.json, logs, and the kit's records in .kit/).
 
 Only needs python3 (3.9+) and curl, both standard on macOS. A big file comes over several
 connections at once, which is often several times faster than one.
@@ -144,8 +149,55 @@ SHARD_RE = re.compile(r"-\d{5}-of-\d{5}\.gguf$")
 ZIM_RE = re.compile(r"^(?P<prefix>.+)_(?P<date>\d{4}-\d{2})\.zim$")
 HEX64 = re.compile(r"\b([0-9a-fA-F]{64})\b")
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent    # this code's own folder
 LOG_FILE: Optional[Path] = None
+
+# The kit folder: app/ is the code exactly as released, which ./kit update replaces and which can be deleted any time
+# for a new version's; downloads/ is everything sync downloads; data/ is the person's: their
+# kit.json, logs, map pins and notes, and the kit's own records in data/.kit. A git checkout is its own app folder,
+# with downloads/ and data/ inside it. Item destinations ("models/Tiny") and state.json's paths are within downloads/.
+
+
+def kit_of(code: Path) -> Path:
+    """The kit folder a code folder belongs to: app/'s parent, or a git checkout itself."""
+    return code.parent if code.name.lower() == "app" and not (code / ".git").exists() else code
+
+
+def app_dir(root: Path) -> Path:
+    return root if (root / ".git").exists() else root / "app"
+
+
+def dl_dir(root: Path) -> Path:
+    return root / "downloads"
+
+
+def data_dir(root: Path) -> Path:
+    return root / "data"
+
+
+def meta_dir(root: Path) -> Path:
+    """The kit's own records: state.json, the access code, caches, the built page, kit.json's last standard list."""
+    return root / "data" / ".kit"
+
+
+def has_code(folder: Path) -> bool:
+    """Whether the kit's code is in this folder: in its app folder, or at its top (a git checkout, or a kit from before
+    the app folder)."""
+    return any((c / "kit").is_file() and (c / "tools" / "kit.py").is_file() for c in (folder / "app", folder))
+
+
+def is_kit(folder: Path) -> bool:
+    """Whether this is a kit folder: with its code, or with its records and its app folder deleted for a new one."""
+    return has_code(folder) or (meta_dir(folder) / "state.json").is_file()
+
+
+JUNK = (".DS_Store", "desktop.ini", "Thumbs.db", ".kit-write-test")    # what computers leave in any folder
+
+
+def alone(root: Path) -> bool:
+    """Whether the kit folder holds just the kit, so it can be moved or deleted whole. An app folder put somewhere on
+    its own, like the Desktop, has other things beside it, which are none of the kit's business."""
+    return all(f.name in ("app", "downloads", "data") or f.name in JUNK or f.name.startswith("._") for f in root.iterdir())
 
 
 # ----------------------------------------------------------------------------- output
@@ -359,8 +411,8 @@ class Item:
     def partial(self, root: Path, f: RemoteFile) -> Path:
         """Where f is downloaded to; an interrupted download resumes from here."""
         if self.kind == "archive" or self.cfg.get("type") == "photon_db":
-            return root / ".kit" / "downloads" / (f.name + ".partial")
-        return root / self.dest / (f.name + ".partial")
+            return dl_dir(root) / ".partial" / (f.name + ".partial")
+        return dl_dir(root) / self.dest / (f.name + ".partial")
 
     def need_bytes(self, root: Path) -> int:
         total = 0
@@ -374,10 +426,52 @@ class Item:
 
 # ----------------------------------------------------------------------------- config & state
 
+def save_text(path: Path, text: str) -> None:
+    """Replace a file in one step, so that a crash leaves the old one or the new one, never half of it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def ensure_config(root: Path) -> str:
+    """data/kit.json is the person's list of what goes in the kit, a copy of the standard list (app/kit.json) to start
+    with. When app/ is a newer version (./kit update, or a new app folder put in by hand), the standard list's changes
+    go into it and the person's own stay: data/.kit/kit.base.json, the standard list it last took in, shows which
+    those are. Every command does this first. Returns a line on what happened, or "" if nothing did."""
+    std, mine, base_file = app_dir(root) / "kit.json", data_dir(root) / "kit.json", meta_dir(root) / "kit.base.json"
+    try:
+        theirs_text = std.read_text(encoding="utf-8")
+        theirs = json.loads(theirs_text)
+    except (OSError, ValueError):
+        die(f"{std} is missing or broken. Put the app folder of a new download of the kit (tinfoilkit.com) in place "
+            "of this one: your downloads and settings stay as they are")
+    try:
+        base = json.loads(base_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        base = MISSING
+    note = ""
+    if not mine.exists():
+        save_text(mine, theirs_text)
+    elif base == theirs:
+        return ""
+    elif base is MISSING:
+        note = "kit.json stays exactly as it was (there's no copy of the old version's to compare with)."
+    else:
+        try:
+            ours = json.loads(mine.read_text(encoding="utf-8"))
+        except ValueError:
+            return ""    # load_config says what's wrong with it, and the merge waits until it's fixed
+        merged = merge3(base, ours, theirs)
+        save_text(mine, theirs_text if merged == theirs else json.dumps(merged, indent=2, ensure_ascii=False) + "\n")
+        note = ("kit.json is the new version's, with your changes kept." if ours != base else
+                "kit.json is the new version's.")
+    save_text(base_file, theirs_text)
+    return note
+
+
 def load_config(root: Path) -> Dict[str, Any]:
-    path = root / "kit.json"
-    if not path.exists():
-        die(f"{path} not found. Run this from the Tinfoil Kit folder.")
+    path = data_dir(root) / "kit.json"
     try:
         cfg = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
@@ -402,7 +496,7 @@ def load_pins(root: Path, cfg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     if cfg["settings"].get("pin_programs", True) is False:
         return {}
     try:
-        pins = json.loads((root / "tools" / "pins.json").read_text(encoding="utf-8"))
+        pins = json.loads((app_dir(root) / "tools" / "pins.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     return {k: v for k, v in pins.items() if isinstance(v, dict) and isinstance(v.get("version"), str)}
@@ -499,7 +593,7 @@ def items_from_config(cfg: Dict[str, Any]) -> List[Item]:
 
 
 def state_path(root: Path) -> Path:
-    return root / ".kit" / "state.json"
+    return meta_dir(root) / "state.json"
 
 
 def load_state(root: Path) -> Dict[str, Any]:
@@ -542,7 +636,7 @@ class Resolver:
         if self._catalog is None:
             if self._catalog_error:      # every book asks; fetch it once
                 raise self._catalog_error
-            cache = self.root / ".kit" / "cache" / "kiwix-catalog.xml"
+            cache = meta_dir(self.root) / "cache" / "kiwix-catalog.xml"
             cache.parent.mkdir(parents=True, exist_ok=True)
             if cache.exists() and time.time() - cache.stat().st_mtime < max_age_hours * 3600:
                 try:
@@ -1000,7 +1094,7 @@ def evaluate(item: Item, state: Dict[str, Any], root: Path) -> None:
         return
     st = state["items"].get(item.key)
     if item.kind == "custom":
-        d = root / item.dest
+        d = dl_dir(root) / item.dest
         t = item.cfg.get("type")
         ok = st is not None and st.get("version") == item.version
         if t == "routing":
@@ -1017,7 +1111,7 @@ def evaluate(item: Item, state: Dict[str, Any], root: Path) -> None:
         return
     if item.kind == "archive":
         cur = (st or {}).get("current")
-        target = root / item.dest / safe_name(cur)
+        target = dl_dir(root) / item.dest / safe_name(cur)
         binary = item.cfg.get("binary")
         ok = (cur == item.version and target.is_dir() and any(target.iterdir())
               and (not binary or find_binary(target, binary) is not None))
@@ -1029,7 +1123,7 @@ def evaluate(item: Item, state: Dict[str, Any], root: Path) -> None:
             files_state = {}   # plain URL with no checksum: a changed ETag/date means a new file
         for f in item.files:
             fs = files_state.get(f.name)
-            path = root / item.dest / f.name
+            path = dl_dir(root) / item.dest / f.name
             same_hash = fs is not None and (f.sha256 is None or fs.get("sha256") == f.sha256)
             size = f.size or (fs or {}).get("size")     # a book's exact size is known once it's downloaded
             same_size = path.exists() and (not size or path.stat().st_size == size)
@@ -1048,7 +1142,7 @@ def hold(item: Item, state: Dict[str, Any], root: Path, only: List[str]) -> None
         due = dt.datetime.fromisoformat(st["updated"]) + dt.timedelta(days=days)
     except (KeyError, TypeError, ValueError):
         return
-    if due > dt.datetime.now() and st.get("files") and all((root / st.get("dest", item.dest) / name).is_file()
+    if due > dt.datetime.now() and st.get("files") and all((dl_dir(root) / st.get("dest", item.dest) / name).is_file()
                                                             for name in st["files"]):
         item.status, item.need, item.extra["due"] = "later", [], due.date().isoformat()
 
@@ -1118,12 +1212,12 @@ def drop_samples(root: Path, state: Dict[str, Any], cfg: Dict[str, Any]) -> None
         ident = key.split("/", 1)[1]
         try:
             for name in v["files"]:
-                (root / v["dest"] / name).unlink(missing_ok=True)
+                (dl_dir(root) / v["dest"] / name).unlink(missing_ok=True)
         except OSError as e:    # open in the kit, on Windows: the next sync tries again
             log(f"Couldn't remove {ident} from the try-it kit yet ({e.strerror}). The next sync will.")
             continue
         with contextlib.suppress(OSError):
-            (root / v["dest"]).rmdir()    # a model's own folder, once it's empty
+            (dl_dir(root) / v["dest"]).rmdir()    # a model's own folder, once it's empty
         del state["items"][key]
         log(f"Removed {ident}: the try-it kit had it, and it isn't in your picks.")
 
@@ -1664,7 +1758,7 @@ def fetch(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, cfg: Dic
     """Download f into its partial file and return that path. An interrupted download resumes,
     unless it was of an older version under the same name. room: how many times its size must fit."""
     partial = item.partial(root, f)
-    rel = partial.relative_to(root).as_posix()
+    rel = partial.relative_to(dl_dir(root)).as_posix()
     size = f.size or (head_size(f.url) if f.estimate else None)     # exactly, where the plan had a rough size
     tag = f.sha256 or f"{item.version}|{f.size or f.estimate or ''}"
     partials = state.setdefault("partials", {})
@@ -1685,18 +1779,19 @@ def fetch(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, cfg: Dic
 
 
 def forget_partial(root: Path, state: Dict[str, Any], partial: Path) -> None:
-    state.get("partials", {}).pop(partial.relative_to(root).as_posix(), None)
+    state.get("partials", {}).pop(partial.relative_to(dl_dir(root)).as_posix(), None)
 
 
 def sweep_partials(root: Path, state: Dict[str, Any], items: List[Item]) -> None:
     """Delete unfinished downloads that a newer version has made useless (they can be 100 GB).
     Kept: the ones this sync resumes, and those of items switched off or not found this time."""
-    keep = {i.partial(root, f).relative_to(root).as_posix() for i in items if i.enabled and not i.error for f in i.need}
+    keep = {i.partial(root, f).relative_to(dl_dir(root)).as_posix() for i in items if i.enabled and not i.error
+            for f in i.need}
     current = {i.key for i in items if i.enabled and not i.error}
     known = {i.key for i in items}
     partials = state.get("partials", {})
     for rel, rec in list(partials.items()):
-        p = root / rel
+        p = dl_dir(root) / rel
         if p.exists() and rel not in keep and (rec.get("item") in current or rec.get("item") not in known):
             drop_partial(p)
             log(f"Removed an unfinished download that's out of date: {rel}")
@@ -1714,7 +1809,7 @@ def drop_replaced_wikipedias(root: Path, state: Dict[str, Any], items: List[Item
         section, _, ident = key.partition("/")
         if section == "library" and WIKIPEDIA_RE.match(ident) and key not in listed and "files" in v:
             for name in v["files"]:
-                (root / v["dest"] / name).unlink(missing_ok=True)
+                (dl_dir(root) / v["dest"] / name).unlink(missing_ok=True)
             del state["items"][key]
             log(f"Removed {ident}: kit.json has Wikipedia in another language now.")
 
@@ -1733,10 +1828,10 @@ def adopt(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, final: P
     """f, if the kit has it in another folder of the same kind, say under an item an older version of the kit called
     something else: moved here rather than downloaded again. Returns its SHA-256. Another switched-on item's
     files stay where they are."""
-    top = root / Path(item.dest).parts[0]
+    top = dl_dir(root) / Path(item.dest).parts[0]
     if not expected or not top.is_dir():
         return None
-    theirs = {(root / i.dest).resolve() for i in items_from_config(cfg) if i.enabled and i.key != item.key}
+    theirs = {(dl_dir(root) / i.dest).resolve() for i in items_from_config(cfg) if i.enabled and i.key != item.key}
     for p in [top / f.name] + [d / f.name for d in sorted(top.iterdir()) if d.is_dir()]:
         if p == final or not p.is_file() or p.parent.resolve() in theirs:
             continue
@@ -1748,19 +1843,19 @@ def adopt(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, final: P
         except OSError:    # open in the kit, on Windows: download it instead
             continue
         for key, v in list(state["items"].items()):
-            if root / v.get("dest", "") == p.parent and p.name in v.get("files", {}):
+            if dl_dir(root) / v.get("dest", "") == p.parent and p.name in v.get("files", {}):
                 del v["files"][p.name]
                 if not v["files"]:
                     del state["items"][key]
         with contextlib.suppress(OSError):
             p.parent.rmdir()    # (once it's empty)
-        log(f"    moved it here from {p.parent.relative_to(root).as_posix()}, rather than downloading it again")
+        log(f"    moved it here from {p.parent.relative_to(dl_dir(root)).as_posix()}, rather than downloading it again")
         return got
     return None
 
 
 def install_files(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, Any], force: bool) -> int:
-    dest = root / item.dest
+    dest = dl_dir(root) / item.dest
     dest.mkdir(parents=True, exist_ok=True)
     old = state["items"].get(item.key) or {}
     old_files: Dict[str, Any] = dict(old.get("files", {}))
@@ -1906,7 +2001,7 @@ def install_archive(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
     expected = expected_digests(f)
     partial = fetch(root, state, item, f, cfg, force, room=3)
     got = verify_download(partial, f, expected)
-    base = root / item.dest
+    base = dl_dir(root) / item.dest
     target = base / safe_name(item.version)
     extract_archive(partial, f.name, target)
     binary = find_binary(target, item.cfg.get("binary"))
@@ -1931,11 +2026,11 @@ def install_archive(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
         log(f"    removed old version: {v}")
     partial.unlink(missing_ok=True)
     forget_partial(root, state, partial)
-    log(f"    ok: {binary.relative_to(root) if binary else target.relative_to(root)}")
+    log(f"    ok: {(binary or target).relative_to(dl_dir(root)).as_posix()}")
     state["items"][item.key] = {
         "version": item.version, "current": item.version, "versions": [item.version] + versions[:keep],
         "dest": item.dest, "archive": f.name, "archive_sha256": got, "verified": bool(expected),
-        "binary": str(binary.relative_to(root)) if binary else None, "updated": now_iso(), "note": item.note}
+        "binary": binary.relative_to(dl_dir(root)).as_posix() if binary else None, "updated": now_iso(), "note": item.note}
     return f.size or 0
 
 
@@ -1945,7 +2040,8 @@ def drop_finder_files(root: Path) -> None:
     """macOS keeps Finder metadata for files on exFAT drives in "._name" files beside them. The servers
     scan library/ and models/ and could take ._name.zim or ._name.gguf for a book or a model, and git warns
     about the ones in a checkout's .git."""
-    for p in [*(root / "library").glob("._*"), *(root / "models").glob("**/._*"), *(root / ".git").glob("**/._*")]:
+    dl = dl_dir(root)
+    for p in [*(dl / "library").glob("._*"), *(dl / "models").glob("**/._*"), *(root / ".git").glob("**/._*")]:
         if p.is_file():
             p.unlink()
 
@@ -1984,7 +2080,7 @@ def install_protomaps(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[s
     est = item.files[0].estimate or 15 * GB
     if not force and not ensure_space(root, 2 * est, cfg):     # world + region + combined copy, briefly
         raise RuntimeError(f"not enough free space for the map tiles (needs about {fmt_size(2 * est)} while building)")
-    dest = root / item.dest
+    dest = dl_dir(root) / item.dest
     work = dest / ".build"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
@@ -2089,10 +2185,10 @@ def build_routing(java: Path, gh: Path, m: Dict[str, Any], dest: Path) -> None:
 def install_routing(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, Any], force: bool) -> int:
     m = maps_settings(cfg)
     java = runtime_binary(root, "java", "java")
-    gh = newest_file(root / "bin" / "graphhopper", "graphhopper-web-*.jar")
+    gh = newest_file(dl_dir(root) / "bin" / "graphhopper", "graphhopper-web-*.jar")
     if not java or not gh:
         raise RuntimeError("Java or GraphHopper (runtimes) isn't installed yet; run sync again")
-    dest = root / item.dest
+    dest = dl_dir(root) / item.dest
     dest.mkdir(parents=True, exist_ok=True)
     f = item.files[0]
     pbf = dest / f.name
@@ -2128,7 +2224,7 @@ def install_routing(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
 
 def install_photon(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str, Any], force: bool) -> int:
     f = item.files[0]
-    dest = root / item.dest
+    dest = dl_dir(root) / item.dest
     expected = expected_digests(f)
     # the download plus about 3x that unpacked
     partial = fetch(root, state, item, f, cfg, force, room=4, label="the address database")
@@ -2189,7 +2285,7 @@ def installer_for(item: Item):
 # ----------------------------------------------------------------------------- portal page
 
 def current_dir(root: Path, rel: str) -> Optional[Path]:
-    base = root / rel
+    base = dl_dir(root) / rel
     cur = base / "CURRENT"
     if cur.exists():
         d = base / cur.read_text(encoding="utf-8").strip()
@@ -2205,7 +2301,7 @@ def b64file(p: Path) -> str:
 def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
     """Assemble the portal page served by kiwix-serve, with the map engine and map config embedded
     (kiwix-serve can only serve one custom page, so everything the map needs goes inside it)."""
-    tpl = (root / "tools" / "portal.html").read_text(encoding="utf-8")
+    tpl = (app_dir(root) / "tools" / "portal.html").read_text(encoding="utf-8")
     m = maps_settings(cfg)
     info: Dict[str, Any] = {"available": False}
     inject = ""
@@ -2221,7 +2317,7 @@ def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
             "map style": bm / "package" / "dist" / "basemaps.js" if bm else None,
             "map fonts": next(iter(ba.glob("*/fonts")), None) if ba else None,
             "map icons": next(iter(ba.glob("*/sprites/v4")), None) if ba else None,
-            "map tiles": root / "maps" / "tiles" / "basemap.pmtiles",
+            "map tiles": dl_dir(root) / "maps" / "tiles" / "basemap.pmtiles",
         }
         missing = [k for k, v in parts.items() if v is None or not v.exists()]
         if missing:
@@ -2242,8 +2338,8 @@ def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
                 "ports": {"tiles": int(m["tiles_port"]), "geocoder": int(m["geocoder_port"]),
                           "routing": int(m["routing_port"])},
                 "tileset": "basemap", "glyphs": glyphs, "sprites": spr,
-                "services": {"geocoder": (root / "maps" / "geocoder" / "photon_data").is_dir(),
-                             "routing": (root / "maps" / "routing" / "graph-cache" / "properties").exists()},
+                "services": {"geocoder": (dl_dir(root) / "maps" / "geocoder" / "photon_data").is_dir(),
+                             "routing": (dl_dir(root) / "maps" / "routing" / "graph-cache" / "properties").exists()},
             }
             def code(p: Path) -> str:
                 return p.read_text(encoding="utf-8").replace("</script", "<\\/script")
@@ -2260,7 +2356,7 @@ def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
     else:
         raise RuntimeError("could not find safe template markers for the portal page")
     html = "{{=" + o + " " + c + "=}}" + html.replace("{{root}}", o + "root" + c)
-    out = root / ".kit" / "portal.html"
+    out = meta_dir(root) / "portal.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")
     tmp.write_text(html, encoding="utf-8")
@@ -2274,7 +2370,8 @@ def prepare_folder(root: Path) -> None:
     if sys.platform == "win32":
         # A kit unzipped from a download is marked "from the internet", and Windows warns before it runs a marked
         # script. Lift the mark from the kit's own scripts and tools (an exFAT drive can't hold it anyway).
-        for p in [*root.glob("*.bat"), *root.glob("*.cmd"), *(root / "tools").glob("*")]:
+        code = app_dir(root)
+        for p in [*code.glob("*.bat"), *code.glob("*.cmd"), *(code / "tools").glob("*")]:
             with contextlib.suppress(OSError):
                 os.remove(f"{p}:Zone.Identifier")
         return
@@ -2282,12 +2379,14 @@ def prepare_folder(root: Path) -> None:
         return
     # A kit downloaded as a ZIP is marked "from the internet", and macOS won't open marked scripts until
     # they're approved in System Settings. Lift the mark so Open Tinfoil Kit opens with a plain double-click in an outage.
-    subprocess.run(["xattr", "-dr", "com.apple.quarantine", *(str(root / f) for f in
+    subprocess.run(["xattr", "-dr", "com.apple.quarantine", *(str(app_dir(root) / f) for f in
                     ("Open Tinfoil Kit.command", "SETUP.command", "UNINSTALL.command", "kit", "tools"))], capture_output=True)
     if on_this_computer(root):
         # Time Machine would copy 300 GB of downloads to the backup disk at its next backup. A sticky exclusion
-        # (no administrator needed) travels with the folder, and goes when the folder does.
-        subprocess.run(["tmutil", "addexclusion", str(root)], capture_output=True)
+        # (no administrator needed) travels with the folder, and goes when the folder does. data/ (pins, notes,
+        # settings) is still backed up.
+        dl_dir(root).mkdir(exist_ok=True)
+        subprocess.run(["tmutil", "addexclusion", str(dl_dir(root))], capture_output=True)
         return
     parts = root.resolve().parts
     if len(parts) >= 3 and parts[1] == "Volumes":   # keep Spotlight from indexing 500 GB of archives
@@ -2393,7 +2492,7 @@ def list_drives() -> List[Dict[str, Any]]:
             except OSError:
                 continue
             found.append({"path": str(v), "name": drive_name(v), "format": fs or "unknown", "free_bytes": free,
-                          "problem": problem or None, "has_kit": (v / KIT_FOLDER / "kit").is_file()})
+                          "problem": problem or None, "has_kit": is_kit(v / KIT_FOLDER)})
     return found
 
 
@@ -2441,33 +2540,60 @@ def copy_code(src: Path, dst: Path) -> None:
             shutil.copymode(src, dst)
 
 
+def copy_app(root: Path, to: Path) -> None:
+    """A copy of this kit's code as the app folder to: what a release has (no .git, downloads or data)."""
+    to.mkdir()
+    for f in sorted(app_dir(root).iterdir()):
+        if f.name not in KEEP | {"downloads", "data"} and not f.name.startswith("._"):
+            copy_code(f, to / f.name)
+
+
 def place_kit(root: Path, dest: Path) -> Tuple[Path, str]:
     """Put the kit at dest, ready to set up there. Returns its folder and what happened, in words. A fresh download is
-    moved there, so there's one copy: renamed on the same disk, copied to another (the code, never downloads). A git
-    checkout is a developer's: it stays put, or is copied to another disk. A kit already at dest is used as it is.
-    On Windows it's always a copy, since Windows won't rename or delete a folder a running script is in."""
+    moved there, so there's one copy: renamed on the same disk, copied to another (app/ and data/, never downloads). A
+    git checkout is a developer's: it stays put, or its code is copied to another disk as an app folder. A kit already
+    at dest is used as it is. On Windows it's always a copy, since Windows won't rename or delete a folder a running
+    script is in. The kit placed gets its downloads folder, which tells SETUP it's been set up. A kit at dest whose app
+    folder was deleted gets a copy of this one."""
     git = (root / ".git").exists()
     if not dest.parent.is_dir():
         raise RuntimeError(f"{dest.parent} isn't there. If it's a drive, is it plugged in?")
     if dest == root or dest.parent == root or (git and root.stat().st_dev == dest.parent.stat().st_dev):
-        (root / ".kit").mkdir(exist_ok=True)
+        dl_dir(root).mkdir(exist_ok=True)
         return root, ""
     if root in dest.parents:
         raise RuntimeError(f"The kit can't go inside its own folder ({dest}).")
     where = where_is(dest.parent)
     if dest.exists():
-        if (dest / "kit").is_file() and (dest / "tools" / "kit.py").is_file():
-            (dest / ".kit").mkdir(exist_ok=True)
-            return dest, f"There's already a Tinfoil Kit on {where} ({dest}). Carrying on with that one."
+        if is_kit(dest):
+            fresh = not has_code(dest)
+            if fresh:    # its app folder was deleted, for a new version's: this one
+                try:
+                    shutil.rmtree(dest / "app.partial", ignore_errors=True)
+                    copy_app(root, dest / "app.partial")
+                    shutil.rmtree(dest / "app", ignore_errors=True)
+                    (dest / "app.partial").rename(dest / "app")
+                except OSError as e:
+                    raise RuntimeError(f"Copying the app folder to {where} stopped partway ({e.strerror or e}). "
+                                       "Is the drive full, or was it unplugged?") from None
+            # (a kit from before the app folder knows it's been set up by its .kit folder; its SETUP takes over)
+            (dest / ".kit" if (dest / "tools").is_dir() and not (dest / ".git").exists() else dl_dir(dest)).mkdir(
+                exist_ok=True)
+            return dest, (f"There's already a Tinfoil Kit on {where} ({dest})" + (", without its app folder: this "
+                          "version's is in it now" if fresh else "") + ". Carrying on with that one.")
         raise RuntimeError(f"There's already a folder called {dest.name} on {where} ({dest}), and it isn't a "
                            "Tinfoil Kit.\nRename it or move it somewhere else, then double-click SETUP again.")
+    if not git and not alone(root):
+        raise RuntimeError(f"This app folder isn't in a folder of its own ({root} has other things in it), so it "
+                           f"stays where it is.\nMake a folder called {KIT_FOLDER}, put the app folder in it, and "
+                           "double-click SETUP again.")
     if not git and sys.platform != "win32" and root.stat().st_dev == dest.parent.stat().st_dev:
         try:
             root.rename(dest)
         except OSError:
             pass    # copy it instead
         else:
-            (dest / ".kit").mkdir(exist_ok=True)
+            dl_dir(dest).mkdir(exist_ok=True)
             return dest, f"Moved the kit to {where}: {dest}"
     partial = dest.with_name(dest.name + ".partial")
     shutil.rmtree(partial, ignore_errors=True)
@@ -2480,16 +2606,19 @@ def place_kit(root: Path, dest: Path) -> Tuple[Path, str]:
                     "Privacy & Security > Files and Folders, turn on Removable Volumes under Terminal, then try again.")
         raise RuntimeError(why) from None
     try:
-        for f in sorted(root.iterdir()):
-            if f.name not in KEEP - {".git"} and not f.name.startswith("._"):
-                copy_code(f, partial / f.name)
+        copy_app(root, partial / "app")
+        # the person's choices so far (where they live, what goes in), not the kit's records or logs
+        for f in sorted(data_dir(root).iterdir()) if data_dir(root).is_dir() else []:
+            if f.name not in (".kit", "logs") and not f.name.startswith("._"):
+                (partial / "data").mkdir(exist_ok=True)
+                copy_code(f, partial / "data" / f.name)
         partial.rename(dest)
     except OSError as e:
         shutil.rmtree(partial, ignore_errors=True)
         raise RuntimeError(f"Copying the kit to {where} stopped partway ({e.strerror or e}). "
                            "Is the drive full, or was it unplugged?") from None
-    (dest / ".kit").mkdir(exist_ok=True)
-    if git or root == Path.home() or sys.platform == "win32":
+    dl_dir(dest).mkdir(exist_ok=True)
+    if git or root == Path.home() or sys.platform == "win32" or dl_dir(root).exists():
         return dest, f"Copied the kit to {where}: {dest}. Use that copy from now on."
     shutil.rmtree(root, ignore_errors=True)    # the download isn't needed now that the kit is in its place
     return dest, f"Moved the kit to {where}: {dest}"
@@ -2509,11 +2638,12 @@ def other_kits(root: Path) -> List[Dict[str, Any]]:
             if k.resolve() in seen:
                 continue
             seen.add(k.resolve())
-            state = json.loads((k / ".kit" / "state.json").read_text(encoding="utf-8"))
+            s = state_path(k)
+            state = json.loads((s if s.is_file() else k / ".kit" / "state.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         items = state.get("items") if isinstance(state, dict) else None
-        if (k / "tools" / "kit.py").is_file() and isinstance(items, dict) and items:
+        if is_kit(k) and isinstance(items, dict) and items:
             found.append({"path": str(k), "where": where_is(k), "bytes": sum(drive_bytes(v) for v in items.values()),
                           "last_sync": str(state.get("last_sync") or "")})
     return sorted(found, key=lambda k: k["last_sync"], reverse=True)
@@ -2538,7 +2668,8 @@ def write_inventory(root: Path, state: Dict[str, Any]) -> None:
             lines.append(f"| {ident} | {v.get('version', '')} | {fmt_size(size) if size else ''} | "
                          f"{(v.get('note') or '').replace('|', '/')} |")
         lines.append("")
-    (root / "INVENTORY.md").write_text("\n".join(lines), encoding="utf-8")
+    dl_dir(root).mkdir(exist_ok=True)
+    (dl_dir(root) / "INVENTORY.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 @contextlib.contextmanager
@@ -2568,7 +2699,7 @@ def keep_awake():
 
 class Lock:
     def __init__(self, root: Path):
-        self.path = root / ".kit" / "lock"
+        self.path = meta_dir(root) / "lock"
         self.fh = None
 
     def __enter__(self) -> "Lock":
@@ -2597,7 +2728,8 @@ class Lock:
 
 # ----------------------------------------------------------------------------- self-update
 
-# ./kit update never writes here, whatever a release holds: the downloads, the kit's state and logs, a git checkout.
+# A release never brings these, whatever it holds: a git checkout's, and the downloads, state and logs of a kit from
+# before app/, downloads/ and data/.
 KEEP = {".git", ".kit", "bin", "installers", "library", "logs", "maps", "models", "INVENTORY.md"}
 NEEDED = ("kit", "kit.json", "SETUP.command", "Open Tinfoil Kit.command", "UNINSTALL.command", "tools/kit.py", "tools/launch.sh",
           "tools/portal.html", "tools/share.py")
@@ -2645,29 +2777,6 @@ def merge3(base: Any, ours: Any, theirs: Any) -> Any:
                 items.append(v)
         return items
     return ours
-
-
-def merge_kit_json(root: Path, theirs_text: str) -> Tuple[str, str]:
-    """This kit's kit.json with the new version's changes, and a line on what happened. The copy of kit.json
-    that came with the kit's current version (site/kit.json) shows which parts were changed here."""
-    mine = root / "kit.json"
-    if not mine.exists():
-        return theirs_text, "kit.json is the new version's."
-    ours_text = mine.read_text(encoding="utf-8")
-    try:
-        ours = json.loads(ours_text)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"kit.json has a syntax error on line {e.lineno}, column {e.colno}: {e.msg}. "
-                         "Fix it, or delete it to start from the standard list, then run this again") from None
-    try:
-        base = json.loads((root / "site" / "kit.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return ours_text, "kit.json stays exactly as it was (there's no copy of the old version's to compare with)."
-    theirs = json.loads(theirs_text)
-    merged = merge3(base, ours, theirs)
-    text = theirs_text if merged == theirs else json.dumps(merged, indent=2, ensure_ascii=False) + "\n"
-    return text, ("kit.json is the new version's, with your changes kept." if ours != base else
-                  "kit.json is the new version's.")
 
 
 # Ed25519 (RFC 8032) and OpenSSH's signature format (PROTOCOL.sshsig), checking only: Python has no Ed25519 of its
@@ -2753,7 +2862,7 @@ def release_keys(signers: Path) -> List[bytes]:
 
 def verify_release(root: Path, data: bytes, sig: bytes) -> None:
     """Refuse a release unless one of this copy's keys signed it, the way ssh-keygen -Y sign does."""
-    keys = release_keys(root / "tools" / "release-signers")
+    keys = release_keys(app_dir(root) / "tools" / "release-signers")
     if not keys:
         raise ValueError("this copy of the kit has no release key to check it with (tools/release-signers). "
                          "Download the kit again from tinfoilkit.com")
@@ -2821,19 +2930,20 @@ def check_release(new: Path) -> None:
             raise ValueError(f"its {script} has a syntax error")
 
 
-def install_release(root: Path, new: Path, old_files: List[str]) -> List[str]:
-    """Move the unpacked release over the kit's code (renames on the same disk, so it takes a moment), then
-    remove the files the last update installed that this version no longer has. Returns the files installed."""
+def install_release(app: Path, new: Path) -> None:
+    """Move the unpacked release over the kit's code in app/ (renames on the same disk, so it takes a moment), then
+    remove what this version no longer has. Downloads and the person's data are in other folders, out of reach."""
     files = sorted(p.relative_to(new).as_posix() for p in new.rglob("*") if p.is_file())
     # kit.py goes last: if this stops partway, the old kit.py (which knows it's older) runs the retry.
     files.sort(key=lambda rel: rel == "tools/kit.py")
     for rel in files:
-        (root / rel).parent.mkdir(parents=True, exist_ok=True)
-        os.replace(new / rel, root / rel)
-    for rel in sorted(set(old_files) - set(files)):
-        if rel != "kit.json" and PurePosixPath(rel).parts[0] not in KEEP:
-            (root / rel).unlink(missing_ok=True)
-    return files
+        (app / rel).parent.mkdir(parents=True, exist_ok=True)
+        os.replace(new / rel, app / rel)
+    for p in sorted(app.rglob("*"), reverse=True):    # what's in a folder before the folder
+        if p.is_dir() and not any(p.iterdir()):
+            p.rmdir()
+        elif not p.is_dir() and p.relative_to(app).as_posix() not in files:
+            p.unlink()
 
 
 # ----------------------------------------------------------------------------- commands
@@ -2888,7 +2998,7 @@ def cmd_pins(root: Path, args: argparse.Namespace) -> None:
     for entry in cfg["runtimes"] + cfg["extras"]:
         entry["enabled"] = True
     cfg["maps"] = {**(cfg.get("maps") or {}), "enabled": True}
-    path = root / "tools" / "pins.json"
+    path = app_dir(root) / "tools" / "pins.json"
     try:
         old = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -2937,10 +3047,11 @@ def cmd_pins(root: Path, args: argparse.Namespace) -> None:
 
 def cmd_sync(root: Path, args: argparse.Namespace) -> None:
     global LOG_FILE
-    (root / "logs").mkdir(exist_ok=True)
-    LOG_FILE = root / "logs" / f"sync-{dt.date.today().isoformat()}.log"
+    (data_dir(root) / "logs").mkdir(parents=True, exist_ok=True)
+    LOG_FILE = data_dir(root) / "logs" / f"sync-{dt.date.today().isoformat()}.log"
     log(f"\n===== sync started {now_iso()} =====")
     with Lock(root), keep_awake():
+        dl_dir(root).mkdir(exist_ok=True)
         prepare_folder(root)
         cfg, state = load_config(root), load_state(root)
         starter, essentials = tier(cfg, args)
@@ -3011,7 +3122,7 @@ def cmd_verify(root: Path, args: argparse.Namespace) -> None:
     for key, v in sorted(state["items"].items()):
         if "files" in v:
             for name, meta in v["files"].items():
-                path = root / v["dest"] / name
+                path = dl_dir(root) / v["dest"] / name
                 checked += 1
                 if not path.exists():
                     bad.append(f"{key}: {name} is missing")
@@ -3027,7 +3138,7 @@ def cmd_verify(root: Path, args: argparse.Namespace) -> None:
                         broken.append((key, name, path))
         elif v.get("binary"):
             checked += 1
-            if not (root / v["binary"]).exists():
+            if not (dl_dir(root) / v["binary"]).exists():
                 bad.append(f"{key}: {v['binary']} is missing")
     if sys.stdout.isatty():
         print(" " * 78, end="\r", flush=True)
@@ -3058,10 +3169,11 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
             total += size
             log(f"  {key.split('/', 1)[1][:44]:<46}{v.get('version', ''):<16}{fmt_size(size) if size else '':>9}"
                 f"   {v.get('updated', '')[:10]}")
-    left = sorted(set(state.get("partials", {})) | {p.relative_to(root).as_posix() for pattern in
-                  ("library/*.partial", "models/*/*.partial", "maps/*/*.partial", ".kit/downloads/*.partial")
-                  for p in files_in(root, pattern)})
-    left = [(rel, (root / rel).stat().st_size) for rel in left if (root / rel).is_file()]
+    dl = dl_dir(root)
+    left = sorted(set(state.get("partials", {})) | {p.relative_to(dl).as_posix() for pattern in
+                  ("library/*.partial", "models/*/*.partial", "maps/*/*.partial", ".partial/*.partial")
+                  for p in files_in(dl, pattern)})
+    left = [(rel, (dl / rel).stat().st_size) for rel in left if (dl / rel).is_file()]
     if left:
         log("\nUnfinished downloads (sync resumes them while the item is on in kit.json; delete one to free its space):")
         for rel, size in left:
@@ -3099,7 +3211,7 @@ def estimate_bytes(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] =
     have = set(state["items"]) if left else set()
     fit = fit_report(root, cfg, state) if essentials else {}
     try:
-        listed = json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
+        listed = json.loads((app_dir(root) / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
         sizes = {s["id"]: s.get("bytes") or 0 for s in listed}
     except (OSError, ValueError, KeyError, TypeError):
         sizes = {}
@@ -3235,7 +3347,7 @@ def model_sizes(root: Path, cfg: Dict[str, Any]) -> Dict[str, int]:
     """Each model's download size, from the kit builder's list (site/sources.json), else the "~N GB" in its note."""
     try:
         listed = {s["id"]: int(s.get("bytes") or 0)
-                  for s in json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]}
+                  for s in json.loads((app_dir(root) / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]}
     except (OSError, ValueError, KeyError, TypeError):
         listed = {}
     sizes = {}
@@ -3300,7 +3412,7 @@ def switch_parts(root: Path, changes: Dict[Tuple[str, str], bool], essential: It
     """Switch models, books, extras or the map (("maps", "maps")) on or off in kit.json, and mark the ones in essential
     "essential": true (see essential()), changing only those keys so the file keeps its layout. On is no "enabled" at
     all, since that's the default."""
-    path = root / "kit.json"
+    path = data_dir(root) / "kit.json"
     text = path.read_text(encoding="utf-8")
     cfg = json.loads(text)
     edits = [(part, "enabled", None if on else False) for part, on in changes.items()]
@@ -3359,10 +3471,10 @@ def ask_picks(root: Path) -> None:
     """./kit pick --ask: the kit builder's choices on tinfoilkit.com (site/sources.json), asked in a terminal. A preset,
     or each part. The AI in a preset is one this computer runs."""
     try:
-        listed = json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
+        listed = json.loads((app_dir(root) / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
     except (OSError, ValueError, KeyError, TypeError):
         die("The kit builder's list (site/sources.json) isn't in this kit. Choose with ./kit pick --skip and --add.")
-    cfg = json.loads((root / "kit.json").read_text(encoding="utf-8"))
+    cfg = json.loads((data_dir(root) / "kit.json").read_text(encoding="utf-8"))
     ids = {s: {e[k] for e in cfg.get(s, []) if isinstance(e, dict) and isinstance(e.get(k), str)}
            for s, k in PART_KEYS.items()}
     wikis = [z for z in ids["library"] if WIKIPEDIA_RE.match(z)]
@@ -3450,7 +3562,7 @@ def cmd_pick(root: Path, args: argparse.Namespace) -> None:
     on, its size and the time to download it."""
     if args.ask:
         ask_picks(root)
-    cfg = json.loads((root / "kit.json").read_text(encoding="utf-8"))
+    cfg = json.loads((data_dir(root) / "kit.json").read_text(encoding="utf-8"))
     models = [m["id"] for m in cfg.get("models", []) if isinstance(m, dict) and "id" in m]
     changes: Dict[Tuple[str, str], bool] = {}
     named: List[Tuple[str, str]] = []    # comes even with just the essentials, since it was asked for
@@ -3660,7 +3772,7 @@ def describe_region(cfg: Dict[str, Any]) -> str:
 
 def set_region(root: Path, r: Dict[str, Any], wiki: Optional[List[str]]) -> Dict[str, Any]:
     """Point kit.json's maps at a place, and swap its Wikipedia for the languages given (None: leave it)."""
-    path = root / "kit.json"
+    path = data_dir(root) / "kit.json"
     cfg = load_config(root)
     raw = json.loads(path.read_text(encoding="utf-8"))
     old = raw.get("maps") or {}
@@ -3827,7 +3939,7 @@ def runtime_binary(root: Path, product: str, name: str) -> Optional[Path]:
         name += ".exe"
     rel = f"bin/{product}-{platform_tag()}"
     cur = current_dir(root, rel)
-    return (find_binary(cur, name) if cur else None) or find_binary(root / rel, name)
+    return (find_binary(cur, name) if cur else None) or find_binary(dl_dir(root) / rel, name)
 
 
 def wait_http(url: str, timeout: float, server: Optional[subprocess.Popen] = None) -> bool:
@@ -3860,7 +3972,7 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
     """starter: a try-it kit, which gets address search and directions with the rest."""
     home = m["home"]
     pm = runtime_binary(root, "pmtiles", "pmtiles")
-    tiles = root / "maps" / "tiles" / "basemap.pmtiles"
+    tiles = dl_dir(root) / "maps" / "tiles" / "basemap.pmtiles"
     check("map tiles present", bool(pm) and tiles.exists(), "" if tiles.exists() else "run ./kit sync")
     if pm and tiles.exists():
         port = free_port()
@@ -3876,8 +3988,8 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
                 ok = False
         check("map tile server works", ok)
     java = runtime_binary(root, "java", "java")
-    photon = newest_file(root / "bin" / "photon", "photon-*.jar")
-    gdir = root / "maps" / "geocoder"
+    photon = newest_file(dl_dir(root) / "bin" / "photon", "photon-*.jar")
+    gdir = dl_dir(root) / "maps" / "geocoder"
     have = bool(java and photon and (gdir / "photon_data").is_dir())
     if not have and not m.get("geocoder_country"):
         log("  SKIP  address search: nobody publishes one for this map's area")
@@ -3912,8 +4024,8 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
             except (HttpError, ValueError) as e:
                 detail = str(e)
         check("address search works", ok, detail)
-    gh = newest_file(root / "bin" / "graphhopper", "graphhopper-web-*.jar")
-    rdir = root / "maps" / "routing"
+    gh = newest_file(dl_dir(root) / "bin" / "graphhopper", "graphhopper-web-*.jar")
+    rdir = dl_dir(root) / "maps" / "routing"
     routed = bool(java and gh and (rdir / "graph-cache" / "properties").exists())
     if not routed and starter:
         log("  SKIP  directions: they come with the rest of the kit")
@@ -3952,12 +4064,12 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
         portal = build_portal(root, cfg)
     except (OSError, RuntimeError, ValueError) as e:
         log(f"  (could not build the portal page: {e}; testing the plain one)")
-        portal = root / "tools" / "portal.html"
+        portal = app_dir(root) / "tools" / "portal.html"
     kiwix = runtime_binary(root, "kiwix-tools", "kiwix-serve")
     llama = runtime_binary(root, "llama.cpp", "llama-server")
     drop_finder_files(root)
-    zims = files_in(root / "library", "*.zim")
-    models = [p for p in files_in(root / "models", "*") if p.is_dir() and files_in(p, "*.gguf")]
+    zims = files_in(dl_dir(root) / "library", "*.zim")
+    models = [p for p in files_in(dl_dir(root) / "models", "*") if p.is_dir() and files_in(p, "*.gguf")]
     log(f"Platform: {platform_tag()}")
     check("library server installed", bool(kiwix), str(kiwix or "run ./kit sync"))
     check("AI server installed", bool(llama), str(llama or "run ./kit sync"))
@@ -3967,8 +4079,8 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
     else:
         log("  SKIP  models: kit.json switches them all off, so the kit runs without the AI")
     procs: List[subprocess.Popen] = []
-    logs_dir = root / "logs"
-    logs_dir.mkdir(exist_ok=True)
+    logs_dir = data_dir(root) / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
     try:
         if kiwix and zims:
             kport, lib = free_port(), "127.0.0.1"
@@ -4008,7 +4120,7 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
             small = min(models, key=lambda m: sum(f.stat().st_size for f in files_in(m, "*.gguf")))
             name = args.model or small.name
             start_server(procs, logs_dir / "test-llama.log",
-                         [llama, "--models-dir", root / "models", "--models-max", "1", "-c", "4096",
+                         [llama, "--models-dir", dl_dir(root) / "models", "--models-max", "1", "-c", "4096",
                           "--host", "127.0.0.1", "--port", lport, "--cors-origins", "http://127.0.0.1:8888"])
             up = wait_http(f"http://127.0.0.1:{lport}/v1/models", 90)
             check("AI server starts", up)
@@ -4056,14 +4168,14 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
 
 def share_tools() -> Any:
     """tools/share.py: the gate that shares the kit on the home network, its QR code, and starting with the computer."""
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    sys.path.insert(0, str(ROOT / "tools"))
     import share
     return share
 
 
 def set_setting(root: Path, key: str, value: Any) -> None:
     """Change one setting in kit.json (None removes it), and leave the rest of the file as it is."""
-    path = root / "kit.json"
+    path = data_dir(root) / "kit.json"
     text = path.read_text(encoding="utf-8")
     val = json.dumps(value)
     name = rf'"{re.escape(key)}"\s*:\s*'
@@ -4193,7 +4305,7 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
                 return
         name = f"tinfoilkit-{tag}.tar.gz"
         assets = {a.get("name"): a.get("browser_download_url") for a in release.get("assets") or [] if isinstance(a, dict)}
-        stage = root / ".kit" / "update"
+        stage = meta_dir(root) / "update"
         shutil.rmtree(stage, ignore_errors=True)
         try:
             if not (isinstance(assets.get(name), str) and isinstance(assets.get(name + ".sig"), str)):
@@ -4202,8 +4314,12 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
             verify_release(root, data, http_get(assets[name + ".sig"]))
             unpack_release(data, stage)
             check_release(stage)
-            text, note = merge_kit_json(root, (stage / "kit.json").read_text(encoding="utf-8"))
-            (stage / "kit.json").write_text(text, encoding="utf-8")
+            mine = data_dir(root) / "kit.json"    # the new version's changes go into it once it's installed
+            try:
+                json.loads(mine.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as e:
+                raise ValueError(f"{mine} has a syntax error on line {e.lineno}, column {e.colno}: {e.msg}. Fix it, or "
+                                 "delete it to start from the standard list, then run this again") from None
         except Exception as e:     # whatever goes wrong before the first file moves, the kit stays as it was
             shutil.rmtree(stage, ignore_errors=True)
             die(f"couldn't install version {tag}, so this one stays as it was: {e}")
@@ -4215,19 +4331,138 @@ def cmd_update(root: Path, args: argparse.Namespace) -> None:
             log(f"This version stays. Run SETUP again when you want {tag}.")
             return
         try:
-            state["kit_files"] = install_release(root, stage, state.get("kit_files", []))
+            install_release(app_dir(root), stage)
         except OSError as e:
             die(f"the update stopped partway ({e}). Run it again to finish.")
         state["kit_version"] = tag
         save_state(root, state)
         shutil.rmtree(stage, ignore_errors=True)
-    log(f"Installed version {tag}. {note}")
+    log(f"Installed version {tag}. {ensure_config(root)}".rstrip())
     sys.exit(3)
+
+
+# A kit from before app/, downloads/ and data/ had all of it at its top. Its code is these, and what ./kit update put
+# there (state.json's kit_files); a copy of a git checkout has the rest of the repository too.
+OLD_CODE = {"kit", "kit.cmd", "SETUP.command", "SETUP-Windows.bat", "UNINSTALL.command", "UNINSTALL-Windows.bat",
+            "Open Tinfoil Kit.command", "Open Tinfoil Kit for Windows.bat", "GUIDE.md", "README.md", "THIRD-PARTY.md",
+            "LICENSE", ".gitattributes", ".gitignore", "tools", "site", "tests", "docs", "mac", ".github", "AGENTS.md",
+            "CLAUDE.md", "package.json", "package-lock.json", "eslint.config.mjs"}
+DOWNLOADED = ("bin", "models", "library", "maps", "installers", "INVENTORY.md")
+
+
+def move_into(src: Path, dst: Path) -> None:
+    """Rename src to dst. A folder goes into the one already there, if there is one."""
+    if src.is_dir() and dst.is_dir():
+        for c in list(src.iterdir()):
+            if c.name.startswith("._"):    # a Mac's notes on a file on exFAT, which go with the file
+                with contextlib.suppress(OSError):
+                    c.unlink()
+            else:
+                move_into(c, dst / c.name)
+        with contextlib.suppress(OSError):
+            src.rmdir()
+        return
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(src, dst)
+
+
+def ensure_layout(root: Path) -> bool:
+    """Move a kit from before the three folders into them, by renaming, so nothing downloads again: its code into
+    app/ (a git checkout's stays where it is), what sync downloaded into downloads/, and its kit.json, logs and records
+    into data/. A new app folder put into an old kit takes the old code's place. Only a kit that was set up (it has
+    .kit) has downloads to move: in a fresh download, just the code moves, so folders of the person's beside it, like
+    models, stay. Does nothing to a kit already laid out, and every command runs it first. Returns whether the code
+    moved."""
+    git, app, meta = (root / ".git").exists(), root / "app", meta_dir(root)
+    old_code = not git and (root / "kit").is_file() and (root / "tools" / "kit.py").is_file()
+    placed = (root / ".kit").is_dir()    # (it moves last: while it's at the top, the move isn't finished)
+    if not old_code and not placed:
+        return False
+    if old_code and not app.is_dir() and ROOT != root:
+        die(f"The kit at {root} is from an older version. Run its SETUP to update it first")
+    try:
+        old_state = json.loads((root / ".kit" / "state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        old_state = {}
+    share, autostarted = None, False
+    if old_code:
+        share = share_tools()
+        autostarted = share.autostart_state(root, code=root) == "on"
+    try:
+        if old_code:
+            std = root / "site" / "kit.json"    # the standard list the top kit.json last took in
+            if std.is_file() and not (meta / "kit.base.json").exists():
+                save_text(meta / "kit.base.json", std.read_text(encoding="utf-8"))
+            if (root / "kit.json").is_file() and not (data_dir(root) / "kit.json").exists():
+                move_into(root / "kit.json", data_dir(root) / "kit.json")
+            tops = {f.split("/")[0] for f in old_state.get("kit_files", []) if isinstance(f, str)}
+            names = sorted(n for n in (OLD_CODE | tops) - KEEP - {"", "kit.json", "app", "downloads", "data"}
+                           if (root / n).exists())
+            fresh, done, made = [n for n in names if not (app / n).exists()], [], not app.exists()
+            app.mkdir(exist_ok=True)
+            try:
+                for n in fresh:
+                    os.replace(root / n, app / n)
+                    done.append(n)
+            except OSError:
+                for n in reversed(done):    # all or nothing: the code keeps working where it is until this works
+                    with contextlib.suppress(OSError):
+                        os.replace(app / n, root / n)
+                if made:
+                    with contextlib.suppress(OSError):
+                        app.rmdir()
+                raise
+            for n in names:    # older than the new version's own, in app/
+                if n not in fresh:
+                    shutil.rmtree(root / n) if (root / n).is_dir() else (root / n).unlink()
+            if not (app / "kit.json").exists():    # the standard list, as in a release
+                std = app / "site" / "kit.json"
+                shutil.copyfile(std if std.is_file() else data_dir(root) / "kit.json", app / "kit.json")
+        dl, got = dl_dir(root), [n for n in DOWNLOADED if placed and (root / n).exists()]
+        for n in got:
+            move_into(root / n, dl / n)
+        if (root / ".kit" / "downloads").is_dir():    # archives that were downloading
+            move_into(root / ".kit" / "downloads", dl / ".partial")
+        shutil.rmtree(root / ".kit" / "update", ignore_errors=True)
+        for n, to in (("logs", data_dir(root) / "logs"), (".kit", meta)):
+            if placed and (root / n).exists():
+                move_into(root / n, to)
+        if placed:
+            dl.mkdir(exist_ok=True)    # what tells SETUP the kit has been set up
+    except OSError as e:
+        die(f"Moving the kit into its app, downloads and data folders stopped partway ({e}). Nothing is lost. Close "
+            "the kit, and any window showing its files, then run SETUP again to finish")
+    with contextlib.suppress(OSError, ValueError):
+        state = json.loads(state_path(root).read_text(encoding="utf-8"))
+        parts = state.get("partials", {})
+        if "kit_files" in state or any(k.startswith(".kit/downloads/") for k in parts):
+            state.pop("kit_files", None)    # ./kit update replaces all of app/ now
+            state["partials"] = {k.replace(".kit/downloads/", ".partial/", 1): v for k, v in parts.items()}
+            save_state(root, state)
+    if placed:
+        moved = ["the kit's code into its app folder"] if old_code else []
+        moved += ["what it downloaded into downloads"] if got else []
+        moved += [("your settings and " if old_code else "") + "its records into data"]
+        log("Moved " + ", ".join(moved[:-1]) + (" and " if moved[:-1] else "") + moved[-1] + "."
+            + (" Nothing downloads again." if got else ""))
+    if autostarted:
+        with contextlib.redirect_stdout(io.StringIO()):
+            if sys.platform == "win32":    # rewritten, not started: SETUP stopped the kit to move it, and goes on
+                share.startup_file().write_bytes(share.startup_script(root).encode("utf-8"))
+            else:
+                share.autostart(root, "on")
+        log("Starting with the computer runs it from the app folder now.")
+    return old_code
+
+
+def cmd_layout(root: Path, args: argparse.Namespace) -> None:
+    """main() has done it by now: this is SETUP's way to have it done, and nothing else."""
 
 
 # ----------------------------------------------------------------------------- main
 
 def main() -> None:
+    global ROOT, REGIONS_FILE
     for stream in (sys.stdout, sys.stderr):    # a Windows console can't show every character in a book's title
         with contextlib.suppress(AttributeError, ValueError):
             stream.reconfigure(errors="replace")
@@ -4300,18 +4535,27 @@ def main() -> None:
     p.add_argument("--languages", action="store_true", help="the Wikipedia languages to offer for the place: codes, "
                                                             "name, GB")
     p.add_argument("--wikipedia", metavar="CODES", help="Wikipedia's languages, comma-separated (en, es, de...)")
+    sub.add_parser("layout", help="move a kit from before its app, downloads and data folders into them (SETUP does)")
     args = ap.parse_args()
-    root = (args.root or ROOT).resolve()
-    if args.cmd not in ("share", "autostart") and not shutil.which("curl"):
+    root = (args.root or kit_of(ROOT)).resolve()
+    if root == Path.home().resolve() or root.parent == root:    # an app folder put there on its own
+        die(f"The kit can't use {root} as its folder. Make a folder called {KIT_FOLDER} there, put the app folder in "
+            "it, and run SETUP again")
+    if args.cmd not in ("share", "autostart", "layout") and not shutil.which("curl"):
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
                 "drives": cmd_drives, "kits": cmd_kits, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials, "starter": cmd_starter,
-                "fit": cmd_fit, "pick": cmd_pick, "share": cmd_share, "autostart": cmd_autostart, "pins": cmd_pins, "region": cmd_region}
+                "fit": cmd_fit, "pick": cmd_pick, "share": cmd_share, "autostart": cmd_autostart, "pins": cmd_pins, "region": cmd_region,
+                "layout": cmd_layout}
     if args.cmd not in commands:
         ap.print_help()
         return
     try:
+        if ensure_layout(root) and not (ROOT / "tools" / "kit.py").is_file():    # this code just moved into app/
+            ROOT = app_dir(root)
+            REGIONS_FILE = ROOT / "tools" / "regions.json"
+        ensure_config(root)
         commands[args.cmd](root, args)
     except KeyboardInterrupt:
         log("\nStopped.")

@@ -328,7 +328,7 @@ export default function Home() {
                     <li>Windows: the installer adds python.org's Python (about 15&nbsp;MB) to your user folder, because the kit's tools need it.</li>
                     <li>Mac: the Tinfoil Kit app goes in your Applications folder. If your Mac has no Python, the installer adds one (about 25&nbsp;MB) to your Library folder.</li>
                     <li>Mac: the kit clears macOS's "downloaded from the internet" mark from its own files, and signs a program if macOS won't open it otherwise, so everything opens in an outage.</li>
-                    <li>Mac: a kit in your home folder stays out of Time Machine, and a kit drive stays out of Spotlight.</li>
+                    <li>Mac: what a kit in your home folder downloads stays out of Time Machine, and a kit drive stays out of Spotlight.</li>
                     <li>Linux: if python3 or curl is missing, the installer says how to get them.</li>
                   </ul>
                   <p>Only if you ask: a home server starts the kit with the computer and shares it on your home network, with an access code. Uninstalling deletes the folder and undoes the rest, including the Python the installer added.</p>
@@ -380,13 +380,13 @@ export default function Home() {
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
               <summary itemProp="name">How do I update it?</summary>
               <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
-                <p itemProp="text">Open the installer again whenever you're online. There's no schedule. New models, books and maps arrive, your picks stay, and only what changed downloads. Your old files keep working until the new ones check out.</p>
+                <p itemProp="text">Open the installer again whenever you're online. There's no schedule. New models, books and maps arrive, your picks stay, and only what changed downloads. Your old files keep working until the new ones check out. A new version replaces only the kit's app folder: your downloads and settings stay in folders of their own.</p>
               </div>
             </details>
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">
               <summary itemProp="name">How do I remove it?</summary>
               <div itemScope itemProp="acceptedAnswer" itemType="https://schema.org/Answer">
-                <p itemProp="text">Run the uninstaller in the kit's folder and type delete. It removes the kit and everything it downloaded. On a drive, it leaves everything else alone.</p>
+                <p itemProp="text">Run the uninstaller in the kit's app folder and type delete. It removes the kit and everything it downloaded. On a drive, it leaves everything else alone.</p>
               </div>
             </details>
             <details itemScope itemProp="mainEntity" itemType="https://schema.org/Question">

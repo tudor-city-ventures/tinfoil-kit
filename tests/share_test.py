@@ -124,7 +124,7 @@ def start(server):
 work = Path(tempfile.mkdtemp(prefix="share-test-"))
 try:
     kit = work / "kit"
-    (kit / ".kit").mkdir(parents=True)
+    (kit / "data" / ".kit").mkdir(parents=True)
     share.save_access(kit, {"code": "48217736", "key": "ab" * 32})
     lib = start(http.server.ThreadingHTTPServer(("127.0.0.1", 0), Upstream))
     ai = start(http.server.ThreadingHTTPServer(("127.0.0.1", 0), Upstream))
@@ -261,12 +261,13 @@ try:
     check("...and that it's gone when the kit stops", share.gate_port(gport) != gport)
 
     # ------------------------------------------------------------------------- ./kit share and ./kit autostart
-    k2 = work / "kit2"
-    (k2 / "tools").mkdir(parents=True)
+    k2 = work / "kit2"    # its code in app/, as a release has it
+    (k2 / "app" / "tools").mkdir(parents=True)
     for f in ("kit", "kit.json"):
-        shutil.copy(ROOT / f, k2 / f)
+        shutil.copy(ROOT / f, k2 / "app" / f)
     for f in ("kit.py", "share.py", "launch.sh"):
-        shutil.copy(ROOT / "tools" / f, k2 / "tools" / f)
+        shutil.copy(ROOT / "tools" / f, k2 / "app" / "tools" / f)
+    mine = k2 / "data" / "kit.json"    # the person's kit.json, a copy of app/kit.json at first
     fake_bin = work / "bin"
     fake_bin.mkdir()
     calls = work / "calls.txt"
@@ -279,22 +280,23 @@ try:
            "KIT_LAN_IP": "192.168.1.20"}
 
     def kit_cmd(*args):
-        p = subprocess.run(["bash", str(k2 / "kit"), *args], capture_output=True, text=True, env=env, timeout=60)
+        p = subprocess.run(["bash", str(k2 / "app" / "kit"), *args], capture_output=True, text=True, env=env, timeout=60)
         return p.returncode, p.stdout + p.stderr
 
-    before = (k2 / "kit.json").read_text()
+    before = (k2 / "app" / "kit.json").read_text()
     rc, out = kit_cmd("share")
     check("./kit share: off at first", rc == 0 and "Sharing is off" in out, out)
     rc, out = kit_cmd("share", "on", "--code", "2468-1357", "--qr")
-    after = (k2 / "kit.json").read_text()
+    after = mine.read_text()
     changed = [(a, b) for a, b in zip(before.splitlines(), after.splitlines()) if a != b]
     check("./kit share on: turns the setting on, and changes nothing else in kit.json",
           rc == 0 and changed == [('    "share_on_network": false,', '    "share_on_network": true,')], str(changed))
     check("./kit share on: shows the access code and the QR code",
           "Access code: 2468 1357" in out and "\033[30;47m" in out and "home network" in out, out)
-    check("./kit share on: the access code lives in .kit, not kit.json",
-          json.loads(share.access_file(k2).read_text())["code"] == "24681357" and "2468" not in after)
-    p = subprocess.run(f'bash "{k2}/kit" share --qr | head -1', shell=True, capture_output=True, text=True, env=env, timeout=60)
+    check("./kit share on: the access code lives in data/.kit, not kit.json, and app/kit.json is as it was",
+          json.loads((k2 / "data" / ".kit" / "share.json").read_text())["code"] == "24681357" and "2468" not in after
+          and (k2 / "app" / "kit.json").read_text() == before)
+    p = subprocess.run(f'bash "{k2}/app/kit" share --qr | head -1', shell=True, capture_output=True, text=True, env=env, timeout=60)
     check("./kit share | head -1: no traceback when the reader stops early", "Traceback" not in p.stderr, p.stderr)
     rc, out = kit_cmd("share", "new-code")
     new = json.loads(share.access_file(k2).read_text())["code"]
@@ -303,7 +305,7 @@ try:
     rc, out = kit_cmd("share", "on", "--code", "123")
     check("./kit share: refuses a code that's too short", rc != 0 and "6 to 64" in out)
     rc, out = kit_cmd("share", "off")
-    check("./kit share off", rc == 0 and '"share_on_network": false' in (k2 / "kit.json").read_text())
+    check("./kit share off", rc == 0 and '"share_on_network": false' in mine.read_text())
 
     if sys.platform.startswith("linux"):
         unit = work / "config" / "systemd" / "user" / "tinfoil-kit.service"
@@ -311,7 +313,7 @@ try:
         text = unit.read_text() if unit.exists() else ""
         log = calls.read_text() if calls.exists() else ""
         check("./kit autostart on: a systemd user service that runs the launcher, started now and at boot",
-              rc == 0 and f'ExecStart=/bin/bash "{k2}/tools/launch.sh" --no-browser' in text and "Restart=always" in text
+              rc == 0 and f'ExecStart=/bin/bash "{k2}/app/tools/launch.sh" --no-browser' in text and "Restart=always" in text
               and "systemctl --user enable tinfoil-kit.service" in log and "systemctl --user restart tinfoil-kit.service" in log
               and "loginctl enable-linger" in log, out + log)
         check("./kit autostart on: says when sharing is off", "Sharing is off" in out, out)
@@ -340,7 +342,7 @@ try:
     # ------------------------------------------------------------------------- Windows: the Startup folder
     # What share.py writes there and reads back. The drive test runs the real thing on Windows.
     win, said, started = work / "Tinfoil Kit 100% café", io.StringIO(), []
-    win.mkdir()
+    (win / "app" / "tools").mkdir(parents=True)
     saved = os.environ.get("APPDATA")
     share.WINDOWS, os.environ["APPDATA"] = True, str(work / "Roaming")
     os.startfile = started.append    # Windows runs the new entry, which starts the kit now
@@ -349,7 +351,7 @@ try:
             rc = share.autostart(win, "on")
         entry = work / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "Tinfoil Kit.cmd"
         text = entry.read_bytes().decode("utf-8") if entry.exists() else ""
-        bat = str(win / "Open Tinfoil Kit for Windows.bat").replace("%", "%%")
+        bat = str(win / "app" / "Open Tinfoil Kit for Windows.bat").replace("%", "%%")
         check("Windows: ./kit autostart on puts Open Tinfoil Kit for Windows.bat in the Startup folder, minimized, no browser",
               rc == 0 and f'if exist "{bat}" start "Tinfoil Kit" /min "{bat}" --no-browser\r\n' in text, text)
         check("Windows: the Startup entry is CRLF and UTF-8, for a folder named in any language",
@@ -357,7 +359,8 @@ try:
         check("Windows: ./kit autostart on starts the kit now too", started == [str(entry)], str(started))
         check("Windows: and says it starts as you sign in", "whenever you sign in" in said.getvalue(), said.getvalue())
         check("Windows: reads the entry back, % and all, in any case",
-              share.autostart_state(win) == "on" and share.autostart_state(Path(str(win).upper())) == "on")
+              share.autostart_state(win) == "on"    # (this disk isn't Windows': the app folder in capitals isn't found)
+              and share.autostart_state(Path(str(win).upper()), code=Path(str(win / "app").upper())) == "on")
         check("Windows: another kit folder's entry is another's", share.autostart_state(work / "elsewhere") == "other")
         check("Windows: a sharing change doesn't restart the kit (which window Windows started can't be told)",
               share.restart_if_autostarted(win) is False)
@@ -395,14 +398,14 @@ class Page(http.server.BaseHTTPRequestHandler):
 http.server.HTTPServer(("127.0.0.1", int(sys.argv[sys.argv.index("--port") + 1])), Page).serve_forever()
 """)
     fake.chmod(0o755)
-    (k2 / "library").mkdir()
-    (k2 / "library" / "book.zim").touch()
+    (k2 / "downloads" / "library").mkdir(parents=True)
+    (k2 / "downloads" / "library" / "book.zim").touch()
     lport, sport = free_port(), free_port()
-    cfg = json.loads((k2 / "kit.json").read_text())
+    cfg = json.loads(mine.read_text())
     cfg["settings"].update(library_port=lport, ai_port=free_port(), share_port=sport, share_on_network=True)
-    (k2 / "kit.json").write_text(json.dumps(cfg, indent=2))
+    mine.write_text(json.dumps(cfg, indent=2))
     share.save_access(k2, {"code": "13572468", "key": "ef" * 32})
-    p = subprocess.Popen(["bash", str(k2 / "tools" / "launch.sh"), "--no-browser", "--no-maps"], stdout=subprocess.PIPE,
+    p = subprocess.Popen(["bash", str(k2 / "app" / "tools" / "launch.sh"), "--no-browser", "--no-maps"], stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT, text=True, stdin=subprocess.DEVNULL,
                          env={**env, "KIT_KIWIX_TOOLS_BIN": str(fake)}, start_new_session=True)
     lines = []
