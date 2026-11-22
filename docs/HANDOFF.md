@@ -54,7 +54,7 @@ Written before the first Claude Code thread. The Status section above is current
 
 - **The kit works** and passes a full end-to-end test suite in a Linux sandbox, with every download source and map server replaced by a mock. Two zips were delivered earlier in the chat: OfflineKit v1 (AI and library) and v2 (adds maps). The code in this repo is v2, renamed to Tinfoil Kit, with the default home location changed to New York, NY.
 - **Not yet tested anywhere real:** a real sync from the internet on a Mac. That means the Apple Silicon binaries, about 300 GB of downloads, and the real map servers running from an exFAT drive. The first real run will be on Travis's Mac.
-- **GitHub:** the repo is `tudor-city-ventures/tinfoilkit`, private.
+- **GitHub:** the repo is `tudor-city-ventures/tinfoil-kit` (renamed from `tinfoilkit` on 2026-11-22; old links redirect), private.
 - **Website:** not designed or built yet. There is no Vercel project and no domain purchase.
 
 **First tasks for the new project, in order:**
@@ -361,7 +361,7 @@ Inspired by the DoTheySupportIt repo, but much smaller and written for people.
   - New: `README.md` (for GitHub readers), `LICENSE`, `AGENTS.md`, `CLAUDE.md`, `tests/`, `docs/`, and `site/` for the website later.
 - **LICENSE:** MIT. Holder: "Tinfoil Kit contributors", unless Travis prefers Tudor City Ventures.
 - **`.gitignore`:** `.kit/ logs/ bin/ models/ library/ maps/ installers/ INVENTORY.md __pycache__/`
-- **Repo owner:** in the Q&A Travis first chose his personal account, then agreed the repo should live under tudor-city-ventures to match the credit and hosting. It now lives at `tudor-city-ventures/tinfoilkit`.
+- **Repo owner:** in the Q&A Travis first chose his personal account, then agreed the repo should live under tudor-city-ventures to match the credit and hosting. It now lives at `tudor-city-ventures/tinfoil-kit`.
 
 ---
 
@@ -405,7 +405,7 @@ Inspired by the DoTheySupportIt repo, but much smaller and written for people.
 ### Draft: install prompt (any chat AI)
 
 ```
-I want to set up Tinfoil Kit on my Mac. It's an offline AI assistant, an offline library (Wikipedia, medical and repair guides) and offline maps, all on an external drive, for when the internet is down. The project is at https://github.com/tudor-city-ventures/tinfoilkit. Read its README and GUIDE, then walk me through setup one step at a time:
+I want to set up Tinfoil Kit on my Mac. It's an offline AI assistant, an offline library (Wikipedia, medical and repair guides) and offline maps, all on an external drive, for when the internet is down. The project is at https://github.com/tudor-city-ventures/tinfoil-kit. Read its README and GUIDE, then walk me through setup one step at a time:
 
 1. Which drive to buy and how to format it.
 2. How to download the kit and run the first sync, which takes a few hours.
@@ -483,7 +483,7 @@ The policy and its reasons are in `.github/CONTRIBUTING.md`. In the repo's Setti
 
 ## 8. Accounts and access
 
-- **GitHub:** `tudor-city-ventures/tinfoilkit`, private. The Claude GitHub app has access.
+- **GitHub:** `tudor-city-ventures/tinfoil-kit`, private. The Claude GitHub app has access.
 - **Vercel**, connected as travisbloom:
   - Teams: "Travis Bloom's projects", the personal Hobby team, and "tudor-city-ventures". The site goes in tudor-city-ventures.
   - Confirm that team is on Pro, which commercial use requires.

@@ -173,10 +173,10 @@ class H(BaseHTTPRequestHandler):
                 p = d / name[:-7]
                 return self.send_bytes(f"{sha(p)}  {p.name}\n".encode(), "text/plain", head) if p.exists() else self.send_error(404)
             return self.send_file(d / name, head)
-        if path == "/repos/tudor-city-ventures/tinfoilkit/releases/latest":    # ./kit update: none until a test publishes one
+        if path == "/repos/tudor-city-ventures/tinfoil-kit/releases/latest":    # ./kit update: none until a test publishes one
             p = R / "kit" / "release.json"
             return self.send_bytes(p.read_bytes(), "application/json", head) if p.exists() else self.send_error(404)
-        if path.startswith("/repos/tudor-city-ventures/tinfoilkit/compare/"):    # "BASE...HEAD": answered only if a test wrote one
+        if path.startswith("/repos/tudor-city-ventures/tinfoil-kit/compare/"):    # "BASE...HEAD": answered only if a test wrote one
             p = R / "kit" / "compare" / path.split("/compare/", 1)[1]
             return self.send_bytes(p.read_bytes(), "application/json", head) if p.is_file() else self.send_error(404)
         m = re.match(r"^/repos/([^/]+/[^/]+)/releases(?:/tags/(.+))?$", path)

@@ -10,7 +10,7 @@ body:
       options:
         - label: I searched the open and closed issues, and this isn't one of them.
           required: true
-        - label: I read [CONTRIBUTING](https://github.com/tudor-city-ventures/tinfoilkit/blob/main/.github/CONTRIBUTING.md).
+        - label: I read [CONTRIBUTING](https://github.com/tudor-city-ventures/tinfoil-kit/blob/main/.github/CONTRIBUTING.md).
           required: true
   - type: textarea
     id: what

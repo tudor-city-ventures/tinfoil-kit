@@ -4,7 +4,7 @@
 
 You are setting this up for a person, probably not a programmer. Work in their terminal (Terminal on a Mac, PowerShell on Windows), explain each step in plain words, and ask before anything slow, costly or destructive. This file has what you need: what the kit runs on, how it works, where it can live, how to set it up, use it, update it and remove it, what to do when something breaks, and where every file comes from.
 
-- Repo: https://github.com/tudor-city-ventures/tinfoilkit
+- Repo: https://github.com/tudor-city-ventures/tinfoil-kit
 - Website: https://tinfoilkit.com
 - Printable guide: GUIDE.md, in the kit folder
 
@@ -84,14 +84,14 @@ Recommend a drive when the laptop is short of space or the person wants a kit th
 Ask the person to plug in the drive first, if they have one.
 
     mkdir -p ~/Downloads && cd ~/Downloads
-    curl -fL https://github.com/tudor-city-ventures/tinfoilkit/releases/latest/download/TinfoilKit.tar.gz | tar -xz
+    curl -fL https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit.tar.gz | tar -xz
     cd TinfoilKit
     ./kit drives --json   # what the kit needs, this computer's free space, and every drive plugged in
 
 On Windows, in PowerShell:
 
     cd ~\Downloads
-    curl.exe -fL -o TinfoilKit.zip https://github.com/tudor-city-ventures/tinfoilkit/releases/latest/download/TinfoilKit-Windows.zip
+    curl.exe -fL -o TinfoilKit.zip https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit-Windows.zip
     tar -xf TinfoilKit.zip; Remove-Item TinfoilKit.zip
     cd TinfoilKit
     .\kit.cmd drives --json
@@ -102,7 +102,7 @@ It needs no internet and prints needs_gb (the GB the current kit.json needs), ne
 
 On a Mac without Apple's Command Line Tools, `./kit` stops and says the kit needs Python. Either have the person double-click SETUP.command, which gets a Python for the kit first (about 25 MB) and then walks them through the rest of setup, or, with their OK, install the tools (`xcode-select --install`, several GB, 5 to 15 minutes) and run the command again. `xcode-select -p` shows whether they're there.
 
-Developers can `git clone https://github.com/tudor-city-ventures/tinfoilkit` straight into the chosen place instead, and update with `git pull`.
+Developers can `git clone https://github.com/tudor-city-ventures/tinfoil-kit` straight into the chosen place instead, and update with `git pull`.
 
 ### 2. Decide where it lives
 
@@ -202,7 +202,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 - `./kit update` exits 3 after installing a newer version of the kit. That's success: carry on with the next command. It exits 0 when the kit is already the newest.
 - In a git checkout, run `git pull` instead of `./kit update`.
 - An update can bring models too big for this computer: `./kit fit` names them, and `./kit fit --skip` leaves them out. On a kit with just the essentials, `./kit space . --json` says when the rest fits; then run `./kit essentials off` before syncing. SETUP asks about both by itself.
-- If `./kit update` says a version isn't signed with the kit's release key, stop: don't install it another way. Tell the person, and report it at https://github.com/tudor-city-ventures/tinfoilkit/security.
+- If `./kit update` says a version isn't signed with the kit's release key, stop: don't install it another way. Tell the person, and report it at https://github.com/tudor-city-ventures/tinfoil-kit/security.
 - Double-clicking SETUP again (SETUP.command, or SETUP-Windows.bat on Windows), or Update in the Mac app, does all four.
 - A normal update brings new library editions, the program builds the new kit version names (the AI engine and the rest), any re-released models and fresh map data. Only what changed downloads.
 - A book with `refresh_days` in kit.json keeps the edition it has until it's that many days old: Wikipedia (115 GB) has 365, so most updates don't download it again. The plan marks it `later`. `./kit sync --only wikipedia_en_all_maxi` gets the newest now.
@@ -219,7 +219,7 @@ Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit fol
 - "Windows protected your PC" on a double-click: More info, then Run anyway, once.
 - "Operation not permitted" in Terminal: macOS is keeping Terminal off the drive. System Settings > Privacy & Security > Files and Folders > Terminal: turn on Removable Volumes, then start again.
 - Sync ended with exit 1, or SETUP says some downloads didn't finish: run `./kit sync -y` again. It resumes and names what's left. The kit already works with what it has.
-- Sync says a program's publisher no longer publishes the build the kit names: run `./kit update` first, since a newer kit names newer builds. If it says a program's file changed after the kit pinned it, don't work around it: tell the person, and report it at https://github.com/tudor-city-ventures/tinfoilkit/security.
+- Sync says a program's publisher no longer publishes the build the kit names: run `./kit update` first, since a newer kit names newer builds. If it says a program's file changed after the kit pinned it, don't work around it: tell the person, and report it at https://github.com/tudor-city-ventures/tinfoil-kit/security.
 - Not enough space: sync stops short of the free space it keeps (50 GB on the computer's own disk, 25 GB on a drive). Get just the essentials (`./kit essentials on`), turn items off in kit.json, or move the kit to a bigger drive.
 - A file may be corrupt: `./kit verify` re-checks every file. `./kit verify --fix` removes bad ones, and the next sync replaces them.
 - A model won't load or is very slow: quit other apps, pick Gemma 4 E4B, or start with `--no-maps` to free about 5 GB. Advanced, with the person's password: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
@@ -244,7 +244,7 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 - Every download comes straight from its publisher over HTTPS. Each release names the exact build of every program, with its SHA-256, in tools/pins.json, signed with the rest. Books, models and map data are checked against the publisher's checksum wherever one is posted (the map tiles and fonts have none). Nothing is hosted or mirrored by this project.
 - The servers listen on 127.0.0.1. Sharing is off until the person turns it on; then a gate, on port 8000 by default, asks for an 8-digit code. It's plain HTTP, so share on the person's own Wi-Fi or hotspot, not a public network.
 - To check a release before running it, download tinfoilkit-TAG.tar.gz and its .sig from the release, then run `ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz`.
-- Security problems go to https://github.com/tudor-city-ventures/tinfoilkit/security/advisories/new, never a public issue.
+- Security problems go to https://github.com/tudor-city-ventures/tinfoil-kit/security/advisories/new, never a public issue.
 
 ## Rules
 
@@ -256,8 +256,8 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 
 ## More
 
-- README: https://github.com/tudor-city-ventures/tinfoilkit#readme
+- README: https://github.com/tudor-city-ventures/tinfoil-kit#readme
 - GUIDE.md: the printable guide, in the kit folder
 - THIRD-PARTY.md: every model, book, map and program, and its license
 - AGENTS.md: rules for changing the kit's own code
-- Bugs and ideas: https://github.com/tudor-city-ventures/tinfoilkit/issues
+- Bugs and ideas: https://github.com/tudor-city-ventures/tinfoil-kit/issues

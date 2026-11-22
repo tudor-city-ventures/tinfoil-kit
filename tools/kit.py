@@ -75,11 +75,11 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Optional, Tuple
 
-USER_AGENT = "TinfoilKit/1.0 (+https://github.com/tudor-city-ventures/tinfoilkit)"
+USER_AGENT = "TinfoilKit/1.0 (+https://github.com/tudor-city-ventures/tinfoil-kit)"
 KIWIX_CATALOG = os.environ.get("KIT_KIWIX_CATALOG", "https://library.kiwix.org/catalog/v2/entries?count=-1")
 KIWIX_RELEASES = os.environ.get("KIT_KIWIX_RELEASES", "https://download.kiwix.org/release/{product}/")
 GITHUB_API = os.environ.get("KIT_GITHUB_API", "https://api.github.com")
-KIT_REPO = os.environ.get("KIT_REPO", "tudor-city-ventures/tinfoilkit")    # where ./kit update gets the kit's code
+KIT_REPO = os.environ.get("KIT_REPO", "tudor-city-ventures/tinfoil-kit")    # where ./kit update gets the kit's code
 KIT_COMMIT = "$Format:%H$"    # git archive (a release, or Code > Download ZIP) writes the commit it packed here
 HF = os.environ.get("KIT_HF", "https://huggingface.co")
 ADOPTIUM_API = os.environ.get("KIT_ADOPTIUM_API", "https://api.adoptium.net")
@@ -2117,7 +2117,7 @@ MISSING = object()
 # the kit's GitHub account isn't enough to put code on every drive. tools/release-signers holds the keys a drive
 # accepts, and each release brings the next copy of it: a new key arrives signed by the old one.
 RELEASE_NAMESPACE = "tinfoilkit-release"
-REPORT = "https://github.com/tudor-city-ventures/tinfoilkit/security"
+REPORT = "https://github.com/tudor-city-ventures/tinfoil-kit/security"
 
 
 def item_key(x: Any) -> Any:
