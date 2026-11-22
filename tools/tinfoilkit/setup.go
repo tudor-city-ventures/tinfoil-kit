@@ -257,8 +257,9 @@ func cmdDrives(root string, a *cliArgs) {
 		"drives", list), jsonStyle{indent: 2, ascii: true}) + "\n")
 }
 
-// devBuilds is npm's packages (the website's, and the developer tools in package.json) and the website's build.
-var devBuilds = []string{"node_modules", ".next"}
+// devBuilds is npm's packages (the website's, and the developer tools in package.json), the website's build and
+// ruff's cache.
+var devBuilds = []string{"node_modules", ".next", ".ruff_cache"}
 
 // copyCode copies files and folders with their contents and permissions, never extended attributes (no ._ files on
 // exFAT, no "from the internet" marks) or timestamps, which some drive formats refuse. A developer's installed tools

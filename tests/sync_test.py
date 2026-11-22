@@ -1647,9 +1647,9 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         shutil.copy(TESTS.parent / "kit.json", code)  # the standard list: data/kit.json starts as a copy
         (code / "site").mkdir()
         shutil.copy(TESTS.parent / "site" / "sources.json", code / "site")  # for ./kit pick --ask
-        if git:  # a developer's, with npm's packages and a website build in it
+        if git:  # a developer's, with npm's packages, ruff's cache and a website build in it
             (path / ".git").mkdir()
-            for d in ("node_modules/prettier", "site/node_modules/next", "site/.next"):
+            for d in ("node_modules/prettier", ".ruff_cache/0.17.5", "site/node_modules/next", "site/.next"):
                 (path / d).mkdir(parents=True)
                 (path / d / "index.js").write_text("")
         return path
@@ -2497,14 +2497,15 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
             tk = drv / "USB DRIVE" / "TinfoilKit"
             check(
                 "SETUP first run: a git checkout's code is copied to the drive as its app folder, and the checkout "
-                "stays where it was; .git, npm's packages and the website's build stay behind",
+                "stays where it was; .git, npm's packages, ruff's cache and the website's build stay behind",
                 rc == 0
                 and placed_ok(tk)
-                and not (tk / ".git").exists()
+                and not (tk / "app" / ".git").exists()
                 and dl.exists()
                 and "Use that copy from now on" in out
                 and (tk / "app" / "site" / "sources.json").exists()
-                and not (tk / "node_modules").exists()
+                and not (tk / "app" / "node_modules").exists()
+                and not (tk / "app" / ".ruff_cache").exists()
                 and not (tk / "app" / "site" / "node_modules").exists()
                 and not (tk / "app" / "site" / ".next").exists(),
                 out,
