@@ -1836,7 +1836,7 @@ def prepare_folder(root: Path) -> None:
 # ----------------------------------------------------------------------------- where the kit lives
 
 KIT_FOLDER = "TinfoilKit"    # at the top of a drive, or in the home folder
-THIS = "this Mac" if sys.platform == "darwin" else "this computer"
+THIS = "this Mac" if sys.platform == "darwin" else "this PC" if sys.platform == "win32" else "this computer"
 
 
 def drive_bases() -> List[Path]:
