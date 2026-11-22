@@ -155,8 +155,7 @@ Then, in the kit folder:
     ./kit test                  # files nobody picked once it all checks out.
 
 - `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit already works with what it has.
-- Sync fetches the most important items first, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
-- If the person has Homebrew, `brew install aria2` makes downloads faster.
+- Sync fetches the most important items first, each big file over eight connections at once, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
 - Last, prove it works offline: turn Wi-Fi off, double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows) and ask a question.
 
 ### For people who'd rather click

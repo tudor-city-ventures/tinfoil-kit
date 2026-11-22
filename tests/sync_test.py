@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -69,13 +70,14 @@ mock = subprocess.Popen([sys.executable, str(TESTS / "mock_remote.py"), str(port
 env = {**os.environ, "KIT_KIWIX_CATALOG": f"{base}/catalog/v2/entries?count=-1", "KIT_KIWIX_RELEASES": base + "/release/{product}/",
        "KIT_GITHUB_API": base, "KIT_HF": base, "KIT_ADOPTIUM_API": base + "/adoptium", "KIT_MAVEN": base + "/maven",
        "KIT_NPM": base + "/npm", "KIT_GITHUB_WEB": base + "/ghweb", "KIT_PROTOMAPS_BUILDS": base + "/protomaps/builds.json",
-       "KIT_PROTOMAPS_BUILD_BASE": base + "/protomaps", "KIT_PHOTON_DUMPS": base + "/photon/", "KIT_GEOFABRIK": base + "/geofabrik"}
+       "KIT_PROTOMAPS_BUILD_BASE": base + "/protomaps", "KIT_PHOTON_DUMPS": base + "/photon/", "KIT_GEOFABRIK": base + "/geofabrik",
+       "KIT_PART_MIN": "16384"}    # so the books and models here, 60 to 310 KB, come over several connections in 16 KB parts
 
 drive = work / "drive" / "TinfoilKit"
 listed = -(-70_000 // 1024) * 1024    # testmed's size in the catalog: Kiwix rounds each up to a whole KiB
 shutil.copytree(TESTS.parent / "tools", drive / "tools")
 cfg = {
-    "settings": {"default_model": "Tiny", "keep_free_gb": 0.001, "keep_free_gb_this_computer": 0.001, "downloader": "curl"},
+    "settings": {"default_model": "Tiny", "keep_free_gb": 0.001, "keep_free_gb_this_computer": 0.001},
     "models": [
         {"id": "Tiny", "type": "hf", "repo": "test/Tiny-GGUF", "files": ["*-Q4_K_M.gguf", "*-Q8_0.gguf"], "priority": 1},
         {"id": "Two", "type": "hf", "repo": "test/Two-GGUF", "files": ["*-Q4_K_M.gguf"]},
@@ -258,10 +260,94 @@ pathlib.Path(str(out) + ".aria2").unlink()
     cfg["settings"]["downloader"] = "aria2c"
     write_cfg()
     rc, out = kit("sync", "-y", env={**env, "PATH": f"{fakebin}{os.pathsep}{env['PATH']}"})
-    cfg["settings"]["downloader"] = "curl"
+    del cfg["settings"]["downloader"]
     write_cfg()
     check("aria2c: a full-length download it hadn't finished is resumed, not taken as done",
           rc == 0 and same("models/Two/Two-Q4_K_M.gguf", "hf/two/Two-Q4_K_M.gguf") and not record.exists(), out)
+
+    def served(name):
+        """The stretches of a file the mock internet sent since the last look, leaving out asking for its size."""
+        log = R / "served.log"
+        lines = log.read_text().splitlines() if log.exists() else []
+        log.write_text("")
+        return [(int(a), int(b)) for n, a, b in (x.split() for x in lines) if n == name and int(b) - int(a) > 1]
+
+    # Several connections at once, each with its own part of the file. Ctrl-C partway keeps what arrived, and a record
+    # of which parts that was; the next sync fetches only the rest.
+    model = drive / "models/Tiny/Tiny-Q4_K_M.gguf"
+    model.unlink()
+    partial = model.with_name(model.name + ".partial")
+    record = partial.with_name(partial.name + ".parts")
+    served("Tiny-Q4_K_M.gguf")
+    (R / "SLOW").touch()
+    p = subprocess.Popen([sys.executable, str(drive / "tools" / "kit.py"), "--root", str(drive), "sync", "-y"], env=env,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    for _ in range(400):
+        if record.exists() and partial.exists() and partial.stat().st_size:
+            break
+        time.sleep(0.05)
+    time.sleep(0.5)
+    p.send_signal(signal.SIGINT)
+    out = p.communicate(timeout=60)[0]
+    (R / "SLOW").unlink()
+    rec = json.loads(record.read_text()) if record.exists() else {}
+    arrived = sum(b - a for a, b in rec.get("done", []))
+    left_open = [x for x in subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout.splitlines()
+                 if x.startswith("curl") and "Range: bytes" in x and f"127.0.0.1:{port}/" in x]
+    sent = served("Tiny-Q4_K_M.gguf")
+    check("Ctrl-C partway through a download in parts: what arrived stays, with its record, and no connection is left open",
+          p.returncode == 130 and rec.get("size") == 300_000 and 0 < arrived < 300_000 and not left_open and len(sent) > 2,
+          out + json.dumps(rec) + str(left_open))
+    rc, out = kit("sync", "-y")
+    again = served("Tiny-Q4_K_M.gguf")
+    check("the next sync fetches only the parts that hadn't arrived",
+          rc == 0 and same("models/Tiny/Tiny-Q4_K_M.gguf", "hf/tiny/Tiny-Q4_K_M.gguf") and not record.exists()
+          and sum(b - a for a, b in again) >= 300_000 - arrived
+          and not any(a < d1 and d0 < b for a, b in again for d0, d1 in rec["done"]), out + str(again))
+
+    # Near the end, a connection with nothing left to fetch takes the second half of what another has left
+    (drive / "models/Two/Two-Q4_K_M.gguf").unlink()
+    (R / "SLOW").touch()
+    rc, out = kit("sync", "-y")
+    (R / "SLOW").unlink()
+    again = served("Two-Q4_K_M.gguf")
+    check("near the end, an idle connection takes half of another's part",
+          rc == 0 and same("models/Two/Two-Q4_K_M.gguf", "hf/two/Two-Q4_K_M.gguf")
+          and any(a % 16384 for a, b in again if a < 147_456), out + str(again))
+
+    # A download one connection began (one before this kit got parts, or "downloader": "curl") carries on in parts
+    model.unlink()
+    partial.write_bytes((R / "hf/tiny/Tiny-Q4_K_M.gguf").read_bytes()[:100_000])
+    rc, out = kit("sync", "-y")
+    again = served("Tiny-Q4_K_M.gguf")
+    check("a download one connection began carries on in parts, without fetching its start again",
+          rc == 0 and same("models/Tiny/Tiny-Q4_K_M.gguf", "hf/tiny/Tiny-Q4_K_M.gguf") and len(again) > 2
+          and min(a for a, b in again) == 100_000 and sum(b - a for a, b in again) >= 200_000, out + str(again))
+
+    # ...and the other way: with "downloader": "curl", a download in parts keeps what arrived from the start, then one
+    # connection fetches the rest
+    model.unlink()
+    data = (R / "hf/tiny/Tiny-Q4_K_M.gguf").read_bytes()
+    partial.write_bytes(data[:50_000] + os.urandom(50_000) + data[100_000:150_000])
+    record.write_text(json.dumps({"size": 300_000, "done": [[0, 50_000], [100_000, 150_000]]}))
+    cfg["settings"]["downloader"] = "curl"
+    write_cfg()
+    rc, out = kit("sync", "-y")
+    del cfg["settings"]["downloader"]
+    write_cfg()
+    again = served("Tiny-Q4_K_M.gguf")
+    check('"downloader": "curl" carries on a download in parts from the end of its first stretch, in one piece',
+          rc == 0 and same("models/Tiny/Tiny-Q4_K_M.gguf", "hf/tiny/Tiny-Q4_K_M.gguf") and not record.exists()
+          and again == [(50_000, 300_000)], out + str(again))
+
+    # A server that sends only whole files, though it says how big one is: one connection after all
+    model.unlink()
+    (R / "NO_PARTS").touch()
+    rc, out = kit("sync", "-y")
+    (R / "NO_PARTS").unlink()
+    check("a server that won't send parts of a file: it comes in one piece",
+          rc == 0 and same("models/Tiny/Tiny-Q4_K_M.gguf", "hf/tiny/Tiny-Q4_K_M.gguf") and not record.exists()
+          and (0, 300_000) in served("Tiny-Q4_K_M.gguf"), out)
 
     # Which release of a program: llama.cpp's builds are its nightly prereleases, but Photon's newest release
     # here is a beta, and a beta is taken only when there's nothing else.
