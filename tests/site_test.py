@@ -130,6 +130,11 @@ with sync_playwright() as p:
             page.click("[data-copy=installPrompt]")
             page.wait_for_selector("[data-copy=installPrompt]:text-is('Copied')", timeout=5000)   # (the CSP blocks wait_for_function)
             check("Copy puts the prompt on the clipboard", page.evaluate("navigator.clipboard.readText()").startswith("I want to set up Tinfoil Kit"))
+            for pid, label in (("installPrompt", "Install ours"), ("ownPrompt", "Build your own")):
+                text = page.text_content("#" + pid).lower()
+                missing = [w for w in ("opt in or out", "ai", "maps", "wikipedia", "medical", "preparedness", "repair",
+                                       "courses", "home") if w not in text]
+                check(f"{label}: the prompt lets you opt in or out of each part", not missing, ", ".join(missing))
             old = b.new_page()    # a browser without the clipboard API (e.g. the page opened over plain http)
             old.add_init_script("Object.defineProperty(Navigator.prototype, 'clipboard', {get: () => undefined})")
             old.goto(URL)
@@ -238,8 +243,8 @@ with sync_playwright() as p:
               and pg.evaluate("document.getElementById('downloads').open") and pg.evaluate(VIEWS) == [os_] and not errs,
               f"{label}, {href}, {pg.evaluate(VIEWS)}, {errs}")
         if os_ == "mac":
-            check("mac: the steps show the warning macOS gives, and the fallback past it",
-                  "Open Anyway" in pg.inner_text("#downloads") and pg.is_visible("#downloads .mac-alert .hit"))
+            check("mac: the steps show what macOS asks before it opens the app, and what to click",
+                  "Move to Applications" in pg.inner_text("#downloads") and pg.is_visible("#downloads .mac-alert .hit"))
             pg.locator("#downloads").screenshot(path=os.path.join(SHOTS, "site_download_mac.png"))
             axe(pg, "download steps for a Mac")
             pg.click("#downloads [data-view=mac] .dl-back")

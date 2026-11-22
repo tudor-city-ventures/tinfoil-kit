@@ -9,7 +9,7 @@ step "python compiles"
 run python3 -m py_compile tools/kit.py tools/share.py tests/*.py site/*.py
 
 step "bash parses"
-SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command tools/launch.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles)
+SH=(kit "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command tools/launch.sh mac/app.sh mac/build.sh tests/check.sh tests/run_all.sh tests/build_fixtures.sh tests/drive_test.sh tests/fakes/java tests/fakes/pmtiles)
 for f in "${SH[@]}"; do run bash -n "$f"; done
 
 step "shellcheck"
@@ -35,8 +35,8 @@ step "archives of the kit stamp kit.py with their commit (./kit update needs it)
 if git rev-parse --git-dir >/dev/null 2>&1; then
   run grep -q '^KIT_COMMIT = "\$Format:%H\$"' tools/kit.py
   run sh -c 'git check-attr export-subst tools/kit.py | grep -q ": set$"'
-  # and carry the kit's own files only: no tests, docs or website besides the two site files the kit reads
-  run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -Ev "^(site/|site/kit.json|site/sources.json)$" | grep -E "^(tests|docs|\.github|site)/"'
+  # and carry the kit's own files only: no tests, docs, website (besides the two site files the kit reads) or Mac app
+  run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -Ev "^(site/|site/kit.json|site/sources.json)$" | grep -E "^(tests|docs|\.github|site|mac)/"'
 else
   echo "skipped (not a git checkout)"
 fi
@@ -71,6 +71,11 @@ echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 
 step "sharing on the home network: the gate, the QR code, ./kit share and autostart"
 out=$(python3 tests/share_test.py 2>&1); rc=$?
+echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+[ $rc -eq 0 ] || fail=1
+
+step "the Mac app's file work and icon"
+out=$(python3 tests/mac_test.py 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 

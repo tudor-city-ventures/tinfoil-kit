@@ -113,12 +113,14 @@ Go through "Where it can live" with the person, with the numbers from step 1:
 - A drive with a problem is FAT32 (it can't hold files over 4 GB) or, on a Mac, NTFS (a Mac can't write to it; Windows and Linux can). It needs erasing as exFAT first: on a Mac, in Disk Utility, select the drive, click Erase and choose ExFAT. On Windows, in File Explorer, right-click the drive, choose Format and pick exFAT. Erasing deletes everything on the drive: confirm which disk it is and get the person's explicit yes first.
 - A drive with has_kit already holds a kit: offer to update that one instead (see "Update it").
 
-### 3. Choose what goes in it (optional)
+### 3. Choose what goes in it
+
+Go through each part with the person and let them opt in or out. For each, say what it's for, about how big it is and what you'd recommend for their computer, and keep the default for anything they don't mind: where they live and Wikipedia's languages, the AI and which of its models, the maps, each group of the library, the whole kit or just the essentials, and whether to share it with the phones and laptops at home (see "A home server"). Run `./kit estimate` after changes. If they pasted picks from the website's builder (a list of sources and a `./kit region` line), those are their answers for the AI, the maps and the library: switch on only those, run the region line, and ask only about the rest.
 
 kit.json lists everything. The default kit:
 
 - AI models, all of which read photos: Inkling 2 Mini (the default, fast, about 18 GB), Qwen3.8 27B (a second opinion from another lab, slower, 17.5 GB), Gemma 4 26B-A4B (a third opinion, 15.7 GB), Gemma 4 12B (mid-size, for 16 to 24 GB, 7.2 GB) and Gemma 4 E4B (small, saves battery, for 8 GB, 5.3 GB).
-- Library: all of English Wikipedia with images (about 115 GB), WikiMed, field and military medicine manuals, LibreTexts textbooks, iFixit repair guides, Ready.gov, US Army publications, Wikibooks, Wiktionary, Wikivoyage, Wikiversity, Appropedia, Energypedia, and Stack Exchange Q&A on home improvement, cooking, gardening, car and bicycle repair, electronics, amateur radio and more. Off by default because they're huge: Survivor Library (232 GB), Khan Academy videos (168 GB) and Project Gutenberg (206 GB).
+- Library, in the builder's groups: Reference (all of English Wikipedia with images, about 127 GB; Wiktionary; Wikivoyage), Medical (WikiMed, field and military medicine manuals, LibreTexts Medicine, medical Q&A; about 4 GB), Preparedness (post-disaster, water and food guides, knots, Ready.gov, Urban Prepper, US Army publications, outdoors Q&A; about 13 GB), Repair and skills (iFixit, Appropedia, Energypedia, and Stack Exchange Q&A on home improvement, gardening, cooking, electronics, amateur radio, car and bicycle repair; about 13 GB) and Books and courses (Wikibooks, Wikiversity, LibreTexts textbooks; about 15 GB). Off by default because they're huge: Survivor Library (220 GB), Khan Academy videos (180 GB) and Project Gutenberg (221 GB).
 - Maps: street detail, addresses and directions for one place, address search for that place's whole country, and a low-detail world map. Where nobody publishes address search for the country alone (much of Europe, the Caribbean), it covers the whole region of the world, 16 to 32 GB, and just the essentials (`./kit essentials on`) leave it out. Out of the box the place is the US Northeast (New England, New York, New Jersey, Pennsylvania); set where the person lives (below). 5 to 30 GB, depending on the place.
 
 To change it:
@@ -130,7 +132,6 @@ To change it:
 - Add a book: `./kit search WORDS` finds Kiwix books and prints a line to paste into library.
 - Where the person lives: ask them, then `./kit region PLACE`, with a US state or a country in English ("Texas", "Ontario", "Germany: Bayern"; nicknames like "UK" and big towns like "Lyon" work too). It sets the map's street detail, directions, address search, home and units, and prints what it set. A big country comes in parts (US states, Canadian provinces, German states): pick the person's part. When a name fits more than one place, it lists them: `./kit region --find WORDS` prints the matches as id, name and group (no words: every place), and `./kit region ID` takes the one meant. `./kit region` alone says what's set now.
 - Wikipedia in the person's language: `./kit region --languages PLACE` lists the choices for that place (codes, name, GB). `./kit region PLACE --wikipedia de` (or `de,en` for two) swaps Wikipedia for those, and sync removes the old one once the new one is in.
-- Or make a kit.json with the builder at https://tinfoilkit.com/#builder and put it in the kit folder, replacing the one there.
 
 Run `./kit estimate` again after any change.
 
@@ -160,11 +161,11 @@ Then, in the kit folder:
 
 ### For people who'd rather click
 
-Download it from https://tinfoilkit.com: the Download button picks the computer's file from the latest release (TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, or TinfoilKit.tar.gz for Linux), and the page says what to do next. On a Mac, open the download and double-click SETUP.command in the TinfoilKit folder. On Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat. On Linux, run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command`. The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), then "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it downloads and tests the essentials, then the rest, explaining each step. On a Mac without Python, it gets one first. On macOS 15 and later the first double-click says Apple could not verify it: open System Settings > Privacy & Security and click Open Anyway, once. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
+Download it from https://tinfoilkit.com: the Download button picks the computer's file from the latest release (TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, or TinfoilKit.tar.gz for Linux), and the page says what to do next. On a Mac, open the download (Safari unzips it into the Tinfoil Kit app), double-click Tinfoil Kit, click Open when macOS asks about an app from the internet, let it move itself to Applications and click Set Up: SETUP runs in a Terminal window. On Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat. On Linux, run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command`. The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), then "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it downloads and tests the essentials, then the rest, explaining each step. On a Mac without Python, it gets one first. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
 
 ## Use it
 
-- Double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows), or run `bash "Open Tinfoil Kit.command"`. It opens http://127.0.0.1:8888. Keep its window open: closing it stops everything.
+- Open the Tinfoil Kit app on a Mac that has it, or double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows), or run `bash "Open Tinfoil Kit.command"`. It opens http://127.0.0.1:8888. Keep its window open: closing it stops everything.
 - Open Tinfoil Kit.command's options: `--share` lets phones and laptops on the same network open it with an access code (it prints the address, the code and a QR code), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in models/), `--no-browser` skips opening the browser. Open Tinfoil Kit for Windows.bat takes `--share` and `--no-browser`. If macOS asks whether to accept incoming connections, click Allow; if Windows asks whether Python may use the network, click Allow access.
 - Ask answers from the books and cites them. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station.
 - Models: pick one on the Ask page. The first answer after switching takes up to a minute while it loads.
@@ -202,7 +203,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 - In a git checkout, run `git pull` instead of `./kit update`.
 - An update can bring models too big for this computer: `./kit fit` names them, and `./kit fit --skip` leaves them out. On a kit with just the essentials, `./kit space . --json` says when the rest fits; then run `./kit essentials off` before syncing. SETUP asks about both by itself.
 - If `./kit update` says a version isn't signed with the kit's release key, stop: don't install it another way. Tell the person, and report it at https://github.com/tudor-city-ventures/tinfoilkit/security.
-- Double-clicking SETUP again (SETUP.command, or SETUP-Windows.bat on Windows) does all four.
+- Double-clicking SETUP again (SETUP.command, or SETUP-Windows.bat on Windows), or Update in the Mac app, does all four.
 - A normal update brings new library editions, the program builds the new kit version names (the AI engine and the rest), any re-released models and fresh map data. Only what changed downloads.
 - A book with `refresh_days` in kit.json keeps the edition it has until it's that many days old: Wikipedia (115 GB) has 365, so most updates don't download it again. The plan marks it `later`. `./kit sync --only wikipedia_en_all_maxi` gets the newest now.
 - It's safe to stop at any point and run it again: it picks up where it left off, and the old files keep working until the new ones check out.
@@ -210,7 +211,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 
 ## Remove it
 
-Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit folder. Once the person types "delete", it removes the kit folder and everything the kit downloaded, and the Python SETUP got (on Windows, or on a Mac that had none). On a drive it leaves the rest of the drive alone. As an agent, run `bash UNINSTALL.command --yes` (`.\UNINSTALL-Windows.bat --yes` on Windows), which skips the question, only after the person's explicit yes.
+Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit folder, or click Remove in the Mac app. Once the person types "delete", it removes the kit folder and everything the kit downloaded, and the Python SETUP got (on Windows, or on a Mac that had none). On a drive it leaves the rest of the drive alone. The Mac app stays in Applications until it's dragged to the Trash. As an agent, run `bash UNINSTALL.command --yes` (`.\UNINSTALL-Windows.bat --yes` on Windows), which skips the question, only after the person's explicit yes.
 
 ## When something goes wrong
 

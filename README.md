@@ -14,7 +14,7 @@ Open the kit folder (or plug in the drive it's on), double-click `Open Tinfoil K
 
 ## How it works
 
-The whole kit is one folder. Put it on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows.
+The whole kit is one folder. Put it on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows. On a Mac the Tinfoil Kit app, the website's Mac download, opens them for you: SETUP in Terminal the first time, then the kit, in a window that stops it when you close it.
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 300}}}%%
@@ -108,7 +108,7 @@ A nightly test sets the kit up on a Mac and on Windows, from a download onto the
 
 Download the kit from [tinfoilkit.com](https://tinfoilkit.com). Its button picks your computer's file from the [latest release](https://github.com/tudor-city-ventures/tinfoilkit/releases/latest): `TinfoilKit-Mac.zip`, `TinfoilKit-Windows.zip`, or `TinfoilKit.tar.gz` for Linux. Then:
 
-- **Mac:** open the download (Safari unzips it by itself) and double-click `SETUP.command` in the TinfoilKit folder. macOS asks once before it opens a script from the internet: click **Done**, open **System Settings > Privacy & Security** and click **Open Anyway**.
+- **Mac:** open the download (Safari unzips it by itself) and double-click **Tinfoil Kit**. Click **Open** when macOS asks about an app from the internet, let it move itself to Applications, then click **Set Up**: SETUP runs in a Terminal window.
 - **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat` in the TinfoilKit folder. If Windows says it protected your PC, click **More info**, then **Run anyway**.
 - **Linux:** run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command` in a terminal. It needs python3 and curl.
 
@@ -122,7 +122,7 @@ cd ~/TinfoilKit
 ./kit test    # start every server offline and check it answers
 ```
 
-Then turn Wi-Fi off and double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the kit folder.
+Then turn Wi-Fi off and open the Tinfoil Kit app, or double-click `Open Tinfoil Kit.command` in the kit folder (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the kit folder.
 
 ## Update
 

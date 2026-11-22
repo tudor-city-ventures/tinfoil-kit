@@ -25,6 +25,8 @@ case "${1:-}" in --placed|--updated) ;; *) KIT_STEP=0; KIT_STEPS=3; export KIT_S
 PY_URL="${KIT_MAC_PYTHON_URL:-https://github.com/astral-sh/python-build-standalone/releases/download/20260718/cpython-3.13.14%2B20260718-aarch64-apple-darwin-install_only_stripped.tar.gz}"
 PY_SHA256="${KIT_MAC_PYTHON_SHA256:-06469835e1b0f73bcdb6c498a1d60ce579cc43a980754490a6f1e30062f43850}"
 PY_HOME="$HOME/Library/Application Support/TinfoilKit"
+APP=""    # the Mac app (the website's Mac download), once it's in Applications: the kit opens with it
+for a in "/Applications/Tinfoil Kit.app" "$HOME/Applications/Tinfoil Kit.app"; do [ $MAC = 1 ] && [ -d "$a" ] && APP="$a" && break; done
 
 say() { printf '\n%s\n' "$*"; }
 ask() { printf '\n%s [Y/n] ' "$1"; read -r a; case "$a" in ""|y|Y|yes|Yes) return 0;; esac; return 1; }
@@ -323,6 +325,11 @@ all_set() {
   say "All set. Tinfoil Kit is $(where_kit), in $KIT"
   if [ "${KIT_HOME_SERVER:-}" = 1 ]; then
     :    # it starts by itself: home_server says so
+  elif [ -n "$APP" ] && on_this_mac; then
+    echo "In an outage: open Tinfoil Kit, in Applications. No internet needed."
+  elif [ -n "$APP" ]; then
+    echo "In an outage: plug in the drive and open Tinfoil Kit, in Applications. No internet needed. On another"
+    echo "computer, open the drive's ${KIT##*/} folder and double-click Open Tinfoil Kit."
   elif on_this_mac && [ "$KIT" = "$HOME/$NAME" ] && [ $MAC = 1 ]; then
     echo "In an outage: in Finder choose Go > Home, open $NAME and double-click Open Tinfoil Kit.command. No internet needed."
   elif on_this_mac; then
@@ -369,6 +376,8 @@ if [ "${1:-}" != "--updated" ]; then
     [ -n "${KIT_REGION:-}" ] && ./kit region "$KIT_REGION" ${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"} >/dev/null 2>&1
   fi
   checks
+  # The Mac app looks for the kit here, and names its drive if it isn't plugged in.
+  [ $MAC = 1 ] && { mkdir -p "$PY_HOME" && printf '%s\n' "$KIT" > "$PY_HOME/last-kit"; } 2>/dev/null
   echo
   ./kit update
   [ $? -eq 3 ] && exec bash "$KIT/SETUP.command" --updated
@@ -434,7 +443,10 @@ fi
 if [ $tested -eq 0 ] && [ $rc -eq 0 ]; then
   all_set
   [ "${KIT_HOME_SERVER:-}" = 1 ] && { home_server; finish; }
-  ask "Open the kit now?" && exec bash "Open Tinfoil Kit.command"
+  if ask "Open the kit now?"; then
+    [ -n "$APP" ] && { open -a "$APP"; exit 0; }
+    exec bash "Open Tinfoil Kit.command"
+  fi
   finish
 fi
 if [ $tested -eq 0 ]; then
@@ -444,6 +456,8 @@ if [ $tested -eq 0 ]; then
   if [ "${KIT_HOME_SERVER:-}" = 1 ]; then
     home_server
     say "Run SETUP again later to get the rest."
+  elif [ -n "$APP" ]; then
+    echo "You can use the kit now: open Tinfoil Kit, in Applications. Click Update in it later to get the rest."
   else
     echo "You can use the kit now: double-click Open Tinfoil Kit.command. Double-click SETUP again later to get the rest."
   fi

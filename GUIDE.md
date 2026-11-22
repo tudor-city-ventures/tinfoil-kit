@@ -13,8 +13,9 @@ on your computer or on an external drive. Print this page and keep it handy (wit
 2. Open the kit folder: on a drive, the `TinfoilKit` folder on the drive. On the computer itself, `TinfoilKit` in
    your home folder (Mac: in Finder choose **Go > Home**. Windows: in File Explorer, your user folder, `C:\Users\<you>`).
 3. Start it:
-   - **Mac**: double-click **`Open Tinfoil Kit.command`**. If macOS won't open it, open Terminal and type `bash ` (with a
-     space), drag `Open Tinfoil Kit.command` into the window, and press Return. That always works.
+   - **Mac**: open the **Tinfoil Kit** app if this Mac has it (in Applications, or search for it with Spotlight).
+     Otherwise double-click **`Open Tinfoil Kit.command`**. If macOS won't open it, open Terminal and type `bash `
+     (with a space), drag `Open Tinfoil Kit.command` into the window, and press Return. That always works.
    - **Windows**: double-click **`Open Tinfoil Kit for Windows.bat`**. If Windows says it protected your PC, click
      **More info**, then **Run anyway**.
    - **Linux**: open a terminal in the folder and run `bash "Open Tinfoil Kit.command"`.
@@ -71,8 +72,8 @@ The kit's map is the backup, and it's handy for planning on a big screen and for
 
 ## Update it (whenever you like, while you have internet)
 
-There's no schedule. Double-click `SETUP.command` in the kit folder (`SETUP-Windows.bat` on Windows; on Linux,
-`bash SETUP.command`). It gets the newest version of the kit itself, with any models and books added since, then the
+There's no schedule. Click **Update** in the Mac app, or double-click `SETUP.command` in the kit folder
+(`SETUP-Windows.bat` on Windows; on Linux, `bash SETUP.command`). It gets the newest version of the kit itself, with any models and books added since, then the
 newest editions of everything, checks every file, and starts it all once offline to make sure it works. Or open a
 terminal in the kit folder (Mac: drag the `TinfoilKit` folder onto the Terminal icon; Windows: right-click the folder,
 **Open in Terminal**) and run these (on Windows, `.\kit.cmd` in place of `./kit`):
@@ -115,15 +116,16 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
 ## First-time setup
 
 1. Download the kit from **tinfoilkit.com**, which picks the file for your computer, and open it: on a Mac, Safari
-   unzips it into a TinfoilKit folder (in another browser, double-click the ZIP). On Windows, right-click it and
+   unzips it into the **Tinfoil Kit** app (in another browser, double-click the ZIP). On Windows, right-click it and
    choose **Extract All**. On Linux, run `tar -xf TinfoilKit.tar.gz`.
-2. Start SETUP in the TinfoilKit folder:
-   - **Mac**: double-click **`SETUP.command`**. macOS says it can't check it for malware: click **Done**, open
-     **System Settings > Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
+2. Start SETUP:
+   - **Mac**: double-click **Tinfoil Kit** and click **Open** when macOS asks about an app from the internet. It
+     offers to move itself to Applications: say yes. Then click **Set Up**, and SETUP starts in a Terminal window.
      On a Mac without Python, it first gets one for the kit's tools (about 25 MB, once).
-   - **Windows**: double-click **`SETUP-Windows.bat`**. If Windows says it protected your PC, click **More info**,
-     then **Run anyway**. First it gets Python, which the kit's tools run on (about 15 MB, once).
-   - **Linux**: open a terminal in the folder and run `bash SETUP.command`. It needs python3 and curl.
+   - **Windows**: double-click **`SETUP-Windows.bat`** in the TinfoilKit folder. If Windows says it protected your
+     PC, click **More info**, then **Run anyway**. First it gets Python, which the kit's tools run on (about 15 MB,
+     once).
+   - **Linux**: open a terminal in the TinfoilKit folder and run `bash SETUP.command`. It needs python3 and curl.
 3. SETUP asks where you live: type your US state or your country (like Texas, Ontario or Germany; a big town works
    too). That sets the maps' area, directions, address search and home, and offers Wikipedia in your language.
 4. SETUP says which AI model this computer can run, and asks before downloading any that are too big for it. Then
@@ -148,10 +150,11 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
 
 ## Removing it
 
-Double-click `UNINSTALL.command` in the kit folder (`UNINSTALL-Windows.bat` on Windows; on Linux,
-`bash UNINSTALL.command`). It shows what it will delete and how much space that frees, and deletes the kit and
+Click **Remove** in the Mac app, or double-click `UNINSTALL.command` in the kit folder (`UNINSTALL-Windows.bat` on
+Windows; on Linux, `bash UNINSTALL.command`). It shows what it will delete and how much space that frees, and deletes the kit and
 everything it downloaded only after you type `delete`. The files don't go to the Trash. On a drive, nothing else on
 the drive is touched. It also removes the Python SETUP got, on Windows or on a Mac that didn't have one.
+To remove the Mac app too, drag it from Applications to the Trash.
 
 Optional, on a Mac: `brew install aria2` makes downloads faster.
 

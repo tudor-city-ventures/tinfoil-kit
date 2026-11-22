@@ -9,7 +9,7 @@ Thanks for helping. One person maintains the kit, so the process keeps their tim
 3. **Open one pull request for it** that says `Closes #123` in its description.
 4. **Show it works.** Run the checks [AGENTS.md](../AGENTS.md#verify) lists for what you changed and paste the output. Changes to the page or the website come with screenshots.
 
-A bot closes issues filed without a form (with `gh` or the API, say) and pull requests that don't link an accepted issue. People who've had a pull request merged here skip both. Anyone without write access can have two pull requests open at a time. A pull request that changes the workflows, CODEOWNERS, Dependabot's settings, `.gitattributes` or the release key fails a check, and only the maintainer can merge it.
+A bot closes issues filed without a form (with `gh` or the API, say) and pull requests that don't link an accepted issue. People who've had a pull request merged here skip both. Anyone without write access can have two pull requests open at a time. A pull request that changes the workflows, CODEOWNERS, Dependabot's settings, `.gitattributes`, the release key or how the Mac app is signed fails a check, and only the maintainer can merge it.
 
 ## Good places to start
 
