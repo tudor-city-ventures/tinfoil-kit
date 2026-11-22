@@ -501,7 +501,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out, _, _, _ = first_run("3\n")
     check("SETUP first run: a wrong answer asks again, and a closed window stops it", rc == 1 and "Type a number from 1 to 2" in out, out)
     shm = Path("/dev/shm")
-    if shm.is_dir() and os.access(shm, os.W_OK) and shm.stat().st_dev != work.stat().st_dev:
+    # (Docker mounts /dev/shm noexec, where the copied ./kit can't run.)
+    if (shm.is_dir() and os.access(shm, os.W_OK) and shm.stat().st_dev != work.stat().st_dev
+            and not os.statvfs(shm).f_flag & getattr(os, "ST_NOEXEC", 8)):
         drv = Path(tempfile.mkdtemp(prefix="kit drives ", dir=shm))
         try:
             (drv / "USB DRIVE").mkdir()
@@ -517,7 +519,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         finally:
             shutil.rmtree(drv, ignore_errors=True)
     else:
-        print("skip  SETUP first run: copying to another disk (no /dev/shm here)")
+        print("skip  SETUP first run: copying to another disk (no usable /dev/shm here)")
 
     # UNINSTALL.command: removes the kit and its downloads, only when asked, and stops the kit if it's running.
     def uninstall(*args, answers="", kit_files=True):
