@@ -35,12 +35,12 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 
 **Waiting on Travis**
 - Whether tinfoilkit.com stays public before launch. The project's Vercel Authentication covers everything except custom domains, so the site is public there, and its GitHub buttons 404 until the repo is public. Hiding it means setting protection to all deployments; that needs his OK.
-- Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too, because scheduled workflows run from the default branch's copy of `.github/`. (Vercel deploys production from `main`; the sizes workflow checks out and pushes `main`.)
 - A real `SETUP.command` run on his Mac. This is the only test against real downloads and Apple Silicon.
 - Going public: turn off Vercel Authentication for production and make the repo public. Ask first.
-- Contribution policy, in place as recommended until Travis says otherwise: the issue-first gate (not label-only or invite-only), DCO sign-off (not a CLA or nothing), and AI tools allowed with disclosure and a person answering for every PR.
 
 **Decided for now (Travis, 2026-11-21):** llama-server is the only AI runtime (no Ollama or LM Studio), Ask stays one library search then an answer (only map questions use tools), and "AI chat" stays llama-server's own page.
+
+**Contribution policy (Travis, 2026-11-22):** the issue-first gate (not label-only or invite-only), DCO sign-off (not a CLA or nothing), and AI tools allowed with disclosure and a person answering for every issue and PR. GitHub's default branch is `main`, so pushing `main` is enough.
 
 **Ideas not started**
 - Real product screenshots on the site. CI's e2e screenshots use test data (a tiny model, mock places), so they would need real data from Travis's Mac.
@@ -279,7 +279,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
 - **Quick gate (`check.sh`, every push):** compile and parse checks, shellcheck when installed, kit.json validity, `site/sources.json` freshness, CRLF on the Windows launcher, then:
   - `sync_test.py`: the real `kit.py` against `mock_remote.py` with tiny random files: downloads, a download that breaks and resumes, checksums, a second sync that does nothing, `verify --fix`, lost `state.json`, a "3 months later" update with planted leftovers, offline and Wi-Fi sign-in runs, and every ending of `SETUP.command` with a stand-in `./kit`, the launcher's first-model choice by memory, and its move off a port another program holds. Needs only python3 and curl, so it runs in cloud sessions.
   - `share_test.py`: the gate against stand-in servers (access code, cookie, rate limit, routes, streaming, DNS rebinding, the QR code), `./kit share` and `./kit autostart` with a stand-in systemctl, and the launcher with sharing on.
-  - `map_logic_test.js`: the page's `Kit` map code against a mock Photon, GraphHopper and tool-calling AI (`mock_services.py`).
+  - `map_logic_test.js`: the page's `Kit` map code against a mock Photon, GraphHopper and tool-calling AI (`mock_services.py`), and a streamed answer the mock cuts in the middle of a character, which must arrive whole.
 - **End to end (`build_fixtures.sh` then `run_all.sh`, CI on changes to the kit):** copies the kit onto a fake drive with real kiwix-serve and llama-server binaries, a tiny GGUF model and test ZIMs, then:
   - `plan` and `sync` (three entries are broken on purpose: sync must finish the rest, name them and exit 1), `verify`, `SETUP.command`, `search`;
   - the launcher with sharing on, then `portal_test.js`, `map_logic_test.js` and the Playwright UI tests (`ui_test.py`, `map_ui_test.py`), with axe on every tab in light and dark mode when `KIT_AXE` is set. `ui_test.py` also uses the kit as a phone on the network does: through the gate, with the access code, llama-server's chat page included;
@@ -297,6 +297,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
 - **Website (`site_test.py`, every push):** serves `site/` with the production headers and drives the kit builder on desktop and phone sizes: presets, totals, no sideways scroll, fonts load from the site, nothing loads from other sites, both Copy paths, the kit.json download, and axe.
 - **`mock_remote.py`** fakes every download source. Flag files switch its behavior: `STATE_V2` ("3 months later"), `FLAKY` (a download breaks partway), `PHOTON_OLD_DUMP` (only an older database version is published). `/wifi-sign-in` answers like a hotel network's sign-in page.
 - **`tests/fakes/`:** a fake `java` (pretends to be GraphHopper's import and server, and Photon, by running the mocks) and a fake `pmtiles`.
+- **`make_tiny_model.py`:** the test AI. It gives one fixed answer to any question, with accents and symbols, some spelled byte by byte as real models write them, and `portal_test.js`, `ui_test.py` and `drive.py` check that it arrives with every character intact. Random weights would write random bytes, which look just like an encoding bug and would hide a real one.
 
 **Never verified. Needs a real Mac and the internet:**
 - Real downloads and checksums from each source.
@@ -310,7 +311,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
 
 ## 5. Agent-driven development setup (keep it slim)
 
-Inspired by the Do They Support It repo, but much smaller and written for people.
+Inspired by the DoTheySupportIt repo, but much smaller and written for people.
 
 - **`AGENTS.md`** is the one set of agent instructions; Codex and Cursor read it natively. **`CLAUDE.md`** contains a single line, `@AGENTS.md`, which Claude Code reads as an import. No symlinks, because people will copy this repo onto exFAT drives.
 - **Verification tiers** are in `AGENTS.md`: use the cheapest one that proves the change, and paste its output.
@@ -346,7 +347,7 @@ Inspired by the Do They Support It repo, but much smaller and written for people
   - Also available on 2026-11-21: tinfoilkit.org, tinfoilkit.dev, tinfoilkit.app, usetinfoil.com, tinfoilhq.com, tinfoil.computer, tinfoil.tools.
   - Taken: tinfoil.app, tinfoil.dev, tinfoil.org, gettinfoil.com.
 - **Hosting:** a new Vercel project in the tudor-city-ventures team. The site credits a company, and Vercel's free Hobby plan is for non-commercial use only. Don't touch other projects.
-- **Credit:** the footer says it's a side project from the team behind Do They Support It, with a link to dotheysupportit.com. Do They Support It is not the main brand.
+- **Credit:** the footer says it's a side project from the team behind DoTheySupportIt, with a link to dotheysupportit.com. DoTheySupportIt is not the main brand.
 - **Open source up front:** a very clear button to the GitHub repo, and the site talks prominently about being open source.
 - **Audience:** technical people and non-technical preppers.
 - **Platforms:** Apple Silicon Macs only for v1.
@@ -418,7 +419,7 @@ Each step needs Travis's go-ahead, because none of them can be quietly undone.
 2. Done: tinfoilkit.com and `www` (redirecting to it) are on the `tinfoilkit` project.
 3. Make sure the public can see tinfoilkit.com: Vercel Authentication on the `tinfoilkit` project must be "all except custom domains" (or off). Previews stay protected.
 4. Make the GitHub repo public. The site's GitHub button and the install prompt point at it. First:
-   - switch the default branch to `main` (visitors land on it) and delete `claude/project-thread-ew0j18`;
+   - delete `claude/project-thread-ew0j18` (the default branch is already `main`);
    - decide whether this file stays public. Sections 8 and 9 are internal (accounts, how the project started); trim them if not. Commit authors are all `Claude <noreply@anthropic.com>` or the Actions bot, so no personal email is in the history.
    Then turn on the settings in "GitHub settings at launch" below, all but the `main` ruleset's pull request rules (step 7). Several exist only for public repos, and the release protections must be on before step 5.
 5. Before the first release, Travis makes the release key once on his Mac: `.github/release.sh key`. It asks for a passphrase and adds the public half to `tools/release-signers`, which an agent commits. The private key stays on his Mac, backed up with its passphrase in his password manager, and never goes into GitHub: without it, no drive can update again. Before each release, run the `pin program builds` workflow (or wait for its Monday run) and do the real-Mac `./kit sync && ./kit test` on that commit, so the pinned builds are the tested ones. Then he publishes the first release from `main` with `.github/release.sh v1.0.0 NOTES.txt` (needs `gh`, signed in), NOTES.txt being a few lines on what's in it, which SETUP shows before installing. The script checks that CI passed, signs, checks the signature, asks him to type the version, then pushes the tag and creates the release. Until the repo is public and has a release, `./kit update` finds nothing and drives keep their version.
@@ -478,5 +479,5 @@ The policy and its reasons are in `.github/CONTRIBUTING.md`. In the repo's Setti
 4. He asked for maps "just like Google Maps" that work with the AI. That became v2: tiles, address search, directions, nearest places and map tools for the AI, tested with mocks and real MapLibre in headless Chrome.
 5. He asked what else he was missing; the result is a personal prep checklist, kept out of this repo.
 6. He decided to open-source it as Tinfoil Kit, with a marketing site on Vercel, and answered a round of questions to pin down the details (section 7).
-7. He wants agent-driven development like the Do They Support It repo, but slim and readable (section 5).
+7. He wants agent-driven development like the DoTheySupportIt repo, but slim and readable (section 5).
 8. He moved the work to a Claude Code project. This file is the handoff.

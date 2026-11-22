@@ -1,4 +1,5 @@
-// Runs the portal's map logic (the same code the browser runs) against mock Photon / GraphHopper / tool-calling AI.
+// Runs the portal's map logic (the same code the browser runs) against mock Photon / GraphHopper / tool-calling AI,
+// and how it reads a streamed answer.
 // usage: node map_logic_test.js portal.html   (mocks: photon :12322, old photon :12323, graphhopper :18989, llama :18081)
 const fs = require("fs");
 const html = fs.readFileSync(process.argv[2], "utf8");
@@ -97,6 +98,11 @@ const opts = { geoBase: "http://127.0.0.1:12322", routeBase: "http://127.0.0.1:1
   let aiErr = null;
   try { await Kit.mapAgent({ ...opts, aiBase: "http://127.0.0.1:18081/nope", model: "x" }, "nearest hospital"); } catch (e) { aiErr = e; }
   check("AI HTTP errors surface with a status", aiErr && aiErr.status === 404, aiErr && aiErr.message.slice(0, 60));
+
+  // an answer the network cut in the middle of a character (the mock cuts "½" between its two bytes)
+  let streamed = "";
+  await Kit.streamChat({ aiBase: "http://127.0.0.1:18081", model: "Mock-Tools" }, [{ role: "user", content: "Hi" }], c => { streamed += c; });
+  check("AI answer: a character cut between network reads arrives whole", streamed === "Library answer [1]. ½ cup — café", JSON.stringify(streamed));
 
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASSED");
   process.exit(failures ? 1 : 0);

@@ -8,6 +8,7 @@ import math
 import os
 import re
 import sys
+import time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -193,9 +194,20 @@ class H(BaseHTTPRequestHandler):
                 "tool_calls": [{"id": f"call_{len(tools_used)}", "type": "function",
                                 "function": {"name": call[0], "arguments": json.dumps(call[1])}}]}}]})
         if body.get("stream"):
-            chunks = [{"choices": [{"index": 0, "delta": {"content": w}}]} for w in ("Library ", "answer ", "[1].")]
-            data = "".join(f"data: {json.dumps(c)}\n\n" for c in chunks) + "data: [DONE]\n\n"
-            return self.reply(200, data.encode(), "text/event-stream")
+            chunks = [{"choices": [{"index": 0, "delta": {"content": w}}]} for w in ("Library ", "answer ", "[1]. ", "½ cup — café")]
+            data = ("".join(f"data: {json.dumps(c, ensure_ascii=False)}\n\n" for c in chunks) + "data: [DONE]\n\n").encode()
+            # in two parts, cut inside "½" as a network can cut it, so the page has to put the character back together
+            cut = data.index("½".encode()) + 1
+            self.send_response(200)
+            self.cors()
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data[:cut])
+            self.wfile.flush()
+            time.sleep(0.2)
+            self.wfile.write(data[cut:])
+            return
         return self.reply(200, {"choices": [{"index": 0, "finish_reason": "stop",
                                              "message": {"role": "assistant", "content": "plain answer"}}]})
 

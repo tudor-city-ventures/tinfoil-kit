@@ -337,6 +337,8 @@ def load_config(root: Path) -> Dict[str, Any]:
 
 # Programs, as opposed to the books, models and map data they serve: the kinds of source tools/pins.json can pin.
 PINNED_TYPES = ("github", "kiwix_release", "adoptium", "maven", "npm", "github_archive")
+PIN_GONE = ("the build this version of the kit names (tools/pins.json). Run SETUP to update the kit, "
+            "or set \"pin_programs\": false in kit.json")
 
 
 def load_pins(root: Path, cfg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -597,9 +599,7 @@ class Resolver:
                 except HttpError as e:
                     if e.status != 404:
                         raise
-                    raise ValueError(f"{repo} no longer publishes {pin}, the build this version of the kit names "
-                                     "(tools/pins.json). Run SETUP to update the kit, or set \"pin_programs\": false "
-                                     "in kit.json") from e
+                    raise ValueError(f"{repo} no longer publishes {pin}, {PIN_GONE}") from e
                 self._releases[f"{repo}@{pin}"] = [rel]
             repo_key = f"{repo}@{pin}"
         else:
@@ -663,13 +663,21 @@ class Resolver:
         c = item.cfg
         query = f"architecture={c.get('arch', 'aarch64')}&image_type={c.get('image_type', 'jre')}&os={c.get('os', 'mac')}"
         pin = self.pinned(item)
-        if pin:    # a list of releases, each with its builds
-            rels = http_json(f"{ADOPTIUM_API}/v3/assets/version/{urllib.parse.quote(pin.removeprefix('jdk-'))}?{query}"
-                             "&jvm_impl=hotspot&project=jdk&release_type=ga&vendor=eclipse")
-            rel = next((r for r in rels if isinstance(r, dict) and r.get("release_name") == pin), {})
-            builds = [b for b in rel.get("binaries", []) if b.get("image_type") == c.get("image_type", "jre") and b.get("package")]
+        if pin:    # by its release name: a lookup by version must match Adoptium's own spelling, "-LTS" and all
+            try:
+                rels = http_json(f"{ADOPTIUM_API}/v3/assets/release_name/eclipse/{urllib.parse.quote(pin, safe='')}?"
+                                 f"{query}&heap_size=normal&jvm_impl=hotspot&project=jdk")
+            except HttpError as e:
+                if e.status != 404:
+                    raise
+                rels = []
+            rel = next((r for r in (rels if isinstance(rels, list) else [rels])
+                        if isinstance(r, dict) and r.get("release_name") == pin), {})
+            builds = [b for b in rel.get("binaries", []) if b.get("package") and (b.get("image_type"), b.get("os"),
+                      b.get("architecture")) == (c.get("image_type", "jre"), c.get("os", "mac"), c.get("arch", "aarch64"))]
             if not builds:
-                raise ValueError(f"Java {pin} for {c.get('os', 'mac')} {c.get('arch', 'aarch64')} isn't published any more")
+                raise ValueError(f"Adoptium no longer publishes Java {pin} for {c.get('os', 'mac')} "
+                                 f"{c.get('arch', 'aarch64')}, {PIN_GONE}")
             pkg = builds[0]["package"]
         else:
             data = http_json(f"{ADOPTIUM_API}/v3/assets/latest/{c.get('feature_version', 21)}/hotspot?{query}&vendor=eclipse")
