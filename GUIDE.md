@@ -148,6 +148,10 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
    essentials, a later SETUP offers the rest once there's room. `./kit essentials off` asks for it any time.
 6. Turn off Wi-Fi and start the kit (see the top of this page).
 
+In a terminal, SETUP takes every answer as an option, and with `--yes` it asks nothing: for example
+`bash SETUP.command --region texas --this-computer --yes`. `bash SETUP.command --help` lists them: a drive, just the
+essentials, which AI models and books, and sharing on the home network.
+
 ## Removing it
 
 Click **Remove** in the Mac app, or double-click `UNINSTALL.command` in the kit folder (`UNINSTALL-Windows.bat` on

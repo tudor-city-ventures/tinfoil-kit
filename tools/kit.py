@@ -39,6 +39,8 @@ Commands (run from the kit folder, e.g.  ./kit sync):
   region [PLACE]     Where you live (a US state or a country): sets the map area, the road data for
                      directions, address search, home and units. --wikipedia en,es also picks Wikipedia's
                      languages; --find WORDS lists places; --languages lists a place's languages.
+  pick               What goes in the kit, by name (SETUP's options): --no-ai, --models IDS (just
+                     those), --skip IDS, --add IDS. Without options, says what's on.
 
 Only needs python3 (3.9+) and curl, both standard on macOS. aria2c is used if installed
 (brew install aria2) for faster multi-connection downloads.
@@ -73,7 +75,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 USER_AGENT = "TinfoilKit/1.0 (+https://github.com/tudor-city-ventures/tinfoil-kit)"
 KIWIX_CATALOG = os.environ.get("KIT_KIWIX_CATALOG", "https://library.kiwix.org/catalog/v2/entries?count=-1")
@@ -1013,7 +1015,10 @@ def find_binary(base: Path, name: Optional[str]) -> Optional[Path]:
 
 def essential(item: Item, fit: Dict[str, Any]) -> bool:
     """What the kit can't do without: the programs, the map, the most important books, and the AI model this computer
-    runs plus the smallest one. SETUP's first run downloads and checks these first, so the kit works hours sooner."""
+    runs plus the smallest one. SETUP's first run downloads and checks these first, so the kit works hours sooner.
+    Anything marked "essential": true counts too: ./kit pick marks what someone asks for by name (SETUP --add)."""
+    if item.cfg.get("essential") is True:
+        return True
     if item.section == "models":
         return item.id in (fit["runs"], fit["smallest"])
     if item.cfg.get("wide"):     # address search for a whole region of the world, tens of GB
@@ -2617,10 +2622,10 @@ def estimate_gb(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] = No
         wide = essentials and r.get("addresses_wide")     # see essential()
         mb = {k: v for k, v in (r.get("mb") or {}).items() if not (wide and k == "addresses")}
         sizes["maps"] = sum(mb.values()) * 1e6 + 0.1 * GB    # plus the map viewer, fonts and icons
-    on = [m["id"] for m in cfg.get("models", [])
-          if m.get("enabled", True) and (not essentials or m["id"] in (fit["runs"], fit["smallest"]))]
-    on += [z["zim"] for z in cfg.get("library", [])
-           if z.get("enabled", True) and (not essentials or int(z.get("priority", 2)) <= 1)]
+    on = [m["id"] for m in cfg.get("models", []) if m.get("enabled", True) and (
+          not essentials or m.get("essential") is True or m["id"] in (fit["runs"], fit["smallest"]))]
+    on += [z["zim"] for z in cfg.get("library", []) if z.get("enabled", True) and (
+           not essentials or z.get("essential") is True or int(z.get("priority", 2)) <= 1)]
     if maps_settings(cfg)["enabled"]:
         on.append("maps")
     return math.ceil((sum(sizes.get(i, 0) for i in on) + GB) / GB)
@@ -2746,42 +2751,131 @@ def fit_report(root: Path, cfg: Dict[str, Any], state: Dict[str, Any]) -> Dict[s
                          and m["id"] in cfg["settings"].get("models_off_for_memory", [])]}
 
 
-def switch_models(root: Path, ids: List[str], on: bool) -> None:
-    """Switch models on or off in kit.json, changing only their "enabled" so the file keeps its layout."""
+PART_KEYS = {"models": "id", "library": "zim", "extras": "id"}    # what names an entry in each part of kit.json
+
+
+def json_key(obj: str, key: str, value: Optional[bool]) -> str:
+    """One kit.json entry's text with key set to value, or taken out (None), keeping its layout."""
+    pat = r'"' + key + r'"\s*:\s*(?:true|false)\b'
+    if value is None:
+        return re.sub(r',\s*' + pat + '|' + pat + r'\s*,\s*', "", obj, count=1)
+    if re.search(pat, obj):
+        return re.sub(pat, f'"{key}": {json.dumps(value)}', obj, count=1)
+    sep = re.search(r',(\s*)"', obj)
+    gap = sep.group(1) if sep and "\n" in sep.group(1) else " "    # an entry on one line gets one space
+    note = re.search(r'"note"\s*:', obj)
+    if note:
+        return f'{obj[:note.start()]}"{key}": {json.dumps(value)},{gap}{obj[note.start():]}'
+    body = obj[:-1].rstrip()
+    return f'{body},{gap}"{key}": {json.dumps(value)}{obj[len(body):]}'
+
+
+def switch_parts(root: Path, changes: Dict[Tuple[str, str], bool], essential: Iterable[Tuple[str, str]] = ()) -> None:
+    """Switch models, books, extras or the map (("maps", "maps")) on or off in kit.json, and mark the ones in essential
+    "essential": true (see essential()), changing only those keys so the file keeps its layout. On is no "enabled" at
+    all, since that's the default."""
     path = root / "kit.json"
     text = path.read_text(encoding="utf-8")
     cfg = json.loads(text)
-    for m in cfg["models"]:
-        if m.get("id") in ids and on:
-            m.pop("enabled", None)
-        elif m.get("id") in ids:
-            m["enabled"] = False
-    start = re.search(r'"models"\s*:\s*\[', text)
-    for ident in ids:
-        hit = re.compile(r'\{[^{}]*"id"\s*:\s*' + re.escape(json.dumps(ident)) + r'[^{}]*\}').search(text, start.end()) \
-            if start else None
-        if not hit:
+    edits = [(part, "enabled", None if on else False) for part, on in changes.items()]
+    edits += [(part, "essential", True) for part in essential if part[0] != "maps"]    # the map always is
+    for (section, ident), name, value in edits:
+        if section == "maps":
+            cfg.setdefault("maps", {})["enabled"] = value is None
+            text = re.sub(r'("maps"\s*:\s*\{[^{}]*?"enabled"\s*:\s*)(?:true|false)\b',
+                          lambda m: m.group(1) + json.dumps(value is None), text, count=1)
             continue
-        obj = new = hit.group(0)
-        if on:
-            new = re.sub(r',\s*"enabled"\s*:\s*false\b|"enabled"\s*:\s*false\s*,\s*', "", obj, count=1)
-        elif re.search(r'"enabled"\s*:\s*true\b', obj):
-            new = re.sub(r'"enabled"\s*:\s*true\b', '"enabled": false', obj, count=1)
-        else:
-            sep = re.search(r',(\s*)"', obj)
-            gap = sep.group(1) if sep else " "
-            note = re.search(r'"note"\s*:', obj)
-            if note:
-                new = f'{obj[:note.start()]}"enabled": false,{gap}{obj[note.start():]}'
-            else:
-                body = obj[:-1].rstrip()
-                new = f'{body},{gap}"enabled": false{obj[len(body):]}'
-        text = text[:hit.start()] + new + text[hit.end():]
+        key = PART_KEYS[section]
+        for e in cfg.get(section, []):
+            if isinstance(e, dict) and e.get(key) == ident:
+                if value is None:
+                    e.pop(name, None)
+                else:
+                    e[name] = value
+        start = re.search(r'"' + section + r'"\s*:\s*\[', text)
+        hit = re.compile(r'\{[^{}]*"' + key + r'"\s*:\s*' + re.escape(json.dumps(ident)) + r'[^{}]*\}').search(text, start.end()) \
+            if start else None
+        if hit:
+            text = text[:hit.start()] + json_key(hit.group(0), name, value) + text[hit.end():]
     if json.loads(text) != cfg:    # a layout this doesn't know: write it plainly
         text = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
     tmp = path.with_name("kit.json.partial")
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
+
+
+def switch_models(root: Path, ids: List[str], on: bool) -> None:
+    switch_parts(root, {("models", i): on for i in ids})
+
+
+def find_parts(cfg: Dict[str, Any], word: str) -> List[Tuple[str, str]]:
+    """What a name in ./kit pick means: a whole part (models, library, extras, maps), one model, book or extra, or
+    every book whose name, up to its first underscore, is it ("wikipedia": Wikipedia in whichever language) or has it
+    between dots ("stackexchange": every Stack Exchange site, "libretexts": every LibreTexts book)."""
+    w = word.strip().lower()
+    ids = {s: [e[k] for e in cfg.get(s, []) if isinstance(e, dict) and isinstance(e.get(k), str)]
+           for s, k in PART_KEYS.items()}
+    if w == "maps":
+        return [("maps", "maps")]
+    if w in ids:
+        return [(w, i) for i in ids[w]]
+    return ([(s, i) for s, names in ids.items() for i in names if i.lower() == w]
+            or [("library", z) for z in ids["library"] if w and w in [z.lower().split("_")[0]] + z.lower().split("_")[0].split(".")])
+
+
+def cmd_pick(root: Path, args: argparse.Namespace) -> None:
+    """What goes in the kit: SETUP's --no-ai, --models, --skip and --add, for setting it up with one command.
+    Checks every name before it changes anything. Without options, says what's on."""
+    cfg = json.loads((root / "kit.json").read_text(encoding="utf-8"))
+    models = [m["id"] for m in cfg.get("models", []) if isinstance(m, dict) and "id" in m]
+    changes: Dict[Tuple[str, str], bool] = {}
+    named: List[Tuple[str, str]] = []    # comes even with just the essentials, since it was asked for
+    unknown: List[str] = []
+
+    def want(names: Optional[str], on: bool, part: Optional[str] = None) -> List[str]:
+        missing = []
+        for name in re.split(r"[,\s]+", names or ""):
+            hits = [h for h in find_parts(cfg, name) if part in (None, h[0])] if name else []
+            if name and not hits:
+                missing.append(name)
+            changes.update((h, on) for h in hits)
+            named.extend(hits if on else [])
+        return missing
+
+    if args.no_ai or args.models:
+        changes.update((("models", m), False) for m in models)
+    not_models = want(args.models, True, "models")
+    if not_models:
+        die(f"No AI model is called {names(not_models)}. The models: {', '.join(models)}.", code=2)
+    unknown = want(args.skip, False) + want(args.add, True)
+    if unknown:
+        books = [z["zim"] for z in cfg.get("library", []) if isinstance(z, dict) and "zim" in z]
+        extras = [e["id"] for e in cfg.get("extras", []) if isinstance(e, dict) and "id" in e]
+        die(f"Nothing in the kit is called {names(unknown)}. AI models: {', '.join(models)}. Books: {', '.join(books)}. "
+            f"Extras: {', '.join(extras)}. Also maps, or a whole part: models, library, extras.", code=2)
+    before = load_config(root)
+    if changes:
+        switch_parts(root, changes, [h for h in named if changes.get(h)])
+        # A model someone picks, or leaves out, by name isn't one to offer back on a computer with more memory.
+        skipped = before["settings"].get("models_off_for_memory") or []
+        keep = [m for m in skipped if ("models", m) not in changes]
+        if keep != skipped:
+            set_setting(root, "models_off_for_memory", keep or None)
+    cfg = load_config(root)
+
+    def on(section: str, key: str) -> List[str]:
+        return [e[key] for e in cfg.get(section, []) if e.get("enabled", True)]
+
+    def off(section: str, key: str) -> str:
+        out = [e[key] for e in cfg.get(section, []) if not e.get("enabled", True)]
+        return f" Off: {', '.join(out[:6])}{f' and {len(out) - 6} more' if len(out) > 6 else ''}." if out else ""
+
+    log(f"AI models: {', '.join(on('models', 'id')) or 'none'}.")
+    log(f"Maps: {'on' if maps_settings(cfg)['enabled'] else 'off'}.")
+    log(f"Books: {len(on('library', 'zim'))} of {len(cfg.get('library', []))}.{off('library', 'zim')}")
+    if cfg.get("extras"):
+        log(f"Extras: {', '.join(on('extras', 'id')) or 'none'}.")
+    log(f"All of it is about {estimate_gb(root, cfg, False)} GB; just the essentials, about {estimate_gb(root, cfg, True)} GB.")
 
 
 def read_line() -> str:
@@ -2849,6 +2943,12 @@ def cmd_fit(root: Path, args: argparse.Namespace) -> None:
         f"{min(m['needs_memory_gb'] for m in fit['models'] if m['id'] in big)} GB of memory or more ({downloads(big)}).")
     if not on_this_computer(root):
         log("A computer with more memory could, with this drive plugged in.")
+    asked = [i for i in big if any(m.get("id") == i and m.get("essential") is True for m in cfg.get("models", []))]
+    if args.skip and asked:    # nobody is answering, and these were asked for by name
+        log(f"{names(asked)} {'comes' if len(asked) == 1 else 'come'} anyway, as asked.")
+        big = [i for i in big if i not in asked]
+        if not big:
+            return
     if args.skip or (args.ask and not answer("Download them anyway?", False)):
         switch_models(root, big, on=False)
         set_setting(root, "models_off_for_memory", sorted(set(cfg["settings"].get("models_off_for_memory", [])) | set(big)))
@@ -2967,10 +3067,10 @@ def cmd_region(root: Path, args: argparse.Namespace) -> None:
         return
     cfg = load_config(root)
     if not args.place:
-        if args.languages:
+        if args.languages or args.wikipedia:    # for the place kit.json has now
             r = region((cfg.get("maps") or {}).get("region"))
             if not r:
-                die("kit.json has no region yet: ./kit region --languages PLACE")
+                die("kit.json has no region yet: ./kit region PLACE")
             args.place = [r["id"]]
         else:
             print(describe_region(cfg))
@@ -3514,6 +3614,12 @@ def main() -> None:
     p.add_argument("--json", action="store_true", help="print it all as JSON")
     p = sub.add_parser("essentials", help="get just the essentials from now on (on), or everything again (off)")
     p.add_argument("action", nargs="?", choices=("on", "off"))
+    p = sub.add_parser("pick", help="what goes in the kit: switch models, books, extras and the map on or off")
+    p.add_argument("--no-ai", action="store_true", help="no AI models")
+    p.add_argument("--models", metavar="IDS", help="only these AI models (ids, comma-separated)")
+    p.add_argument("--skip", metavar="IDS", help="leave these out: AI models, books (a name, or its start up to an "
+                   "underscore, like wikipedia), maps, or a whole part (models, library, extras)")
+    p.add_argument("--add", metavar="IDS", help="add these, like the books that are off by default")
     p = sub.add_parser("fit", help="which AI model this computer runs, and the ones too big for its memory")
     p.add_argument("--ask", action="store_true", help="ask whether to download the models it can't run (SETUP)")
     p.add_argument("--skip", action="store_true", help="switch off the models it can't run, in kit.json")
@@ -3539,7 +3645,7 @@ def main() -> None:
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
                 "drives": cmd_drives, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials,
-                "fit": cmd_fit, "share": cmd_share, "autostart": cmd_autostart, "pins": cmd_pins, "region": cmd_region}
+                "fit": cmd_fit, "pick": cmd_pick, "share": cmd_share, "autostart": cmd_autostart, "pins": cmd_pins, "region": cmd_region}
     if args.cmd not in commands:
         ap.print_help()
         return
