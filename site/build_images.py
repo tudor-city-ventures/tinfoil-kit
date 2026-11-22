@@ -14,7 +14,7 @@ from playwright.sync_api import sync_playwright
 SITE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SITE)
 INK, INK2, PAPER, SIGNAL = "#1C1F1A", "#3A3E36", "#F3F0E6", "#D9531E"
-HEADLINE = "The internet's down.<br>Your AI isn't."
+HEADLINE = "The world's knowledge,<br>ready when the<br>internet isn't."
 
 
 def data_uri(path, mime):
@@ -31,7 +31,7 @@ CARD = Template("""<style>
 body{margin:0;width:${w}px;height:${h}px;position:relative;overflow:hidden;background:$paper;color:$ink;font-family:Sans}
 .copy{position:absolute;left:88px;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center}
 h1{margin:0;font-size:116px;line-height:1;font-weight:700;letter-spacing:-.03em}
-p{margin:30px 0 0;font-size:70px;line-height:1.1;font-weight:700;letter-spacing:-.02em;color:$ink2}
+p{margin:30px 0 0;font-size:62px;line-height:1.1;font-weight:700;letter-spacing:-.02em;color:$ink2}
 img{position:absolute;right:${right}px;top:${top}px}
 </style>
 <div class="copy"><h1>Tinfoil Kit</h1><p>$headline</p></div>

@@ -23,11 +23,11 @@ import { APP, Footer, JsonLd, LICENSES, pageMetadata, Question, REPO, SITE } fro
 // My AI installs it: the home page. Your AI asks what you want and gives you one command, since the downloads are
 // coming soon. Plain words up top (AI, never LLM, GGUF or ZIM); Under the hood names the parts for technical readers.
 const DESCRIPTION =
-  "A free, open-source kit that keeps an AI, all of Wikipedia, medical guides and maps on your laptop or a drive, with no internet. Your AI sets it up with one command.";
+  "A free, open-source copy of the world's knowledge for when the internet is down for days or weeks: Wikipedia, medical and survival guides, repair manuals, maps and a local offline AI that answers from them.";
 
 export const metadata = pageMetadata({
   path: "/",
-  title: "Tinfoil Kit: the internet's down, your AI isn't",
+  title: "Tinfoil Kit: the world's knowledge, ready when the internet isn't",
   description: DESCRIPTION,
 });
 
@@ -123,6 +123,7 @@ const jsonLd = {
 };
 
 const SECTIONS = [
+  ["#uses", "What it's for"],
   ["#how", "How it works"],
   ["#demo", "Try it"],
   ["#builder", "Build your kit"],
@@ -152,12 +153,50 @@ const SERVERS = [
   ],
 ];
 
-// llms.txt's example, one step to a line so it wraps where a person reads it
-const COMMAND = [
-  "mkdir -p ~/Downloads && cd ~/Downloads &&",
-  "curl -fsSL https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/TinfoilKit.tar.gz | tar -xz &&",
-  "bash TinfoilKit/app/SETUP.command --region texas --drive /Volumes/Kit --yes",
-].join("\n");
+// On the drive: what the kit holds, named in the hero so nobody has to guess (the builder lists every source)
+const DRIVE = [
+  ["Wikipedia", "All of it, with pictures, plus textbooks, a dictionary and travel guides."],
+  ["Medicine", "WikiMed, MedlinePlus, the CDC's guides and US military medical manuals."],
+  ["Survival", "FEMA's guides and US Army field manuals: water, food, shelter, navigation."],
+  ["Repair", "iFixit, plus how-tos for the house, the car, solar panels and radios."],
+  ["Maps", "Your area's streets, directions and nearest hospital, and a map of the world."],
+  ["AI", "Answers in plain words from everything above, and shows the pages it used."],
+];
+
+// What it's for: what people need to know in a long outage, and the books that answer it. Medical lines look things
+// up; they never diagnose.
+const USES = [
+  [
+    "Someone's hurt",
+    "Look up how to treat a burn, a deep cut or a broken bone, step by step.",
+    "WikiMed · MedlinePlus · military medical manuals",
+  ],
+  [
+    "The water isn't safe",
+    "Boil it, filter it or disinfect it with household bleach: how long, and how much.",
+    "CDC · FEMA · water treatment guides",
+  ],
+  [
+    "You need to get somewhere",
+    "Driving and walking directions on your own maps, and the nearest hospital or pharmacy.",
+    "Offline maps",
+  ],
+  [
+    "Something broke",
+    "Fix a leaking pipe, a dead generator or the car, with guides from people who've done it.",
+    "iFixit · home and car repair Q&A",
+  ],
+  [
+    "The power's out",
+    "Keep food safe without a fridge, and run what matters on solar panels and batteries.",
+    "Food storage guides · Energypedia · Ready.gov",
+  ],
+  [
+    "The kids are home",
+    "Textbooks, courses and all of Wikipedia, so they can keep learning.",
+    "Wikipedia · LibreTexts · Wikibooks",
+  ],
+];
 
 export default function Home() {
   return (
@@ -168,13 +207,11 @@ export default function Home() {
         <section className="wrap hero">
           <div className="hero-copy">
             <p className="kicker">Free&nbsp;· Open source</p>
-            <h1>
-              The internet's down.
-              <br /> Your AI isn't.
-            </h1>
+            <h1>The world's knowledge, ready when the internet isn't.</h1>
             <p className="lede">
-              An opinionated, easy-to-install local AI with the world's knowledge built in. Ask anything, look up first
-              aid, fix a leak, find the nearest hospital.
+              Tinfoil Kit saves all of Wikipedia, medical and survival guides, repair manuals and maps to a drive you
+              own, with a local offline AI that answers from them. When the internet is down for days or weeks, it all
+              still works.
             </p>
             <Download>
               <a className="star" href={REPO}>
@@ -189,6 +226,40 @@ export default function Home() {
             </Download>
           </div>
           <Hero />
+          <div className="manifest" role="region" aria-labelledby="onDrive">
+            <p className="manifest-head">
+              <span id="onDrive">On the drive</span> <a href="#builder">You pick what goes in</a>
+            </p>
+            <ul>
+              {DRIVE.map(([what, holds]) => (
+                <li key={what}>
+                  <b>{what}</b>
+                  <span>{holds}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+        <section id="uses" className="how">
+          <div className="wrap section">
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <p className="kicker">What it's for</p>
+              <h2>The questions a long outage brings.</h2>
+            </div>
+            <ul className="uses">
+              {USES.map(([when, what, books]) => (
+                <li key={when}>
+                  <h3>{when}</h3>
+                  <p>{what}</p>
+                  <small>{books}</small>
+                </li>
+              ))}
+            </ul>
+            <p className="uses-foot">
+              Ask in plain words, and the AI answers from these books and shows the pages it used. Or skip the AI:
+              Search finds the right passages in seconds, on very little power.
+            </p>
+          </div>
         </section>
         <section id="how" className="how">
           <div className="wrap section">
@@ -231,50 +302,6 @@ export default function Home() {
                 <small>Windows and Linux are experimental for now.</small>
               </li>
             </ol>
-            <div className="example">
-              <div className="example-copy">
-                <p className="kicker">What it looks like</p>
-                <h3>Your AI checks first, then asks.</h3>
-                <p>
-                  An AI that can run commands on your computer, like Claude Code or Codex, looks first, with commands
-                  that only read: the chip and memory, which decide which AI your kit runs, and the drive's format and
-                  free space. It asks only what it can't see, like where you live, and hands you the command. A chat AI
-                  that can't reach your computer asks you instead.
-                </p>
-              </div>
-              <figure className="chat">
-                <figcaption>Your AI agent</figcaption>
-                <ol>
-                  <li className="you">
-                    <b>You</b>I want to set up Tinfoil Kit… Its instructions for AI assistants are at
-                    https://tinfoilkit.com/llms.txt. Read them first.
-                  </li>
-                  <li>
-                    <b>Your AI</b>Read them. I looked at your Mac and its drives, with commands that only read:
-                    <dl>
-                      <div>
-                        <dt>Mac</dt>
-                        <dd>MacBook Air, Apple M4, 32&nbsp;GB of memory</dd>
-                      </div>
-                      <div>
-                        <dt>Drive</dt>
-                        <dd>Kit, a 1&nbsp;TB external SSD: exFAT, 998&nbsp;GB free</dd>
-                      </div>
-                    </dl>
-                    Your Mac runs the default AI, Inkling 2 Mini, and all of the kit fits on Kit. Where do you live?
-                  </li>
-                  <li className="you">
-                    <b>You</b>Austin, Texas.
-                  </li>
-                  <li className="gap">Wikipedia, places nearby, what to leave out…</li>
-                  <li>
-                    <b>Your AI</b>Paste this into Terminal. It gets a small kit to try first; when it works, I'll give
-                    you the command for the rest.
-                    <code>{COMMAND}</code>
-                  </li>
-                </ol>
-              </figure>
-            </div>
           </div>
         </section>
         <section id="demo" className="band">
@@ -554,9 +581,10 @@ tools/tinfoilkit/build.sh verify SHA256SUMS`}
           </div>
           <div className="faq" itemScope itemType="https://schema.org/FAQPage">
             <Question q="What is Tinfoil Kit?">
-              Tinfoil Kit is a free, open-source kit for when the internet goes down. It puts an AI, all of Wikipedia,
-              medical and repair guides, and maps with directions on an external drive or your laptop. You set it up
-              while you're online, and after that it all works with no internet.
+              Tinfoil Kit is a free, open-source copy of the world's knowledge for when the internet is down for days or
+              weeks. It puts all of Wikipedia, medical and survival guides, repair manuals, maps with directions and a
+              local offline AI that answers from them on an external drive or your laptop. You set it up while you're
+              online, and after that it all works with no internet.
             </Question>
             <Question q="Where's the download?">
               Coming soon. A Mac download has to be signed by Apple, or macOS makes you dig through System Settings to

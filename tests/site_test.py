@@ -88,7 +88,7 @@ PAGES = {"": "My AI installs it", "agents": "I'm an AI"}
 VERSIONS = "[...document.querySelectorAll('nav.versions a')].map(a => [a.getAttribute('href'), a.textContent, a.getAttribute('aria-current')])"
 # The home page says AI in plain words until Under the hood, which names the parts for technical readers
 JARGON = re.compile(r"\bLLMs?\b|\bGGUF\b|\bZIM\b|PMTiles|llama-server|SHA256SUMS")
-PLAIN = "[...document.querySelectorAll('.hero, #how, #demo, #builder, #faq')].map(e => e.innerText).join(' ')"
+PLAIN = "[...document.querySelectorAll('.hero, #uses, #how, #demo, #builder, #faq')].map(e => e.innerText).join(' ')"
 
 # Never 2 TB: the drive's size isn't the point
 copy = glob.glob(os.path.join(SITE, "app", "**", "*.jsx"), recursive=True) + glob.glob(
@@ -262,8 +262,9 @@ with sync_playwright() as p:
         versions(f"{name} home page", "")
         check(
             f"{name}: the home page's headline and subheader",
-            page.text_content(".hero h1").startswith("The internet's down.")
-            and page.text_content(".hero .lede").startswith("An opinionated, easy-to-install local AI"),
+            page.text_content(".hero h1") == "The world's knowledge, ready when the internet isn't."
+            and page.text_content(".hero .lede").startswith("Tinfoil Kit saves all of Wikipedia")
+            and "local offline AI" in page.text_content(".hero .lede"),
             page.text_content(".hero .lede"),
         )
         star, where = page.locator(".ctas .star"), page.evaluate(STAR)
@@ -329,15 +330,29 @@ with sync_playwright() as p:
             models == 0 and totals["no-ai"] < totals["recommended"],
             f"{models} models, {totals}",
         )
-        found = dict(zip(page.locator(".chat dt").all_inner_texts(), page.locator(".chat dd").all_inner_texts()))
+        # the hero names what the kit holds: below the buttons, and on phones before the animation
+        drive = page.locator(".manifest b").all_text_contents()
+        where = page.evaluate(
+            "(() => { const r = s => document.querySelector(s).getBoundingClientRect();"
+            " return [r('.cta-note').bottom <= r('.manifest').top, r('.manifest').bottom <= r('.fig').top] })()"
+        )
         check(
-            f"{name}: the chat shows the AI finding the Mac's chip and memory and the external drive",
-            list(found) == ["Mac", "Drive"]
-            and "Apple M" in found["Mac"]
-            and "GB of memory" in found["Mac"]
-            and "exFAT" in found["Drive"]
-            and "free" in found["Drive"],
-            str(found),
+            f"{name}: the hero lists what's on the drive, under the buttons"
+            + (", before the animation" if name == "phone" else ""),
+            drive == ["Wikipedia", "Medicine", "Survival", "Repair", "Maps", "AI"]
+            and page.get_attribute(".manifest-head a", "href") == "#builder"
+            and where[0]
+            and (where[1] or name == "desktop"),
+            f"{drive}, {where}",
+        )
+        uses = page.locator("#uses .uses h3").all_text_contents()
+        check(
+            f"{name}: What it's for comes first after the hero, with six situations and the books for each",
+            page.evaluate("document.querySelector('.hero').nextElementSibling.id") == "uses"
+            and len(uses) == 6
+            and page.locator("#uses .uses small").count() == 6
+            and page.get_attribute("nav.links a", "href") == "#uses",
+            ", ".join(uses),
         )
         check(
             f"{name}: Is it safe? says don't trust, verify",
