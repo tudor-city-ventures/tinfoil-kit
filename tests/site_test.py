@@ -104,7 +104,7 @@ with sync_playwright() as p:
         star, where = page.locator(".ctas .star"), page.evaluate(STAR)
         check(f"{name}: Star on GitHub sits {'beside' if name == 'desktop' else 'under'} the main buttons",
               where == ("beside" if name == "desktop" else "below") and star.inner_text().strip() == "Star on GitHub"
-              and star.get_attribute("href") == "https://github.com/tudor-city-ventures/tinfoilkit", where)
+              and star.get_attribute("href") == "https://github.com/tudor-city-ventures/tinfoil-kit", where)
         if name == "phone":
             page.set_viewport_size({"width": 320, "height": 640})    # the narrowest width WCAG asks a page to fit
             width = page.evaluate("document.documentElement.scrollWidth")
@@ -223,7 +223,7 @@ with sync_playwright() as p:
     def attach(route):
         route.fulfill(status=200, headers={"Content-Type": "application/octet-stream",
                       "Content-Disposition": "attachment; filename=" + route.request.url.rsplit("/", 1)[1]}, body=b"kit")
-    REL = "https://github.com/tudor-city-ventures/tinfoilkit/releases/latest/download/"
+    REL = "https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest/download/"
     FILES = {"mac": "TinfoilKit-Mac.zip", "windows": "TinfoilKit-Windows.zip", "linux": "TinfoilKit.tar.gz"}
     UAS = {"mac": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15",
            "windows": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
@@ -307,7 +307,7 @@ with sync_playwright() as p:
     sectxt = home.request.get(URL + ".well-known/security.txt").text()
     expires = re.search(r"^Expires: (\d{4}-\d\d-\d\d)", sectxt, re.M)
     check("security.txt names the private report form and isn't within 30 days of expiring (bump its Expires)",
-          "Contact: https://github.com/tudor-city-ventures/tinfoilkit/security/advisories/new" in sectxt and expires
+          "Contact: https://github.com/tudor-city-ventures/tinfoil-kit/security/advisories/new" in sectxt and expires
           and datetime.date.fromisoformat(expires.group(1)) - datetime.date.today() > datetime.timedelta(days=30))
     locs = re.findall(r"<loc>(.*?)</loc>", home.request.get(URL + "sitemap.xml").text())
     check("sitemap.xml lists the canonical address", locs == [canonical], str(locs))

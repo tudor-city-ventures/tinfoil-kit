@@ -1,5 +1,5 @@
-Contact: https://github.com/tudor-city-ventures/tinfoilkit/security/advisories/new
+Contact: https://github.com/tudor-city-ventures/tinfoil-kit/security/advisories/new
 Expires: 2027-10-31T00:00:00.000Z
-Policy: https://github.com/tudor-city-ventures/tinfoilkit/blob/main/.github/SECURITY.md
+Policy: https://github.com/tudor-city-ventures/tinfoil-kit/blob/main/.github/SECURITY.md
 Preferred-Languages: en
 Canonical: https://tinfoilkit.com/.well-known/security.txt

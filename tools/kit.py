@@ -77,11 +77,11 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-USER_AGENT = "TinfoilKit/1.0 (+https://github.com/tudor-city-ventures/tinfoilkit)"
+USER_AGENT = "TinfoilKit/1.0 (+https://github.com/tudor-city-ventures/tinfoil-kit)"
 KIWIX_CATALOG = os.environ.get("KIT_KIWIX_CATALOG", "https://library.kiwix.org/catalog/v2/entries?count=-1")
 KIWIX_RELEASES = os.environ.get("KIT_KIWIX_RELEASES", "https://download.kiwix.org/release/{product}/")
 GITHUB_API = os.environ.get("KIT_GITHUB_API", "https://api.github.com")
-KIT_REPO = os.environ.get("KIT_REPO", "tudor-city-ventures/tinfoilkit")    # where ./kit update gets the kit's code
+KIT_REPO = os.environ.get("KIT_REPO", "tudor-city-ventures/tinfoil-kit")    # where ./kit update gets the kit's code
 KIT_COMMIT = "$Format:%H$"    # git archive (a release, or Code > Download ZIP) writes the commit it packed here
 HF = os.environ.get("KIT_HF", "https://huggingface.co")
 ADOPTIUM_API = os.environ.get("KIT_ADOPTIUM_API", "https://api.adoptium.net")
@@ -270,7 +270,7 @@ class RemoteFile:
     sha256_sidecar: bool = False  # fetch <url>.sha256 at download time (Kiwix)
     md5_sidecar: bool = False     # fetch <url>.md5 at download time (Geofabrik, Photon dumps)
     checks: Dict[str, str] = field(default_factory=dict)  # other published digests: {"sha1": hex, "sha512": hex}
-    estimate: Optional[int] = None  # rough size when the real one is only known after downloading (map tiles)
+    estimate: Optional[int] = None  # rough size, when the exact one is only known later (map tiles, Kiwix's books)
 
 
 @dataclass
@@ -312,12 +312,10 @@ class Item:
     def need_bytes(self, root: Path) -> int:
         total = 0
         for f in self.need:
-            if f.size:
+            size = f.size or f.estimate
+            if size:
                 partial = self.partial(root, f)
-                done = partial.stat().st_size if partial.exists() else 0
-                total += max(0, f.size - done)
-            elif f.estimate:
-                total += f.estimate
+                total += max(0, size - (partial.stat().st_size if partial.exists() else 0))
         return total
 
 
@@ -547,8 +545,9 @@ class Resolver:
             raise ValueError(f"not found in the Kiwix catalog (try: ./kit search {item.id.split('_')[0]})")
         item.dest = "library"
         item.version = entry["date"]
-        item.files = [RemoteFile(name=entry["file"], url=entry["url"], size=entry["size"],
-                                 sha256_sidecar=True)]
+        # The catalog rounds each size up to a whole KiB, so it's only a rough one: fetch() asks the download server for
+        # the exact size just before downloading (asking for every book here would slow every plan down).
+        item.files = [RemoteFile(name=entry["file"], url=entry["url"], estimate=entry["size"], sha256_sidecar=True)]
 
     def _hf(self, item: Item) -> None:
         repo = item.cfg["repo"]
@@ -979,7 +978,8 @@ def evaluate(item: Item, state: Dict[str, Any], root: Path) -> None:
             fs = files_state.get(f.name)
             path = root / item.dest / f.name
             same_hash = fs is not None and (f.sha256 is None or fs.get("sha256") == f.sha256)
-            same_size = path.exists() and (f.size is None or path.stat().st_size == f.size)
+            size = f.size or (fs or {}).get("size")     # a book's exact size is known once it's downloaded
+            same_size = path.exists() and (not size or path.stat().st_size == size)
             if not (same_hash and same_size):
                 item.need.append(f)
     item.status = "ok" if not item.need else ("update" if st else "new")
@@ -1154,6 +1154,13 @@ def download(url: str, partial: Path, size: Optional[int], downloader: str) -> N
         got = partial.stat().st_size if partial.exists() else 0
         if rc == 0 and (not size or got == size):
             return
+        # Finished, but a hair short of the size we were given: one rounded up to a whole KiB, as Kiwix's catalog does.
+        # Once asking again adds nothing (the server says it has no more), or on the last try, take it: its checksum
+        # decides.
+        if rc == 0 and 0 < size - got < 1024:
+            if got == before or attempt == 5:
+                return
+            continue
         if (use_aria and rc == 9) or (not use_aria and rc == 23):    # retrying won't help
             try:
                 free = f" ({fmt_size(shutil.disk_usage(partial.parent).free)} free)"
@@ -1252,24 +1259,25 @@ def ensure_space(root: Path, need: int, cfg: Dict[str, Any]) -> bool:
 def fetch(root: Path, state: Dict[str, Any], item: Item, f: RemoteFile, cfg: Dict[str, Any], force: bool,
           room: int = 1, label: str = "") -> Path:
     """Download f into its partial file and return that path. An interrupted download resumes,
-    unless it was of an older version under the same name. room: how many times f.size must fit."""
+    unless it was of an older version under the same name. room: how many times its size must fit."""
     partial = item.partial(root, f)
     rel = partial.relative_to(root).as_posix()
-    tag = f.sha256 or f"{item.version}|{f.size or ''}"
+    size = f.size or (head_size(f.url) if f.estimate else None)     # exactly, where the plan had a rough size
+    tag = f.sha256 or f"{item.version}|{f.size or f.estimate or ''}"
     partials = state.setdefault("partials", {})
     if partial.exists() and (partials.get(rel, {}).get("tag", tag) != tag
-                             or (f.size and partial.stat().st_size > f.size)):
+                             or (size and partial.stat().st_size > size)):
         log(f"    discarding an unfinished download of a different version of {f.name}")
         drop_partial(partial)
     have = partial.stat().st_size if partial.exists() else 0
-    need = max(0, (f.size or 0) * room - have)
+    need = max(0, (size or f.estimate or 0) * room - have)
     if not force and not ensure_space(root, need, cfg):
         raise RuntimeError(f"not enough free space for {label or f.name} (needs about {fmt_size(need)} more, "
                            f"and the kit keeps {fmt_size(keep_free(root, cfg))} free); make room or switch it off in kit.json")
     partials[rel] = {"item": item.key, "tag": tag}
     save_state(root, state)
-    log(f"    downloading {label or f.name} ({fmt_size(f.size)})" + (f", resuming at {fmt_size(have)}" if have else ""))
-    download(f.url, partial, f.size, cfg["settings"].get("downloader", "auto"))
+    log(f"    downloading {label or f.name} ({fmt_size(size or f.estimate)})" + (f", resuming at {fmt_size(have)}" if have else ""))
+    download(f.url, partial, size, cfg["settings"].get("downloader", "auto"))
     return partial
 
 
@@ -1498,10 +1506,17 @@ def install_archive(root: Path, item: Item, state: Dict[str, Any], cfg: Dict[str
 
 def drop_finder_files(root: Path) -> None:
     """macOS keeps Finder metadata for files on exFAT drives in "._name" files beside them. The servers
-    scan library/ and models/ and could take ._name.zim or ._name.gguf for a book or a model."""
-    for p in [*(root / "library").glob("._*"), *(root / "models").glob("**/._*")]:
+    scan library/ and models/ and could take ._name.zim or ._name.gguf for a book or a model, and git warns
+    about the ones in a checkout's .git."""
+    for p in [*(root / "library").glob("._*"), *(root / "models").glob("**/._*"), *(root / ".git").glob("**/._*")]:
         if p.is_file():
             p.unlink()
+
+
+def files_in(folder: Path, pattern: str) -> List[Path]:
+    """folder.glob(pattern), sorted, without those "._name" files: unlike the shell's, Python's glob matches names
+    that start with a dot."""
+    return sorted(p for p in folder.glob(pattern) if not p.name.startswith("._"))
 
 
 def dir_bytes(path: Path) -> int:
@@ -2122,7 +2137,7 @@ MISSING = object()
 # the kit's GitHub account isn't enough to put code on every drive. tools/release-signers holds the keys a drive
 # accepts, and each release brings the next copy of it: a new key arrives signed by the old one.
 RELEASE_NAMESPACE = "tinfoilkit-release"
-REPORT = "https://github.com/tudor-city-ventures/tinfoilkit/security"
+REPORT = "https://github.com/tudor-city-ventures/tinfoil-kit/security"
 
 
 def item_key(x: Any) -> Any:
@@ -2567,7 +2582,7 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
                 f"   {v.get('updated', '')[:10]}")
     left = sorted(set(state.get("partials", {})) | {p.relative_to(root).as_posix() for pattern in
                   ("library/*.partial", "models/*/*.partial", "maps/*/*.partial", ".kit/downloads/*.partial")
-                  for p in root.glob(pattern)})
+                  for p in files_in(root, pattern)})
     left = [(rel, (root / rel).stat().st_size) for rel in left if (root / rel).is_file()]
     if left:
         log("\nUnfinished downloads (sync resumes them while the item is on in kit.json; delete one to free its space):")
@@ -3286,8 +3301,8 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
     kiwix = runtime_binary(root, "kiwix-tools", "kiwix-serve")
     llama = runtime_binary(root, "llama.cpp", "llama-server")
     drop_finder_files(root)
-    zims = sorted((root / "library").glob("*.zim"))
-    models = sorted(p for p in (root / "models").glob("*") if p.is_dir() and list(p.glob("*.gguf")))
+    zims = files_in(root / "library", "*.zim")
+    models = [p for p in files_in(root / "models", "*") if p.is_dir() and files_in(p, "*.gguf")]
     log(f"Platform: {platform_tag()}")
     check("library server installed", bool(kiwix), str(kiwix or "run ./kit sync"))
     check("AI server installed", bool(llama), str(llama or "run ./kit sync"))
@@ -3327,7 +3342,7 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
                 check("full-text search works", hits > 0, f"{hits} results for 'water'")
         if llama and models:
             lport = free_port()
-            small = min(models, key=lambda m: sum(f.stat().st_size for f in m.glob("*.gguf")))
+            small = min(models, key=lambda m: sum(f.stat().st_size for f in files_in(m, "*.gguf")))
             name = args.model or small.name
             start_server(procs, logs_dir / "test-llama.log",
                          [llama, "--models-dir", root / "models", "--models-max", "1", "-c", "4096",

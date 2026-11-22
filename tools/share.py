@@ -28,6 +28,7 @@ import re
 import secrets
 import shutil
 import socket
+import socketserver
 import subprocess
 import sys
 import threading
@@ -526,6 +527,12 @@ class Gate(http.server.ThreadingHTTPServer):
         self.failures: Dict[str, List[float]] = {}
         self._access: Tuple[float, str, str] = (-1.0, "", "")
         super().__init__(("0.0.0.0", port), Handler)
+
+    def server_bind(self) -> None:
+        # Without http.server's lookup of this computer's own name (name.local): on a Mac, where the gate starts
+        # with the computer, that would ask to "find devices on local networks", and answering them needs no such thing.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
     def access(self) -> Tuple[str, str]:
         """The access code and the cookie that proves it, read again whenever ./kit share changes the code."""

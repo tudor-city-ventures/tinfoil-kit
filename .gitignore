@@ -9,6 +9,7 @@ installers/
 INVENTORY.md
 __pycache__/
 .DS_Store
+._*
 
 # Test fixtures and runs (tests/build_fixtures.sh, tests/run_all.sh)
 tests/work/

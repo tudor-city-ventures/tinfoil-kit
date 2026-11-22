@@ -213,6 +213,15 @@ if [ "$NO_MAPS" = 0 ] && [ -d "$KIT/maps" ]; then
   JAVA="$(pick_bin java java)"
   PHOTON_JAR="$(newest "$KIT"/bin/photon/photon-*.jar)"
   GH_JAR="$(newest "$KIT"/bin/graphhopper/graphhopper-web-*.jar)"
+  # Java looks up this computer's name as it starts (the address search's logging does). On a Mac, looking up
+  # name.local asks to "find devices on local networks" unless the kit started from Terminal, so Java gets a hosts
+  # file of its own that answers that name, and needs no other: every map server listens on 127.0.0.1.
+  JOPTS=()
+  if [ -n "$JAVA" ] && [ "$(uname -s)" = Darwin ]; then
+    n="$(hostname)" s="$(scutil --get LocalHostName 2>/dev/null)"
+    printf '127.0.0.1 localhost %s %s%s\n::1 localhost\n' "$n" "${n%%.*}" "${s:+ $s.local}" > "$KIT/.kit/java-hosts"
+    JOPTS=("-Djdk.net.hosts.file=$KIT/.kit/java-hosts")
+  fi
   # pmtiles answers /basemap.json, the TileJSON that says it is up, only when it has a --public-url
   if [ -n "$PMTILES" ] && [ -f "$KIT/maps/tiles/basemap.pmtiles" ] && ! up "http://127.0.0.1:$TILES_PORT/basemap.json"; then
     "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors "$CORS" \
@@ -220,12 +229,12 @@ if [ "$NO_MAPS" = 0 ] && [ -d "$KIT/maps" ]; then
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED map"
   fi
   if [ -n "$JAVA" ] && [ -n "$PHOTON_JAR" ] && [ -d "$KIT/maps/geocoder/photon_data" ] && ! up "http://127.0.0.1:$GEO_PORT/status"; then
-    "$JAVA" "-Xmx$GEO_HEAP" -jar "$PHOTON_JAR" serve -data-dir "$KIT/maps/geocoder" -listen-ip "$HOST" \
+    "$JAVA" "${JOPTS[@]}" "-Xmx$GEO_HEAP" -jar "$PHOTON_JAR" serve -data-dir "$KIT/maps/geocoder" -listen-ip "$HOST" \
       -listen-port "$GEO_PORT" -cors-origin "$CORS" > "$KIT/logs/geocoder.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED address-search"
   fi
   if [ -n "$JAVA" ] && [ -n "$GH_JAR" ] && [ -f "$KIT/maps/routing/graph-cache/properties" ] && ! up "http://127.0.0.1:$ROUTE_PORT/health"; then
-    (cd "$KIT/maps/routing" && exec "$JAVA" "-Xmx$ROUTE_HEAP" \
+    (cd "$KIT/maps/routing" && exec "$JAVA" "${JOPTS[@]}" "-Xmx$ROUTE_HEAP" \
       "-Ddw.server.application_connectors[0].bind_host=$HOST" "-Ddw.server.application_connectors[0].port=$ROUTE_PORT" \
       -jar "$GH_JAR" server gh-serve.yml) > "$KIT/logs/routing.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED directions"

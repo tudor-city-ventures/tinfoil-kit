@@ -21,14 +21,14 @@ const guard = script("protected-files");
 const forms = script("forms");
 const TEMPLATES = path.join(__dirname, "..", ".github", "ISSUE_TEMPLATE");
 
-const REPO = { owner: "tudor-city-ventures", repo: "tinfoilkit" };
+const REPO = { owner: "tudor-city-ventures", repo: "tinfoil-kit" };
 const ACCEPTED = { labels: [{ name: "accepted" }] };
 
 async function run({ pr = {}, issues = {}, action = "opened", sender }) {
   const calls = [];
   const p = {
     number: 50, title: "Add a thing", body: "", author_association: "NONE",
-    user: { login: "drive-by" }, head: { repo: { full_name: "drive-by/tinfoilkit" } }, ...pr,
+    user: { login: "drive-by" }, head: { repo: { full_name: "drive-by/tinfoil-kit" } }, ...pr,
   };
   const github = { rest: {
     issues: {
@@ -66,8 +66,8 @@ async function expect(name, opts, closed) {
   await expect("Closes an accepted issue", { pr: { body: "Closes #12" }, issues: { 12: ACCEPTED } }, false);
   await expect("mentions it mid-sentence", { pr: { body: "This does what (#12) asks." }, issues: { 12: ACCEPTED } }, false);
   await expect("mentions it in the title", { pr: { title: "Fix the thing in #12" }, issues: { 12: ACCEPTED } }, false);
-  await expect("links its URL", { pr: { body: "Fixes https://github.com/Tudor-City-Ventures/tinfoilkit/issues/12" }, issues: { 12: ACCEPTED } }, false);
-  await expect("owner/repo#12", { pr: { body: "Resolves tudor-city-ventures/tinfoilkit#12" }, issues: { 12: ACCEPTED } }, false);
+  await expect("links its URL", { pr: { body: "Fixes https://github.com/Tudor-City-Ventures/tinfoil-kit/issues/12" }, issues: { 12: ACCEPTED } }, false);
+  await expect("owner/repo#12", { pr: { body: "Resolves tudor-city-ventures/tinfoil-kit#12" }, issues: { 12: ACCEPTED } }, false);
   await expect("one of several references is accepted", { pr: { body: "See #3 and #12" }, issues: { 3: {}, 12: ACCEPTED } }, false);
 
   await expect("issue isn't accepted", { pr: { body: "Closes #13" }, issues: { 13: { labels: [{ name: "enhancement" }] } } }, true);
@@ -76,7 +76,7 @@ async function expect(name, opts, closed) {
   await expect("number doesn't exist", { pr: { body: "Closes #999" } }, true);
   await expect("another repo's issue", { pr: { body: "Closes other/repo#12 and https://github.com/other/repo/issues/12" }, issues: { 12: ACCEPTED } }, true);
 
-  await expect("branch in this repo", { pr: { head: { repo: { full_name: "tudor-city-ventures/tinfoilkit" } } } }, false);
+  await expect("branch in this repo", { pr: { head: { repo: { full_name: "tudor-city-ventures/tinfoil-kit" } } } }, false);
   for (const a of ["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]) await expect(a, { pr: { author_association: a } }, false);
   await expect("first-time contributor", { pr: { author_association: "FIRST_TIME_CONTRIBUTOR" } }, true);
   await expect("fork was deleted", { pr: { head: { repo: null } } }, true);
@@ -89,7 +89,7 @@ async function expect(name, opts, closed) {
   async function files(names, pr = {}) {
     let failure = null;
     const list = names.map((n) => (Array.isArray(n) ? { filename: n[0], previous_filename: n[1] } : { filename: n }));
-    const p = { number: 50, changed_files: list.length, head: { repo: { full_name: "drive-by/tinfoilkit" } }, ...pr };
+    const p = { number: 50, changed_files: list.length, head: { repo: { full_name: "drive-by/tinfoil-kit" } }, ...pr };
     const github = { rest: { pulls: { listFiles: "listFiles" } }, paginate: async () => list };
     await guard(github, { repo: REPO, payload: { pull_request: p } }, { info() {}, setFailed(m) { failure = m; } });
     return failure;
@@ -102,7 +102,7 @@ async function expect(name, opts, closed) {
   }
   check("renaming a workflow away fails it", !!(await files([["old.yml", ".github/workflows/check.yml"]])));
   check("a look-alike path passes", !(await files(["tests/.github/workflows/x.yml", "docs/CODEOWNERS.md", "tools/release-signers.md", "tests/pins.json", "mac/app.sh"])));
-  check("a branch in this repo skips it", !(await files([".github/workflows/check.yml"], { head: { repo: { full_name: "Tudor-City-Ventures/tinfoilkit" } } })));
+  check("a branch in this repo skips it", !(await files([".github/workflows/check.yml"], { head: { repo: { full_name: "Tudor-City-Ventures/tinfoil-kit" } } })));
   check("a deleted fork is still checked", !!(await files([".github/CODEOWNERS"], { head: { repo: null } })));
   check("more files than GitHub lists fails it", !!(await files(["README.md"], { changed_files: 3001 })));
 

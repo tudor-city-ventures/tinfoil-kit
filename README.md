@@ -106,7 +106,7 @@ A nightly test sets the kit up on a Mac and on Windows, from a download onto the
 
 ## Set up
 
-Download the kit from [tinfoilkit.com](https://tinfoilkit.com). Its button picks your computer's file from the [latest release](https://github.com/tudor-city-ventures/tinfoilkit/releases/latest): `TinfoilKit-Mac.zip`, `TinfoilKit-Windows.zip`, or `TinfoilKit.tar.gz` for Linux. Then:
+Download the kit from [tinfoilkit.com](https://tinfoilkit.com). Its button picks your computer's file from the [latest release](https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest): `TinfoilKit-Mac.zip`, `TinfoilKit-Windows.zip`, or `TinfoilKit.tar.gz` for Linux. Then:
 
 - **Mac:** open the download (Safari unzips it by itself) and double-click **Tinfoil Kit**. Click **Open** when macOS asks about an app from the internet, let it move itself to Applications, then click **Set Up**: SETUP runs in a Terminal window.
 - **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat` in the TinfoilKit folder. If Windows says it protected your PC, click **More info**, then **Run anyway**.
@@ -117,7 +117,7 @@ SETUP asks where you live and whether the kit goes on an external drive or on th
 Or from a terminal on a Mac or Linux:
 
 ```sh
-git clone https://github.com/tudor-city-ventures/tinfoilkit ~/TinfoilKit    # or /Volumes/<drive>/TinfoilKit
+git clone https://github.com/tudor-city-ventures/tinfoil-kit ~/TinfoilKit    # or /Volumes/<drive>/TinfoilKit
 cd ~/TinfoilKit
 ./kit plan    # preview what will download
 ./kit sync    # download everything (a few hours)

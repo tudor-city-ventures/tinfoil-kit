@@ -4,8 +4,8 @@ contact_links:
     url: https://tinfoilkit.com/#faq
     about: Common questions are answered on the website.
   - name: Help setting up
-    url: https://github.com/tudor-city-ventures/tinfoilkit/blob/main/GUIDE.md#if-something-doesnt-work
+    url: https://github.com/tudor-city-ventures/tinfoil-kit/blob/main/GUIDE.md#if-something-doesnt-work
     about: The guide covers setup, updates and what to do when something fails.
   - name: Security problem
-    url: https://github.com/tudor-city-ventures/tinfoilkit/security/advisories/new
+    url: https://github.com/tudor-city-ventures/tinfoil-kit/security/advisories/new
     about: Report it privately instead of opening an issue.

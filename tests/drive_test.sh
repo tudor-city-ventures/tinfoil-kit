@@ -3,16 +3,18 @@
 # CI runs it nightly and on demand (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive.
 #   tests/drive_test.sh mac     erase a disk image as exFAT the way Disk Utility does, build the Mac app, unzip
 #                               the kit as Download ZIP leaves it, run its SETUP against the mock internet and
-#                               pick the drive, double-click Open Tinfoil Kit, check the page in WebKit, open the
-#                               kit with the app, eject. Leaves tests/work/drive.vhd. Then set the kit up on this
-#                               Mac (~/TinfoilKit) from the app, as a home server (SETUP --home-server), check
+#                               pick the drive (it builds a small real map there: Andorra's), double-click Open
+#                               Tinfoil Kit, check the library, the AI and the map, check the page in WebKit, open
+#                               the kit with the app, eject. Leaves tests/work/drive.vhd. Then set the kit up on
+#                               this Mac (~/TinfoilKit) from the app, as a home server (SETUP --home-server), check
 #                               that the Mac started it and that it's shared behind the access code, and remove
 #                               it with UNINSTALL.
 #   tests/drive_test.sh linux   mount that drive the way a Linux desktop does, start the kit on this
 #                               machine (the newest Ubuntu in CI), then in Ubuntu 24.04 and 22.04, Debian 12
 #                               and Fedora. Then make it a home server (./kit share on, ./kit autostart on) and
 #                               check it the same way, and remove it from the drive with UNINSTALL.
-# Windows: the workflow mounts drive.vhd and double-clicks Open Tinfoil Kit for Windows.bat.
+# Windows: tests/drive_windows.ps1. SETUP and UNINSTALL run in terminal windows of their own with their answers typed
+# in, and the launchers' output shows in windows too, so that tests/drive.py record can film it all.
 set -u
 TESTS="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$TESTS")"
@@ -22,25 +24,59 @@ mkdir -p "$L" "$SHOTS"
 FAILS=0
 fail() { echo "FAIL: $*"; FAILS=$((FAILS + 1)); }
 step() { echo; echo "=== $*"; }
-stop_kit() { pkill -f tools/launch.sh; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; sleep 1; } 2>/dev/null
+# The kit's servers, gone before the next kit starts: a map server still answering would stand in for the next one's.
+SERVERS='llama-server|kiwix-serve|pmtiles serve|graphhopper-web|photon-'
+stop_kit() {
+  pkill -f tools/launch.sh; sleep 1; pkill -f "$SERVERS"
+  for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "$SERVERS" > /dev/null || break; sleep 1; done
+} 2>/dev/null
 
 # The kit as Safari leaves a Download ZIP: unzipped into tinfoilkit-main, every file marked as from the internet.
-# Its kit.json is the test kit, put in the folder the way one from the website's builder goes in.
-download_kit() { # DIR
+# Its kit.json is the test kit, put in the folder the way one from the website's builder goes in; with maps, a map too.
+download_kit() { # DIR [maps]
   rm -rf "$1" && mkdir -p "$1"
   git -C "$ROOT" archive HEAD | tar -xf - -C "$1"
-  python3 "$TESTS/drive.py" kitjson "$1/kit.json"
+  python3 "$TESTS/drive.py" kitjson "$1/kit.json" ${2:-}
   xattr -r -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$1"
 }
 # Where SETUP lists a drive: its line in ./kit drives (folder, format, GB free, problem, name).
 drive_number() { # KIT NAME
   "$1/kit" drives | awk -F'\t' -v n="$2" '$5 == n {print NR; exit}'
 }
+# COMMAND in a terminal window of its own, with the mock internet and ANSWERS typed in as it asks (printf %b, a
+# line each), the way a person double-clicking it would: Terminal on a Mac, xterm where there's a screen, else no
+# window. Its output goes to logs/LOG; returns its exit code.
+terminal() { # FOLDER LOG ANSWERS COMMAND...
+  local dir="$1" log="$L/$2" answers="$3" run="$W/${2%.log}.command" i
+  shift 3
+  rm -f "$log.exit"
+  { echo '#!/bin/bash'
+    echo 'printf "\033[3;0;0t\033[8;34;100t\033[2J\033[H"'    # Terminal: top left, 100 columns by 34 rows, cleared
+    printf 'cd %q && . %q\n' "$dir" "$TESTS/env.sh"
+    for i in $(compgen -e | grep '^KIT_'); do printf 'export %s=%q\n' "$i" "${!i}"; done    # KIT_OWN_PYTHON=1 setup ...
+    printf '%q ' "$(command -v python3)" "$TESTS/drive.py" type "$log" "$answers" -- "$@"; echo
+    printf 'echo $? > %q\n' "$log.exit"
+  } > "$run"
+  chmod +x "$run"
+  if [ "$(uname -s)" = Darwin ]; then open "$run"
+  elif [ -n "${DISPLAY:-}" ] && command -v xterm > /dev/null; then xterm $XTERM -T "${2%.log}" -e bash "$run" > /dev/null 2>&1 &
+  else bash "$run" > /dev/null 2>&1 & fi
+  for ((i = 0; i < 1800; i++)); do [ -f "$log.exit" ] && break; sleep 1; done
+  [ -f "$log.exit" ] || { echo "(still running after 30 minutes)"; return 124; }
+  sleep 2    # the end, on screen a moment
+  return "$(cat "$log.exit")"
+}
+XTERM="-geometry 100x34+0+0 -fa Monospace -fs 11 -bg #1d1f21 -fg #e0e0e0"
+# COMMAND's output in a window, where there's a screen: what's on screen when a person runs it.
+window() { # TITLE COMMAND...
+  [ -n "${DISPLAY:-}" ] && command -v xterm > /dev/null || return 0
+  local title="$1"; shift
+  xterm $XTERM -T "$title" -e "$@" > /dev/null 2>&1 &
+}
 # SETUP with the mock internet, a stock Mac's PATH and bash, and these answers.
 setup() { # FOLDER LOG ANSWERS [SETUP'S OPTIONS]
   local dir="$1" log="$2" answers="$3"; shift 3
-  (cd "$dir" && . "$TESTS/env.sh" && printf '%b' "$answers" | PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash SETUP.command "$@") \
-    > "$L/$log" 2>&1
+  terminal "$dir" "$log" "$answers" env PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash SETUP.command "$@"
   echo "exit $?"
   grep -E "PASS|FAIL|All set|Moved|Problems|^  - |^  [0-9]  |home network|Access code|starts" "$L/$log" | tail -24
   grep -q "All set" "$L/$log" || fail "SETUP didn't end with All set (logs/$log)"
@@ -71,14 +107,11 @@ mac() {
   local img="$W/drive.img" vol=/Volumes/TINFOIL disk kit src mock f much
   local py="$HOME/Library/Application Support/TinfoilKit"    # SETUP's Python for a Mac without one, and the app's notes
   local app="$HOME/Applications/Tinfoil Kit.app"
-  python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
-  mock=$!
-
-  step "a 2 GB disk, erased as exFAT the way Disk Utility does"
+  step "a 4 GB disk, erased as exFAT the way Disk Utility does"
   hdiutil detach "$vol" > /dev/null 2>&1
-  rm -f "$img" "$W/drive.vhd" && mkfile -n 2g "$img"
+  rm -f "$img" "$W/drive.vhd" && mkfile -n 4g "$img"    # a map's tiles count as about 1 GB until they're built
   disk=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount "$img" | awk 'NR == 1 {print $1}')
-  diskutil eraseDisk ExFAT TINFOIL GPT "$disk" || { fail "erase $disk"; kill "$mock"; return; }
+  diskutil eraseDisk ExFAT TINFOIL GPT "$disk" || { fail "erase $disk"; return; }
 
   step "the Mac app, built from this commit and signed ad hoc, in Applications as it puts itself"
   rm -rf "$app" "$W/app"
@@ -90,15 +123,21 @@ mac() {
     tail -20 "$L/mac_app_build.log"; fail "the Mac app didn't build (logs/mac_app_build.log)"
   fi
 
+  python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
+  mock=$!
   step "SETUP.command in the unzipped download, as on a Mac without Python: it gets the kit's own (the real"
-  echo "build, from the mock internet); pick the drive; it moves the kit there and sets it up"
+  echo "build, from the mock internet); pick the drive; it moves the kit there and sets it up, map included"
   src="$W/Downloads/tinfoilkit-main" kit="$vol/TinfoilKit"
   rm -rf "$py"
-  download_kit "$src"
+  download_kit "$src" maps
   n="$(drive_number "$src" TINFOIL)"
   echo "SETUP lists TINFOIL as drive ${n:-(not at all)}"
-  # Answers: keep where it's for, an external drive, TINFOIL, start downloading, don't open the kit, close.
-  KIT_OWN_PYTHON=1 setup "$src" setup.log "\n1\n${n:-1}\ny\nn\n\n"
+  "$src/kit" space "$kit"
+  # Answers: keep where it's for, an external drive, TINFOIL, all of it even if that leaves less free than SETUP
+  # likes (it asks then), start downloading, don't open the kit, close.
+  much=""; [ "$("$src/kit" space "$kit" | cut -f1)" = tight ] && much="2\n"
+  KIT_OWN_PYTHON=1 setup "$src" setup.log "\n1\n${n:-1}\n${much}y\nn\n\n"
+  [ -f "$kit/maps/routing/graph-cache/properties" ] || fail "SETUP didn't build the map's roads on the drive"
   "$py/python/bin/python3" --version || fail "SETUP didn't get the kit's own Python"
   [ -d "$kit/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
@@ -182,7 +221,7 @@ mac() {
   cp -R "$kit/logs" "$L/mac-home-logs" 2> /dev/null
 
   step "UNINSTALL.command: type delete, and the kit, its downloads and its LaunchAgent are gone"
-  printf 'delete\n\n' | /bin/bash "$kit/UNINSTALL.command" > "$L/uninstall-mac.log" 2>&1
+  terminal "$HOME" uninstall-mac.log 'delete\n\n' /bin/bash "$kit/UNINSTALL.command"
   tail -4 "$L/uninstall-mac.log"
   [ -e "$kit" ] && fail "$kit is still there after UNINSTALL"
   [ -e "$agent" ] && fail "UNINSTALL left the LaunchAgent, which would start a kit that's gone"
@@ -216,8 +255,8 @@ linux() {
   for img in ubuntu:24.04 ubuntu:22.04 debian:12 fedora:latest; do run_linux "$img" "$img"; done
 
   step "a home server, set up over SSH: ./kit share on, then ./kit autostart on (a systemd user service)"
-  { "$kit/kit" share on && "$kit/kit" autostart on; } > "$L/home-server.log" 2>&1 || fail "./kit share on, ./kit autostart on"
-  cat "$L/home-server.log"
+  terminal "$kit" home-server.log "" bash -c './kit share on && ./kit autostart on' || fail "./kit share on, ./kit autostart on"
+  tr -d '\r' < "$L/home-server.log"
   loginctl show-user "$USER" --property=Linger | grep -q yes || fail "the kit won't start at boot: lingering is off"
   python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit systemd started"
   share_check "$kit"
@@ -225,7 +264,7 @@ linux() {
 
   step "UNINSTALL.command --yes: the kit and its systemd service go, and nothing else on the drive"
   echo mine > "$mnt/keep-me.txt"
-  bash "$kit/UNINSTALL.command" --yes > "$L/uninstall-linux.log" 2>&1
+  terminal "$mnt" uninstall-linux.log "" bash "$kit/UNINSTALL.command" --yes
   tail -4 "$L/uninstall-linux.log"
   [ -e "$kit" ] && fail "the kit is still on the drive after UNINSTALL"
   [ -e "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/tinfoil-kit.service" ] && fail "UNINSTALL left the systemd service"
@@ -242,6 +281,7 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
   step "$name: bash \"Open Tinfoil Kit.command\""
   if [ -z "$img" ]; then
     (cd "$kit" && exec bash "Open Tinfoil Kit.command" --no-browser > "$log" 2>&1) &
+    window "bash \"Open Tinfoil Kit.command\"" tail -n +1 --pid=$! -f "$log"
   else
     # Libraries a desktop install has and these bare images don't, plus the package GUIDE.md tells Fedora users
     # to add (Fedora 45 moved to OpenSSL 4; llama.cpp's Linux build needs 3). Not curl: Ubuntu's desktop lacks it.
@@ -251,8 +291,20 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
     esac
     docker run -d --name kit --network host -v "$mnt:/media/user/TINFOIL" -w /media/user/TINFOIL/TinfoilKit \
       "$img" bash -c "$prep && exec bash \"Open Tinfoil Kit.command\" --no-browser" > /dev/null
+    window "$name: bash \"Open Tinfoil Kit.command\"" docker logs -f kit
   fi
   python3 "$TESTS/drive.py" check 8888 8080 || { fail "$name"; ok=0; }
+  if [ -z "$img" ] && [ "$ok" = 1 ]; then
+    step "the page in Chrome"
+    if python3 -c "import playwright" 2> /dev/null; then
+      KIT_BROWSER="$(command -v google-chrome > /dev/null && echo chrome || echo chromium)" KIT_LIBRARY_PORT=8888 \
+        KIT_AI_PORT=8080 KIT_TEST_SHOTS="$SHOTS/linux" python3 "$TESTS/ui_test.py" > "$L/linux_ui.log" 2>&1 ||
+        fail "the page in Chrome (logs/linux_ui.log)"
+      grep -E "^FAIL" "$L/linux_ui.log"; tail -1 "$L/linux_ui.log"
+    else
+      echo "(no Playwright here, so the page isn't checked)"
+    fi
+  fi
   if [ -n "$img" ]; then docker logs kit > "$log" 2>&1; docker rm -f kit > /dev/null; else stop_kit; fi
   if [ "$ok" = 1 ]; then grep -E "Library:|AI:|!" "$log"; else tail -25 "$log"; fi
 }
