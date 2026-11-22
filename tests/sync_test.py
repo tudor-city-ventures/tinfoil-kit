@@ -453,7 +453,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # ./kit update: a kit on the drive, its kit.json changed by its owner, and releases of the kit's code
     # published on the mock GitHub. site/kit.json is the copy of kit.json the kit's current version came with.
     up = work / "update" / "TinfoilKit"
-    code = {rel: (TESTS.parent / rel).read_bytes() for rel in ("kit", "SETUP.command", "START-HERE.command", "UNINSTALL.command")}
+    code = {rel: (TESTS.parent / rel).read_bytes() for rel in ("kit", "SETUP.command", "Open Tinfoil Kit.command", "UNINSTALL.command")}
     code.update({p.relative_to(TESTS.parent).as_posix(): p.read_bytes() for p in (TESTS.parent / "tools").rglob("*")
                  if p.is_file() and "__pycache__" not in p.parts})
     code["tools/release-signers"] = signer.encode()    # this kit's key, and the one each test release brings
@@ -706,7 +706,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out, calls = run_setup(args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: shares the kit, starts it with the computer, shows the address, and doesn't open it",
           rc == 0 and calls[:len(first)] == first and (setup / "home.log").read_text().splitlines() == home
-          and "Home server" in out and "Open the kit now" not in out and "double-click START-HERE" not in out, out)
+          and "Home server" in out and "Open the kit now" not in out and "double-click Open Tinfoil Kit" not in out, out)
     rc, out, calls = run_setup(update=3, args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: still a home server after the kit updates itself and starts over",
           rc == 0 and "(new version)" in out and (setup / "home.log").read_text().splitlines() == home, out)

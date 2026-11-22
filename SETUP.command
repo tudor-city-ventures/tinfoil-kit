@@ -324,11 +324,11 @@ all_set() {
   if [ "${KIT_HOME_SERVER:-}" = 1 ]; then
     :    # it starts by itself: home_server says so
   elif on_this_mac && [ "$KIT" = "$HOME/$NAME" ] && [ $MAC = 1 ]; then
-    echo "In an outage: in Finder choose Go > Home, open $NAME and double-click START-HERE.command. No internet needed."
+    echo "In an outage: in Finder choose Go > Home, open $NAME and double-click Open Tinfoil Kit.command. No internet needed."
   elif on_this_mac; then
-    echo "In an outage: open that folder and double-click START-HERE.command. No internet needed."
+    echo "In an outage: open that folder and double-click Open Tinfoil Kit.command. No internet needed."
   else
-    echo "In an outage: plug in the drive, open its ${KIT##*/} folder and double-click START-HERE.command. No internet needed."
+    echo "In an outage: plug in the drive, open its ${KIT##*/} folder and double-click Open Tinfoil Kit.command. No internet needed."
   fi
   if [ $MAC = 1 ]; then again="double-click it again"; else again="run it again"; fi
   echo
@@ -434,7 +434,7 @@ fi
 if [ $tested -eq 0 ] && [ $rc -eq 0 ]; then
   all_set
   [ "${KIT_HOME_SERVER:-}" = 1 ] && { home_server; finish; }
-  ask "Open the kit now?" && exec bash START-HERE.command
+  ask "Open the kit now?" && exec bash "Open Tinfoil Kit.command"
   finish
 fi
 if [ $tested -eq 0 ]; then
@@ -445,7 +445,7 @@ if [ $tested -eq 0 ]; then
     home_server
     say "Run SETUP again later to get the rest."
   else
-    echo "You can use the kit now: double-click START-HERE.command. Double-click SETUP again later to get the rest."
+    echo "You can use the kit now: double-click Open Tinfoil Kit.command. Double-click SETUP again later to get the rest."
   fi
   finish 1
 fi

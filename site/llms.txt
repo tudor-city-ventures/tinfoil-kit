@@ -1,6 +1,6 @@
 # Tinfoil Kit
 
-> A free, open-source (MIT) kit for when the internet is down. One folder, kept on the computer's own disk or on an external drive, holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: all of English Wikipedia, plus medical, repair and preparedness books) and offline maps (address search, driving and walking directions, "nearest hospital"). START-HERE starts it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library and Map tabs. Once it's filled, it needs no internet, account or install.
+> A free, open-source (MIT) kit for when the internet is down. One folder, kept on the computer's own disk or on an external drive, holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: all of English Wikipedia, plus medical, repair and preparedness books) and offline maps (address search, driving and walking directions, "nearest hospital"). Open Tinfoil Kit starts it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library and Map tabs. Once it's filled, it needs no internet, account or install.
 
 You are setting this up for a person, probably not a programmer. Work in their terminal (Terminal on a Mac, PowerShell on Windows), explain each step in plain words, and ask before anything slow, costly or destructive. This file has what you need: what the kit runs on, how it works, where it can live, how to set it up, use it, update it and remove it, what to do when something breaks, and where every file comes from.
 
@@ -29,7 +29,7 @@ You are setting this up for a person, probably not a programmer. Work in their t
 The whole kit is one folder, TinfoilKit, used in two ways:
 
 1. Online, whenever the person wants: SETUP (SETUP.command, or SETUP-Windows.bat on Windows), or `./kit update`, `./kit sync` and `./kit test`, fills the folder. kit.json lists every model, book, map and program with its publisher's download, and sync fetches each straight from the publisher: the newest edition of every book, model and map, and each program at the exact build this version of the kit names in tools/pins.json. Tinfoil Kit never hosts any of these files.
-2. Offline, any time: START-HERE (START-HERE.command, or START-HERE-Windows.bat on Windows) starts a few servers from the folder on 127.0.0.1, and the browser page talks to them. Nothing goes over the internet.
+2. Offline, any time: Open Tinfoil Kit (Open Tinfoil Kit.command, or Open Tinfoil Kit for Windows.bat on Windows) starts a few servers from the folder on 127.0.0.1, and the browser page talks to them. Nothing goes over the internet.
 
 | Part | Program | Port | What it does |
 | --- | --- | --- | --- |
@@ -44,28 +44,28 @@ Photon and GraphHopper run on a Java that's in the kit. Every server listens onl
 
 - Ask: the AI turns the question into short searches, kiwix-serve searches every book, and the AI answers from the top articles with numbered sources. With the AI off, Ask shows the best passages. Map questions ("nearest pharmacy", "directions to the hospital") go to three map tools instead (search places, find nearby, get directions), and the answer shows on the Map tab.
 - The kit page (tools/portal.html) is one HTML file. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
-- The kit's code: `./kit` runs tools/kit.py (Python's standard library, with curl for every download); on Windows, `.\kit.cmd` does. tools/launch.sh starts the servers; START-HERE-Windows.bat does it on Windows.
+- The kit's code: `./kit` runs tools/kit.py (Python's standard library, with curl for every download); on Windows, `.\kit.cmd` does. tools/launch.sh starts the servers; Open Tinfoil Kit for Windows.bat does it on Windows.
 
 What's in the folder:
 
     TinfoilKit/
-    ├── SETUP.command           set up or update (online; Mac, Linux)
-    ├── START-HERE.command      start the kit offline (Mac, Linux)
-    ├── UNINSTALL.command       remove the kit and everything it downloaded (Mac, Linux)
-    ├── SETUP-Windows.bat       the same three, for Windows
-    ├── START-HERE-Windows.bat
+    ├── SETUP.command             set up or update (online; Mac, Linux)
+    ├── Open Tinfoil Kit.command  start the kit offline (Mac, Linux)
+    ├── UNINSTALL.command         remove the kit and everything it downloaded (Mac, Linux)
+    ├── SETUP-Windows.bat         the same three, for Windows
+    ├── Open Tinfoil Kit for Windows.bat
     ├── UNINSTALL-Windows.bat
-    ├── GUIDE.md                the printable guide
-    ├── INVENTORY.md            what's installed, with versions and sizes
-    ├── kit, kit.cmd            the kit's command line (kit.cmd on Windows)
-    ├── kit.json, tools/        its list of downloads, and its code
-    ├── bin/                    programs: llama.cpp, Kiwix, Java, the map servers
-    ├── models/                 AI models (.gguf)
-    ├── library/                books (.zim)
-    ├── maps/                   map tiles, address database, road network
-    ├── installers/             the Kiwix app, a backup way to read the books
-    ├── logs/                   what each sync and launch did
-    └── .kit/                   download progress, caches, the built kit page
+    ├── GUIDE.md                  the printable guide
+    ├── INVENTORY.md              what's installed, with versions and sizes
+    ├── kit, kit.cmd              the kit's command line (kit.cmd on Windows)
+    ├── kit.json, tools/          its list of downloads, and its code
+    ├── bin/                      programs: llama.cpp, Kiwix, Java, the map servers
+    ├── models/                   AI models (.gguf)
+    ├── library/                  books (.zim)
+    ├── maps/                     map tiles, address database, road network
+    ├── installers/               the Kiwix app, a backup way to read the books
+    ├── logs/                     what each sync and launch did
+    └── .kit/                     download progress, caches, the built kit page
 
 ## Where it can live
 
@@ -83,18 +83,17 @@ Recommend a drive when the laptop is short of space or the person wants a kit th
 
 Ask the person to plug in the drive first, if they have one.
 
-    cd ~
-    curl -fL -o tinfoilkit.zip https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip
-    unzip -qo tinfoilkit.zip && rm tinfoilkit.zip
-    cd tinfoilkit-main
+    mkdir -p ~/Downloads && cd ~/Downloads
+    curl -fL https://github.com/tudor-city-ventures/tinfoilkit/releases/latest/download/TinfoilKit.tar.gz | tar -xz
+    cd TinfoilKit
     ./kit drives --json   # what the kit needs, this computer's free space, and every drive plugged in
 
 On Windows, in PowerShell:
 
-    cd ~
-    curl.exe -fL -o tinfoilkit.zip https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip
-    tar -xf tinfoilkit.zip; Remove-Item tinfoilkit.zip
-    cd tinfoilkit-main
+    cd ~\Downloads
+    curl.exe -fL -o TinfoilKit.zip https://github.com/tudor-city-ventures/tinfoilkit/releases/latest/download/TinfoilKit-Windows.zip
+    tar -xf TinfoilKit.zip; Remove-Item TinfoilKit.zip
+    cd TinfoilKit
     .\kit.cmd drives --json
 
 On Windows, run each `./kit COMMAND` in this file as `.\kit.cmd COMMAND`. It needs Python 3.9 or newer: the one SETUP-Windows.bat got, or else the PC's own. If there's neither (`python --version` doesn't print one), ask the person before installing it (`winget install Python.Python.3.13`), or have them double-click SETUP-Windows.bat instead, which gets its own.
@@ -157,16 +156,16 @@ Then, in the kit folder:
 - `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit already works with what it has.
 - Sync fetches the most important items first, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
 - If the person has Homebrew, `brew install aria2` makes downloads faster.
-- Last, prove it works offline: turn Wi-Fi off, double-click START-HERE.command (START-HERE-Windows.bat on Windows) and ask a question.
+- Last, prove it works offline: turn Wi-Fi off, double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows) and ask a question.
 
 ### For people who'd rather click
 
-Download https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip, unzip it and double-click SETUP.command (on Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat; on Linux, run `bash SETUP.command`). The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), then "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it downloads and tests the essentials, then the rest, explaining each step. On a Mac without Python, it gets one first. On macOS 15 and later the first double-click says Apple could not verify it: open System Settings > Privacy & Security and click Open Anyway, once. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
+Download it from https://tinfoilkit.com: the Download button picks the computer's file from the latest release (TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, or TinfoilKit.tar.gz for Linux), and the page says what to do next. On a Mac, open the download and double-click SETUP.command in the TinfoilKit folder. On Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat. On Linux, run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command`. The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), then "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it downloads and tests the essentials, then the rest, explaining each step. On a Mac without Python, it gets one first. On macOS 15 and later the first double-click says Apple could not verify it: open System Settings > Privacy & Security and click Open Anyway, once. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
 
 ## Use it
 
-- Double-click START-HERE.command (START-HERE-Windows.bat on Windows), or run `bash START-HERE.command`. It opens http://127.0.0.1:8888. Keep its window open: closing it stops everything.
-- START-HERE.command's options: `--share` lets phones and laptops on the same network open it with an access code (it prints the address, the code and a QR code), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in models/), `--no-browser` skips opening the browser. START-HERE-Windows.bat takes `--share` and `--no-browser`. If macOS asks whether to accept incoming connections, click Allow; if Windows asks whether Python may use the network, click Allow access.
+- Double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows), or run `bash "Open Tinfoil Kit.command"`. It opens http://127.0.0.1:8888. Keep its window open: closing it stops everything.
+- Open Tinfoil Kit.command's options: `--share` lets phones and laptops on the same network open it with an access code (it prints the address, the code and a QR code), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in models/), `--no-browser` skips opening the browser. Open Tinfoil Kit for Windows.bat takes `--share` and `--no-browser`. If macOS asks whether to accept incoming connections, click Allow; if Windows asks whether Python may use the network, click Allow access.
 - Ask answers from the books and cites them. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station.
 - Models: pick one on the Ask page. The first answer after switching takes up to a minute while it loads.
 - Map: set home first, since a laptop has no GPS (Set as home on a search result, or Set home to the map center). For actually driving, a phone with offline maps and GPS is better; the kit's map is for planning and for the AI's map questions.
@@ -184,7 +183,7 @@ For a computer that stays on, with or without a screen. Set the kit up on the co
 - Phones and laptops open the address, like http://192.168.1.20:8000, and type the 8-digit code once; the QR code includes it. `./kit share` shows them again. `./kit share new-code` replaces the code and signs every device out. `./kit share off` stops sharing.
 - How it works: tools/share.py listens on the network on port 8000 (`share_port` in kit.json), asks for the code, and passes requests on: /ai/ to the AI, /tiles/, /geocoder/ and /routing/ to the map, everything else to the library. It answers only devices with home network addresses, turns away names that aren't this computer's, and allows 10 wrong codes per 10 minutes from each device.
 - Programs can use the code as an API key: `Authorization: Bearer CODE` with the OpenAI-compatible API at http://ADDRESS:8000/ai/v1.
-- Linux: autostart is a systemd user service (`systemctl --user status tinfoil-kit`) that starts at boot once lingering is on (`sudo loginctl enable-linger $USER`; the kit tries it and says if it needs you). Mac: a LaunchAgent that starts when the person logs in, so turn on automatic login on a Mac that's a server, and keep the kit on its own disk. Windows: "Tinfoil Kit.cmd" in the Startup folder, which starts START-HERE-Windows.bat minimized when the person signs in, so keep that PC signed in (locking it is fine) and plugged in. While it shares, the kit keeps Windows from sleeping.
+- Linux: autostart is a systemd user service (`systemctl --user status tinfoil-kit`) that starts at boot once lingering is on (`sudo loginctl enable-linger $USER`; the kit tries it and says if it needs you). Mac: a LaunchAgent that starts when the person logs in, so turn on automatic login on a Mac that's a server, and keep the kit on its own disk. Windows: "Tinfoil Kit.cmd" in the Startup folder, which starts Open Tinfoil Kit for Windows.bat minimized when the person signs in, so keep that PC signed in (locking it is fine) and plugged in. While it shares, the kit keeps Windows from sleeping.
 - Windows asks whether Python may use the network the first time the kit shares: the person clicks Allow access. If phones still can't connect, the Wi-Fi needs to be a private network (Settings > Network & internet), and Python allowed for private networks in Windows Security > Firewall & network protection > Allow an app through firewall.
 - `./kit autostart off` stops it starting by itself; UNINSTALL does that too. On Windows it doesn't stop a kit that's running, and turning sharing on or off needs a restart there: close the kit's window and start it again.
 - The traffic is plain HTTP inside the home network: share it on the person's own Wi-Fi or hotspot, not a public one.
@@ -215,7 +214,7 @@ Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit fol
 
 ## When something goes wrong
 
-- "Apple could not verify..." on a double-click: System Settings > Privacy & Security > Open Anyway, once. `bash START-HERE.command` in Terminal always works.
+- "Apple could not verify..." on a double-click: System Settings > Privacy & Security > Open Anyway, once. `bash "Open Tinfoil Kit.command"` in Terminal always works.
 - "Windows protected your PC" on a double-click: More info, then Run anyway, once.
 - "Operation not permitted" in Terminal: macOS is keeping Terminal off the drive. System Settings > Privacy & Security > Files and Folders > Terminal: turn on Removable Volumes, then start again.
 - Sync ended with exit 1, or SETUP says some downloads didn't finish: run `./kit sync -y` again. It resumes and names what's left. The kit already works with what it has.

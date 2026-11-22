@@ -1,6 +1,6 @@
 #!/bin/bash
 # Starts the offline library server (kiwix-serve) and the AI server (llama-server),
-# then opens the portal in the browser. Started by START-HERE.command.
+# then opens the portal in the browser. Started by Open Tinfoil Kit.command.
 #
 #   bash tools/launch.sh [--share] [--model=NAME] [--no-browser] [--no-maps]
 #

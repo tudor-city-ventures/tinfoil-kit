@@ -8,13 +8,13 @@ An offline kit for when the internet goes down. One folder, on your computer or 
 - **An offline library** (Kiwix): Wikipedia, medical references, repair guides, preparedness manuals.
 - **Offline maps** with address search, driving and walking directions, and "nearest hospital".
 
-Open the kit folder (or plug in the drive it's on), double-click `START-HERE.command` (`START-HERE-Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library and Map tabs. No internet, account or install needed.
+Open the kit folder (or plug in the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library and Map tabs. No internet, account or install needed.
 
 ![The Ask tab](docs/screenshots/shot_ask.png)
 
 ## How it works
 
-The whole kit is one folder. Put it on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, START-HERE starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `START-HERE.command` on a Mac or Linux, `SETUP-Windows.bat` and `START-HERE-Windows.bat` on Windows.
+The whole kit is one folder. Put it on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows.
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 300}}}%%
@@ -28,7 +28,7 @@ flowchart TB
   folder[("Kit folder<br/>on a drive or your computer")]
   subgraph offline["Offline, any time"]
     direction TB
-    start["START-HERE<br/>starts the servers"]
+    start["Open Tinfoil Kit<br/>starts the servers"]
     start --> ai["AI<br/>llama-server"]
     start --> library["Library<br/>kiwix-serve"]
     start --> maps["Maps<br/>pmtiles, Photon,<br/>GraphHopper"]
@@ -50,11 +50,11 @@ The first time, SETUP asks where you live (a US state or a country), which sets 
 2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in [kit.json](kit.json) and downloads only what changed. Programs are the exception: each version of the kit names the exact build of each one it installs (`tools/pins.json`), so a new AI engine arrives with a kit update. A big book can wait for its next edition: Wikipedia (115 GB) keeps the one it has until it's a year old (`refresh_days` in kit.json). Downloads resume after a break, every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
 3. **Check** (`./kit test`): starts every server offline and checks that each one answers.
 
-Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build from nuget.org (about 15 MB, checked against its SHA-256) and keeps it in `%LOCALAPPDATA%\TinfoilKit`, outside the kit. A Mac's python3 only offers to install Apple's Command Line Tools (several GB) until they're installed, so on a Mac without them `SETUP.command` gets a standalone Python from python-build-standalone on GitHub (about 25 MB, checked against its SHA-256) and keeps it in `~/Library/Application Support/TinfoilKit`, outside the kit (its symlinks wouldn't fit on exFAT). The kit on a drive doesn't need either: START-HERE uses only the programs in the kit (sharing on the home network also needs Python).
+Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build from nuget.org (about 15 MB, checked against its SHA-256) and keeps it in `%LOCALAPPDATA%\TinfoilKit`, outside the kit. A Mac's python3 only offers to install Apple's Command Line Tools (several GB) until they're installed, so on a Mac without them `SETUP.command` gets a standalone Python from python-build-standalone on GitHub (about 25 MB, checked against its SHA-256) and keeps it in `~/Library/Application Support/TinfoilKit`, outside the kit (its symlinks wouldn't fit on exFAT). The kit on a drive doesn't need either: Open Tinfoil Kit uses only the programs in the kit (sharing on the home network also needs Python).
 
 ### Using it (offline)
 
-`START-HERE.command` (`tools/launch.sh`; `START-HERE-Windows.bat` on Windows) starts these servers on your computer and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the computer's memory. Every server listens only on 127.0.0.1, so nothing else on the network can reach them. Sharing, off by default, adds one more on the network.
+`Open Tinfoil Kit.command` (`tools/launch.sh`; `Open Tinfoil Kit for Windows.bat` on Windows) starts these servers on your computer and opens the kit page at http://127.0.0.1:8888. It picks an AI model that fits the computer's memory. Every server listens only on 127.0.0.1, so nothing else on the network can reach them. Sharing, off by default, adds one more on the network.
 
 | Part | Program | Port | What it does |
 | --- | --- | --- | --- |
@@ -76,23 +76,23 @@ The kit page (`tools/portal.html`) is one HTML file with no build step. Each syn
 
 ```text
 TinfoilKit/
-├── SETUP.command           set up, or update whenever you like (online; Mac, Linux)
-├── START-HERE.command      start the kit offline (Mac, Linux)
-├── UNINSTALL.command       remove the kit and everything it downloaded (Mac, Linux)
-├── SETUP-Windows.bat       the same three, for Windows
-├── START-HERE-Windows.bat
+├── SETUP.command             set up, or update whenever you like (online; Mac, Linux)
+├── Open Tinfoil Kit.command  start the kit offline (Mac, Linux)
+├── UNINSTALL.command         remove the kit and everything it downloaded (Mac, Linux)
+├── SETUP-Windows.bat         the same three, for Windows
+├── Open Tinfoil Kit for Windows.bat
 ├── UNINSTALL-Windows.bat
-├── GUIDE.md                the printable guide
-├── INVENTORY.md            what's installed, with versions and sizes
-├── kit, kit.cmd            the kit's command line (kit.cmd on Windows)
-├── kit.json, tools/        its list of downloads, and its code
-├── bin/                    programs: llama.cpp, Kiwix, Java, the map servers
-├── models/                 AI models
-├── library/                books (.zim files)
-├── maps/                   map tiles, address database, road network
-├── installers/             the Kiwix app, a backup way to read the books
-├── logs/                   what each sync and launch did
-└── .kit/                   download progress, caches, the built kit page
+├── GUIDE.md                  the printable guide
+├── INVENTORY.md              what's installed, with versions and sizes
+├── kit, kit.cmd              the kit's command line (kit.cmd on Windows)
+├── kit.json, tools/          its list of downloads, and its code
+├── bin/                      programs: llama.cpp, Kiwix, Java, the map servers
+├── models/                   AI models
+├── library/                  books (.zim files)
+├── maps/                     map tiles, address database, road network
+├── installers/               the Kiwix app, a backup way to read the books
+├── logs/                     what each sync and launch did
+└── .kit/                     download progress, caches, the built kit page
 ```
 
 The repo is the kit, so `site/` (the website), `tests/` and `docs/` come along, but the kit doesn't use them.
@@ -106,11 +106,11 @@ A nightly test sets the kit up on a Mac and on Windows, from a download onto the
 
 ## Set up
 
-Download the kit (**Code > Download ZIP** on GitHub) and unzip it. Then, in the unzipped folder:
+Download the kit from [tinfoilkit.com](https://tinfoilkit.com). Its button picks your computer's file from the [latest release](https://github.com/tudor-city-ventures/tinfoilkit/releases/latest): `TinfoilKit-Mac.zip`, `TinfoilKit-Windows.zip`, or `TinfoilKit.tar.gz` for Linux. Then:
 
-- **Mac:** double-click `SETUP.command`. macOS asks once before it opens a script from the internet: open **System Settings > Privacy & Security** and click **Open Anyway**.
-- **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat`. If Windows says it protected your PC, click **More info**, then **Run anyway**.
-- **Linux:** run `bash SETUP.command` in a terminal. It needs python3 and curl.
+- **Mac:** open the download (Safari unzips it by itself) and double-click `SETUP.command` in the TinfoilKit folder. macOS asks once before it opens a script from the internet: click **Done**, open **System Settings > Privacy & Security** and click **Open Anyway**.
+- **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat` in the TinfoilKit folder. If Windows says it protected your PC, click **More info**, then **Run anyway**.
+- **Linux:** run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command` in a terminal. It needs python3 and curl.
 
 SETUP asks where you live and whether the kit goes on an external drive or on this computer, says how much room each has, moves it there, downloads the essentials and tests them, then gets the rest and tests again. Or from a terminal on a Mac or Linux:
 
@@ -122,7 +122,7 @@ cd ~/TinfoilKit
 ./kit test    # start every server offline and check it answers
 ```
 
-Then turn Wi-Fi off and double-click `START-HERE.command` (`START-HERE-Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the kit folder.
+Then turn Wi-Fi off and double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the kit folder.
 
 ## Update
 
@@ -150,7 +150,7 @@ The kit downloads programs and runs them on your computer, so here is what prote
 - **The repo.** Every GitHub Action is pinned to a commit and runs with a read-only token, except a few jobs that never run code from a pull request or a download. An outside pull request that touches the workflows, CODEOWNERS, the release key or the program pins fails a check that only the maintainer can merge past.
 - **What it can't protect against:** a bad file from a hacked publisher, if it's a book, model or map (its checksum comes from the same place as the file) or a program that was already bad when a release pinned it; someone with your unlocked computer or drive, since the kit isn't encrypted (use FileVault, BitLocker or an encrypted drive for that); and an AI answer that's wrong, so check its sources.
 
-To check a release before running it, download its `tinfoilkit-TAG.tar.gz` and `.sig` (the **Code > Download ZIP** button is protected by HTTPS alone) and run:
+To check a release before running it, download its `tinfoilkit-TAG.tar.gz` and `.sig` (the downloads the website links to are protected by HTTPS alone) and run:
 
 ```sh
 ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release \

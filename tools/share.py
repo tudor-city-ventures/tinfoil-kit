@@ -817,7 +817,7 @@ AGENT = "com.tinfoilkit.kit"
 
 
 def launcher(root: Path) -> Path:
-    return root / "START-HERE-Windows.bat" if WINDOWS else root / "tools" / "launch.sh"
+    return root / "Open Tinfoil Kit for Windows.bat" if WINDOWS else root / "tools" / "launch.sh"
 
 
 def systemd_unit(root: Path) -> str:
@@ -846,8 +846,8 @@ def startup_file() -> Path:
 
 
 def startup_script(root: Path) -> str:
-    """START-HERE-Windows.bat, minimized, if the kit is still there (a drive can be unplugged). In UTF-8 (chcp 65001)
-    for a folder named in any language, with % doubled since cmd reads it as its own."""
+    """Open Tinfoil Kit for Windows.bat, minimized, if the kit is still there (a drive can be unplugged). In UTF-8
+    (chcp 65001) for a folder named in any language, with % doubled since cmd reads it as its own."""
     bat = str(launcher(root)).replace("%", "%%")
     return ("@echo off\r\nchcp 65001 >nul\r\n"
             f"rem Starts Tinfoil Kit when you sign in to Windows. {kit_cmd('autostart off')} removes this.\r\n"

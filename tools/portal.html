@@ -170,7 +170,7 @@
     </ul>
     <h2>If something doesn't work</h2>
     <ul>
-      <li>Close the kit's Terminal window and double-click <b>START-HERE.command</b> again.</li>
+      <li>Close the kit's Terminal window and double-click <b>Open Tinfoil Kit.command</b> again.</li>
       <li>Logs are in the <b>logs</b> folder, inside the kit's folder.</li>
       <li>If the AI won't start, the library still works. The Kiwix app in <b>installers</b> also opens the library files directly.</li>
       <li>Big models need most of the computer's memory: quit other apps. If a model still won't load, use Gemma-4-E4B.</li>
@@ -903,7 +903,7 @@ if (typeof document !== "undefined") (function () {
   });
 
   /* ---------------------------------------------------------------- map tab */
-  var KM = window.KIT_MAPS || { available: false, reason: "the map isn't set up here. It's added by ./kit sync (while online) and starts with START-HERE.command." };
+  var KM = window.KIT_MAPS || { available: false, reason: "the map isn't set up here. It's added by ./kit sync (while online) and starts when you open Tinfoil Kit." };
   function server(name) { return GATE ? location.origin + "/" + name : location.protocol + "//" + location.hostname + ":" + KM.ports[name]; }
   var GEO = KM.ports ? server("geocoder") : "", ROUTE = KM.ports ? server("routing") : "";
   var map = null, mapReady = false, pending = null, markers = [], homeMk = null, toPick = null;

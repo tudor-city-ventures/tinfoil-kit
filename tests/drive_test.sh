@@ -3,7 +3,7 @@
 # CI runs it nightly and on demand (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive.
 #   tests/drive_test.sh mac     erase a disk image as exFAT the way Disk Utility does, unzip the kit as
 #                               Download ZIP leaves it, run its SETUP against the mock internet and pick the
-#                               drive, double-click START-HERE, check the page in WebKit, eject. Leaves
+#                               drive, double-click Open Tinfoil Kit, check the page in WebKit, eject. Leaves
 #                               tests/work/drive.vhd. Then set the kit up on this Mac (~/TinfoilKit) as a home
 #                               server (SETUP --home-server), check that the Mac started it and that it's shared
 #                               behind the access code, and remove it with UNINSTALL.
@@ -111,13 +111,13 @@ mac() {
   [ -d "$kit/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
   echo "$(find "$kit" -name '._*' | wc -l | tr -d ' ') ._ files on the drive"
-  for f in START-HERE.command SETUP.command UNINSTALL.command tools/launch.sh; do
+  for f in "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command tools/launch.sh; do
     xattr -p com.apple.quarantine "$kit/$f" > /dev/null 2>&1 && fail "$f is still marked as from the internet"
   done
   [ -f "$vol/.metadata_never_index" ] || fail "no .metadata_never_index, so Spotlight would index the drive"
 
-  step "double-click START-HERE.command: Terminal runs it, and it opens the page in Safari"
-  open "$kit/START-HERE.command"
+  step "double-click Open Tinfoil Kit.command: Terminal runs it, and it opens the page in Safari"
+  open "$kit/Open Tinfoil Kit.command"
   python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit after a double-click"
   sleep 5
   screencapture -x "$SHOTS/mac-desktop.png" 2> /dev/null || echo "(no desktop screenshot here)"
@@ -209,10 +209,10 @@ linux() {
 run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IMAGE is set, and check it
   local name="$1" img="$2" log prep ok=1
   log="$L/linux-$(printf '%s' "${img:-host}" | tr -c 'a-zA-Z0-9.' '-').log"
-  step "$name: bash START-HERE.command"
+  step "$name: bash \"Open Tinfoil Kit.command\""
   if [ -z "$img" ]; then
-    (cd "$kit" && exec bash START-HERE.command --no-browser > "$log" 2>&1) &
-    window "bash START-HERE.command" tail -n +1 --pid=$! -f "$log"
+    (cd "$kit" && exec bash "Open Tinfoil Kit.command" --no-browser > "$log" 2>&1) &
+    window "bash \"Open Tinfoil Kit.command\"" tail -n +1 --pid=$! -f "$log"
   else
     # Libraries a desktop install has and these bare images don't, plus the package GUIDE.md tells Fedora users
     # to add (Fedora 45 moved to OpenSSL 4; llama.cpp's Linux build needs 3). Not curl: Ubuntu's desktop lacks it.
@@ -221,8 +221,8 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
       *) prep="apt-get update -qq && apt-get install -y -qq libgomp1 libvulkan1 procps > /dev/null" ;;
     esac
     docker run -d --name kit --network host -v "$mnt:/media/user/TINFOIL" -w /media/user/TINFOIL/TinfoilKit \
-      "$img" bash -c "$prep && exec bash START-HERE.command --no-browser" > /dev/null
-    window "$name: bash START-HERE.command" docker logs -f kit
+      "$img" bash -c "$prep && exec bash \"Open Tinfoil Kit.command\" --no-browser" > /dev/null
+    window "$name: bash \"Open Tinfoil Kit.command\"" docker logs -f kit
   fi
   python3 "$TESTS/drive.py" check 8888 8080 || { fail "$name"; ok=0; }
   if [ -z "$img" ] && [ "$ok" = 1 ]; then

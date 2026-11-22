@@ -215,7 +215,8 @@ VIDEO = Path(os.environ.get("KIT_TEST_WORK") or Path(__file__).resolve().parent 
 TITLES = {
     "mac": "Mac: set up onto an exFAT drive from a download, start it, use the page; then set up on the Mac as a "
            "home server, and uninstall",
-    "windows": "Windows: plug in the drive the Mac made, double-click START-HERE-Windows.bat, use the page in Edge",
+    "windows": "Windows: plug in the drive the Mac made, double-click Open Tinfoil Kit for Windows.bat, use the page "
+               "in Edge",
     "windows-setup": "Windows: SETUP-Windows.bat from a download, onto the PC and then onto a drive, and uninstall",
     "linux": "Linux: the drive the Mac made, started on Ubuntu, then Ubuntu 24.04 and 22.04, Debian 12 and Fedora; "
              "the page in Chrome; then a home server, and uninstall",

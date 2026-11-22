@@ -95,7 +95,7 @@ with sync_playwright() as p:
     page.on("console", lambda m: errors.append(m.text + " @ " + str(m.location)) if m.type == "error" else None)
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("response", lambda r: print("   HTTP", r.status, r.url) if r.status >= 400 else None)
-    note("The kit's page, as START-HERE opens it. Ask anything: it looks in the offline library first")
+    note("The kit's page, as Open Tinfoil Kit opens it. Ask anything: it looks in the offline library first")
     page.goto(URL)
     page.wait_for_function("document.getElementById('aiStatus').textContent.includes('ready')", timeout=20000)
     check("redirected localhost -> 127.0.0.1", page.url.startswith(f"http://127.0.0.1:{LIB}/"), page.url)
