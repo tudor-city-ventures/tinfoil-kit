@@ -2,8 +2,9 @@ name: drive test
 # The kit on a real exFAT disk: set up on a Mac, then plugged into Windows and Linux (tests/drive_test.sh). And set
 # up on Windows from a download, onto the PC and onto a drive (tests/drive_windows.ps1).
 # By hand (Actions > drive test > Run workflow) once the bulk of a change is done. Nightly and on pushes only when
-# something it covers changed (the changes job), so site edits never start it. Pushes start it only once the
-# repo is public, since Mac minutes cost money while it's private.
+# something it covers changed (the changes job), so site edits never start it; but Monday's nightly always runs,
+# since llama.cpp and kiwix-tools put out new builds (which the kit gets) with no change here. Pushes start it only
+# once the repo is public, since Mac minutes cost money while it's private.
 run-name: drive test${{ inputs.only == 'windows-setup' && ', Windows setup only' || '' }}
 on:
   schedule:
@@ -44,8 +45,13 @@ jobs:
         run: |
           case "$EVENT" in
             push) base="$BEFORE" ;;
-            schedule) base="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/drive.yml/runs?status=success&per_page=30" \
-                                -q '[.workflow_runs[] | select(.display_title | contains("only") | not)][0].head_sha')" || base="" ;;
+            schedule)
+              if [ "$(date -u +%u)" = 1 ]; then
+                base="" && echo "Monday: it runs anyway, on the newest llama.cpp and kiwix-tools builds."
+              else
+                base="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/drive.yml/runs?status=success&per_page=30" \
+                          -q '[.workflow_runs[] | select(.display_title | contains("only") | not)][0].head_sha')" || base=""
+              fi ;;
             *) base="" ;;    # by hand: always
           esac
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2> /dev/null &&

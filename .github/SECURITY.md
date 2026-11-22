@@ -6,13 +6,7 @@ Tinfoil Kit downloads programs and data and runs them on your computer, and `./k
 
 Use [Report a vulnerability](https://github.com/tudor-city-ventures/tinfoilkit/security/advisories/new) on the Security tab, not a public issue. Say what you ran and what happened. Reports a person hasn't reproduced, such as unchecked output from an AI or a scanner, are closed.
 
-One person maintains the kit. Expect a reply within a week. Then:
-
-1. We agree on the problem and how serious it is, in the private advisory.
-2. The fix ships in a signed release. Kits get it the next time their owners run SETUP, so a serious problem is also announced on tinfoilkit.com.
-3. The advisory goes public with the release and credits you, unless you'd rather not be named.
-
-Please keep it private until the fix is out, or for 90 days after your report if that comes first. Research in good faith is welcome: test on your own computer and your own copy of the kit, leave other people's data and networks alone, and don't load-test tinfoilkit.com.
+Tinfoil Kit is a free project with one maintainer, so there's no promised reply time, fix date or bounty. Reports are looked at as time allows. A fix ships in a signed release, which kits get the next time their owners run SETUP, so if you plan to publish, please give it a fair chance to ship first. Research in good faith is welcome: test on your own computer and your own copy of the kit, leave other people's data and networks alone, and don't load-test tinfoilkit.com.
 
 ## What counts
 
@@ -24,6 +18,6 @@ Please keep it private until the fix is out, or for 90 days after your report if
 
 Not in scope: bugs in llama.cpp, Kiwix, Photon, GraphHopper or the other programs the kit downloads (report those to their projects), and someone on a network you share reading the sharing gate's traffic, which is plain HTTP (the README says to share on networks you trust).
 
-## Supported versions
+## Versions
 
-The latest release and `main`.
+Fixes go into new releases only, so run SETUP to get them.
