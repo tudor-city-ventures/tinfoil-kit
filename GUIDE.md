@@ -8,8 +8,8 @@ external drive. Print this page and keep it handy (with the drive, if the kit is
 
 ## In an outage: start it
 
-1. If the kit is on a drive, plug it in: any Mac, Windows PC or Linux PC will do (ideally 32 GB memory). Plug the laptop
-   into power if you can.
+1. If the kit is on a drive, plug it in: any Mac, Windows PC or Linux PC will do (ideally 32 GB memory; Windows and
+   Linux are experimental for now). Plug the laptop into power if you can.
 2. Open the kit's `app` folder: on a drive, the `TinfoilKit` folder on the drive, then `app`. On the computer itself,
    `TinfoilKit` in your home folder, then `app` (Mac: in Finder choose **Go > Home**. Windows: in File Explorer, your
    user folder, `C:\Users\<you>`).
@@ -227,7 +227,8 @@ library is missing, install that too.
 ## A home server (advanced)
 
 A computer that stays on, like a Linux box, a Mac mini or a Windows PC, can serve the kit to every phone and laptop at
-home. On Linux or a Mac it needs no screen. Over SSH, in the unzipped download (or a `git clone`), run:
+home. This is experimental for now. On Linux or a Mac it needs no screen. Over SSH, in the unzipped download (or a
+`git clone`), run:
 
 ```
 bash SETUP.command --home-server

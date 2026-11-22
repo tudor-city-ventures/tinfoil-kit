@@ -509,7 +509,7 @@ share_home() {
 
 # Phones and laptops on the home network open the kit with its access code, and it starts with the computer.
 home_server() {
-  say "Home server: sharing the kit on your home network, and starting it whenever $THIS starts."
+  say "Home server, experimental for now: sharing the kit on your home network, and starting it whenever $THIS starts."
   ./kit share on >/dev/null
   ./kit autostart on
   echo
@@ -540,6 +540,7 @@ if [ "${1:-}" != "--updated" ]; then
       echo "This gets an offline AI, library and maps ready for when the internet is down, then checks that they work."
       echo "The first time takes a few hours. Later runs only download what changed."
     fi
+    [ $MAC = 1 ] || echo "Tinfoil Kit on Linux is experimental for now: it's tested less than on a Mac, so expect rough edges."
     need_tools
     if [ -d "$KIT/downloads" ]; then
       [ $FIRST = 1 ] && { KIT_STEPS=2; goes_on && KIT_STEPS=3; }

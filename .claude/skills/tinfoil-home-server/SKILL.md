@@ -9,6 +9,8 @@ Sharing is off until the person turns it on. Then phones and laptops on the same
 
 ## A new kit, as a home server
 
+A home server is experimental for now: tell them, so rough edges don't surprise them.
+
 On the computer that stays on (a Linux box, a Mac mini, or a laptop on its charger), the setup command from the tinfoil-install skill with `--this-computer --home-server`. It sets the kit up on that computer's own disk, gets all of it, shares it, and starts it with the computer.
 
 ## A kit that's already set up

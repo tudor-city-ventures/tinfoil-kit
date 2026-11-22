@@ -2,6 +2,9 @@
   "framework": "nextjs",
   "installCommand": "npm ci --ignore-scripts",
   "cleanUrls": true,
+  "redirects": [
+    {"source": "/", "has": [{"type": "query", "key": "for", "value": "agent"}], "destination": "/agents", "permanent": true}
+  ],
   "headers": [
     {
       "source": "/(.*)",

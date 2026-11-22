@@ -24,18 +24,18 @@ export const metadata = {
 
 export const viewport = { themeColor: "#F3F0E6" };
 
-// Which version of the page to show: ?for=agent in the address, else the last pick, else the human one.
-// It runs before the body draws, so the page never flashes the wrong version.
-const pickReader = `(function (d) {
-  var r = null;
+// Before the page draws: mark that scripts run (the CSS uses it), and send old links on to where their part moved. The
+// agent version was /?for=agent (Vercel redirects that too); the kit builder and the prompts went to /ai-setup.
+const early = `(function (d, l) {
   d.classList.add("js");
-  try { r = new URLSearchParams(location.search).get("for") || localStorage.getItem("reader"); } catch (e) {}
-  if (r === "agent") d.setAttribute("data-reader", r);
-})(document.documentElement);`;
+  if (l.pathname !== "/") return;
+  if (new URLSearchParams(l.search).get("for") === "agent" || l.hash === "#instructions") l.replace("/agents");
+  else if (l.hash === "#builder" || l.hash === "#prompts") l.replace("/ai-setup" + l.hash);
+})(document.documentElement, location);`;
 
 export default function RootLayout({ children }) {
   return (
-    // the script above changes <html> before React starts, so its attributes differ from the server's on purpose
+    // the script above changes <html> before React starts, so its class differs from the server's on purpose
     <html
       lang="en"
       className={`${plexSans.variable} ${plexMono.variable}`}
@@ -43,7 +43,7 @@ export default function RootLayout({ children }) {
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: pickReader }} />
+        <script dangerouslySetInnerHTML={{ __html: early }} />
       </head>
       <body>{children}</body>
     </html>

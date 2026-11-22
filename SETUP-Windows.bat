@@ -109,6 +109,7 @@ if defined UPDATE (
   echo This gets an offline AI, library and maps ready for when the internet is down, then checks that they work.
   echo The first time takes a few hours. Later runs only download what changed.
 )
+echo Tinfoil Kit on Windows is experimental for now: it's tested less than on a Mac, so expect rough edges.
 call :runtime || call :finish 1
 rem (kit place makes the downloads folder, so a download that hasn't been put in its place has none)
 if exist "%KIT%\downloads\" (
@@ -310,7 +311,7 @@ call :finish 0
 rem Phones and laptops on the home network open the kit with its access code, and it starts as you sign in.
 :home_server
 echo(
-echo Home server: sharing the kit on your home network, and starting it whenever you sign in to this PC.
+echo Home server, experimental for now: sharing the kit on your home network, and starting it whenever you sign in to this PC.
 call :kit share on >nul
 call :kit autostart on
 echo(

@@ -10,12 +10,13 @@ You are helping a person set this up, probably not a programmer. Don't install i
 
 ## What it runs on
 
-| Computer | Set up the kit | AI | Library | Map |
-| --- | --- | --- | --- | --- |
-| Mac with Apple Silicon (M1 or newer) | yes | yes | yes | yes |
-| Windows PC (x64), Windows 10 version 1803 or newer, or Windows 11 | yes | yes | yes | yes |
-| Linux PC (x64) | yes | yes | yes | yes |
+| Computer | Support | Set up the kit | AI | Library | Map |
+| --- | --- | --- | --- | --- | --- |
+| Mac with Apple Silicon (M1 or newer) | supported | yes | yes | yes | yes |
+| Windows PC (x64), Windows 10 version 1803 or newer, or Windows 11 | experimental | yes | yes | yes | yes |
+| Linux PC (x64) | experimental | yes | yes | yes | yes |
 
+- Windows and Linux are experimental for now, and so is a home server: they're tested less than a kit on a Mac, so expect rough edges. Tell the person before they set one up, and suggest a Mac if they have one.
 - The kit holds each program for all three, so a kit on an exFAT drive starts on any of them, whichever one set it up.
 
 - Intel Macs and ARM Windows or Linux PCs can't run it: the kit downloads programs built for Apple Silicon and for x64 PCs only. On a Mac, `uname -m` prints arm64.
@@ -207,7 +208,7 @@ For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` fo
 
 ## A home server
 
-For a computer that stays on, with or without a screen. The setup command with `--this-computer --home-server` (see "Set it up") sets the kit up on that computer's own disk, gets all of it, and turns on both of these. By hand, in the kit's app folder:
+Experimental for now: tell the person. For a computer that stays on, with or without a screen. The setup command with `--this-computer --home-server` (see "Set it up") sets the kit up on that computer's own disk, gets all of it, and turns on both of these. By hand, in the kit's app folder:
 
     ./kit share on       # share it on the home network behind an access code: prints the address, the code and a QR code
     ./kit autostart on   # start it now, and whenever the computer starts

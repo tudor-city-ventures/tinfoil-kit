@@ -200,12 +200,12 @@ nav.links {
   margin-left: auto;
 }
 /* Narrow screens fold the sections behind the Menu button. Without the script (no .js) they stay listed,
-   and so do the agent version's two links. */
+   and so do a flat bar's few links (the agent page's). */
 @media (max-width: 880px) {
-  .js:not([data-reader="agent"]) .menu {
+  .js .top:not(.flat) .menu {
     display: inline-flex;
   }
-  .js:not([data-reader="agent"]) nav.links {
+  .js .top:not(.flat) nav.links {
     display: none;
     flex-basis: 100%;
     flex-direction: column;
@@ -215,23 +215,23 @@ nav.links {
     border-top: var(--rule);
     font-size: 16px;
   }
-  .js:not([data-reader="agent"]) header.top.open nav.links {
+  .js .top.open:not(.flat) nav.links {
     display: flex;
   }
-  .js:not([data-reader="agent"]) nav.links a {
+  .js .top:not(.flat) nav.links a {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     padding: 16px 0;
     border-bottom: 1px solid var(--ink);
   }
-  .js:not([data-reader="agent"]) nav.links a:not(.btn)::after {
+  .js .top:not(.flat) nav.links a:not(.btn)::after {
     counter-increment: sec;
     content: "0" counter(sec);
     color: var(--olive);
     font-size: 13px;
   }
-  .js:not([data-reader="agent"]) nav.links a.btn {
+  .js .top:not(.flat) nav.links a.btn {
     justify-content: center;
     align-items: center;
     margin: 16px 0 4px;
@@ -837,60 +837,45 @@ footer a {
 footer a:hover {
   color: #f2a878;
 }
-/* Read as: the human page, or the agent page. data-for="human" or "agent" marks what shows in only one. */
-html:not([data-reader="agent"]) [data-for="agent"],
-html[data-reader="agent"] [data-for="human"] {
-  display: none !important;
-}
-/* The agent page is the markdown, with no images or icons. */
-html[data-reader="agent"] img,
-html[data-reader="agent"] svg,
-html[data-reader="agent"] canvas {
-  display: none !important;
-}
-.readas {
+/* The three versions of the site, one for each way in, each a page of its own */
+.versions {
   background: var(--ink);
-  color: #cfcbbe;
 }
-html:not(.js) .readas {
-  display: none;
-}
-.readas .wrap {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  padding-top: 8px;
-  padding-bottom: 8px;
-  font: 500 13px var(--mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.readas .seg {
+.versions .wrap {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
-.readas button {
+.versions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 36px;
   padding: 0 14px;
   border: 1px solid var(--mute);
   border-radius: 4px;
-  background: transparent;
+  font: 500 14px var(--mono);
   color: var(--paper);
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  cursor: pointer;
+  text-align: center;
+  text-wrap: balance;
+  text-decoration: none;
 }
-.readas button:hover {
+.versions a:hover {
   border-color: var(--paper);
+  color: var(--paper);
 }
-html:not([data-reader="agent"]) .readas [data-reader="human"],
-html[data-reader="agent"] .readas [data-reader="agent"] {
+.versions a[aria-current="page"] {
   background: var(--paper);
-  color: var(--ink);
   border-color: var(--paper);
+  color: var(--ink);
+}
+/* The agent version is the markdown, with no images or icons. */
+.plain img,
+.plain svg,
+.plain canvas {
+  display: none !important;
 }
 .cta-note {
   font: 13px/1.5 var(--mono);
@@ -1264,6 +1249,135 @@ dialog.dl::backdrop {
 code {
   font: 0.9em var(--mono);
 }
+/* Windows and Linux in the download list */
+.exp {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 6px;
+  border: 1px solid var(--signal-text);
+  border-radius: 3px;
+  font: 600 11px/1.4 var(--mono);
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 3px;
+  color: var(--signal-text);
+}
+/* My AI installs it: the hero's chat, a sketch of what happens in your AI's window */
+.chat {
+  flex: 1 1 480px;
+  min-width: 0;
+  max-width: 560px;
+  margin: 0;
+  border: var(--rule);
+  background: var(--paper2);
+}
+.chat figcaption {
+  padding: 10px 16px;
+  border-bottom: var(--rule);
+  font: 600 13px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--olive);
+}
+.chat ol {
+  list-style: none;
+  margin: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chat li {
+  max-width: 90%;
+  padding: 12px 14px;
+  border: var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.chat li b {
+  display: block;
+  margin-bottom: 2px;
+  font: 600 11px var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--olive);
+}
+.chat li.you {
+  align-self: flex-end;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.chat li.you b {
+  color: #e0884f;
+}
+.chat li.gap {
+  align-self: center;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 13px var(--mono);
+  color: var(--ink2);
+}
+.chat code {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 3px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 12px/1.55 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* Under the hood: the servers, and what each part is made of */
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 16px;
+}
+.cards li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  border: var(--rule);
+  background: var(--paper);
+}
+.cards b {
+  font-size: 18px;
+}
+.cards li > code {
+  font: 500 14px/1.5 var(--mono);
+  color: var(--olive);
+}
+.cards span {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink2);
+}
+pre.code {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid #5a5e54;
+  font: 14px/1.6 var(--mono);
+  color: var(--paper);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.facts code {
+  color: var(--paper);
+}
 .agent {
   padding-top: 56px;
   padding-bottom: 72px;
@@ -1347,18 +1461,18 @@ code {
     justify-content: center;
   }
 }
+@media (max-width: 600px) {
+  .versions .wrap {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .versions a {
+    padding: 4px 6px;
+    font-size: 13px;
+    line-height: 1.25;
+  }
+}
 @media (max-width: 420px) {
-  .readas .wrap {
-    gap: 6px 10px;
-    font-size: 12px;
-    letter-spacing: 0.02em;
-  }
-  .readas .seg {
-    gap: 4px;
-  }
-  .readas button {
-    padding: 0 8px;
-  }
   .prompt .doc {
     padding: 16px;
     font-size: 13px;

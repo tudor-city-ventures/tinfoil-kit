@@ -18,17 +18,21 @@ const DOWNLOADS = [
     os: "windows",
     name: "Windows",
     detail: "Windows 10 or 11, Intel or AMD (x64)",
-    note: "For Windows 10 or 11 PCs with Intel or AMD chips.",
+    note: "For Windows 10 or 11 PCs with Intel or AMD chips. Experimental for now.",
     file: "TinfoilKit-Windows.zip",
+    experimental: true,
   },
   {
     os: "linux",
     name: "Linux",
     detail: "Ubuntu, Debian, Fedora, Arch and others, Intel or AMD (x64)",
-    note: "For Linux PCs with Intel or AMD chips.",
+    note: "For Linux PCs with Intel or AMD chips. Experimental for now.",
     file: "TinfoilKit.tar.gz",
+    experimental: true,
   },
 ];
+// Windows and Linux are experimental until they've had the Mac's testing on real computers.
+const EXPERIMENTAL = "experimental for now: it's tested less than on a Mac, so expect rough edges.";
 
 function detectOS() {
   const ua = navigator.userAgent; // iPads ask for the desktop site as a Mac, but have a touch screen
@@ -39,14 +43,14 @@ function detectOS() {
   return "";
 }
 
-// Set up with your AI: the hero's main button, and step 2 of How it works, open a dialog with the setup prompt to copy
-// into any AI chat. Before the script runs, they go to the prompts further down the page.
+// Set up with your AI opens a dialog with the setup prompt to copy into any AI chat. Before the script runs, it goes to
+// the prompts on the My AI installs it page.
 let openSetup = null;
 export function SetupLink(props) {
-  return <a {...props} href="#prompts" aria-haspopup="dialog" onClick={(e) => openSetup && openSetup(e)} />;
+  return <a {...props} href="/ai-setup#prompts" aria-haspopup="dialog" onClick={(e) => openSetup && openSetup(e)} />;
 }
 
-// The download, from step 2 of How it works: the dialog that lists every computer's, this one's first.
+// A download link in the copy: the dialog that lists every computer's, this one's first.
 let openDownloads = null;
 export function DownloadLink(props) {
   return (
@@ -129,7 +133,7 @@ function SetupDialog({ phone }) {
           </ol>
           <p className="dl-fine">
             Want to choose what goes in first? Use the{" "}
-            <a href="#builder" onClick={close}>
+            <a href="/ai-setup#builder" onClick={close}>
               kit builder
             </a>
             . Want to check the code before you run it?{" "}
@@ -144,10 +148,11 @@ function SetupDialog({ phone }) {
   );
 }
 
-// Download: the second button gets this computer's file, All downloads lists them all, and once a download starts the
-// dialog says what to click next. Before the script runs, the button opens the release page, which lists every file.
-// The children are the hero's other links, beside the buttons.
-export default function Download({ children }) {
+// The hero's two ways in, Download and Set up with your AI, with "or" between them: lead="ai" puts the AI first. Download
+// gets this computer's file, All downloads lists them all, and once a download starts the dialog says what to click
+// next. Before the script runs, it opens the release page, which lists every file. The children are the hero's other
+// links, beside the buttons.
+export default function Download({ lead = "download", children }) {
   const dialog = useRef(null);
   const [os, setOS] = useState("");
   const [view, setView] = useState("all");
@@ -180,25 +185,31 @@ export default function Download({ children }) {
     show("all");
   }
 
+  const getKit = (
+    <a
+      className={lead === "ai" ? "btn" : "btn primary"}
+      id="getKit"
+      href={mine ? `${RELEASES}/latest/download/${mine.file}` : `${RELEASES}/latest`}
+      onClick={get}
+    >
+      {mine ? `Download for ${mine.name}` : "Download free"}
+    </a>
+  );
+  const askAI = (
+    <SetupLink className={lead === "ai" ? "btn primary" : "btn"} id="askAI">
+      Set up with your AI
+    </SetupLink>
+  );
   return (
     <>
       <div className="ctas">
-        <SetupLink className="btn primary" id="askAI">
-          Set up with your AI
-        </SetupLink>
+        {lead === "ai" ? askAI : getKit}
         <span className="or">or</span>
-        <a
-          className="btn"
-          id="getKit"
-          href={mine ? `${RELEASES}/latest/download/${mine.file}` : `${RELEASES}/latest`}
-          onClick={get}
-        >
-          {mine ? `Download for ${mine.name}` : "Download free"}
-        </a>
+        {lead === "ai" ? getKit : askAI}
         {children}
       </div>
       <p className="cta-note">
-        <span id="getFor">{mine ? mine.note : "For Mac, Windows and Linux."}</span>{" "}
+        <span id="getFor">{mine ? mine.note : "For Macs, and for Windows and Linux PCs (experimental for now)."}</span>{" "}
         <button type="button" className="all-dl" id="allDl" aria-haspopup="dialog" onClick={() => show("all")}>
           All downloads
         </button>
@@ -229,7 +240,10 @@ export default function Download({ children }) {
               {list.map((d) => (
                 <li key={d.os} data-os={d.os} className={d === mine ? "mine" : undefined}>
                   <div>
-                    <b>{d.name}</b>
+                    <b>
+                      {d.name}
+                      {d.experimental ? <em className="exp">Experimental</em> : null}
+                    </b>
                     <span>{d.detail}</span>
                   </div>
                   <a
@@ -283,7 +297,7 @@ export default function Download({ children }) {
             </button>
           </div>
           <div data-view="windows" hidden={view !== "windows"}>
-            <p>Your download has started. Here's what to click.</p>
+            <p>Your download has started. Tinfoil Kit on Windows is {EXPERIMENTAL} Here's what to click.</p>
             <ol className="dl-steps">
               <li>
                 In your Downloads folder, right-click <b>TinfoilKit-Windows</b>, choose <b>Extract All</b>, then{" "}
@@ -307,7 +321,10 @@ export default function Download({ children }) {
             </button>
           </div>
           <div data-view="linux" hidden={view !== "linux"}>
-            <p>Your download has started. In a terminal, install curl if it's missing:</p>
+            <p>
+              Your download has started. Tinfoil Kit on Linux is {EXPERIMENTAL} In a terminal, install curl if it's
+              missing:
+            </p>
             <ul className="dl-distros">
               <li>
                 <span>Ubuntu, Debian, Mint</span>

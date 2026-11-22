@@ -54,6 +54,16 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
             self.send_header(h["key"], h["value"])
         super().end_headers()
 
+    def handle(self):
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError):  # the browser moved on mid-answer, as a redirect does
+            pass
+
+    def translate_path(self, path):  # cleanUrls in vercel.json: /agents is agents.html (agents/ holds its data)
+        file = super().translate_path(path)
+        return file + ".html" if os.path.isfile(file + ".html") else file
+
 
 handler = functools.partial(Quiet, directory=OUT)
 srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -66,9 +76,14 @@ INKED = """(() => { const c = document.querySelector('.fig canvas'), d = c.getCo
 STAR = """(() => { const r = s => document.querySelector(s).getBoundingClientRect(), s = r('.ctas .star'), g = r('.ctas .btn:not(.primary)'), n = r('.cta-note');
   if (!s.height || s.bottom > n.top) return 'misplaced';
   return Math.abs(s.top + s.height / 2 - g.top - g.height / 2) < 8 ? 'beside' : s.top >= g.bottom ? 'below' : 'misplaced'; })()"""
-# An 'or' between the two main buttons: downloading is the other way in, for people who'd rather not use an AI
-OR = """(() => { const r = s => document.querySelector(s).getBoundingClientRect(), a = r('#askAI'), o = r('.ctas .or'), g = r('#getKit');
-  return a.right <= o.left && o.right <= g.left ? 'beside' : a.bottom <= o.top && o.bottom <= g.top ? 'below' : 'neither' })()"""
+# An 'or' between the two main buttons, the page's own way in first: Download, or Set up with your AI
+OR = """([first, second]) => { const r = s => document.querySelector(s).getBoundingClientRect(), a = r(first), o = r('.ctas .or'), g = r(second);
+  return a.right <= o.left && o.right <= g.left ? 'beside' : a.bottom <= o.top && o.bottom <= g.top ? 'below' : 'neither' }"""
+# The three versions of the site, each a page of its own: the person installs it, their AI does, or an AI reads it
+PAGES = {"": "I'll install it", "ai-setup": "My AI installs it", "agents": "I'm an AI"}
+VERSIONS = "[...document.querySelectorAll('nav.versions a')].map(a => [a.getAttribute('href'), a.textContent, a.getAttribute('aria-current')])"
+# The home page is for people who'd rather not touch jargon; the AI setup page can name the parts
+JARGON = re.compile(r"\bLLMs?\b|\bGGUF\b|\bZIM\b|PMTiles|llama-server|SHA256SUMS")
 
 # Never 2 TB: the drive's size isn't the point
 copy = glob.glob(os.path.join(SITE, "app", "**", "*.jsx"), recursive=True) + glob.glob(
@@ -113,6 +128,18 @@ def choose(page, select, option, group=None):
     page.wait_for_selector("[role=listbox]", state="detached")
 
 
+def until(page, script, timeout=3000):
+    """Polls a script until it's true (the CSP blocks wait_for_function), and returns its last answer."""
+    for _ in range(timeout // 50):
+        value = page.evaluate(script)
+        if value:
+            return value
+        page.wait_for_timeout(50)
+    return value
+
+
+HYDRATED = "#getKit:has-text('Download for')"  # the page's script has run: Download knows this computer
+
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path=os.environ.get("KIT_CHROMIUM") or None)
     for name, vp in (("desktop", {"width": 1440, "height": 900}), ("phone", {"width": 390, "height": 844})):
@@ -121,8 +148,27 @@ with sync_playwright() as p:
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.on("request", lambda r: None if r.url.startswith((URL, "data:", "blob:")) else offsite.append(r.url))
+
+        def wide_enough(label):
+            w = page.evaluate("document.documentElement.scrollWidth")
+            check(f"{label}: no sideways scroll", w <= page.viewport_size["width"], f"{w}px")
+            if name == "phone":
+                page.set_viewport_size({"width": 320, "height": 640})  # the narrowest width WCAG asks a page to fit
+                w = page.evaluate("document.documentElement.scrollWidth")
+                check(f"{label} at 320px: no sideways scroll", w <= 320, f"{w}px")
+                page.set_viewport_size(vp)
+
+        def versions(label, here):
+            got = page.evaluate(VERSIONS)
+            check(
+                f"{label}: the versions of the site lead to each other, with this one marked",
+                got == [["/" + path, text, "page" if path == here else None] for path, text in PAGES.items()],
+                str(got),
+            )
+
+        # I'll install it: the home page, for people who'd rather download it
         page.goto(URL)
-        page.wait_for_selector(".card")
+        page.wait_for_selector(HYDRATED)
         faces = page.evaluate(
             "document.fonts.ready.then(() => [...document.fonts].map(f => f.family.replace(/\"/g, '') + ' ' + f.weight + ': ' + f.status))"
         )
@@ -136,7 +182,7 @@ with sync_playwright() as p:
         )
         # the hero is drawn on a canvas each frame: it should move, and hold still once paused
         page.locator(".fig canvas").scroll_into_view_if_needed()
-        inked = page.evaluate(INKED)
+        inked = until(page, f"{INKED} > 5000 && {INKED}") or page.evaluate(INKED)
         before = page.evaluate(FRAME)
         page.wait_for_timeout(250)
         check(f"{name}: hero draws and moves", inked > 5000 and page.evaluate(FRAME) != before, f"{inked} inked pixels")
@@ -154,6 +200,112 @@ with sync_playwright() as p:
             and page.is_visible(".viz-state"),
         )
         page.click(".viz-toggle")
+        wide_enough(f"{name} home page")
+        versions(f"{name} home page", "")
+        star, where = page.locator(".ctas .star"), page.evaluate(STAR)
+        check(
+            f"{name}: Star on GitHub sits {'beside' if name == 'desktop' else 'under'} the main buttons",
+            where == ("beside" if name == "desktop" else "below")
+            and star.inner_text().strip() == "Star on GitHub"
+            and star.get_attribute("href") == "https://github.com/tudor-city-ventures/tinfoil-kit",
+            where,
+        )
+        between = page.evaluate(OR, ["#getKit", "#askAI"])
+        check(
+            f"{name}: Download comes first, then an 'or', then Set up with your AI",
+            page.inner_text(".ctas .or") == "or"
+            and between == ("beside" if name == "desktop" else "below")
+            and page.get_attribute(".ctas .btn.primary", "id") == "getKit",
+            between,
+        )
+        if name == "phone":
+            closed = page.is_visible("#menu") and not page.is_visible("nav.links a[href='#faq']")
+            page.click("#menu")
+            opened = (
+                page.is_visible("nav.links a[href='#faq']") and page.get_attribute("#menu", "aria-expanded") == "true"
+            )
+            page.click("nav.links a[href='#faq']")
+            check(
+                "phone: sections sit behind Menu, which closes after a pick",
+                closed
+                and opened
+                and page.get_attribute("#menu", "aria-expanded") == "false"
+                and not page.is_visible("nav.links a[href='#faq']"),
+            )
+        else:
+            check(
+                "desktop: sections listed, no Menu button",
+                page.is_visible("nav.links a[href='#faq']") and not page.is_visible("#menu"),
+            )
+        said = JARGON.findall(page.inner_text("body"))
+        check(f"{name}: the home page says AI, in plain words, with no jargon", not said, ", ".join(said))
+        check(f"{name}: home page has no page errors", not errors, "; ".join(errors))
+        check(f"{name}: home page loads nothing from other sites", not offsite, ", ".join(offsite))
+        axe(page, f"{name} home page")
+        if name == "desktop":
+            page.context.grant_permissions(["clipboard-read", "clipboard-write"])
+            page.evaluate("navigator.clipboard.writeText('')")
+            page.click("#askAI")
+            opened = page.evaluate("document.getElementById('aiSetup').open") and not page.is_visible(
+                "#aiSetup .dl-phone"
+            )
+            page.click("#copyHero")
+            page.wait_for_selector("#copyHero:text-is('Copied')", timeout=5000)
+            check(
+                "Set up with your AI shows the setup prompt, and Copy copies it",
+                opened
+                and page.evaluate("navigator.clipboard.readText()") == page.text_content("#heroPrompt")
+                and page.text_content("#heroPrompt").startswith("I want to set up Tinfoil Kit"),
+            )
+            page.keyboard.press("Escape")
+            # Step 2 is the download; the small print offers the AI setup page instead
+            steps = page.locator("#how .how-steps h3").all_inner_texts()
+            page.click("#how .how-steps li:nth-child(2) > a")
+            check(
+                "How it works: get a drive, download Tinfoil Kit, use it anywhere; step 2 lists the downloads",
+                len(steps) == 3
+                and "external" in steps[0]
+                and "Download" in steps[1]
+                and page.evaluate("document.getElementById('downloads').open")
+                and page.is_visible("#downloads .dl-list"),
+                str(steps),
+            )
+            page.keyboard.press("Escape")
+            check(
+                "How it works: step 2's small print sends AI users to My AI installs it",
+                page.get_attribute("#how .how-steps li:nth-child(2) small a", "href") == "/ai-setup",
+            )
+            check(
+                "Is it safe?: has your AI audit the code, rather than asking you to read it",
+                "audit the code" in page.inner_text("#trust h2")
+                and "every line" not in page.inner_text("#trust h2").lower(),
+            )
+            page.click("[data-copy=auditPrompt]")
+            page.wait_for_selector("[data-copy=auditPrompt]:text-is('Copied')", timeout=5000)
+            audit = page.evaluate("navigator.clipboard.readText()")
+            check(
+                "Check the code: the prompt has the AI read the code and run nothing",
+                "https://github.com/tudor-city-ventures/tinfoil-kit" in audit
+                and "Don't install or run anything" in audit,
+            )
+            check(
+                "Project NOMAD is one question in the FAQ, and there's no What's inside section",
+                page.locator("#compare, #inside, a[href='#inside']").count() == 0
+                and page.locator("#faq summary", has_text="Project NOMAD").count() == 1,
+            )
+            check(
+                "the FAQ says Windows and Linux are experimental",
+                "experimental"
+                in page.locator(
+                    "#faq details", has=page.locator("summary", has_text="Windows or Linux")
+                ).text_content(),
+            )
+        page.screenshot(path=os.path.join(SHOTS, f"site_{name}.png"), full_page=True)
+
+        # My AI installs it: the AI setup leads, the kit builder makes its prompt, and the parts go by their names
+        errors.clear()
+        page.goto(URL + "ai-setup")
+        page.wait_for_selector(".card")
         totals = {}
         for preset in ("essentials", "everything", "no-ai", "recommended"):
             page.click(f"[data-preset={preset}]")
@@ -174,54 +326,27 @@ with sync_playwright() as p:
             models == 0 and totals["no-ai"] < totals["recommended"],
             f"{models} models, {totals}",
         )
-        width = page.evaluate("document.documentElement.scrollWidth")
-        check(f"{name}: no sideways scroll", width <= vp["width"], f"{width}px")
-        star, where = page.locator(".ctas .star"), page.evaluate(STAR)
+        wide_enough(f"{name} AI setup page")
+        versions(f"{name} AI setup page", "ai-setup")
+        between = page.evaluate(OR, ["#askAI", "#getKit"])
         check(
-            f"{name}: Star on GitHub sits {'beside' if name == 'desktop' else 'under'} the main buttons",
-            where == ("beside" if name == "desktop" else "below")
-            and star.inner_text().strip() == "Star on GitHub"
-            and star.get_attribute("href") == "https://github.com/tudor-city-ventures/tinfoil-kit",
-            where,
-        )
-        between = page.evaluate(OR)
-        check(
-            f"{name}: an 'or' between the two main buttons makes Download the other way",
-            page.inner_text(".ctas .or") == "or" and between == ("beside" if name == "desktop" else "below"),
+            f"{name}: AI setup page: Set up with your AI comes first, then an 'or', then Download",
+            between == ("beside" if name == "desktop" else "below")
+            and page.get_attribute(".ctas .btn.primary", "id") == "askAI"
+            and page.inner_text(".ctas .btn.primary") == "Set up with your AI",
             between,
         )
-        if name == "phone":
-            page.set_viewport_size({"width": 320, "height": 640})  # the narrowest width WCAG asks a page to fit
-            width = page.evaluate("document.documentElement.scrollWidth")
-            check("320px phone: no sideways scroll", width <= 320, f"{width}px")
-            page.set_viewport_size(vp)
-            closed = page.is_visible("#menu") and not page.is_visible("nav.links a[href='#faq']")
-            page.click("#menu")
-            opened = (
-                page.is_visible("nav.links a[href='#faq']") and page.get_attribute("#menu", "aria-expanded") == "true"
-            )
-            page.click("nav.links a[href='#faq']")
-            check(
-                "phone: sections sit behind Menu, which closes after a pick",
-                closed
-                and opened
-                and page.get_attribute("#menu", "aria-expanded") == "false"
-                and not page.is_visible("nav.links a[href='#faq']"),
-            )
-        else:
-            check(
-                "desktop: sections listed, no Menu button",
-                page.is_visible("nav.links a[href='#faq']") and not page.is_visible("#menu"),
-            )
+        text = page.inner_text("body")
+        named = [w for w in ("LLM", "llama.cpp", "GGUF", "ZIM", "PMTiles", "SHA256SUMS", "127.0.0.1") if w not in text]
+        check(f"{name}: the AI setup page names the parts, for technical readers", not named, ", ".join(named))
         first = page.locator(".card [role=checkbox]").first
         before = page.inner_text("#totalText")
         first.uncheck()
         check(f"{name}: unticking a source changes the total", page.inner_text("#totalText") != before)
-        check(f"{name}: no page errors", not errors, "; ".join(errors))
-        check(f"{name}: nothing loads from other sites", not offsite, ", ".join(offsite))
-        axe(page, name)
+        check(f"{name}: AI setup page has no page errors", not errors, "; ".join(errors))
+        check(f"{name}: AI setup page loads nothing from other sites", not offsite, ", ".join(offsite))
+        axe(page, f"{name} AI setup page")
         if name == "desktop":
-            page.context.grant_permissions(["clipboard-read", "clipboard-write"])
             page.click("[data-copy=installPrompt]")
             # (the CSP blocks wait_for_function)
             page.wait_for_selector("[data-copy=installPrompt]:text-is('Copied')", timeout=5000)
@@ -229,57 +354,20 @@ with sync_playwright() as p:
                 "Copy puts the prompt on the clipboard",
                 page.evaluate("navigator.clipboard.readText()").startswith("I want to set up Tinfoil Kit"),
             )
-            # AI setup is the main button, Download the second; step 2 of How it works opens the same prompt
-            check(
-                "the hero's main button is Set up with your AI, then Download",
-                page.inner_text(".ctas .btn.primary") == "Set up with your AI"
-                and page.locator(".ctas .btn").nth(1).get_attribute("id") == "getKit",
-            )
             page.evaluate("navigator.clipboard.writeText('')")
-            page.click("#askAI")
-            opened = page.evaluate("document.getElementById('aiSetup').open") and not page.is_visible(
-                "#aiSetup .dl-phone"
-            )
+            steps = page.locator("#how .how-steps h3").all_inner_texts()
+            page.click("#how a[href='/ai-setup#prompts']")
             page.click("#copyHero")
             page.wait_for_selector("#copyHero:text-is('Copied')", timeout=5000)
             check(
-                "Set up with your AI shows the setup prompt, and Copy copies it",
-                opened and page.evaluate("navigator.clipboard.readText()") == page.text_content("#installPrompt"),
-            )
-            page.keyboard.press("Escape")
-            steps = page.locator("#how .how-steps h3").all_inner_texts()
-            page.click("#how a[href='#prompts']")
-            check(
-                "How it works: get a drive, have your AI set it up, use it anywhere; step 2 opens the prompt",
+                "AI setup page: paste the prompt, answer its questions, run one command; step 1 opens the prompt",
                 len(steps) == 3
-                and "external" in steps[0]
-                and "AI" in steps[1]
-                and page.evaluate("document.getElementById('aiSetup').open"),
+                and "prompt" in steps[0]
+                and "command" in steps[2]
+                and page.evaluate("navigator.clipboard.readText()") == page.text_content("#installPrompt"),
                 str(steps),
             )
             page.keyboard.press("Escape")
-            # Step 2 also says the installer is there for people who'd rather not use an AI
-            page.click("#how small a")
-            check(
-                "How it works: step 2's small print offers the installer, and its link lists the downloads",
-                "installer" in page.inner_text("#how .how-steps li:nth-child(2) small")
-                and page.evaluate("document.getElementById('downloads').open")
-                and page.is_visible("#downloads .dl-list"),
-            )
-            page.keyboard.press("Escape")
-            check(
-                "Is it safe?: has your AI audit the code, rather than asking you to read it",
-                "audit the code" in page.inner_text("#trust h2")
-                and "every line" not in page.inner_text("#trust h2").lower(),
-            )
-            page.click("[data-copy=auditPrompt]")
-            page.wait_for_selector("[data-copy=auditPrompt]:text-is('Copied')", timeout=5000)
-            audit = page.evaluate("navigator.clipboard.readText()")
-            check(
-                "Check the code: the prompt has the AI read the code and run nothing",
-                "https://github.com/tudor-city-ventures/tinfoil-kit" in audit
-                and "Don't install or run anything" in audit,
-            )
             for pid, label, choose_words in (
                 ("installPrompt", "Install ours", "leave out"),
                 ("ownPrompt", "Build your own", "opt in or out"),
@@ -306,14 +394,9 @@ with sync_playwright() as p:
                 "Install ours: the AI asks about a drive and its format, then gives the command to run",
                 "external drive" in ours and "formatted" in ours and "give me the command" in ours,
             )
-            check(
-                "Project NOMAD is one question in the FAQ, and there's no What's inside section",
-                page.locator("#compare, #inside, a[href='#inside']").count() == 0
-                and page.locator("#faq summary", has_text="Project NOMAD").count() == 1,
-            )
             old = b.new_page()  # a browser without the clipboard API (e.g. the page opened over plain http)
             old.add_init_script("Object.defineProperty(Navigator.prototype, 'clipboard', {get: () => undefined})")
-            old.goto(URL)
+            old.goto(URL + "ai-setup")
             old.wait_for_selector(".card")
             old.click("#copySetup")
             check(
@@ -327,7 +410,7 @@ with sync_playwright() as p:
                 "Object.defineProperty(Navigator.prototype, 'clipboard', {get: () => undefined});"
                 "Document.prototype.execCommand = () => false"
             )
-            stuck.goto(URL)
+            stuck.goto(URL + "ai-setup")
             stuck.wait_for_selector(".card")
             stuck.click("#copySetup")
             check(
@@ -551,59 +634,39 @@ with sync_playwright() as p:
                 f"{line} (focus: {focus})",
             )
 
-        # Read as: the human page is the default; AI agent shows the markdown with no images or icons, and the pick sticks
-        def wide_enough(label):
-            w = page.evaluate("document.documentElement.scrollWidth")
-            check(f"{label}: no sideways scroll", w <= page.viewport_size["width"], f"{w}px")
+        page.screenshot(path=os.path.join(SHOTS, f"site_{name}_ai_setup.png"), full_page=True)
 
-        check(
-            f"{name}: the human page is the default",
-            page.is_visible(".hero h1") and not page.is_visible("#instructions"),
-        )
-        page.click(".readas [data-reader=agent]")
-        page.wait_for_selector("#agentDoc b", timeout=5000)  # heading lines are bold once llms.txt loads
+        # I'm an AI: llms.txt as markdown, in the page itself, with no images or icons
+        errors.clear()
+        page.goto(URL + "agents")
         pictures = page.evaluate(
             "[...document.querySelectorAll('img, svg, canvas')].filter(e => e.getClientRects().length).length"
         )
         check(
-            f"{name}: AI agent shows the markdown, with no images or icons",
+            f"{name}: I'm an AI shows the markdown, with no images or icons",
             page.inner_text("#agentDoc").startswith("# Tinfoil Kit")
-            and not page.is_visible(".hero")
-            and not page.is_visible("#builder")
+            and page.locator("#agentDoc b", has_text="## Set it up").count() == 1
             and not pictures
             and page.is_visible("nav.links a[href='/llms.txt']")
-            and not page.is_visible("#menu")
-            and "for=agent" in page.url
-            and page.get_attribute(".readas [data-reader=agent]", "aria-pressed") == "true",
+            and not page.is_visible("#menu"),
             f"{pictures} images or icons showing",
         )
+        versions(f"{name} agent page", "agents")
         if name == "desktop":
             page.click("[data-copy=agentDoc]")
             page.wait_for_selector("[data-copy=agentDoc]:text-is('Copied')", timeout=5000)
             check(
                 "Copy puts the markdown on the clipboard",
                 page.evaluate("navigator.clipboard.readText()")
-                == open(os.path.join(SITE, "public", "llms.txt")).read(),
+                == open(os.path.join(SITE, "public", "llms.txt"), encoding="utf-8").read(),
             )
         wide_enough(f"{name} agent page")
-        if name == "phone":
-            page.set_viewport_size({"width": 320, "height": 640})
-            wide_enough("320px phone agent page")
-            page.set_viewport_size(vp)
+        check(f"{name}: agent page has no page errors", not errors, "; ".join(errors))
         axe(page, f"{name} agent page")
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}_agent.png"), full_page=True)
-        page.goto(URL)
-        check(
-            f"{name}: the pick sticks on the next visit",
-            page.is_visible("#instructions") and not page.is_visible(".hero"),
-        )
-        page.wait_for_selector(".card", state="attached")
-        page.click(".readas [data-reader=human]")
-        check(
-            f"{name}: Human switches back",
-            page.is_visible(".hero h1") and page.is_visible(".fig") and "for=" not in page.url,
-        )
-        page.screenshot(path=os.path.join(SHOTS, f"site_{name}.png"), full_page=True)
+        page.click("nav.versions a[href='/']")
+        check(f"{name}: I'll install it goes back to the home page", page.url == URL and page.is_visible(".hero h1"))
+        page.close()
 
     # Download: the button gets this computer's file, and the dialog says what to click next. GitHub's answer is
     # stood in for here: an attachment, as its release files come, so the page stays put.
@@ -631,8 +694,8 @@ with sync_playwright() as p:
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.route("https://github.com/**", attach)
         pg.goto(URL)
-        pg.wait_for_selector(".card")
-        label, href = pg.inner_text("#getKit"), pg.get_attribute("#getKit", "href")
+        pg.wait_for_selector(HYDRATED)
+        label, href, note = pg.inner_text("#getKit"), pg.get_attribute("#getKit", "href"), pg.inner_text("#getFor")
         with pg.expect_download() as dl:
             pg.click("#getKit")
         check(
@@ -646,6 +709,13 @@ with sync_playwright() as p:
             and not errs,
             f"{label}, {href}, {pg.evaluate(VIEWS)}, {errs}",
         )
+        # Windows and Linux are experimental until they've had the Mac's testing on real computers
+        steps = pg.inner_text(f"#downloads [data-view={os_}]")
+        check(
+            f"{os_}: {'nothing says experimental' if os_ == 'mac' else 'the note and the steps say experimental'}",
+            ("xperimental" in note and "experimental" in steps) == (os_ != "mac"),
+            f"{note} / {steps[:120]}",
+        )
         if os_ == "mac":
             check(
                 "mac: the steps show what macOS asks before it opens the app, and what to click",
@@ -657,11 +727,13 @@ with sync_playwright() as p:
             links = pg.evaluate(
                 "[...document.querySelectorAll('.dl-list li')].map(l => l.dataset.os + ' ' + l.querySelector('a').href)"
             )
+            tags = pg.evaluate("[...document.querySelectorAll('.dl-list li')].map(l => !!l.querySelector('.exp'))")
             check(
-                "All downloads lists every computer's file, this one's first",
+                "All downloads lists every computer's file, this one's first, with Windows and Linux experimental",
                 links == [f"{o} {REL}{FILES[o]}" for o in ("mac", "windows", "linux")]
-                and pg.evaluate(VIEWS) == ["all"],
-                str(links),
+                and pg.evaluate(VIEWS) == ["all"]
+                and tags == [False, True, True],
+                f"{links} {tags}",
             )
             pg.keyboard.press("Escape")
             check("Escape closes the dialog", not pg.evaluate("document.getElementById('downloads').open"))
@@ -669,7 +741,7 @@ with sync_playwright() as p:
     ctx = b.new_context(**p.devices["iPhone 15"])
     pg = ctx.new_page()
     pg.goto(URL)
-    pg.wait_for_selector(".card")
+    pg.wait_for_selector("#downloads .dl-phone:not([hidden])", state="attached")
     pg.click("#getKit")
     check(
         "phone: Download lists every computer's file and says it runs on a laptop",
@@ -868,14 +940,34 @@ with sync_playwright() as p:
     )
     axe(demo, "demo's map on a phone")
     demo.close()
-    deep = b.new_page()  # a shared link opens the version it names
-    deep.goto(URL + "?for=agent")
-    deep.wait_for_selector("#agentDoc b", timeout=5000)
-    check("?for=agent opens the agent page", deep.is_visible("#instructions") and not deep.is_visible(".hero"))
+    # Old links still land: the agent version was /?for=agent, and the kit builder and the prompts were on the home page
+    deep = b.new_page()
+    moves = {"?for=agent": "/agents", "#instructions": "/agents", "#builder": "/ai-setup#builder"}
+    went = {}
+    for old, new in moves.items():
+        try:  # the home page's first script sends it on
+            deep.goto(URL + old)
+            deep.wait_for_url(URL + new[1:], timeout=5000)
+        except Exception:
+            pass
+        went[old] = deep.url.replace(URL, "/")
+    check("old links to the agent version and the kit builder land on their new pages", went == moves, str(went))
+    redirects = json.load(open(os.path.join(SITE, "vercel.json"))).get("redirects", [])
+    check(
+        "Vercel sends /?for=agent to /agents itself, for agents that run no script",
+        {
+            "source": "/",
+            "has": [{"type": "query", "key": "for", "value": "agent"}],
+            "destination": "/agents",
+            "permanent": True,
+        }
+        in redirects,
+        str(redirects),
+    )
     deep.close()
     still = b.new_page(reduced_motion="reduce")
     still.goto(URL)
-    still.wait_for_selector(".card")
+    still.wait_for_selector(HYDRATED)
     still.wait_for_timeout(500)  # it redraws once its sizes and fonts arrive, then should stop
     before = still.evaluate(FRAME)
     still.wait_for_timeout(300)
@@ -907,9 +999,30 @@ with sync_playwright() as p:
     card = home.request.get(URL + "og.png").body()
     size = struct.unpack(">II", card[16:24])  # a PNG's width and height sit in its first chunk
     check("link-preview card is the size its tags say", size == (1200, 630), "%dx%d" % size)
-    # search engines and AI answer engines: robots.txt lets every crawler in and names the sitemap, the sitemap lists
-    # the canonical address, and the JSON-LD describes the kit there
-    canonical = home.get_attribute("link[rel=canonical]", "href")
+    # search engines and AI answer engines: each version is a page of its own, with its own address, title, summary and
+    # structured data; robots.txt lets every crawler in and names the sitemap, which lists all three
+    seo = {}
+    for path in PAGES:
+        home.goto(URL + path)
+        ld = [
+            json.loads(t)
+            for t in home.eval_on_selector_all("script[type='application/ld+json']", "s => s.map(e => e.textContent)")
+        ]
+        seo[path] = {
+            "canonical": home.get_attribute("link[rel=canonical]", "href"),
+            "title": home.title(),
+            "description": home.get_attribute("meta[name=description]", "content"),
+            "og": home.get_attribute("meta[property='og:url']", "content"),
+            "nodes": {n["@type"]: n for d in ld for n in d.get("@graph", [d])},
+        }
+    canonical = seo[""]["canonical"]
+    check(
+        "each version has its own address, title and summary, and its link preview points at it",
+        all(v["canonical"] == "https://tinfoilkit.com/" + path == v["og"] for path, v in seo.items())
+        and len({v["title"] for v in seo.values()}) == 3
+        and len({v["description"] for v in seo.values()}) == 3,
+        json.dumps({k: [v["canonical"], v["title"]] for k, v in seo.items()}),
+    )
     robots = home.request.get(URL + "robots.txt").text()
     check(
         "robots.txt lets every crawler in and names the sitemap",
@@ -925,34 +1038,45 @@ with sync_playwright() as p:
         and datetime.date.fromisoformat(expires.group(1)) - datetime.date.today() > datetime.timedelta(days=30),
     )
     locs = re.findall(r"<loc>(.*?)</loc>", home.request.get(URL + "sitemap.xml").text())
-    check("sitemap.xml lists the canonical address", locs == [canonical], str(locs))
-    ld = [
-        json.loads(t)
-        for t in home.eval_on_selector_all("script[type='application/ld+json']", "s => s.map(e => e.textContent)")
-    ]
-    app = [n for d in ld for n in d.get("@graph", [d]) if n["@type"] == "SoftwareApplication"]
+    check("sitemap.xml lists the three versions", locs == [v["canonical"] for v in seo.values()], str(locs))
+    app = seo[""]["nodes"].get("SoftwareApplication", {})
     check(
-        "structured data describes Tinfoil Kit, free, at the canonical address",
-        len(app) == 1
-        and app[0]["name"] == "Tinfoil Kit"
-        and app[0]["url"] == canonical
-        and app[0]["offers"]["price"] == "0",
+        "structured data describes Tinfoil Kit, free, at the home page",
+        app.get("name") == "Tinfoil Kit" and app.get("url") == canonical and app.get("offers", {}).get("price") == "0",
         json.dumps(app)[:200],
     )
-    # each FAQ entry is a schema.org Question and Answer they can quote, and the first defines the kit on its own
-    faq = home.evaluate("""[...document.querySelectorAll('.faq[itemscope][itemtype="https://schema.org/FAQPage"] > details')].map(d =>
-        d.matches('[itemscope][itemprop=mainEntity][itemtype="https://schema.org/Question"]') && [d.querySelector(':scope > summary[itemprop=name]'),
-        d.querySelector(':scope > [itemscope][itemprop=acceptedAnswer][itemtype="https://schema.org/Answer"] > [itemprop=text]')].map(e => e && e.textContent))""")
-    total = home.locator(".faq details").count()
+    howto, code = seo["ai-setup"]["nodes"].get("HowTo", {}), seo["ai-setup"]["nodes"].get("SoftwareSourceCode", {})
+    article = seo["agents"]["nodes"].get("TechArticle", {})
     check(
-        "every FAQ entry is marked up as a question and its answer",
-        total and len(faq) == total and all(f and all(f) for f in faq),
-        f"{sum(bool(f and all(f)) for f in faq)} of {total}",
+        "the AI setup page is a how-to and the source code, and the agent page an article in markdown, all about the kit",
+        len(howto.get("step", [])) == 3
+        and code.get("codeRepository") == "https://github.com/tudor-city-ventures/tinfoil-kit"
+        and article.get("encoding", {}).get("contentUrl") == "https://tinfoilkit.com/llms.txt"
+        and howto.get("about", {}).get("@id") == article.get("about", {}).get("@id") == app.get("@id"),
+        json.dumps([howto.get("about"), article.get("about"), app.get("@id")]),
     )
-    check(
-        "the FAQ opens by saying what Tinfoil Kit is",
-        bool(faq and faq[0] and faq[0][0] == "What is Tinfoil Kit?" and faq[0][1].startswith("Tinfoil Kit is ")),
-    )
+    # agents and crawlers that run no script read the instructions straight from the page
+    raw = open(os.path.join(OUT, "agents.html"), encoding="utf-8").read()
+    check("the agent page has llms.txt in its HTML", "## Set it up" in raw and "### 3. Give them the command" in raw)
+    # each FAQ entry is a schema.org Question and Answer they can quote, and the home page's first defines the kit
+    for path in ("", "ai-setup"):
+        home.goto(URL + path)
+        faq = home.evaluate("""[...document.querySelectorAll('.faq[itemscope][itemtype="https://schema.org/FAQPage"] > details')].map(d =>
+            d.matches('[itemscope][itemprop=mainEntity][itemtype="https://schema.org/Question"]') && [d.querySelector(':scope > summary[itemprop=name]'),
+            d.querySelector(':scope > [itemscope][itemprop=acceptedAnswer][itemtype="https://schema.org/Answer"] > [itemprop=text]')].map(e => e && e.textContent))""")
+        total = home.locator(".faq details").count()
+        check(
+            f"/{path}: every FAQ entry is marked up as a question and its answer",
+            total and len(faq) == total and all(f and all(f) for f in faq),
+            f"{sum(bool(f and all(f)) for f in faq)} of {total}",
+        )
+        if not path:
+            check(
+                "the FAQ opens by saying what Tinfoil Kit is",
+                bool(
+                    faq and faq[0] and faq[0][0] == "What is Tinfoil Kit?" and faq[0][1].startswith("Tinfoil Kit is ")
+                ),
+            )
     b.close()
 srv.shutdown()
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
