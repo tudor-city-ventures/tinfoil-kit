@@ -260,6 +260,26 @@ Test-Kit $kit "the drive, set up with --yes"
 Invoke-Uninstall $kit "uninstall-windows-yes.log"
 Dismount-DiskImage -ImagePath $vhd | Out-Null
 
+# A cmd window, unlike the cmd /c that PowerShell or an AI's shell starts, would close at SETUP's exit: there
+# SETUP runs itself in a cmd of its own. Here cmd reads what's typed from a file, as a window reads the keyboard.
+Step "SETUP-Windows.bat --this-computer --models Tiny --yes typed in a cmd window: the window stays, and says how SETUP ended"
+Get-Kit $dl
+$kit = "$env:USERPROFILE\TinfoilKit"
+@("`"$dl\SETUP-Windows.bat`" --this-computer --models Tiny --yes", "echo SETUP ended with %errorlevel%", "exit") |
+  Set-Content -Encoding ascii "$work\cmd-window.txt"
+$p = Start-Process cmd.exe -ArgumentList "/d /q" -PassThru -NoNewWindow -RedirectStandardInput "$work\cmd-window.txt" `
+  -RedirectStandardOutput "$logs\setup-windows-cmd.log" -RedirectStandardError "$logs\setup-windows-cmd.err"
+$null = $p.Handle
+if (-not $p.WaitForExit(1200000)) { Fail "SETUP in a cmd window was still running after 20 minutes"; Stop-Process -Id $p.Id -Force }
+Get-Content "$logs\setup-windows-cmd.log" | Select-String "All set|SETUP ended" | ForEach-Object { $_.Line }
+if (-not (Select-String -Quiet -Path "$logs\setup-windows-cmd.log" -Pattern "SETUP ended with 0")) {
+  Fail "SETUP --yes in a cmd window closed it, or didn't end with 0"
+  Get-Content "$logs\setup-windows-cmd.log" -Tail 25; Get-Content "$logs\setup-windows-cmd.err" -ErrorAction SilentlyContinue
+}
+if (-not (Test-Path "$kit\models")) { Fail "the kit isn't set up on this PC, at $kit" }
+if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
+Invoke-Uninstall $kit "uninstall-windows-cmd.log"
+
 Step "the map: ./kit sync builds Andorra's with the real pmtiles, Java, Photon and GraphHopper for Windows"
 Get-Kit $dl
 python "$tests\drive.py" kitjson "$dl\kit.json" maps

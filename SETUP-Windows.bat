@@ -28,11 +28,17 @@ set "ME=%~f0"
 call :options %*
 if "!OPTS!"=="help" exit /b 0
 if "!OPTS!"=="bad" exit /b 2
-rem With --yes it ends with exit, which would close the terminal it was typed in, so it runs in a cmd of its own:
-rem this line ends this copy, as the download it's in may be gone by then.
+rem With --yes it ends with exit, as a double-click does. Typed in a cmd window, not a cmd /c that PowerShell or a
+rem script starts, that would close the window, so there it runs in a cmd of its own, from a copy of these two
+rem lines in TEMP: cmd would read the rest of this file after it, and moving the kit deletes the download it's in.
 if not defined KIT_YES goto begin
-if defined KIT_CHILD goto begin
-set "KIT_CHILD=1" & cmd /d /c ""!ME!" %*" & exit /b !errorlevel!
+set "CMDLN=!CMDCMDLINE!"
+if /i not "!CMDLN:/c =!"=="!CMDLN!" goto begin
+> "%TEMP%\TinfoilKit-SETUP.cmd" (
+  echo @cmd /d /c call %%*
+  echo @exit /b %%errorlevel%%
+) || goto begin
+"%TEMP%\TinfoilKit-SETUP.cmd" "%ME%" %*
 :begin
 cd /d "%~dp0"
 set "KIT=%CD%"
