@@ -92,7 +92,11 @@ When it's done, suggest they open the kit and print the essentials while they ha
 
 ## When it fails
 
-If curl stops with error 404 before SETUP starts, GitHub has no release of the kit to download right now (https://github.com/tudor-city-ventures/tinfoil-kit/releases): tell the person to try again later.
+If curl stops with error 404 before SETUP starts, GitHub has no release of the kit to download right now (https://github.com/tudor-city-ventures/tinfoil-kit/releases). On a Mac or Linux with git and Go (`git --version` and `go version` both answer), give them the kit from its source instead, with the same options:
+
+    git clone --depth 1 https://github.com/tudor-city-ventures/tinfoil-kit ~/Downloads/tinfoil-kit && bash ~/Downloads/tinfoil-kit/SETUP.command --region texas --drive /Volumes/Kit --yes
+
+SETUP builds the kit's program first, then copies the code to the drive. For this computer, clone it to ~/TinfoilKit and run the SETUP.command there with `--this-computer`. Otherwise, and on Windows, tell the person to try again later.
 
 With `--yes`, SETUP never asks: it stops and says why. Fix that and run the same command again.
 

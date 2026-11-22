@@ -246,6 +246,27 @@ try:
         f'window.KIT_REFRESHED = "{state().get("last_sync")}";'
         in (drive / "data" / ".kit" / "portal.html").read_text(),
     )
+    # A file kit.json stops listing for an item (Gemma 4's drafts) goes, as an old version does, once the rest is in.
+    cfg["models"][0]["files"] = ["*-Q4_K_M.gguf"]
+    write_cfg()
+    rc, out = kit("sync", "-y")
+    check(
+        "a file kit.json no longer lists for a model is deleted, and the rest kept",
+        rc == 0
+        and "Removed Tiny-Q8_0.gguf from Tiny: kit.json no longer lists it." in out
+        and not (drive / "downloads" / "models/Tiny/Tiny-Q8_0.gguf").exists()
+        and list(state()["items"]["models/Tiny"]["files"]) == ["Tiny-Q4_K_M.gguf"]
+        and same("models/Tiny/Tiny-Q4_K_M.gguf", "hf/tiny/Tiny-Q4_K_M.gguf"),
+        out,
+    )
+    cfg["models"][0]["files"] = ["*-Q4_K_M.gguf", "*-Q8_0.gguf"]
+    write_cfg()
+    rc, out = kit("sync", "-y")
+    check(
+        "listed again, it downloads again",
+        rc == 0 and same("models/Tiny/Tiny-Q8_0.gguf", "hf/tiny/Tiny-Q8_0.gguf"),
+        out,
+    )
 
     # SETUP's first run gets the essentials first, then the rest.
     ess = work / "essentials"
@@ -1662,10 +1683,16 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         (code / "site").mkdir()
         shutil.copy(TESTS.parent / "site" / "sources.json", code / "site")  # for ./kit pick --ask
         if git:  # a developer's, with npm's packages, ruff's cache and a website build in it
-            (path / ".git").mkdir()
+            (code / "tools" / "commit").write_text("$Format:%H$\n")  # (what git archive fills in)
             for d in ("node_modules/prettier", ".ruff_cache/0.17.5", "site/node_modules/next", "site/.next"):
                 (path / d).mkdir(parents=True)
                 (path / d / "index.js").write_text("")
+            if shutil.which("git"):  # a real one, with a commit (not in CI's bash 3.2 container, which has no git)
+                me = ["-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false"]
+                for args in (["init", "-q"], ["add", "-A"], [*me, "commit", "-qm", "test"]):
+                    subprocess.run(["git", "-C", str(path), *args], check=True, capture_output=True)
+            else:
+                (path / ".git").mkdir()
         return path
 
     setup = kit_folder(work / "setup")
@@ -2576,6 +2603,13 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
                 and not (tk / "app" / "site" / ".next").exists(),
                 out,
             )
+            if shutil.which("git"):
+                head = subprocess.run(["git", "-C", str(dl), "rev-parse", "HEAD"], capture_output=True, text=True)
+                check(
+                    "the copy knows the checkout's commit, as a release knows its own, for ./kit update",
+                    (tk / "app" / "tools" / "commit").read_text() == head.stdout,
+                    (tk / "app" / "tools" / "commit").read_text(),
+                )
         finally:
             shutil.rmtree(drv, ignore_errors=True)
     else:

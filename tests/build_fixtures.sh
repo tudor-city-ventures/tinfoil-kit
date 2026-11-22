@@ -98,6 +98,8 @@ python3 "$TESTS/make_tiny_model.py" "$R/hf/tiny/Tiny-Q4_K_M.gguf" 0
 python3 "$TESTS/make_tiny_model.py" "$R/hf/tiny/Tiny-Q8_0.gguf" 1
 python3 "$TESTS/make_tiny_model.py" "$R/hf/tiny_v2/Tiny-Q4_K_M.gguf" 2
 cp "$R/hf/tiny/Tiny-Q8_0.gguf" "$R/hf/tiny_v2/"
+# a speculative decoding draft beside the weights, as kits that had Gemma 4's still have: the AI server must leave it be
+cp "$R/hf/tiny/Tiny-Q4_K_M.gguf" "$R/hf/tiny/mtp-Tiny.gguf" && cp "$R/hf/tiny/mtp-Tiny.gguf" "$R/hf/tiny_v2/"
 python3 "$TESTS/make_tiny_model.py" "$R/hf/two/Two-Q4_K_M.gguf" 3
 (cd "$R/zim" && python3 "$TESTS/make_zims.py")
 

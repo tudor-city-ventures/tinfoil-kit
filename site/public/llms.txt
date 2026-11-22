@@ -269,7 +269,7 @@ Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's a
 
 ## When something goes wrong
 
-- The setup command stops with curl's error 404: GitHub has no release of the kit to download right now (https://github.com/tudor-city-ventures/tinfoil-kit/releases). Tell the person to try again later. A developer can build it from the source instead (see "By hand").
+- The setup command stops with curl's error 404: GitHub has no release of the kit to download right now (https://github.com/tudor-city-ventures/tinfoil-kit/releases). On a Mac or Linux with git and Go (`git --version` and `go version` both answer; Go is at https://go.dev/dl), the kit can come from its source instead, with the same options: `git clone --depth 1 https://github.com/tudor-city-ventures/tinfoil-kit ~/Downloads/tinfoil-kit && bash ~/Downloads/tinfoil-kit/SETUP.command --region texas --drive /Volumes/Kit --yes`. SETUP builds the kit's program first, then copies the code to the drive. For this computer, clone it to ~/TinfoilKit and run the SETUP.command there with `--this-computer`. Otherwise, and on Windows, tell the person to try again later.
 - "Apple could not verify..." on a double-click: System Settings > Privacy & Security > Open Anyway, once. `bash "Open Tinfoil Kit.command"` in Terminal always works.
 - "Windows protected your PC" on a double-click: More info, then Run anyway, once.
 - "Operation not permitted" in Terminal: macOS is keeping Terminal off the drive. System Settings > Privacy & Security > Files and Folders > Terminal: turn on Removable Volumes, then start again.

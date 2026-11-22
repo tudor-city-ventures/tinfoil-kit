@@ -31,7 +31,7 @@
    "group": "AI models",
    "title": "Gemma 4 26B",
    "why": "A third opinion from Google. Quick and reads photos.",
-   "bytes": 15694045216,
+   "bytes": 15442105888,
    "estimated": false,
    "presets": [
     "recommended",
@@ -43,7 +43,7 @@
    "group": "AI models",
    "title": "Gemma 4 12B",
    "why": "Mid-size, from Google. The AI for 16 to 24 GB laptops. Reads photos.",
-   "bytes": 7145181440,
+   "bytes": 6891472640,
    "estimated": false,
    "presets": [
     "recommended",
@@ -55,7 +55,7 @@
    "group": "AI models",
    "title": "Gemma 4 E4B",
    "why": "Small and light. The AI for 8 GB laptops, or to save battery.",
-   "bytes": 5265746464,
+   "bytes": 5206068448,
    "estimated": false,
    "presets": [
     "essentials",
@@ -68,7 +68,7 @@
    "group": "Maps",
    "title": "Offline maps",
    "why": "Street maps, address search and driving or walking directions for your region.",
-   "bytes": 16910837452,
+   "bytes": 16910995737,
    "estimated": false,
    "presets": [
     "essentials",

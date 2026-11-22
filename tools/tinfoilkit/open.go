@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -204,17 +205,14 @@ func (l *launcher) open(o openOptions) int {
 			say(fmt.Sprintf("  Another program is using port %d, so the AI uses %d.", aiPort, p))
 			aiPort = p
 		}
-		preset := filepath.Join(l.data, ".kit", "presets.ini")
-		os.WriteFile(preset, []byte(fmt.Sprintf("version = 1\n\n[%s]\nload-on-startup = true\n", model)), 0o644)
 		// AI chat is llama-server's own page, so it gets Ask's safety rules as its default system message. An
 		// environment variable, not a flag: a llama-server too old to know it ignores it instead of refusing to start.
 		var env []string
 		if chat := filepath.Join(l.app, "tools", "ai-chat.json"); isFile(chat) {
 			env = append(env, "LLAMA_ARG_UI_CONFIG_FILE="+chat)
 		}
-		aiProc = l.start(l.logFile("llama-server.log", false), l.kit, env, llama, "--models-dir", filepath.Join(l.dl, "models"),
-			"--models-preset", preset, "--models-max", "1", "-c", ctxSize, "--host", "127.0.0.1",
-			"--port", strconv.Itoa(aiPort), "--cors-origins", cors)
+		aiProc = l.start(l.logFile("llama-server.log", false), l.kit, env, llama, aiServer(l.kit, l.dl,
+			filepath.Join(l.data, ".kit", "presets.ini"), models, model, ctxSize, aiPort, cors)...)
 		say(fmt.Sprintf("  Starting AI (loading %s)...", model))
 	}
 
@@ -604,7 +602,7 @@ func (l *launcher) pickModel(model string, models []string, chosen bool) string 
 	for _, m := range models {
 		have = have || m == model
 	}
-	size := func(m string) int { return modelMB(filepath.Join(l.dl, "models", m)) }
+	size := func(m string) int { return int(modelBytes(filepath.Join(l.dl, "models", m)) / 1048576) } // MB, as memory is counted
 	if have && (chosen || room == 0 || size(model) <= room) {
 		return model
 	}
@@ -633,30 +631,89 @@ func (l *launcher) pickModel(model string, models []string, chosen bool) string 
 	return fit
 }
 
-// modelMB is the size of a model's files in MB (1,048,576 bytes, as memory is counted).
-func modelMB(dir string) int {
-	var total int64
-	entries, _ := os.ReadDir(dir)
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".gguf") && !strings.HasPrefix(e.Name(), ".") {
-			if info, err := e.Info(); err == nil {
-				total += info.Size()
-			}
-		}
+// modelBytes is the size of what a model loads.
+func modelBytes(dir string) int64 {
+	weights, mmproj := modelFiles(dir)
+	total := fileSize(mmproj)
+	for _, f := range weights {
+		total += fileSize(f)
 	}
-	return int(total / 1048576)
+	return total
 }
 
-// modelFolders are the folders in models/ with a model in them.
+// modelFolders are the folders in models/ with a model in them. Not one with # ; [ or ] in its name, which the AI
+// server's list of models (aiServer) can't hold.
 func modelFolders(dir string) []string {
 	var out []string
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
-		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") && len(filesWithSuffix(filepath.Join(dir, e.Name()), ".gguf")) > 0 {
-			out = append(out, e.Name())
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") && !strings.ContainsAny(e.Name(), "#;[]") {
+			if weights, _ := modelFiles(filepath.Join(dir, e.Name())); len(weights) > 0 {
+				out = append(out, e.Name())
+			}
 		}
 	}
 	return out
+}
+
+// modelFiles are what the AI server loads from a model's folder: the weights (every part, the first one first, if
+// they come in parts; else the biggest file) and the vision projector, if there is one. Never a speculative decoding
+// draft beside them (mtp-, dspark- or dflash-): llama-server takes one by itself when it scans a folder, and with
+// Gemma 4's draft and its projector it aborts as the model loads (ggml-org/llama.cpp#30698). So the kit names each
+// model's files for it instead (aiServer). A name with # or ; in it doesn't count: the list can't hold one.
+func modelFiles(dir string) (weights []string, mmproj string) {
+	single, size := "", int64(-1)
+	for _, f := range filesWithSuffix(dir, ".gguf") {
+		name := strings.ToLower(filepath.Base(f))
+		switch {
+		case strings.ContainsAny(name, "#;"):
+		case strings.Contains(name, "mmproj"):
+			mmproj = f
+		case strings.HasPrefix(name, "mtp-") || strings.HasPrefix(name, "dspark-") || strings.HasPrefix(name, "dflash-"):
+		case modelPart.MatchString(name):
+			weights = append(weights, f)
+		case fileSize(f) > size:
+			single, size = f, fileSize(f)
+		}
+	}
+	if len(weights) == 0 && single != "" {
+		weights = []string{single}
+	}
+	return weights, mmproj
+}
+
+var modelPart = regexp.MustCompile(`-\d{5}-of-\d{5}\.gguf$`)
+
+// aiServer writes the AI server's list of models to preset, one section for each model folder with the files it
+// loads (modelFiles), first loading as the server starts, and returns the arguments that start llama-server on it:
+// as a router, one model at a time, with ctx tokens of context, on 127.0.0.1 at port, answering only the page at
+// origin. ./kit open and ./kit test both start it this way, from the kit folder: the list's paths start there, since
+// it can't hold a # or ; and a drive's name might have one.
+func aiServer(kit, dl, preset string, models []string, first, ctx string, port int, origin string) []string {
+	var b strings.Builder
+	b.WriteString("version = 1\n")
+	rel := func(p string) string {
+		if r, err := filepath.Rel(kit, p); err == nil {
+			return r
+		}
+		return p
+	}
+	for _, m := range models {
+		weights, mmproj := modelFiles(filepath.Join(dl, "models", m))
+		if len(weights) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "\n[%s]\nmodel = %s\n", m, rel(weights[0]))
+		if mmproj != "" {
+			fmt.Fprintf(&b, "mmproj = %s\n", rel(mmproj))
+		}
+		if m == first {
+			b.WriteString("load-on-startup = true\n")
+		}
+	}
+	os.WriteFile(preset, []byte(b.String()), 0o644)
+	return []string{"--models-preset", preset, "--models-max", "1", "-c", ctx, "--host", "127.0.0.1",
+		"--port", strconv.Itoa(port), "--cors-origins", origin}
 }
 
 // filesWithSuffix lists the files in dir ending in suffix, by name, without hidden ones (like macOS's ._name).

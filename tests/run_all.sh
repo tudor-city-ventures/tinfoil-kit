@@ -25,6 +25,12 @@ cp "$TESTS/drive_kit_maps.json" "$D/data/kit.json"
 . "$TESTS/env.sh"
 cd "$A" || exit 1
 step() { echo; echo "=== $*"; }
+# llama-server must leave the speculative decoding draft beside the test model alone: Gemma 4's crashed it.
+no_draft() { # LOG WHO
+  if [ ! -s "$D/data/logs/$1" ]; then echo "FAIL: no data/logs/$1"
+  elif grep -qE -- "--model-draft|loading draft model" "$D/data/logs/$1"; then echo "FAIL: $2 loaded the draft (data/logs/$1)"
+  else echo "ok: $2 loaded no draft"; fi
+}
 # Runs one test: prints its failures and last line, and FAIL if it crashed or timed out. Full output in logs/.
 run_test() { # log-name seconds command...
   local log="$L/$1.log" secs="$2" rc; shift 2
@@ -54,6 +60,7 @@ finder_files
 # kit no, close.
 step "setup (sync again, then test)"; printf '\ny\nn\n\n' | timeout 600 bash SETUP.command > "$L/setup.log" 2>&1; echo "exit $?"
 grep -E "PASS|FAIL|up to date|All set" "$L/setup.log" | tail -12
+no_draft test-llama.log "./kit test's AI"
 finder_files_left "./kit test"; finder_files
 step "search";  ./kit search test | head -2
 step "share on the home network"; ./kit share on --code 13572468 | head -2
@@ -73,6 +80,7 @@ step "portal logic"; run_test portal_logic 180 node "$TESTS/portal_test.js" "$A/
 step "map logic";    run_test map_logic 180 node "$TESTS/map_logic_test.js" "$A/tools/portal.html"
 step "portal UI";    run_test portal_ui 240 python3 "$TESTS/ui_test.py"
 step "map UI";       run_test map_ui 400 python3 "$TESTS/map_ui_test.py"
+no_draft llama-server.log "the launcher's AI"
 cleanup 2>/dev/null
 step "share off"; ./kit share off | head -1
 step "launcher --no-maps"; (timeout 60 bash "Open Tinfoil Kit.command" --no-browser --no-maps > "$L/launch2.out" 2>&1 &); sleep 8

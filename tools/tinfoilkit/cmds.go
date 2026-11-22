@@ -1425,6 +1425,7 @@ func cmdSync(root string, a *cliArgs) {
 			}
 		}
 		if !part {
+			dropUnlisted(root, state, items)
 			dropReplacedWikipedias(root, state, items, cfg)
 		}
 		if len(failures) == 0 && len(errs) == 0 && !part {
@@ -1948,12 +1949,7 @@ func cmdTest(root string, a *cliArgs) {
 	llama := runtimeBinary(root, "llama.cpp", "llama-server")
 	dropFinderFiles(root)
 	zims := filesIn(filepath.Join(dlDir(root), "library"), "*.zim")
-	var models []string
-	for _, p := range filesIn(filepath.Join(dlDir(root), "models"), "*") {
-		if isDir(p) && len(filesIn(p, "*.gguf")) > 0 {
-			models = append(models, p)
-		}
-	}
+	models := modelFolders(filepath.Join(dlDir(root), "models"))
 	orSync := func(p string) string {
 		if p == "" {
 			return "run ./kit sync"
@@ -1969,11 +1965,7 @@ func cmdTest(root string, a *cliArgs) {
 		someOn = someOn || m.on()
 	}
 	if someOn {
-		var ns []string
-		for _, m := range models {
-			ns = append(ns, filepath.Base(m))
-		}
-		check("models present", len(models) > 0, strings.Join(ns, ", "))
+		check("models present", len(models) > 0, strings.Join(models, ", "))
 	} else {
 		log("  SKIP  models: kit.json switches them all off, so the kit runs without the AI")
 	}
@@ -2068,23 +2060,16 @@ func cmdTest(root string, a *cliArgs) {
 		}
 		if llama != "" && len(models) > 0 {
 			lport := ephemeralPort()
-			small, smallest := "", int64(math.MaxInt64)
+			name, smallest := a.str("model"), int64(math.MaxInt64)
 			for _, m := range models {
-				var total int64
-				for _, f := range filesIn(m, "*.gguf") {
-					total += fileSize(f)
-				}
-				if total < smallest {
-					small, smallest = m, total
+				if size := modelBytes(filepath.Join(dlDir(root), "models", m)); a.str("model") == "" && size < smallest {
+					name, smallest = m, size
 				}
 			}
-			name := a.str("model")
-			if name == "" {
-				name = filepath.Base(small)
-			}
-			startServer(&servers, filepath.Join(logs, "test-llama.log"), "", llama, "--models-dir",
-				filepath.Join(dlDir(root), "models"), "--models-max", "1", "-c", "4096", "--host", "127.0.0.1",
-				"--port", itoa(lport), "--cors-origins", "http://127.0.0.1:8888")
+			// as ./kit open starts it, with a list of models of its own, so a kit that's open keeps its list
+			os.MkdirAll(metaDir(root), 0o755)
+			startServer(&servers, filepath.Join(logs, "test-llama.log"), root, llama, aiServer(root, dlDir(root),
+				filepath.Join(metaDir(root), "presets-test.ini"), models, name, "4096", lport, "http://127.0.0.1:8888")...)
 			up := waitHTTP(fmt.Sprintf("http://127.0.0.1:%d/v1/models", lport), 90*time.Second, nil)
 			check("AI server starts", up, "")
 			if up {
@@ -2097,7 +2082,7 @@ func cmdTest(root string, a *cliArgs) {
 				}
 				all := true
 				for _, m := range models {
-					all = all && containsAny(listed, filepath.Base(m))
+					all = all && containsAny(listed, m)
 				}
 				check("models discovered", all, strings.Join(shown, ", "))
 				body := dumpsLine(newObj("model", name, "max_tokens", 64, "temperature", 0, "messages",
