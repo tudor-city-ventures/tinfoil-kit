@@ -1,16 +1,16 @@
 @echo off
 rem Double-click me (Windows) to set up Tinfoil Kit, and again whenever you want the newest models, books and maps.
 rem The first time, it asks where you live and whether the kit goes on an external drive or on this PC, says how
-rem much fits there, and copies it there. Then it's kit update, sync and test (the first time, the essentials come
-rem first), as SETUP.command does on a Mac or Linux.
+rem much fits there, and copies it there. Then it's kit update, sync and test, as SETUP.command does on a Mac or
+rem Linux: first a small kit to try (kit starter), then the rest when SETUP runs again.
 rem The answers can come with it instead, the same ones SETUP.command takes, so one command sets the kit up: an AI
 rem helping someone asks them the questions, then gives them that command. It asks only what these leave out:
 rem   --region PLACE      where you live: a US state, a country or a part of one, as kit region takes it
 rem   --wikipedia CODES   Wikipedia's languages, like de or de,en
 rem   --this-computer     the kit goes on this PC, in your user folder
 rem   --drive PATH        the kit goes on the drive at PATH (like E:), in a TinfoilKit folder at its top
-rem   --essentials        just the essentials
-rem   --all               all of it, even when that leaves less free space than SETUP likes
+rem   --essentials        just the essentials (the first time, right after the kit to try)
+rem   --all               all of it, even when that leaves less free space than SETUP likes (the first time, right after the kit to try)
 rem   --no-ai             no AI models
 rem   --models IDS        just these AI models (kit pick)
 rem   --skip IDS          leave these out: AI models, books, maps, extras (kit pick)
@@ -81,11 +81,16 @@ if defined UPDATE (
 )
 call :python || call :finish 1
 if exist ".kit\" (
+  if not defined UPDATE (
+    set "KIT_STEPS=2"
+    call :goes_on && set "KIT_STEPS=3"
+  )
   call :where_kit
   call :step "the kit is !WHERE!, in !KIT!"
   if defined KIT_PLACE call :stays
 ) else (
-  set "KIT_STEPS=4"
+  set "KIT_STEPS=3"
+  call :goes_on && set "KIT_STEPS=4"
   call :pick_region first
   call :place
 )
@@ -115,36 +120,79 @@ if defined KIT_GIVEN (
 )
 rem After kit update, so a kit from before this question gets it
 if not defined KIT_REGION_ASKED call :pick_region
-rem An update can bring models too big for this computer
-if not defined KIT_FIT_ASKED call :fit_ai
 set "ONLY=all"
 findstr /r /c:"\"essentials_only\": *true" kit.json >nul 2>&1 && set "ONLY=essentials"
-if defined UPDATE call :how_much_now
-if defined UPDATE (
-  call :step "download. Here's what will change:"
-  call :kit plan || call :finish 1
-) else (
-  call :step "the essentials. Here's what comes first:"
-  call :kit plan --essentials || call :finish 1
+rem The first time, SETUP gets the try-it kit (kit starter): a few GB, checked, then the kit opens to be tried. The
+rem rest comes when SETUP runs again (that's saying it's ready), or right after the try-it kit with --all,
+rem --essentials or --home-server. After that, SETUP updates what's there. TRY: the first run, or one on a try-it
+rem kit. REST: with TRY, the rest comes in this run. LATER: the rest, on a run after the try-it kit's: it asks what
+rem goes in.
+set "TRY=" & set "REST=" & set "LATER="
+if not defined UPDATE set "TRY=1"
+findstr /r /c:"\"starter_only\": *true" kit.json >nul 2>&1 && set "TRY=1"
+if defined UPDATE set "REST=1"
+call :goes_on && set "REST=1"
+if defined TRY if defined UPDATE set "LATER=1"
+rem An update can bring models too big for this computer
+if not defined KIT_FIT_ASKED if not defined LATER call :fit_ai
+if not defined UPDATE (
+  call :kit starter on >nul
+  if "!KIT_HOW_MUCH!"=="all" set "ONLY=all"
+  if "!KIT_HOW_MUCH!"=="essentials" set "ONLY=essentials"
 )
-echo(
-echo Each item comes from its publisher under its own license, listed in THIRD-PARTY.md. Downloading means you accept them.
-echo Big downloads take hours. Keep this PC plugged in with the lid open: it won't go to sleep while this runs.
-echo You can stop any time (press Ctrl+C, or close this window) and double-click SETUP later to carry on.
-call :ask "Start downloading?" || call :finish 0
-call :stop_kit
-rem The first time, the essentials come first and get checked, so the kit works hours before the rest is in.
-if defined UPDATE goto get_rest
-if "!ONLY!"=="essentials" goto get_rest
-call :get --essentials
-if not "!TESTED!"=="0" goto results
-echo(
-echo The essentials work: from now on, if the internet goes down, the kit is ready.
-call :space "!KIT!"
-call :step "everything else (about !NEED_GB!). It takes hours, and the kit works the whole time."
-:get_rest
+if defined UPDATE if not defined TRY call :how_much_now
+if not defined TRY goto update_all
+if defined UPDATE goto the_rest
+
+"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" estimate > "%OUT%" 2>nul
+set "SMALL=0"
+for /f "usebackq delims=" %%g in ("%OUT%") do set "SMALL=%%g"
+call :gb SMALL
+call :step "a small kit to try first (about !SMALL_GB!). Here's what it gets:"
+call :kit plan || call :finish 1
+set "TAKES=It takes minutes on a fast connection."
+if defined REST set "TAKES=The kit to try takes minutes on a fast connection, the rest hours."
+call :before_download "!TAKES!" || call :finish 0
 call :get
-if not defined UPDATE if "!ONLY!"=="essentials" if "!TESTED!"=="0" call :step "everything else: not now. You chose just the essentials. Once there's room, SETUP offers the rest."
+if not "!TESTED!/!RC!"=="0/0" goto results
+if not defined REST goto try_it
+echo(
+echo The try-it kit works: from now on, if the internet goes down, the kit is ready.
+
+rem The rest, now that the try-it kit works. The first time, what goes in was settled before the kit moved.
+:the_rest
+call :step "the rest of the kit"
+if not defined LATER goto rest_plan
+set "PICK_ASK=--ask"
+call :chosen && set "PICK_ASK="
+if defined KIT_YES set "PICK_ASK="
+call :kit pick !PICK_ASK! || call :finish 1
+call :fit_ai
+call :space "!KIT!"
+call :where_kit
+set "AT=this PC"
+if not "!WHERE!"=="on this PC" set "AT=!WHERE:~13!"
+call :how_much "!AT!" "Not now" && goto rest_plan
+echo(
+echo The try-it kit keeps working. Run SETUP again when you're ready for the rest.
+call :finish 1
+:rest_plan
+call :kit starter off >nul
+set "ESSENTIALS=off"
+if "!ONLY!"=="essentials" set "ESSENTIALS=on"
+call :kit essentials !ESSENTIALS! >nul
+echo(
+echo Here's what it gets:
+call :kit plan || (call :kit starter on >nul & call :finish 1)
+if defined LATER call :before_download "The kit keeps working while it downloads." || (call :kit starter on >nul & call :finish 0)
+call :get
+goto results
+
+:update_all
+call :step "download. Here's what will change:"
+call :kit plan || call :finish 1
+call :before_download "Big downloads take hours." || call :finish 0
+call :get
 
 :results
 if "%TESTED%"=="0" if "%RC%"=="0" goto all_set
@@ -191,6 +239,39 @@ if defined KIT_YES call :finish 0
 call :ask "Open the kit now?" && (del "%OUT%" 2>nul & call "%KIT%\Open Tinfoil Kit for Windows.bat" & exit 0)
 call :finish 0
 
+rem The try-it kit works: how big the rest is, how long it takes at the speed just measured, and how to get it. Then
+rem the kit opens, to be tried.
+:try_it
+call :where_kit
+echo(
+echo The try-it kit works. It's !WHERE!, in !KIT!
+echo Turn off Wi-Fi and try it: ask the AI something, look something up, find your street on the map.
+set "REMAIN=0" & set "TOOK="
+"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" estimate --rest > "%OUT%" 2>nul
+for /f "usebackq tokens=1,2 delims=	" %%a in ("%OUT%") do (set "REMAIN=%%a" & set "TOOK=%%b")
+call :gb REMAIN
+set "SAY=The rest of the kit"
+if "!ONLY!"=="essentials" set "SAY=The rest of the essentials"
+set "SAY=!SAY! is about !REMAIN_GB! more"
+if defined TOOK set "SAY=!SAY!: !TOOK!"
+echo(
+echo !SAY!. You can use the kit while it downloads.
+set "THEN=it asks what you want in the kit, then gets that"
+call :chosen && set "THEN=it gets it"
+if defined KIT_YES (
+  echo When you're ready for it: "!KIT!\SETUP-Windows.bat" --yes
+) else (
+  echo When you're ready, double-click SETUP-Windows.bat again: !THEN!.
+)
+if defined KIT_SHARE call :share_home
+if not defined KIT_YES goto try_it_ask
+rem (in a window of its own, so a command an AI runs doesn't wait for it)
+start "Tinfoil Kit" "%KIT%\Open Tinfoil Kit for Windows.bat"
+call :finish 0
+:try_it_ask
+call :ask "Open the kit now?" && (del "%OUT%" 2>nul & call "%KIT%\Open Tinfoil Kit for Windows.bat" & exit 0)
+call :finish 0
+
 rem Phones and laptops on the home network open the kit with its access code, and it starts as you sign in.
 :home_server
 echo(
@@ -209,6 +290,18 @@ call :kit share on >nul
 echo(
 call :kit share
 goto :eof
+
+rem Before a download: whose files they are, and how to keep it going. Its argument says how long it takes. Returns 1
+rem if the person would rather not start.
+:before_download
+set "TAKES=%~1"
+echo(
+echo Each item comes from its publisher under its own license, listed in THIRD-PARTY.md. Downloading means you accept them.
+echo !TAKES! Keep this PC plugged in with the lid open: it won't go to sleep while this runs.
+echo You can stop any time (press Ctrl+C, or close this window) and double-click SETUP later to carry on.
+call :ask "Start downloading?" || exit /b 1
+call :stop_kit
+exit /b 0
 
 rem kit sync with these options, then start everything offline and check that it answers. Sets RC and TESTED.
 :get
@@ -366,6 +459,22 @@ if not defined PICKS exit /b 0
 if "%~1"=="say" echo What goes in it:
 call :kit pick !PICKS!
 exit /b !errorlevel!
+
+rem Whether someone has said what goes in the kit, now or before (kit pick sets "picked").
+:chosen
+if defined KIT_NO_AI exit /b 0
+if defined KIT_MODELS exit /b 0
+if defined KIT_SKIP exit /b 0
+if defined KIT_ADD exit /b 0
+findstr /r /c:"\"picked\": *true" kit.json >nul 2>&1 && exit /b 0
+exit /b 1
+
+rem Whether the first run goes on to the rest of the kit right after the kit to try, instead of stopping there.
+:goes_on
+if "!KIT_HOW_MUCH!"=="all" exit /b 0
+if "!KIT_HOW_MUCH!"=="essentials" exit /b 0
+if defined KIT_HOME_SERVER exit /b 0
+exit /b 1
 
 rem Which AI model this computer runs, and whether to get the ones too big for it (on an update, also the ones
 rem skipped before on a computer with less memory). Models chosen with --models or --no-ai stay as chosen.
@@ -544,10 +653,13 @@ call :space "!P!%NAME%"
 echo   %~1  !L%~1! (!F%~1!, !FREE_GB! free of !TOTAL_GB!): !NOTE!
 goto :eof
 
-rem After :space, how much of the kit goes to the place it looked at (its argument names it). Sets ONLY to all or
-rem essentials, or returns 1 to choose somewhere else.
+rem After :space, how much of the kit goes to the place it looked at (its first argument names it). Sets ONLY to all
+rem or essentials, or returns 1 for the way out: choosing somewhere else, or the second argument if there is one
+rem ("Not now", once the kit is in place).
 :how_much
 set "AT=%~1"
+set "OTHER=%~2"
+if not defined OTHER set "OTHER=Somewhere else"
 set "KEEPS="
 if "!AT!"=="this PC" set "KEEPS=, so this PC keeps running well"
 set "TIGHT=All of it fits on !AT!, but leaves only !LEFT_GB! free. Better to leave at least !LEAVE_GB!!KEEPS!."
@@ -567,13 +679,13 @@ if "!FULL!"=="tight" goto how_much_tight
 if "!ESS!"=="fits" goto how_much_essentials
 if "!ESS!"=="tight" goto how_much_essentials_tight
 echo !NO_ROOM!
-echo Make room there, or choose somewhere else.
+if "%~2"=="" echo Make room there, or choose somewhere else.
 exit /b 1
 :how_much_tight
 echo !TIGHT!
 echo   1  Just the essentials (about !NEED_ESS_GB!)
 echo   2  All of it anyway (about !NEED_GB!)
-echo   3  Somewhere else
+echo   3  !OTHER!
 call :choose "Type 1, 2 or 3, then press Enter:" 3
 if "!PICK!"=="1" set "ONLY=essentials" & exit /b 0
 if "!PICK!"=="2" set "ONLY=all" & exit /b 0
@@ -581,14 +693,14 @@ exit /b 1
 :how_much_essentials
 echo !NOT_ALL!
 echo   1  Just the essentials (about !NEED_ESS_GB!). SETUP offers the rest later, once it fits.
-echo   2  Somewhere else
+echo   2  !OTHER!
 call :choose "Type 1 or 2, then press Enter:" 2
 if "!PICK!"=="1" set "ONLY=essentials" & exit /b 0
 exit /b 1
 :how_much_essentials_tight
 echo !TIGHT_ESS!
 echo   1  Just the essentials anyway (about !NEED_ESS_GB!)
-echo   2  Somewhere else
+echo   2  !OTHER!
 call :choose "Type 1 or 2, then press Enter:" 2
 if "!PICK!"=="1" set "ONLY=essentials" & exit /b 0
 exit /b 1
