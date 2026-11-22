@@ -1,5 +1,5 @@
 // Vercel serves this, as 404.html, for any address the site doesn't have.
-export const metadata = { title: 'Not found · Tinfoil Kit' };   // Next.js adds noindex to it
+export const metadata = { title: "Not found · Tinfoil Kit" }; // Next.js adds noindex to it
 
 export default function NotFound() {
   return (
