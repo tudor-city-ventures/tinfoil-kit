@@ -279,7 +279,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
 - **Quick gate (`check.sh`, every push):** compile and parse checks, shellcheck when installed, kit.json validity, `site/sources.json` freshness, CRLF on the Windows launcher, then:
   - `sync_test.py`: the real `kit.py` against `mock_remote.py` with tiny random files: downloads, a download that breaks and resumes, checksums, a second sync that does nothing, `verify --fix`, lost `state.json`, a "3 months later" update with planted leftovers, offline and Wi-Fi sign-in runs, and every ending of `SETUP.command` with a stand-in `./kit`, the launcher's first-model choice by memory, and its move off a port another program holds. Needs only python3 and curl, so it runs in cloud sessions.
   - `share_test.py`: the gate against stand-in servers (access code, cookie, rate limit, routes, streaming, DNS rebinding, the QR code), `./kit share` and `./kit autostart` with a stand-in systemctl, and the launcher with sharing on.
-  - `map_logic_test.js`: the page's `Kit` map code against a mock Photon, GraphHopper and tool-calling AI (`mock_services.py`).
+  - `map_logic_test.js`: the page's `Kit` map code against a mock Photon, GraphHopper and tool-calling AI (`mock_services.py`), and a streamed answer the mock cuts in the middle of a character, which must arrive whole.
 - **End to end (`build_fixtures.sh` then `run_all.sh`, CI on changes to the kit):** copies the kit onto a fake drive with real kiwix-serve and llama-server binaries, a tiny GGUF model and test ZIMs, then:
   - `plan` and `sync` (three entries are broken on purpose: sync must finish the rest, name them and exit 1), `verify`, `SETUP.command`, `search`;
   - the launcher with sharing on, then `portal_test.js`, `map_logic_test.js` and the Playwright UI tests (`ui_test.py`, `map_ui_test.py`), with axe on every tab in light and dark mode when `KIT_AXE` is set. `ui_test.py` also uses the kit as a phone on the network does: through the gate, with the access code, llama-server's chat page included;
@@ -297,6 +297,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
 - **Website (`site_test.py`, every push):** serves `site/` with the production headers and drives the kit builder on desktop and phone sizes: presets, totals, no sideways scroll, fonts load from the site, nothing loads from other sites, both Copy paths, the kit.json download, and axe.
 - **`mock_remote.py`** fakes every download source. Flag files switch its behavior: `STATE_V2` ("3 months later"), `FLAKY` (a download breaks partway), `PHOTON_OLD_DUMP` (only an older database version is published). `/wifi-sign-in` answers like a hotel network's sign-in page.
 - **`tests/fakes/`:** a fake `java` (pretends to be GraphHopper's import and server, and Photon, by running the mocks) and a fake `pmtiles`.
+- **`make_tiny_model.py`:** the test AI. It gives one fixed answer to any question, with accents and symbols, some spelled byte by byte as real models write them, and `portal_test.js`, `ui_test.py` and `drive.py` check that it arrives with every character intact. Random weights would write random bytes, which look just like an encoding bug and would hide a real one.
 
 **Never verified. Needs a real Mac and the internet:**
 - Real downloads and checksums from each source.

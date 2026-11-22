@@ -5,6 +5,7 @@ the way a phone on the home network does: through the gate, with the access code
 import os
 import sys
 from playwright.sync_api import sync_playwright
+from make_tiny_model import ANSWER
 
 SHOTS = os.environ.get("KIT_TEST_SHOTS", os.path.join(os.path.dirname(__file__), "work", "shots"))
 os.makedirs(SHOTS, exist_ok=True)
@@ -20,6 +21,14 @@ def check(name, ok, detail=""):
     global fails
     print(("PASS  " if ok else "FAIL  ") + name + (f": {detail}" if detail else ""))
     fails += 0 if ok else 1
+
+
+def intact(page):
+    """Is the answer the test model's, as the page shows it (bold, [1] a link to the source), every character intact?
+    If not, what arrived, spelled in ASCII so a mangled character shows as its code."""
+    shown = page.inner_text("#answer")
+    ok = " ".join(shown.split()) == " ".join(ANSWER.replace("**", "").split()) and page.locator("#answer a.cite").count() == 1
+    return ok, "" if ok else ascii(shown)[:400]
 
 
 with sync_playwright() as p:
@@ -46,7 +55,7 @@ with sync_playwright() as p:
     page.wait_for_function("document.getElementById('progress').textContent.startsWith('Done')", timeout=120000)
     srcs = page.eval_on_selector_all("#sources li a", "els => els.map(e => e.textContent)")
     check("sources listed", "Water purification" in srcs, ", ".join(srcs))
-    check("answer rendered", len(page.inner_text("#answer")) > 0)
+    check("the AI's answer arrives with every character intact, and cites its source", *intact(page))
     page.screenshot(path=os.path.join(SHOTS, "shot_ask.png"), full_page=True)
     href = page.get_attribute("#sources li a", "href")
     r = page.request.get(f"http://127.0.0.1:{LIB}" + href)
@@ -114,6 +123,7 @@ with sync_playwright() as p:
         p3.wait_for_function("document.getElementById('progress').textContent.startsWith('Done')", timeout=120000)
         srcs = p3.eval_on_selector_all("#sources li a", "els => els.map(e => e.textContent)")
         check("shared: asking works through the gate", "Water purification" in srcs, ", ".join(srcs))
+        check("shared: the AI's answer arrives intact through the gate", *intact(p3))
         r = p3.request.get(share + p3.get_attribute("#sources li a", "href"))
         check("shared: a source opens through the gate", r.ok and "8 drops" in r.text())
         p3.click("nav a[data-tab=help]")
