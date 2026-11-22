@@ -277,9 +277,9 @@ After that, every `.github/release.sh vX.Y.Z` builds and notarizes the app by it
   - `Gemma-4-E4B` is the small, fast one.
   - MTP files are matched at the repo's top level first, because the `MTP/` subfolder has duplicates.
 - **Library:** about 40 ZIM files, by priority:
-  - Medical: WikiMed (mdwiki), military medicine, LibreTexts medicine.
-  - Preparedness: Ready.gov, Urban Prepper, post-disaster, water treatment, food, knots.
-  - Repair: iFixit, US Army publications, and Stack Exchange sites (home improvement, cars, bikes, electronics).
+  - Medical: WikiMed (mdwiki), MedlinePlus, CDC Travelers' Health, military medicine, LibreTexts medicine.
+  - Preparedness: Ready.gov, Urban Prepper, Learning Self-Reliance (videos), post-disaster, water treatment, food, knots.
+  - Repair: iFixit, CD3WD, US Army publications, and Stack Exchange sites (home improvement, cars, bikes, electronics).
   - Reference: Wikipedia with images (about 115 GB), Wiktionary, Wikibooks, Wikivoyage, Wikiversity, LibreTexts.
   - Project Gutenberg subsets.
   - Off by default: Survivor Library, Khan Academy, all of Gutenberg.
