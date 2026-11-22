@@ -17,7 +17,7 @@ You are setting this up for a person, probably not a programmer. Work in their T
 | Linux PC (x64), from an exFAT drive set up on a Mac | no, for now | yes | yes | no, for now |
 
 - Intel Macs and ARM Windows or Linux PCs can't run it: the kit downloads programs built for Apple Silicon and for x64 PCs only. On a Mac, `uname -m` prints arm64.
-- Memory decides which AI runs. 32 GB runs the default model, Inkling 2 Mini. On a Mac with less, the kit starts Gemma 4 E4B, which runs on 8 to 16 GB. `sysctl -n hw.memsize` prints the memory in bytes.
+- Memory decides which AI runs: a model may take 60% of it. 32 GB or more runs the default model, Inkling 2 Mini, and the other big models; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B. On Windows the person picks it on the Ask page. `./kit fit` says which one this computer runs (`--json` for agents), and `./kit fit --skip` switches off the models it can't run, which saves about 50 GB on a 16 or 24 GB laptop. `sysctl -n hw.memsize` prints the memory in bytes.
 - On Windows and Linux the AI uses the graphics card through Vulkan. Without a good one it's slow: pick Gemma 4 E4B.
 - Space: about 300 GB for the default kit. `./kit estimate` prints the number for the current kit.json, with no internet. Sync always leaves 50 GB free on the computer's own disk and 25 GB on a drive.
 - Setup needs the internet for a few hours, Apple's free Command Line Tools (for python3 3.9 or newer, and curl) and the Mac on its charger. After that, nothing needs the internet.
@@ -102,13 +102,14 @@ Go through "Where it can live" with the person, with the numbers from step 1:
 
 kit.json lists everything. The default kit:
 
-- AI models, all of which read photos: Inkling 2 Mini (the default, fast, about 18 GB), Qwen3.8 27B (a second opinion from another lab, slower, 17.5 GB), Gemma 4 26B-A4B (a third opinion, 15.7 GB) and Gemma 4 E4B (small, saves battery, runs on 8 to 16 GB, 5.3 GB).
+- AI models, all of which read photos: Inkling 2 Mini (the default, fast, about 18 GB), Qwen3.8 27B (a second opinion from another lab, slower, 17.5 GB), Gemma 4 26B-A4B (a third opinion, 15.7 GB), Gemma 4 12B (mid-size, for 16 to 24 GB, 7.2 GB) and Gemma 4 E4B (small, saves battery, for 8 GB, 5.3 GB).
 - Library: all of English Wikipedia with images (about 115 GB), WikiMed, field and military medicine manuals, LibreTexts textbooks, iFixit repair guides, Ready.gov, US Army publications, Wikibooks, Wiktionary, Wikivoyage, Wikiversity, Appropedia, Energypedia, and Stack Exchange Q&A on home improvement, cooking, gardening, car and bicycle repair, electronics, amateur radio and more. Off by default because they're huge: Survivor Library (232 GB), Khan Academy videos (168 GB) and Project Gutenberg (206 GB).
 - Maps: street detail, addresses and directions for the US Northeast (New England, New York, New Jersey, Pennsylvania), address search for the whole US, and a low-detail world map. 20 to 30 GB.
 
 To change it:
 
 - Skip an item: set "enabled": false on it in models, library or maps.
+- Run without the AI: set "enabled": false on every model, or pick No AI in the builder. The library and the map work as usual, Ask shows the best passages instead of an answer, and `./kit test` doesn't ask for a model.
 - Add a book: `./kit search WORDS` finds Kiwix books and prints a line to paste into library.
 - Change the map region: edit "maps" (its notes explain how).
 - Or make a kit.json with the builder at https://tinfoilkit.com/#builder and put it in the kit folder, replacing the one there.

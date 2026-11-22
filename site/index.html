@@ -31,13 +31,14 @@
       "applicationCategory": "UtilitiesApplication",
       "operatingSystem": "macOS, Windows, Linux",
       "softwareRequirements": "A Mac with an M chip (M1 or newer) to set it up, on its own disk or an external SSD. A drive set up on a Mac also runs the AI and the library on Windows and Linux.",
-      "memoryRequirements": "32 GB runs the full-size AI; computers with less run a lighter one",
+      "memoryRequirements": "32 GB or more runs the default AI, Inkling 2 Mini; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B",
       "storageRequirements": "About 300 GB for the recommended kit",
       "featureList": [
         "Ask: plain-word answers from the offline library, with numbered sources you can open",
         "AI chat that runs on your laptop and can read photos",
-        "Library: all of Wikipedia with pictures, medical references, iFixit repair guides, Army field manuals and FEMA emergency guides",
+        "Library: all of Wikipedia with pictures, the WikiMed medical encyclopedia, Army field and medical manuals, iFixit repair guides and FEMA emergency guides",
         "Map: address search, driving and walking directions, and the nearest hospital or pharmacy",
+        "The AI is optional: the library and the map work without it",
         "Works with no internet, no account and no telemetry"
       ],
       "isAccessibleForFree": true,
@@ -202,6 +203,31 @@ html:not(.js) .readas{display:none}
 .readas button:hover{border-color:var(--paper)}
 .readas button[aria-pressed=true]{background:var(--paper);color:var(--ink);border-color:var(--paper)}
 .cta-note{font:13px/1.5 var(--mono);color:var(--ink2)}
+.first-run{font:13px/1.5 var(--mono);color:var(--ink2);margin-top:-12px;max-width:560px}
+.first-run summary{cursor:pointer;list-style:none;padding:12px 0;color:var(--ink);font-weight:500}
+.first-run summary::-webkit-details-marker{display:none}
+.first-run summary::before{content:"+";display:inline-block;width:1.8em;color:var(--signal-text);font-weight:600}
+.first-run[open] summary::before{content:"\2212"}
+.first-run ol{list-style:none;counter-reset:step;margin:0;padding-left:1.8em;display:flex;flex-direction:column;gap:6px}
+.first-run li{counter-increment:step;position:relative}
+.first-run li::before{content:counter(step) ".";position:absolute;left:-1.8em;color:var(--signal-text)}
+.phone{border:2px dashed var(--ink);background:var(--paper);padding:22px 24px;display:flex;flex-direction:column;gap:10px}
+.phone h3{font:600 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--signal-text)}
+.phone p,.phone li{font-size:16px;line-height:1.5;color:var(--ink2)}
+.phone ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.phone li{position:relative;padding-left:30px}
+.phone li::before{content:"";position:absolute;left:0;top:4px;width:14px;height:14px;border:2px solid var(--ink)}
+.faq div[itemprop=text]{max-width:760px}
+.faq ul{margin:0 0 20px;padding-left:22px;font-size:17px;line-height:1.55;color:var(--ink2);display:flex;flex-direction:column;gap:6px}
+.faq table{border-collapse:collapse;margin:0 0 20px;width:100%;font-size:16px;line-height:1.45}
+.faq th,.faq td{border:1px solid var(--ink);padding:10px 12px;text-align:left;vertical-align:top;color:var(--ink2)}
+.faq th{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--olive);background:var(--paper2)}
+.faq td:first-child{white-space:nowrap;font-weight:600;color:var(--ink)}
+.credits{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:16px}
+.credits li{background:var(--paper);border:var(--rule);padding:18px 20px;display:flex;flex-direction:column;gap:6px}
+.credits .name{font:600 19px/28px var(--sans);color:var(--ink)}
+.credits span{font-size:15px;line-height:1.5;color:var(--ink2)}
+.credits .give{margin-top:auto;padding-top:6px;font:600 14px/24px var(--mono)}
 code{font:.9em var(--mono)}
 .agent{padding-top:56px;padding-bottom:72px;display:flex;flex-direction:column;gap:20px}
 .agent h1{font-size:clamp(32px,5vw,48px);line-height:1.05;letter-spacing:-.02em}
@@ -209,7 +235,7 @@ code{font:.9em var(--mono)}
 .prompt .doc{padding:24px 28px;font:15px/1.7 var(--mono)}
 .doc b{font-weight:600}
 @media (max-width:600px){.wrap{padding-left:16px;padding-right:16px}.fig{padding:16px}h2{font-size:32px}.oss h2{font-size:34px}.hero{padding-top:40px;gap:36px}.agent{padding-top:36px}
-.presets{display:flex;align-self:stretch}.presets button{flex:1 1 auto;padding:0 6px;font-size:13px}
+.presets{display:grid;grid-template-columns:1fr 1fr;align-self:stretch}.presets button{padding:0 6px;font-size:13px;border-bottom:var(--rule)}.presets button:nth-child(2n){border-right:0}.presets button:nth-last-child(-n+2){border-bottom:0}
 .total{padding:10px 12px;gap:8px;bottom:8px}.total .sum{font-size:12px}
 .total .acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));width:100%}.total .long{display:none}.total .btn{min-height:44px;font-size:14px;padding:0 10px;justify-content:center}}
 @media (max-width:420px){.readas .wrap{gap:6px 10px;font-size:12px;letter-spacing:.02em}.readas .seg{gap:4px}.readas button{padding:0 8px}.prompt .doc{padding:16px;font-size:13px}}
@@ -253,13 +279,22 @@ Menu</button>
 <div class="hero-copy">
 <p class="kicker">Free&nbsp;· Open source</p>
 <h1>The internet's down.<br> Your AI isn't.</h1>
-<p class="lede">Ask anything, check a symptom, fix a leak, find the nearest hospital. It all lives on your laptop or a drive you can grab, and starts with a double-click.</p>
+<p class="lede">Ask anything, look up first aid, fix a leak, find the nearest hospital. It all lives on your laptop or a drive you can grab, and starts with a double-click.</p>
 <div class="ctas">
 <a class="btn primary" href="https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip">Download free</a>
 <a class="btn" href="https://github.com/tudor-city-ventures/tinfoilkit">View on GitHub</a>
 <a class="star" href="https://github.com/tudor-city-ventures/tinfoilkit"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2L14.6 9L21.9 9.4L16.2 14L18.1 21L12 17L5.9 21L7.8 14L2.1 9.4L9.4 9z" fill="currentColor"/></svg>Star on GitHub</a>
 </div>
 <p class="cta-note">Then double-click SETUP on a Mac. It asks whether the kit goes on the Mac or an external drive.</p>
+<details class="first-run">
+<summary>First time on a Mac? Here's what to click.</summary>
+<ol>
+<li>Double-click SETUP. When macOS says it can't verify it, click Done.</li>
+<li>Open System Settings &gt; Privacy &amp; Security, scroll down and click Open Anyway. You only do this once.</li>
+<li>If it offers Apple's free Command Line Tools, click Install. SETUP waits, then carries on.</li>
+<li>If it asks whether Terminal may use files on a removable volume, click Allow.</li>
+</ol>
+</details>
 </div>
 <figure class="fig viz">
 <canvas role="img" aria-label="A dotted globe spins up and streams into a drive until the drive holds the whole kit. Then the Wi-Fi goes off, the globe goes dark, and the drive lights up what it holds: Wikipedia, AI models, maps and guides."></canvas>
@@ -287,9 +322,9 @@ Menu</button>
 <div class="tile"><span class="tag">TAB 01</span><h3>Ask</h3>
 <p>Ask in plain words, like you would online. The answer comes from the library, with numbered sources you can open. Works even with the AI off.</p></div>
 <div class="tile"><span class="tag">TAB 02</span><h3>AI chat</h3>
-<p>A chat AI that runs on your laptop instead of the cloud. Show it a photo of a rash, a part or a label and ask about it.</p></div>
+<p>A chat AI that runs on your laptop instead of the cloud. Show it a photo of a broken part or a label and ask about it.</p></div>
 <div class="tile"><span class="tag">TAB 03</span><h3>Library</h3>
-<p>All of Wikipedia with pictures, medical references, iFixit repair guides, Army field manuals and FEMA's emergency guides. All searchable.</p></div>
+<p>All of Wikipedia with pictures, the WikiMed medical encyclopedia, Army field and medical manuals, iFixit repair guides and FEMA's emergency guides. All searchable.</p></div>
 <div class="tile"><span class="tag">TAB 04</span><h3>Map</h3>
 <p>Search an address, get driving or walking directions, or find the nearest hospital or pharmacy.</p></div>
 </div>
@@ -299,6 +334,14 @@ Menu</button>
 <div class="step"><b>03 · TEST IT</b><p>Turn Wi-Fi off and double-click <code>START-HERE</code>. Everything should still answer.</p></div>
 <div class="step"><b>04 · UPDATE IT</b><p>Whenever you like, double-click <code>SETUP</code> again while you're online. New models, books and maps arrive, and only what changed downloads.</p></div>
 </div>
+<aside class="phone" aria-labelledby="phone-head">
+<h3 id="phone-head">Do this on your phone today</h3>
+<p>In an outage, your phone is usually the thing in your hand. Two free apps give it the basics offline:</p>
+<ul>
+<li><a href="https://kiwix.org/">Kiwix</a>: install it, then download WikiMed, the medical encyclopedia (about 2&nbsp;GB).</li>
+<li><a href="https://organicmaps.app/">Organic Maps</a>: install it, then download the map of your region. It finds your way by GPS, with no signal.</li>
+</ul>
+</aside>
 </div>
 </section>
 
@@ -312,6 +355,7 @@ Menu</button>
 <button type="button" data-preset="essentials" aria-pressed="false">Essentials</button>
 <button type="button" data-preset="recommended" aria-pressed="true">Recommended</button>
 <button type="button" data-preset="everything" aria-pressed="false">Everything</button>
+<button type="button" data-preset="no-ai" aria-pressed="false">No AI</button>
 </div>
 <div id="groups" style="display:flex;flex-direction:column;gap:32px"><p class="mono">Loading sources…</p></div>
 <div class="ways">
@@ -372,16 +416,41 @@ First ask me about my computer, where the kit should live, how much space I have
 <div class="faq" itemscope itemtype="https://schema.org/FAQPage">
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What is Tinfoil Kit?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Tinfoil Kit is a free, open-source kit for when the internet goes down: an AI that runs on your laptop, all of Wikipedia, medical and repair guides, and maps with directions, kept on the laptop itself or on an external drive. You set it up while you're online. After that, double-click to start it, and it all works with no internet.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Is the AI as good as ChatGPT?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Not quite. It's an open model small enough to run on a laptop, so it's a step behind the biggest cloud AIs. It's good at explaining and summarizing, the Ask tab answers from the library with sources, and none of it needs the internet.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Do I need the AI?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">No. The library and the map work without it, and with the AI off, the Ask tab still searches every book and shows the best passages, with links to the full pages. To leave it out entirely, pick No AI in the kit builder: the same books and maps, with no models to download.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What do I need?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">A Mac with an M chip (M1 or newer) to set it up. The kit goes on the Mac's own disk or on an external SSD, and a drive also starts on Windows and Linux. 32&nbsp;GB of memory runs the full-size AI; with less, you get a lighter one. The recommended kit is about 300&nbsp;GB, and the kit builder above shows the total for your picks. On the Mac's own disk, the kit always leaves 50&nbsp;GB free.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Which AI will my laptop run?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><div itemprop="text"><p>It depends on how much memory it has. On a Mac or a Linux PC the kit picks for you when it starts; on Windows, pick from the model menu on the Ask tab.</p><table><thead><tr><th scope="col">Memory</th><th scope="col">The AI it runs</th></tr></thead><tbody><tr><td>8&nbsp;GB</td><td>Gemma 4 E4B, the small model (5&nbsp;GB). Close other apps before you ask it something.</td></tr><tr><td>16 to 24&nbsp;GB</td><td>Gemma 4 12B, the mid-size model (7&nbsp;GB). It reads photos too.</td></tr><tr><td>32&nbsp;GB or more</td><td>Inkling 2 Mini, the default (18&nbsp;GB). Qwen3.8 27B and Gemma 4 26B fit too, for a second opinion.</td></tr></tbody></table><p>To see your memory, open About This Mac, or Settings &gt; System &gt; About on Windows. With less than 32&nbsp;GB, switch off the three big models in the kit builder to save about 50&nbsp;GB. On a Windows or Linux PC the AI runs on the graphics card, so without a good one, use Gemma 4 E4B.</p></div></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Does anything leave my laptop?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">No. Once the kit is filled, every part runs on your laptop at 127.0.0.1 with no account and no telemetry. The only time it goes online is when you run SETUP or <code>./kit sync</code> to download updates, and then it only talks to the places it downloads from: GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus anything you add to kit.json.</p></div></details>
-<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Can I trust the AI's answers?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Treat it like a well-read friend, not a doctor. In the Ask tab it answers from the library and numbers its sources, so you can open the page it used and check. For anything serious, read the source itself.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What does setup change on my computer?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><div itemprop="text"><p>Very little. Everything the kit downloads goes in one folder, TinfoilKit, in your home folder or on the drive, and nothing runs unless you start it. Starting the kit on Windows or Linux changes nothing outside that folder. On a Mac:</p><ul><li>macOS asks you once to allow SETUP, since it's a script from the internet rather than an App Store app.</li><li>SETUP offers to install Apple's free Command Line Tools if they're missing: the kit's code runs on the Python they include.</li><li>The kit lifts macOS's "downloaded from the internet" mark from its own files, and signs a downloaded program on your Mac if it won't start otherwise, so everything opens with a double-click in an outage.</li><li>A kit in your home folder stays out of Time Machine backups, and a kit drive stays out of Spotlight.</li></ul><p>Two more happen only if you ask: a home server can start the kit with the computer (<code>./kit autostart on</code>) and share it on your home network behind an access code. UNINSTALL deletes the folder and undoes the rest. The Command Line Tools stay, since other apps use them too.</p></div></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What's the catch?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">None. It's open source under the MIT license, with no account, no telemetry in the kit and no analytics on this site. It's a side project from the team behind <a href="https://dotheysupportit.com">Do They Support It</a>. What it costs you is disk space and a few hours of downloading.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Can I trust the AI's answers?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Check it, the way you'd check a well-read friend. In the Ask tab it answers from the library and numbers its sources, so you can open the page it used. For anything medical, the kit is a place to look things up, in WikiMed and the Army's medical manuals. It isn't a doctor: read the source, and get trained help when you can.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">What's under the hood?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Open-source parts, all served on your laptop at 127.0.0.1: llama.cpp's llama-server runs the AI, kiwix-serve runs the library, and Protomaps, Photon and GraphHopper run the map. One file, kit.json, lists every source. <code>./kit sync</code> checks each download against its publisher's checksum and keeps the old version until the new one verifies. The <a href="https://github.com/tudor-city-ventures/tinfoilkit#readme">README</a> has the commands.</p></div></details>
-<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Can my family use it from their phones?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Yes. Start it with <code>--share</code> and any phone on the same Wi-Fi or hotspot can open the page. No internet is needed for that, only a local network. Anyone else on that network can open it too, so share on your own hotspot or home Wi-Fi.</p></div></details>
+<details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Can my family use it from their phones?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Yes. Sharing stays off until you turn it on: run <code>./kit share on</code>, or start the kit with <code>--share</code> for one session. Phones and laptops on your Wi-Fi or hotspot then open the address it shows and type its 8-digit access code, or scan its QR code. No internet is needed, only a local network, and other devices and websites can't use it without the code. For a computer that stays on, <code>bash SETUP.command --home-server</code> sets it up to share and to start with the computer. Sharing works from a Mac or Linux for now.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">How long does it run on battery?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">The big model uses a lot of power: expect a couple of hours of active use on a laptop. The small model uses much less, and the Library tab with the AI off uses almost nothing. A USB-C power station and a folding solar panel keep it going.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Does it run on Windows or Linux?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Yes, from an external drive formatted exFAT and set up on a Mac: double-click START-HERE-Windows.bat on Windows, or run <code>bash START-HERE.command</code> on Linux. The AI and the library start; the map runs on a Mac only. Without a strong graphics card the AI is slower, and these paths are tested less than the Mac.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">How do I update it?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Whenever you like, while you're online, double-click SETUP again. There's no schedule. It gets the newest version of the kit first, so models, books and maps added since arrive too, and the picks you made stay. Only what changed downloads, and your old files keep working until the new ones check out.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">How do I remove it?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Double-click UNINSTALL in the kit folder. Once you type delete, it removes the kit and everything it downloaded, and on a drive it leaves everything else alone.</p></div></details>
 <details itemscope itemprop="mainEntity" itemtype="https://schema.org/Question"><summary itemprop="name">Is all this content legal to download?</summary><div itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer"><p itemprop="text">Yes, for your own use. The kit downloads everything straight from its publishers: Kiwix packages openly licensed sites like Wikipedia, WikiMed and iFixit, and US government guides, and the AI models are open-weight models published for anyone to run. Each keeps its own license, and some, like iFixit's, forbid commercial use, so don't sell drives you've filled. <a href="https://github.com/tudor-city-ventures/tinfoilkit/blob/main/THIRD-PARTY.md">Every source and its license</a>.</p></div></details>
+</div>
+</section>
+
+<section id="built-on" class="band" data-for="human">
+<div class="wrap section">
+<div style="display:flex;flex-direction:column;gap:10px">
+<p class="kicker">Built on</p>
+<h2>The kit is glue. These projects do the work.</h2>
+<p style="font-size:18px;line-height:1.5;color:var(--ink2);max-width:680px">Tinfoil Kit downloads, checks and starts free software and data that other people make. If the kit helps you, help them.</p>
+</div>
+<ul class="credits">
+<li><a class="name" href="https://kiwix.org/">Kiwix</a><span>Packs Wikipedia and hundreds of other sites into files that work offline, and serves the library.</span><a class="give" href="https://support.kiwix.org/">Donate to Kiwix</a></li>
+<li><a class="name" href="https://www.wikipedia.org/">Wikipedia</a><span>Most of the library: Wikipedia and its sister sites, written by volunteers.</span><a class="give" href="https://donate.wikimedia.org/">Donate to Wikipedia</a></li>
+<li><a class="name" href="https://www.openstreetmap.org/">OpenStreetMap</a><span>The map, drawn by millions of volunteers: streets, addresses, hospitals.</span><a class="give" href="https://supporting.openstreetmap.org/">Support OpenStreetMap</a></li>
+<li><a class="name" href="https://protomaps.com/">Protomaps</a><span>Turns OpenStreetMap into one map file, and gives it its style.</span><a class="give" href="https://github.com/sponsors/protomaps">Sponsor Protomaps</a></li>
+<li><a class="name" href="https://maplibre.org/">MapLibre</a><span>Draws the map in your browser.</span><a class="give" href="https://opencollective.com/maplibre">Donate to MapLibre</a></li>
+<li><a class="name" href="https://github.com/ggml-org/llama.cpp">llama.cpp</a><span>Runs the AI on your laptop.</span></li>
+<li><a class="name" href="https://github.com/graphhopper/graphhopper">GraphHopper</a><span>Plans driving and walking routes, and hosts the address data.</span></li>
+<li><a class="name" href="https://github.com/komoot/photon">Photon</a><span>Finds addresses and places.</span></li>
+</ul>
+<p style="font-size:16px;line-height:1.5;color:var(--ink2);max-width:760px">For llama.cpp, GraphHopper and Photon, a star on GitHub or a good bug report helps. The AI models come from Thinking Machines, Alibaba's Qwen team and Google, the map extracts from Geofabrik, and the books from Wikipedia's sister sites, iFixit, LibreTexts, Stack Exchange, the US Army, FEMA and more. <a href="https://github.com/tudor-city-ventures/tinfoilkit/blob/main/THIRD-PARTY.md">Every source and its license</a>.</p>
 </div>
 </section>
 
@@ -453,6 +522,7 @@ View the code on GitHub</a>
 
   function gb(bytes) {
     if (bytes == null) return "size TBD";
+    if (bytes === 0) return "0 GB";   // a group with nothing picked, like the models under No AI
     var g = bytes / 1e9;
     return "~" + (g < 1 ? "<1" : g < 10 ? g.toFixed(1).replace(/\.0$/, "") : Math.round(g)) + " GB";
   }

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build everything the end-to-end suite's mock internet serves, into tests/work/remote.
-# With "drive", also the real Mac, Windows and Linux Vulkan builds the drive test installs (tests/drive_test.sh).
+# With "drive", also the real Mac, Windows and Linux Vulkan builds the drive test installs (tests/drive_test.sh),
+# and the Python SETUP-Windows.bat gets (tests/drive_windows.ps1).
 # Linux x86_64 only. Needs internet (GitHub, download.kiwix.org, npm, PyPI) the first time.
 # Python deps: pip install gguf numpy libzim playwright && playwright install chromium
 set -eo pipefail
@@ -13,9 +14,10 @@ MAPLIBRE=5.24.1        # the newest 5.x the mock offers; 6.x ships ESM only
 BASEMAPS=5.7.2
 GH_AUTH=(); [ -n "${GITHUB_TOKEN:-}" ] && GH_AUTH=(-H "Authorization: Bearer $GITHUB_TOKEN")
 
-get() {   # get URL FILE: download once, reuse on later runs
+get() {   # get URL FILE: download once, reuse on later runs. The GitHub token goes to GitHub only.
   [ -s "$2" ] && return
-  curl -fsSL --retry 3 "${GH_AUTH[@]}" -o "$2.part" "$1" || { echo "download failed: $1" >&2; return 1; }
+  local auth=(); case "$1" in https://api.github.com/*|https://github.com/*) auth=("${GH_AUTH[@]}") ;; esac
+  curl -fsSL --retry 3 "${auth[@]}" -o "$2.part" "$1" || { echo "download failed: $1" >&2; return 1; }
   mv -f "$2.part" "$2"
 }
 md5() { (cd "$(dirname "$1")" && md5sum "$(basename "$1")" > "$(basename "$1").md5"); }
@@ -126,6 +128,13 @@ print("kiwix-tools_%s-%s.%s" % (plat, newest, ext))' "$TMP/kiwix.html" "$plat")
     get "https://download.kiwix.org/release/kiwix-tools/$name" "$DL/$name"
     cp "$DL/$name" "$R/release/kiwix-tools/kiwix-tools_${plat%%.*}-3.8.2.${plat#*.}"
   done
+  # The very Python SETUP-Windows.bat names, which must match the checksum there
+  pyv=$(tr -d '\r' < "$TESTS/../SETUP-Windows.bat" | sed -n 's/^set "PYV=\(.*\)"$/\1/p')
+  pysha=$(tr -d '\r' < "$TESTS/../SETUP-Windows.bat" | sed -n 's/^set "PYSHA=\(.*\)"$/\1/p')
+  get "https://api.nuget.org/v3-flatcontainer/python/$pyv/python.$pyv.nupkg" "$DL/python.$pyv.nupkg"
+  mkdir -p "$R/nuget" && cp "$DL/python.$pyv.nupkg" "$R/nuget/python.nupkg"
+  python3 -c 'import hashlib, sys; sys.exit(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() != sys.argv[2])' \
+    "$R/nuget/python.nupkg" "$pysha" || { echo "python.$pyv.nupkg doesn't match the checksum in SETUP-Windows.bat"; exit 1; }
 fi
 
 rm -rf "$TMP"

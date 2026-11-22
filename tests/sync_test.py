@@ -114,6 +114,10 @@ try:
 
     rc, out = kit("plan")
     check("plan lists new items and broken entries", rc == 0 and out.count("NEW") == 4 and out.count("ERROR") == 2, out)
+    rc, out = kit("plan", "--essentials")
+    check("plan --essentials: the AI this computer runs and the most important books, nothing else",
+          rc == 0 and out.count("NEW") == 2 and "Tiny" in out and "testmed_en_all_maxi" in out and "Two" not in out
+          and "testsurvival" not in out and "ERROR" not in out, out)
 
     rc, out = kit("sync", "-y")
     check("sync exits 1 when entries are broken", rc == 1, f"exit {rc}")
@@ -133,6 +137,20 @@ try:
     write_cfg()
     rc, out = kit("sync", "-y")
     check("second sync has nothing to do", rc == 0 and "Everything is up to date." in out, out)
+
+    # SETUP's first run gets the essentials first, then the rest.
+    ess = work / "essentials"
+    shutil.copytree(TESTS.parent / "tools", ess / "tools")
+    (ess / "kit.json").write_text(json.dumps({"settings": cfg["settings"], "models": [cfg["models"][1]],
+                                              "library": cfg["library"][:2]}))
+    rc, out = kit("sync", "-y", "--essentials", root=ess)
+    ess_state = json.loads((ess / ".kit" / "state.json").read_text())
+    check("sync --essentials: gets only those, and doesn't count as a complete sync",
+          rc == 0 and (ess / "models/Two/Two-Q4_K_M.gguf").exists() and list((ess / "library").glob("testmed_*.zim"))
+          and not list((ess / "library").glob("testsurvival_*")) and "last_sync" not in ess_state, out)
+    rc, out = kit("sync", "-y", root=ess)
+    check("sync after the essentials: gets the rest", rc == 0 and list((ess / "library").glob("testsurvival_*.zim"))
+          and "last_sync" in json.loads((ess / ".kit" / "state.json").read_text()), out)
 
     rc, out = kit("verify")
     check("verify passes", rc == 0 and "All 5 files OK" in out, out)
@@ -505,6 +523,7 @@ case "$1" in
         [ $SYNC = 1 ] && printf 'Problems (everything else is done):\n  - models/Big: download failed\nRe-run ./kit sync\n' >> logs/sync-2026-01-01.log
         exit $SYNC;;
   test) exit $TEST;;
+  share|autostart) echo "$*" >> home.log;;
 esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     def kit_folder(path, git=False):
@@ -523,10 +542,11 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     setup = kit_folder(work / "setup")
     (setup / ".kit").mkdir()     # set up before, so SETUP doesn't ask where it goes
 
-    def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="y\nn\n\n", **env_extra):
+    def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="y\nn\n\n", args=(), **env_extra):
         shutil.copy(TESTS.parent / "SETUP.command", folder)
         (folder / "calls.log").write_text("")
-        p = subprocess.run(["bash", str(folder / "SETUP.command")], input=answers, capture_output=True, text=True, timeout=60,
+        (folder / "home.log").write_text("")
+        p = subprocess.run(["bash", str(folder / "SETUP.command"), *args], input=answers, capture_output=True, text=True, timeout=60,
                            env={**os.environ, "PLAN": str(plan), "SYNC": str(sync), "TEST": str(test), "UPDATE": str(update),
                                 **env_extra})
         return p.returncode, p.stdout, (folder / "calls.log").read_text().split()[1::2]
@@ -555,6 +575,20 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("SETUP: Ctrl-C during the download", rc == 130 and "Stopped" in out and calls == ["update", "plan", "sync"], out)
     rc, out, calls = run_setup(plan=1)
     check("SETUP: offline: stops before asking to download", rc == 1 and calls == ["update", "plan"] and "Start downloading" not in out, out)
+    home = ["share on", "autostart on", "share"]
+    check("SETUP: a normal setup doesn't share the kit or start it with the computer", (setup / "home.log").read_text() == "")
+    rc, out, calls = run_setup(args=("--home-server",), answers="y\n\n")
+    check("SETUP --home-server: shares the kit, starts it with the computer, shows the address, and doesn't open it",
+          rc == 0 and calls[:4] == ["update", "plan", "sync", "test"] and (setup / "home.log").read_text().splitlines() == home
+          and "Home server" in out and "Open the kit now" not in out and "double-click START-HERE" not in out, out)
+    rc, out, calls = run_setup(update=3, args=("--home-server",), answers="y\n\n")
+    check("SETUP --home-server: still a home server after the kit updates itself and starts over",
+          rc == 0 and "(new version)" in out and (setup / "home.log").read_text().splitlines() == home, out)
+    rc, out, calls = run_setup(sync=1, args=("--home-server",), answers="y\n\n")
+    check("SETUP --home-server: some downloads failed but the kit works: shares it anyway",
+          rc == 1 and "didn't finish" in out and (setup / "home.log").read_text().splitlines() == home, out)
+    rc, out, calls = run_setup(test=1, args=("--home-server",), answers="y\n\n")
+    check("SETUP --home-server: checks failed: doesn't share it", rc == 1 and (setup / "home.log").read_text() == "", out)
 
     # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
     # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.
@@ -652,7 +686,8 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         (gone / "library" / "book.zim").write_bytes(os.urandom(5000))
         shutil.copy(TESTS.parent / "UNINSTALL.command", gone)
         if kit_files:
-            (gone / "kit").write_text("#!/bin/bash\n")
+            (gone / "kit").write_text(f'#!/bin/bash\necho "$*" >> "{work / "uninstall-kit.log"}"\n')
+            (gone / "kit").chmod(0o755)
             (gone / "tools").mkdir()
             (gone / "tools" / "kit.py").write_text("# kit\n")
         (gone.parent / "keep.txt").write_text("not the kit's")
@@ -660,15 +695,19 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
                            timeout=60, env={**os.environ, "HOME": str(work)})
         return p.returncode, p.stdout, gone
 
+    kit_log = work / "uninstall-kit.log"
+    kit_log.write_text("")
     rc, out, gone = uninstall(answers="\n\n")
     check("UNINSTALL: says what it deletes, and just Return keeps everything",
           rc == 0 and "This deletes Tinfoil Kit" in out and "can't be undone" in out and "Kept" in out
-          and (gone / "models/Tiny/Tiny.gguf").exists(), out)
+          and (gone / "models/Tiny/Tiny.gguf").exists() and kit_log.read_text() == "", out)
     rc, out, gone = uninstall(answers="yes\n\n")
     check("UNINSTALL: anything but delete keeps it", rc == 0 and "Kept" in out and (gone / "library/book.zim").exists(), out)
     rc, out, gone = uninstall(answers="delete\n\n")
     check("UNINSTALL: typing delete removes the kit and its downloads, and nothing beside it",
           rc == 0 and not gone.exists() and (gone.parent / "keep.txt").exists() and "Tinfoil Kit is gone" in out, out)
+    check("UNINSTALL: a home server's kit stops starting with the computer first", kit_log.read_text() == "autostart off\n",
+          kit_log.read_text())
     rc, out, gone = uninstall(answers="delete\n\n", kit_files=False)
     check("UNINSTALL: refuses a folder that isn't a kit", rc == 1 and gone.exists() and "doesn't look like a Tinfoil Kit" in out, out)
     rc, out, gone = uninstall(answers="DELETE\n\n")
@@ -738,6 +777,78 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         check(f"launcher: {mem_gb} GB of memory starts {want}", got == want and (want == "Big" or f"{mem_gb} GB of memory" in out), out)
     got, out = launch(16, "--model=Big")
     check("launcher: --model wins over memory", got == "Big", out)
+    (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Gone", "library_port": rport, "ai_port": rport}}))
+    got, out = launch(24)
+    check("launcher: without the default model, the biggest that fits", got == "Mid" and "too little" not in out, out)
+
+    # ./kit fit: which model this computer runs, and asking before downloading the ones too big for it.
+    fk = work / "fit"
+    shutil.copytree(TESTS.parent / "tools", fk / "tools")
+    fit_json = """{
+  "settings": {"default_model": "Big"},
+  "models": [
+    {
+      "id": "Big",
+      "type": "hf",
+      "note": "Default. ~18 GB"
+    },
+    {
+      "id": "Mid",
+      "type": "hf",
+      "note": "Mid-size. ~7.2 GB"
+    },
+    {
+      "id": "Small",
+      "type": "hf",
+      "note": "Small. ~5.3 GB"
+    }
+  ]
+}
+"""
+    (fk / "kit.json").write_text(fit_json)
+
+    def fit(mem_gb, *args, answers=""):
+        p = subprocess.run([sys.executable, str(fk / "tools" / "kit.py"), "--root", str(fk), "fit", *args], input=answers,
+                           capture_output=True, text=True, timeout=60, env={**os.environ, "KIT_MEMORY_MB": str(mem_gb * 1024)})
+        return p.returncode, p.stdout + p.stderr
+
+    rc, out = fit(32)
+    check("kit fit: enough memory for the default model", rc == 0 and "32 GB of memory, so its AI will be Big" in out
+          and "can't run" not in out, out)
+    rc, out = fit(16)
+    check("kit fit: too little for the default: the biggest that fits, and which ones it can't run (changes nothing)",
+          rc == 0 and "its AI will be Mid" in out and "It can't run Big: it needs 32 GB of memory or more" in out
+          and "./kit fit --skip" in out and (fk / "kit.json").read_text() == fit_json, out)
+    rc, out = fit(16, "--ask", answers="\n")
+    on = {m["id"]: m.get("enabled", True) for m in json.loads((fk / "kit.json").read_text())["models"]}
+    added = [line for line in (fk / "kit.json").read_text().splitlines() if line not in fit_json.splitlines()]
+    check("kit fit --ask: just Return skips them, in kit.json, changing only that line",
+          rc == 0 and "Download them anyway? [y/N]" in out and on == {"Big": False, "Mid": True, "Small": True}
+          and added == ['      "enabled": false,'], out)
+    rc, out = fit(16, "--ask")
+    check("kit fit --ask: doesn't ask again about a skipped one", rc == 0 and "?" not in out and "Big" not in out, out)
+    rc, out = fit(64, "--ask", answers="\n")
+    check("kit fit --ask: a computer with more memory offers them back, and kit.json is as it was",
+          rc == 0 and "skipped before on a computer with less memory" in out and "Its AI will be Big." in out
+          and (fk / "kit.json").read_text() == fit_json, out)
+    rc, out = fit(16, "--ask", answers="y\n")
+    check("kit fit --ask: yes keeps them", rc == 0 and (fk / "kit.json").read_text() == fit_json, out)
+    rc, out = fit(8, "--json")
+    report = json.loads(out)
+    check("kit fit --json: on 8 GB nothing fits, so the smallest, and the rest are too big",
+          rc == 0 and report["runs"] == "Small" and report["too_big"] == ["Big", "Mid"], out)
+    (fk / ".kit" / "state.json").write_text(json.dumps({"items": {"models/Big": {}}}))
+    rc, out = fit(16, "--skip")
+    check("kit fit --skip: leaves alone a model that's already downloaded", rc == 0 and "can't run" not in out
+          and (fk / "kit.json").read_text() == fit_json, out)
+
+    # The kit builder's No AI preset switches every model off: ./kit test doesn't ask for one
+    noai = work / "noai"
+    shutil.copytree(TESTS.parent / "tools", noai / "tools")
+    (noai / "kit.json").write_text(json.dumps({"settings": {}, "models": [{"id": "Tiny", "enabled": False}],
+                                               "library": [], "maps": {"enabled": False}}))
+    rc, out = kit("test", root=noai)
+    check("test: a kit with every model off doesn't ask for one", "models present" not in out and "without the AI" in out, out)
 
     # Another program on the library's port (the mock internet, here): the library starts on the next one.
     fake = work / "fake-kiwix-serve"
@@ -793,6 +904,32 @@ server.serve_forever()
         except RuntimeError:
             refused = True
         check(f"unzip in Python refuses a path outside the folder: {bad}", refused and not (work / "escape.txt").exists())
+    # A Mac's or Linux PC's programs come with links, which exFAT can't hold: set up from Windows, they're copies.
+    with tarfile.open(ex / "links.tar.gz", "w:gz") as tf:
+        for name, kind, target in (("lib/libfoo.dylib", tarfile.SYMTYPE, "libfoo.1.dylib"),    # a link to a link
+                                   ("lib/libfoo.1.dylib", tarfile.SYMTYPE, "libfoo.1.2.dylib"),
+                                   ("lib/libfoo.1.2.dylib", tarfile.REGTYPE, ""),
+                                   ("lib/hard.dylib", tarfile.LNKTYPE, "lib/libfoo.1.2.dylib"),
+                                   ("legal", tarfile.SYMTYPE, "lib"),    # a folder
+                                   ("out", tarfile.SYMTYPE, "../../outside.txt"), ("abs", tarfile.SYMTYPE, "/etc/passwd"),
+                                   ("loop", tarfile.SYMTYPE, ".")):
+            ti = tarfile.TarInfo(name)
+            ti.type, ti.linkname = kind, target
+            ti.size = 3 if kind == tarfile.REGTYPE else 0
+            tf.addfile(ti, io.BytesIO(b"lib") if kind == tarfile.REGTYPE else None)
+    kp.untar_py(ex / "links.tar.gz", ex / "l", "gz")
+    copies = [ex / "l" / n for n in ("lib/libfoo.dylib", "lib/libfoo.1.dylib", "lib/hard.dylib", "legal/libfoo.dylib")]
+    check("untar in Python: links become copies, of a link and of a folder too",
+          all(p.exists() and p.read_bytes() == b"lib" and not p.is_symlink() for p in copies)
+          and not any(os.path.lexists(ex / "l" / n) for n in ("out", "abs", "loop")), sorted(map(str, (ex / "l").rglob("*"))))
+    with zipfile.ZipFile(ex / "links.zip", "w") as z:
+        z.writestr("bin/llama-server", b"prog")
+        info = zipfile.ZipInfo("bin/llama")
+        info.external_attr = 0o120777 << 16
+        z.writestr(info, "llama-server")
+    kp.unzip_py(ex / "links.zip", ex / "lz")
+    check("unzip in Python: a link becomes a copy",
+          (ex / "lz/bin/llama").read_bytes() == b"prog" and not (ex / "lz/bin/llama").is_symlink())
     path = os.environ["PATH"]
     try:
         os.environ["PATH"] = str(ex / "empty")    # no unzip or tar: the Python fallback takes over

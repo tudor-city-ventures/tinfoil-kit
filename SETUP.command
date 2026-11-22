@@ -1,12 +1,16 @@
 #!/bin/bash
 # Double-click me (macOS) to set up Tinfoil Kit, and again whenever you want the newest models, books and maps.
 # Linux: bash SETUP.command
+# A home server, a computer that stays on (no screen needed): bash SETUP.command --home-server
 # The first time, it asks whether the kit goes on an external drive or on this Mac, and moves it there.
 # Then it's ./kit update, ./kit sync and ./kit test, with checks and plain-English prompts for first-timers.
 # The whole script is one { } block, so bash reads all of it before running any: ./kit update can replace this
 # file, and the first run moves it.
 {
 cd "$(dirname "$0")" || exit 1
+# --home-server: at the end, share the kit on the home network behind an access code, and start it whenever the
+# computer starts. It goes in the environment because this script starts itself again after moving or updating the kit.
+for a in "$@"; do [ "$a" = --home-server ] && export KIT_HOME_SERVER=1; done
 KIT="$(pwd)"
 NAME=TinfoilKit    # the kit's folder: at the top of a drive, or in the home folder
 MAC=0; [ "$(uname -s)" = Darwin ] && MAC=1
@@ -178,7 +182,9 @@ checks() {
 
 all_set() {
   say "All set. Tinfoil Kit is $(where_kit), in $KIT"
-  if on_this_mac && [ "$KIT" = "$HOME/$NAME" ] && [ $MAC = 1 ]; then
+  if [ "${KIT_HOME_SERVER:-}" = 1 ]; then
+    :    # it starts by itself: home_server says so
+  elif on_this_mac && [ "$KIT" = "$HOME/$NAME" ] && [ $MAC = 1 ]; then
     echo "In an outage: in Finder choose Go > Home, open $NAME and double-click START-HERE.command. No internet needed."
   elif on_this_mac; then
     echo "In an outage: open that folder and double-click START-HERE.command. No internet needed."
@@ -192,6 +198,15 @@ all_set() {
   echo "  SETUP.command      $again whenever you want the newest AI models, books and maps (needs internet)."
   echo "  UNINSTALL.command  removes the kit and everything it downloaded."
   [ $MAC = 1 ] && open "$KIT" 2>/dev/null    # show where it lives
+}
+
+# Phones and laptops on the home network open the kit with its access code, and it starts with the computer.
+home_server() {
+  say "Home server: sharing the kit on your home network, and starting it whenever $THIS starts."
+  ./kit share on >/dev/null
+  ./kit autostart on
+  echo
+  ./kit share
 }
 
 # --placed: the first run's copy of this script chose this place and moved the kit here.
@@ -241,6 +256,7 @@ tested=$?
 [ $tested -eq 130 ] && { say "Stopped."; finish 130; }
 if [ $tested -eq 0 ] && [ $rc -eq 0 ]; then
   all_set
+  [ "${KIT_HOME_SERVER:-}" = 1 ] && { home_server; finish; }
   ask "Open the kit now?" && exec bash START-HERE.command
   finish
 fi
@@ -248,7 +264,12 @@ if [ $tested -eq 0 ]; then
   say "Everything in the kit works, but some downloads didn't finish:"
   problems
   echo
-  echo "You can use the kit now: double-click START-HERE.command. Double-click SETUP again later to get the rest."
+  if [ "${KIT_HOME_SERVER:-}" = 1 ]; then
+    home_server
+    say "Run SETUP again later to get the rest."
+  else
+    echo "You can use the kit now: double-click START-HERE.command. Double-click SETUP again later to get the rest."
+  fi
   finish 1
 fi
 say "Some checks failed. The messages above say which; logs are in the logs folder."

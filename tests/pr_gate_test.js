@@ -1,18 +1,22 @@
-// Runs the github-script in .github/workflows/pr-gate.yml against fake pull requests and a fake GitHub API.
+// Runs the github-scripts in .github/workflows/pr-gate.yml against fake pull requests and a fake GitHub API.
 // Usage: node tests/pr_gate_test.js
 const fs = require("fs");
 const path = require("path");
 
 const yml = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "pr-gate.yml"), "utf8").split("\n");
-const at = yml.findIndex((l) => /^\s+script: \|\s*$/.test(l));
-const indent = yml[at + 1].match(/^ */)[0].length;
-const body = [];
-for (const l of yml.slice(at + 1)) {
-  if (l.trim() && l.match(/^ */)[0].length < indent) break;
-  body.push(l.slice(indent));
-}
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
-const gate = new AsyncFunction("github", "context", "core", body.join("\n"));
+function script(job) {    // the `script: |` block of that job
+  const at = yml.findIndex((l, i) => /^\s+script: \|\s*$/.test(l) && i > yml.indexOf(`  ${job}:`));
+  const indent = yml[at + 1].match(/^ */)[0].length;
+  const body = [];
+  for (const l of yml.slice(at + 1)) {
+    if (l.trim() && l.match(/^ */)[0].length < indent) break;
+    body.push(l.slice(indent));
+  }
+  return new AsyncFunction("github", "context", "core", body.join("\n"));
+}
+const gate = script("gate");
+const guard = script("protected-files");
 
 const REPO = { owner: "tudor-city-ventures", repo: "tinfoilkit" };
 const ACCEPTED = { labels: [{ name: "accepted" }] };
@@ -77,6 +81,27 @@ async function expect(name, opts, closed) {
   await expect("maintainer reopened it", { action: "reopened", sender: { login: "travisbloom" } }, false);
   await expect("author reopened it, still no issue", { action: "reopened" }, true);
   await expect("author reopened it after linking one", { action: "reopened", pr: { body: "Closes #12" }, issues: { 12: ACCEPTED } }, false);
+
+  // protected-files: outside pull requests that touch CI, reviews or release signing fail the check.
+  async function files(names, pr = {}) {
+    let failure = null;
+    const list = names.map((n) => (Array.isArray(n) ? { filename: n[0], previous_filename: n[1] } : { filename: n }));
+    const p = { number: 50, changed_files: list.length, head: { repo: { full_name: "drive-by/tinfoilkit" } }, ...pr };
+    const github = { rest: { pulls: { listFiles: "listFiles" } }, paginate: async () => list };
+    await guard(github, { repo: REPO, payload: { pull_request: p } }, { info() {}, setFailed(m) { failure = m; } });
+    return failure;
+  }
+  check("an ordinary change passes", !(await files(["tools/kit.py", "kit.json", ".github/CONTRIBUTING.md", "site/index.html"])));
+  for (const f of [".github/workflows/check.yml", ".github/workflows/new.yaml", ".github/CODEOWNERS", ".github/dependabot.yml",
+                   ".github/release.sh", ".gitattributes", "tools/release-signers"]) {
+    const m = await files(["README.md", f]);
+    check(`${f} fails it, by name`, !!m && m.includes(f));
+  }
+  check("renaming a workflow away fails it", !!(await files([["old.yml", ".github/workflows/check.yml"]])));
+  check("a look-alike path passes", !(await files(["tests/.github/workflows/x.yml", "docs/CODEOWNERS.md", "tools/release-signers.md"])));
+  check("a branch in this repo skips it", !(await files([".github/workflows/check.yml"], { head: { repo: { full_name: "Tudor-City-Ventures/tinfoilkit" } } })));
+  check("a deleted fork is still checked", !!(await files([".github/CODEOWNERS"], { head: { repo: null } })));
+  check("more files than GitHub lists fails it", !!(await files(["README.md"], { changed_files: 3001 })));
 
   console.log(failed ? `${failed} FAILED, ${passed} passed` : `ALL ${passed} PASSED`);
   process.exit(failed ? 1 : 0);
