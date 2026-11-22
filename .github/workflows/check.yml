@@ -3,6 +3,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:    # a commit a workflow pushed starts no checks, and a release needs them
 permissions:
   contents: read
 jobs:

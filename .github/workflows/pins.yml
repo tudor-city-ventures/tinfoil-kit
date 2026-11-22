@@ -1,0 +1,66 @@
+name: pin program builds
+# Pins the newest build of every program, with its SHA-256, in tools/pins.json (./kit pins) and commits it when it
+# changed, so the next release installs exactly those builds. A program whose file changed under the same version
+# fails the run, and nothing is committed until someone finds out why.
+# Only the commit job can write to the repo, and it runs none of the kit's code: the build job, which talks to
+# every publisher, has a read-only token and hands its result over as an artifact.
+on:
+  schedule:
+    - cron: "41 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main     # a scheduled run starts on the default branch; releases are cut from main
+          persist-credentials: false
+      - run: ./kit pins
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: pins
+          path: tools/pins.json
+          retention-days: 1
+
+  commit:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: pins
+          path: ${{ runner.temp }}/pins
+      - name: commit the new pins, if every entry is a version and a SHA-256
+        env:
+          NEW: ${{ runner.temp }}/pins/pins.json
+        run: |
+          python3 -I - "$NEW" <<'PY'
+          import json, re, sys
+          pins = json.load(open(sys.argv[1]))
+          readme = pins.pop("_readme", [])
+          word = re.compile(r"[\w.+-]{1,64}")
+          ok = type(readme) is list and all(type(line) is str for line in readme) and pins and all(
+              word.fullmatch(k) and type(v) is dict and set(v) <= {"version", "sha256"}
+              and type(v.get("version")) is str and word.fullmatch(v["version"])
+              and re.fullmatch(r"[0-9a-f]{64}", str(v.get("sha256", "0" * 64))) for k, v in pins.items())
+          sys.exit(0 if ok else "The new pins.json doesn't look right, so it isn't committed. Run ./kit pins by hand.")
+          PY
+          cp "$NEW" tools/pins.json
+          git diff --quiet tools/ && { echo "no change"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Pin the newest program builds" tools/pins.json
+          git pull --rebase origin main
+          git push origin HEAD:main

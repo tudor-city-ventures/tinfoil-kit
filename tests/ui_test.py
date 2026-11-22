@@ -205,17 +205,25 @@ with sync_playwright() as p:
         # keeps a connection open, so the page never goes quiet: wait for the message box instead (the visible one:
         # the page has hidden text boxes too).
         bad.clear()
-        pending = {}
+        pending, sent = {}, []
         p3.on("request", lambda r: pending.__setitem__(r, r.url))
+        p3.on("response", lambda r: sent.append(f"{r.request.method} {r.status} {r.url}") if r.request.method != "GET" else None)
         p3.on("requestfinished", lambda r: pending.pop(r, None))
         p3.on("requestfailed", lambda r: pending.pop(r, None))
         try:
             p3.goto(share + "/ai/")
             box = p3.locator("textarea:visible, [contenteditable=true]:visible").first
             box.wait_for(timeout=30000)
-            with p3.expect_response(lambda r: "chat/completions" in r.url, timeout=120000) as reply:
-                box.fill("Hello")
-                box.press("Enter")
+            box.click()
+            p3.keyboard.type("Hello")    # real keys: the page's editor doesn't notice text set directly
+            send = p3.get_by_role("button", name="Send")
+            asked = ("chat/completions", "/responses", "/completion")    # whichever API this llama.cpp's page uses
+            with p3.expect_response(lambda r: r.request.method == "POST" and any(a in r.url for a in asked),
+                                    timeout=120000) as reply:
+                if send.count():
+                    send.first.click()
+                else:
+                    p3.keyboard.press("Enter")
             answered, why = reply.value.ok, reply.value.url
             p3.wait_for_timeout(2000)
         except Exception as e:    # a timeout: say what was on screen and what was still loading
@@ -223,7 +231,8 @@ with sync_playwright() as p:
             boxes = p3.evaluate("[...document.querySelectorAll('textarea, [contenteditable]')].map(e => e.tagName + ' '"
                                 " + e.offsetWidth + 'x' + e.offsetHeight + ' ' + getComputedStyle(e).visibility).join(', ')")
             why = (str(e).splitlines()[0] + " | on screen: " + " ".join(p3.inner_text("body").split())[:300]
-                   + " | text boxes: " + boxes + " | still loading: " + ", ".join(sorted(set(pending.values())))[:300])
+                   + " | text boxes: " + boxes + " | still loading: " + ", ".join(sorted(set(pending.values())))[:300]
+                   + " | sent: " + "; ".join(sent)[:300])
         p3.screenshot(path=os.path.join(SHOTS, "shot_share_ai_chat.png"))
         check("shared: AI chat answers through the gate", answered, why)
         # The page asks whether llama-server's own tools are on. They aren't, and the gate keeps them off.

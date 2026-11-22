@@ -210,8 +210,10 @@ if [ "$NO_MAPS" = 0 ] && [ -d "$KIT/maps" ]; then
   JAVA="$(pick_bin java java)"
   PHOTON_JAR="$(newest "$KIT"/bin/photon/photon-*.jar)"
   GH_JAR="$(newest "$KIT"/bin/graphhopper/graphhopper-web-*.jar)"
+  # pmtiles answers /basemap.json, the TileJSON that says it is up, only when it has a --public-url
   if [ -n "$PMTILES" ] && [ -f "$KIT/maps/tiles/basemap.pmtiles" ] && ! up "http://127.0.0.1:$TILES_PORT/basemap.json"; then
-    "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors "$CORS" > "$KIT/logs/tiles.log" 2>&1 &
+    "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors "$CORS" \
+      --public-url "http://$HOST:$TILES_PORT" > "$KIT/logs/tiles.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED map"
   fi
   if [ -n "$JAVA" ] && [ -n "$PHOTON_JAR" ] && [ -d "$KIT/maps/geocoder/photon_data" ] && ! up "http://127.0.0.1:$GEO_PORT/status"; then

@@ -49,6 +49,27 @@ def catalog() -> bytes:
             + "\n".join(entries) + "\n</feed>\n").encode()
 
 
+def gh_releases(repo: str):
+    """The releases GitHub lists for each program's repo, newest first; None for a repo it doesn't know."""
+    if repo == "ggml-org/llama.cpp":
+        return json.loads(releases())
+    if repo == "protomaps/go-pmtiles":    # the drive test adds the real Windows build
+        return [{"tag_name": "v1.31.2", "draft": False, "prerelease": False, "assets": [
+            {"name": a.name, "size": a.stat().st_size, "browser_download_url": f"{BASE}/gh2/{a.name}"}
+            for a in sorted((R / "gh2").glob("go-pmtiles_1.31.2_*"))]}]
+    if repo == "komoot/photon":
+        a, a2 = R / "gh2" / "photon-1.3.0.jar", R / "gh2" / "photon-1.2.1.jar"
+        return [
+            {"tag_name": "2.0.0-beta", "draft": False, "prerelease": True, "assets": [
+                {"name": "photon-2.0.0-beta.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"}]},
+            {"tag_name": "1.3.0", "draft": False, "prerelease": False, "assets": [
+                {"name": "original-photon-1.3.0.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"},
+                {"name": a.name, "size": a.stat().st_size, "digest": "sha256:" + sha(a), "browser_download_url": f"{BASE}/gh2/{a.name}"}]},
+            {"tag_name": "1.2.1", "draft": False, "prerelease": False, "assets": [
+                {"name": a2.name, "size": a2.stat().st_size, "digest": "sha256:" + sha(a2), "browser_download_url": f"{BASE}/gh2/{a2.name}"}]}]
+    return None
+
+
 def releases() -> bytes:
     tag = "b99999" if v2() else "b99990"
     # every build of this tag: the Linux one, plus the Mac, Windows and Linux Vulkan ones for the drive test
@@ -158,24 +179,13 @@ class H(BaseHTTPRequestHandler):
         if path.startswith("/repos/tudor-city-ventures/tinfoilkit/compare/"):    # "BASE...HEAD": answered only if a test wrote one
             p = R / "kit" / "compare" / path.split("/compare/", 1)[1]
             return self.send_bytes(p.read_bytes(), "application/json", head) if p.is_file() else self.send_error(404)
-        if path == "/repos/ggml-org/llama.cpp/releases":
-            return self.send_bytes(releases(), "application/json", head)
-        if path == "/repos/protomaps/go-pmtiles/releases":    # the drive test adds the real Windows build
-            return self.send_bytes(json.dumps([{"tag_name": "v1.31.2", "draft": False, "prerelease": False, "assets": [
-                {"name": a.name, "size": a.stat().st_size, "browser_download_url": f"{BASE}/gh2/{a.name}"}
-                for a in sorted((R / "gh2").glob("go-pmtiles_1.31.2_*"))]}]).encode(), "application/json", head)
-        if path == "/repos/komoot/photon/releases":
-            a = R / "gh2" / "photon-1.3.0.jar"
-            a2 = R / "gh2" / "photon-1.2.1.jar"
-            older = [{"tag_name": "1.2.1", "draft": False, "prerelease": False, "assets": [
-                {"name": a2.name, "size": a2.stat().st_size, "digest": "sha256:" + sha(a2), "browser_download_url": f"{BASE}/gh2/{a2.name}"}]}]
-            return self.send_bytes(json.dumps([
-                {"tag_name": "2.0.0-beta", "draft": False, "prerelease": True, "assets": [
-                    {"name": "photon-2.0.0-beta.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"}]},
-                {"tag_name": "1.3.0", "draft": False, "prerelease": False, "assets": [
-                    {"name": "original-photon-1.3.0.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"},
-                    {"name": a.name, "size": a.stat().st_size, "digest": "sha256:" + sha(a), "browser_download_url": f"{BASE}/gh2/{a.name}"}]}] + older).encode(),
-                "application/json", head)
+        m = re.match(r"^/repos/([^/]+/[^/]+)/releases(?:/tags/(.+))?$", path)
+        if m and gh_releases(m.group(1)) is not None:
+            rels = gh_releases(m.group(1))
+            if m.group(2):    # one release, by its tag (a pinned build)
+                rel = next((r for r in rels if r["tag_name"] == unquote(m.group(2))), None)
+                return self.send_bytes(json.dumps(rel).encode(), "application/json", head) if rel else self.send_error(404)
+            return self.send_bytes(json.dumps(rels).encode(), "application/json", head)
         if path == "/repos/protomaps/basemaps-assets/commits/main":
             return self.send_bytes(json.dumps({"sha": (R / "gh2" / "basemaps-assets.sha").read_text().strip()}).encode(), "application/json", head)
         m = re.match(r"^/ghweb/protomaps/basemaps-assets/archive/([0-9a-f]+)\.tar\.gz$", path)
@@ -191,6 +201,16 @@ class H(BaseHTTPRequestHandler):
             return self.send_bytes(json.dumps([{"release_name": "jdk-21.0.9+10", "version": {"semver": "21.0.9+10"}, "binary": {
                 "image_type": "jre", "package": {"name": a.name, "link": f"{BASE}/adoptium/file/{a.name}", "size": a.stat().st_size,
                                                  "checksum": sha(a)}}}]).encode(), "application/json", head)
+        m = re.match(r"^/adoptium/v3/assets/version/([^/?]+)$", path)
+        if m:    # a pinned Java: the releases matching that version, each with its builds
+            name = "jdk-" + unquote(m.group(1))
+            a = R / "adoptium" / "OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz"
+            rels = [{"release_name": "jdk-21.0.9+10", "binaries": [
+                {"image_type": "jdk", "os": "linux", "architecture": "x64", "package": {"name": "wrong.tar.gz", "link": f"{BASE}/nope"}},
+                {"image_type": "jre", "os": "linux", "architecture": "x64", "package": {
+                    "name": a.name, "link": f"{BASE}/adoptium/file/{a.name}", "size": a.stat().st_size if a.exists() else 0,
+                    "checksum": sha(a) if a.exists() else None}}]}]
+            return self.send_bytes(json.dumps([r for r in rels if r["release_name"] == name]).encode(), "application/json", head)
         if path.startswith("/adoptium/file/"):
             return self.send_file(R / "adoptium" / path.split("/")[-1], head)
         if path.startswith("/maven/"):

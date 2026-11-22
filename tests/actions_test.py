@@ -16,6 +16,7 @@ WRITES = {
     ("pr-gate.yml", "gate"): {"issues", "pull-requests"},      # closes outside PRs without an accepted issue
     ("pr-gate.yml", "labels"): {"issues"},                     # creates the gate's labels, run by hand
     ("sizes.yml", "commit"): {"contents"},                     # commits builder sizes; runs no kit code
+    ("pins.yml", "commit"): {"contents"},                      # commits program pins; runs no kit code
     ("scorecard.yml", "analysis"): {"security-events", "id-token"},   # publishes the Scorecard results
 }
 # Actions from GitHub itself and OpenSSF's Scorecard, at a full commit SHA: a tag can be moved to new code.
