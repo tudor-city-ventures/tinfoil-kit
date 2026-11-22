@@ -1137,30 +1137,58 @@ def inside(dest: Path, name: str) -> Path:
     return dest.joinpath(*parts)
 
 
+def link_target(dest: Path, link: Path, target: str) -> Optional[Path]:
+    """Where a link in an archive points, if that's inside the archive: links can't go on exFAT, so they're copied."""
+    if not target or target.startswith(("/", "\\")) or ":" in target:
+        return None
+    path = Path(os.path.normpath(link.parent / target.replace("\\", "/")))
+    return path if path != link and os.path.commonpath([dest, path]) == str(dest) else None
+
+
+def copy_links(links: List[Tuple[Path, Path]]) -> None:
+    """Make each link a copy of what it points at. Links to files go first, a link to a link once that's copied,
+    and links to folders last, so a copied folder has its links too."""
+    while links:
+        ready = [lt for lt in links if lt[1].is_file()] or [lt for lt in links if lt[1].is_dir()]
+        if not ready:
+            return    # the rest point at nothing in the archive
+        for link, target in ready:
+            link.parent.mkdir(parents=True, exist_ok=True)
+            if target.is_file():
+                shutil.copy(target, link)
+            elif target not in link.parents:    # a link to a folder it's in would copy itself forever
+                shutil.copytree(target, link, dirs_exist_ok=True)
+        links = [lt for lt in links if lt not in ready]
+
+
 def unzip_py(archive: Path, dest: Path) -> None:
-    """unzip in Python, for Windows and Linux PCs without unzip. Files and folders only: the zips the kit
-    downloads have no links (they're for Windows, or the Mac's pmtiles)."""
+    """unzip in Python, for Windows and Linux PCs without unzip."""
+    links = []
     with zipfile.ZipFile(archive) as z:
         for info in z.infolist():
             path = inside(dest, info.filename)
             mode = info.external_attr >> 16
             if stat.S_ISLNK(mode):
-                continue
-            if info.is_dir():
+                target = link_target(dest, path, z.read(info).decode("utf-8", "replace"))
+                if target:
+                    links.append((path, target))
+            elif info.is_dir():
                 path.mkdir(parents=True, exist_ok=True)
-                continue
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with z.open(info) as src, open(path, "wb") as out:
-                shutil.copyfileobj(src, out, 1 << 20)
-            if mode & 0o111:
-                with contextlib.suppress(OSError):
-                    path.chmod(0o755)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with z.open(info) as src, open(path, "wb") as out:
+                    shutil.copyfileobj(src, out, 1 << 20)
+                if mode & 0o111:
+                    with contextlib.suppress(OSError):
+                        path.chmod(0o755)
+    copy_links(links)
 
 
 def untar_py(archive: Path, dest: Path, compression: str) -> None:
     """tar in Python: Windows' tar can't always read bzip2, and a tar from Git for Windows takes C: for a
-    remote host. Files and folders only, as in the Photon database and the programs' archives. Read as a
-    stream, front to back, since the Photon database is tens of GB."""
+    remote host. Read as a stream, front to back, since the Photon database is tens of GB. Links become
+    copies (a Mac's or Linux PC's programs have some, set up from Windows onto a drive)."""
+    links = []
     with tarfile.open(archive, "r|" + compression) as tf:
         for m in tf:
             path = inside(dest, m.name)
@@ -1173,6 +1201,11 @@ def untar_py(archive: Path, dest: Path, compression: str) -> None:
                 if m.mode & 0o111:
                     with contextlib.suppress(OSError):
                         path.chmod(0o755)
+            elif m.issym() or m.islnk():
+                target = link_target(dest, path, m.linkname) if m.issym() else inside(dest, m.linkname)
+                if target:
+                    links.append((path, target))
+    copy_links(links)
 
 
 def extract_archive(archive: Path, name: str, target: Path) -> None:
@@ -1537,6 +1570,13 @@ def build_portal(root: Path, cfg: Dict[str, Any]) -> Path:
 # ----------------------------------------------------------------------------- housekeeping
 
 def prepare_folder(root: Path) -> None:
+    if sys.platform == "win32":
+        # A kit unzipped from a download is marked "from the internet", and Windows warns before it runs a marked
+        # script. Lift the mark from the kit's own scripts and tools (an exFAT drive can't hold it anyway).
+        for p in [*root.glob("*.bat"), *(root / "tools").glob("*")]:
+            with contextlib.suppress(OSError):
+                os.remove(f"{p}:Zone.Identifier")
+        return
     if sys.platform != "darwin":
         return
     # A kit downloaded as a ZIP is marked "from the internet", and macOS won't open marked scripts until
@@ -2398,7 +2438,8 @@ def free_port() -> int:
 
 def start_server(procs: List[subprocess.Popen], log: Path, cmd: List[Any], cwd: Optional[Path] = None) -> None:
     with open(log, "w") as f:    # the server keeps its own handle on the log
-        procs.append(subprocess.Popen([str(c) for c in cmd], cwd=cwd, stdout=f, stderr=subprocess.STDOUT))
+        procs.append(subprocess.Popen([str(c) for c in cmd], cwd=cwd, stdin=subprocess.DEVNULL, stdout=f,
+                                      stderr=subprocess.STDOUT))
 
 
 def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.Popen], logs_dir: Path) -> None:
