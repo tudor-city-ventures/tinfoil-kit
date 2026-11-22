@@ -540,6 +540,10 @@ pathlib.Path(str(out) + ".aria2").unlink()
           and "Nothing downloads again" in out, out + str(top))
     rc, out = kit("layout", root=old)
     check("kit layout on a kit that's laid out already: does nothing, and says nothing", rc == 0 and out == "", out)
+    p = subprocess.run([str(PROGRAM), "--root", str(old), "region", "--find", "andorra"], env={**env, "KIT_CODE": str(old)},
+                       stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+    check("a KIT_CODE left set doesn't send the kit's own program, in its tools folder, to where the code was",
+          p.returncode == 0 and "andorra" in p.stdout, p.stdout + p.stderr)
     served()
     rc, out = kit("sync", "-y", root=old)
     sent = served()

@@ -193,15 +193,11 @@ func isArchive(name string) bool {
 
 // codeRoot is this code's own folder: the app folder this program is in (app/tools), or a git checkout. KIT_CODE
 // names it for a copy of the program run from elsewhere: Windows won't move the folder of a program that's running,
-// so SETUP-Windows.bat moves a kit's code into its app folder with a copy in TEMP.
+// so SETUP-Windows.bat moves a kit's code into its app folder with a copy in TEMP. A program in a tools folder pays
+// it no mind, so one left set can't send the kit's own program to a folder its code has left.
 var codeRoot = findCodeRoot()
 
 func findCodeRoot() string {
-	if c := os.Getenv("KIT_CODE"); c != "" {
-		if abs, err := filepath.Abs(c); err == nil {
-			return abs
-		}
-	}
 	exe, err := os.Executable()
 	if err != nil {
 		wd, _ := os.Getwd()
@@ -209,6 +205,11 @@ func findCodeRoot() string {
 	}
 	if r, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = r
+	}
+	if c := os.Getenv("KIT_CODE"); c != "" && !strings.EqualFold(filepath.Base(filepath.Dir(exe)), "tools") {
+		if abs, err := filepath.Abs(c); err == nil {
+			return abs
+		}
 	}
 	return filepath.Dir(filepath.Dir(exe))
 }

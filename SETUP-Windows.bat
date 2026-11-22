@@ -885,16 +885,12 @@ echo Tinfoil Kit needs Windows 10 (version 1803 or newer) or Windows 11.
 exit /b 1
 
 rem kit layout, run from a copy of the kit's program in TEMP: Windows won't move the folder of a program that's
-rem running. KIT_CODE tells the copy where the kit's code is.
+rem running. KIT_CODE tells the copy where the kit's code is. The rest is one line, which cmd reads before the
+rem move takes this file into app: after it, cmd can read no more of the file.
 :layout
 set "TK_COPY=%TEMP%\tinfoilkit-layout-%RANDOM%.exe"
 copy /y "%TK%" "%TK_COPY%" >nul || exit /b 1
-set "KIT_CODE=%APP%"
-"%TK_COPY%" --root "%KIT%" layout
-set "ERR=%errorlevel%"
-set "KIT_CODE="
-del "%TK_COPY%" 2>nul
-exit /b %ERR%
+set "KIT_CODE=%APP%" & "%TK_COPY%" --root "%KIT%" layout & set "ERR=!errorlevel!" & set "KIT_CODE=" & del "%TK_COPY%" 2>nul & exit /b !ERR!
 
 rem "on this PC" or "on the drive NAME", in WHERE
 :where_kit
