@@ -2,7 +2,10 @@
 # a person double-clicking it would answer. First onto this PC (~\TinfoilKit), then onto an exFAT drive. Each
 # time START-HERE-Windows.bat must serve the library and the AI, and UNINSTALL-Windows.bat must remove it all.
 # Last, ./kit sync builds a small real map with the real map programs, and START-HERE-Windows.bat must serve it.
+# With -Drive, it plugs in the drive the Mac made (tests\work\drive.vhd) instead, starts the kit on it with a
+# double-click and uses the page in Edge.
 # CI runs it (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive, in tests\work\remote.
+param([switch]$Drive)
 $ErrorActionPreference = "Stop"
 $tests = $PSScriptRoot
 $root = Split-Path $tests
@@ -16,8 +19,10 @@ function Step($msg) { ""; "=== $msg" }
 
 # The mock internet, and the KIT_* settings that point the kit at it
 Get-Content "$tests\env.sh" | ForEach-Object { if ($_ -match '^export (\w+)="(.*)"$') { Set-Item "env:$($Matches[1])" $Matches[2] } }
-$mock = Start-Process python -ArgumentList "`"$tests\mock_remote.py`"", 19000 -PassThru -NoNewWindow `
-  -RedirectStandardOutput "$logs\mock_remote.log" -RedirectStandardError "$logs\mock_remote.err"
+if (-not $Drive) {
+  $mock = Start-Process python -ArgumentList "`"$tests\mock_remote.py`"", 19000 -PassThru -NoNewWindow `
+    -RedirectStandardOutput "$logs\mock_remote.log" -RedirectStandardError "$logs\mock_remote.err"
+}
 
 # The kit as a browser leaves a Download ZIP that File Explorer unzipped: in Downloads, every file marked as from
 # the internet. Its kit.json is the test kit, put in the folder the way one from the website's builder goes in.
@@ -32,12 +37,13 @@ function Get-Kit($dir) {
   }
 }
 
-# cmd.exe running a script, and its exit code. Not Start-Process -Wait: that also waits for what the script
-# leaves running, like the File Explorer window SETUP opens at the end.
+# A script in a console window of its own, with the answers typed in as it asks them (tests/drive.py type), and its
+# exit code. Not Start-Process -Wait: that also waits for what the script leaves running, like the File Explorer
+# window SETUP opens at the end.
 function Invoke-Cmd($line, $log, $answers) {
   $answers | Set-Content -Encoding ascii "$work\answers.txt"
-  $p = Start-Process cmd.exe -ArgumentList "/c `"$line`"" -PassThru -NoNewWindow -RedirectStandardInput "$work\answers.txt" `
-    -RedirectStandardOutput "$logs\$log" -RedirectStandardError "$logs\$log.err"
+  $p = Start-Process (Get-Command python).Source -PassThru `
+    -ArgumentList "`"$tests\drive.py`" type `"$logs\$log`" `"@$work\answers.txt`" -- $line"
   $null = $p.Handle    # keeps the exit code readable after it exits
   if (-not $p.WaitForExit(1200000)) { Fail "$line was still running after 20 minutes"; Stop-Process -Id $p.Id -Force }
   "exit $($p.ExitCode)"
@@ -46,11 +52,11 @@ function Invoke-Cmd($line, $log, $answers) {
 # SETUP-Windows.bat with these answers, one per line, as if typed. Its own Python, not this one, runs the kit.
 function Invoke-Setup($dir, $log, $answers) {
   Invoke-Cmd "`"$dir\SETUP-Windows.bat`"" $log $answers
-  Get-Content "$logs\$log", "$logs\$log.err" | Select-String "PASS|FAIL|All set|Moved|Copied|Removed|Problems|^  - |^  [0-9]+  [A-Za-z]" |
+  Get-Content "$logs\$log" | Select-String "PASS|FAIL|All set|Moved|Copied|Removed|Problems|^  - |^  [0-9]+  [A-Za-z]" |
     Select-Object -Last 30 | ForEach-Object { $_.Line }
   if (-not (Select-String -Quiet -Path "$logs\$log" -Pattern "All set")) {
     Fail "SETUP didn't end with All set (logs\$log)"
-    Get-Content "$logs\$log", "$logs\$log.err" -Tail 40
+    Get-Content "$logs\$log" -Tail 40
   }
 }
 
@@ -100,6 +106,44 @@ function Invoke-Uninstall($kit, $log) {
   Get-Content "$logs\$log" | Select-Object -Last 4
   if (Test-Path $kit) { Fail "$kit is still there after UNINSTALL" }
   if (Test-Path "$env:LOCALAPPDATA\TinfoilKit") { Fail "UNINSTALL left the Python SETUP got" }
+}
+
+if ($Drive) {
+  Step "plug in the drive the Mac made"
+  New-Item -ItemType Directory -Force "$work\shots" | Out-Null
+  $disk = Mount-DiskImage -ImagePath "$work\drive.vhd" -PassThru | Get-Disk
+  $part = Get-Partition -DiskNumber $disk.Number |
+    Where-Object { (Get-Volume -Partition $_ -ErrorAction SilentlyContinue).FileSystem -eq "exFAT" } | Select-Object -First 1
+  if (-not $part) { Get-Partition -DiskNumber $disk.Number | Format-List; throw "no exFAT partition on the drive" }
+  if (-not $part.DriveLetter) {
+    $part | Add-PartitionAccessPath -AssignDriveLetter
+    $part = Get-Partition -DiskNumber $disk.Number -PartitionNumber $part.PartitionNumber
+  }
+  $kit = "$($part.DriveLetter):\TinfoilKit"
+  "The drive is $($part.DriveLetter):"
+  Get-ChildItem -Force "$kit\library", "$kit\models" -Recurse | ForEach-Object { "$($_.Mode)  $($_.FullName)" }
+  Step "double-click START-HERE-Windows.bat on the drive: it starts the kit and opens the page"
+  $p = Start-Process "$kit\START-HERE-Windows.bat" -WorkingDirectory $kit -PassThru
+  python "$tests\drive.py" check 8888 8080
+  if ($LASTEXITCODE -ne 0) { Fail "the kit on the drive after a double-click" }
+  Start-Sleep 5
+  try {
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+    $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+    [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+    $bmp.Save("$work\shots\windows-desktop.png")
+  } catch { "(no desktop screenshot here: $_)" }
+  Step "the page in Edge"
+  $env:KIT_BROWSER = "msedge"; $env:KIT_LIBRARY_PORT = "8888"; $env:KIT_AI_PORT = "8080"
+  $env:KIT_TEST_SHOTS = "$work\shots\windows"
+  python "$tests\ui_test.py"
+  if ($LASTEXITCODE -ne 0) { Fail "the page in Edge" }
+  Stop-Kit $kit $p
+  ""
+  if ($script:fails) { "$($script:fails) FAILED"; exit 1 }
+  "ALL PASSED"
+  exit 0
 }
 
 Step "SETUP-Windows.bat in the unzipped download: this PC; it copies the kit to ~\TinfoilKit and sets it up"

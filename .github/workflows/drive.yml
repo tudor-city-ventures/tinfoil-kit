@@ -1,6 +1,8 @@
 name: drive test
 # The kit on a real exFAT disk: set up on a Mac, then plugged into Windows and Linux (tests/drive_test.sh). And set
-# up on Windows from a download, onto the PC and onto a drive (tests/drive_windows.ps1).
+# up on Windows from a download, onto the PC and onto a drive (tests/drive_windows.ps1). Each machine's screen is
+# filmed (tests/drive.py record), and the videos job links the videos from the run's page, for anyone checking how
+# the kit looks on a system they don't have.
 # By hand (Actions > drive test > Run workflow) once the bulk of a change is done. Nightly and on pushes only when
 # something it covers changed (the changes job), so site edits never start it. Pushes start it only once the
 # repo is public, since Mac minutes cost money while it's private.
@@ -102,7 +104,8 @@ jobs:
         with:
           name: mock-internet
           path: tests/work/remote
-      - run: tests/drive_test.sh mac
+      - name: Set up the drive, start the kit, use the page; then a home server, and uninstall (filmed)
+        run: python3 tests/drive.py record mac -- tests/drive_test.sh mac
       - id: made
         if: ${{ !cancelled() }}
         run: if [ -f tests/work/drive.vhd ]; then echo "drive=yes" >> "$GITHUB_OUTPUT"; fi
@@ -119,6 +122,13 @@ jobs:
           path: |
             tests/work/logs
             tests/work/shots
+      - if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: raw-video-mac
+          path: tests/work/video
+          retention-days: 1
+          overwrite: true
 
   windows:
     needs: mac
@@ -132,45 +142,30 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
-      - run: pip install playwright
+      - run: |
+          pip install playwright
+          choco install ffmpeg -y --no-progress | Out-Null
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: drive
           path: tests/work
-      - name: Plug in the drive the Mac made and double-click START-HERE-Windows.bat
+      - name: Plug in the drive the Mac made, double-click START-HERE-Windows.bat, use the page in Edge (filmed)
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force tests/work/logs, tests/work/shots | Out-Null
-          $disk = Mount-DiskImage -ImagePath (Resolve-Path tests/work/drive.vhd) -PassThru | Get-Disk
-          $part = Get-Partition -DiskNumber $disk.Number | Where-Object { (Get-Volume -Partition $_ -ErrorAction SilentlyContinue).FileSystem -eq 'exFAT' } | Select-Object -First 1
-          if (-not $part) { Get-Partition -DiskNumber $disk.Number | Format-List; throw "no exFAT partition on the drive" }
-          if (-not $part.DriveLetter) {
-            $part | Add-PartitionAccessPath -AssignDriveLetter
-            $part = Get-Partition -DiskNumber $disk.Number -PartitionNumber $part.PartitionNumber
-          }
-          $kit = "$($part.DriveLetter):\TinfoilKit"
-          "The drive is $($part.DriveLetter):"
-          Get-ChildItem -Force "$kit\library", "$kit\models" -Recurse | ForEach-Object { "$($_.Mode)  $($_.FullName)" }
-          Start-Process -FilePath "$kit\START-HERE-Windows.bat" -WorkingDirectory $kit
-          python tests/drive.py check 8888 8080
-          $checked = $LASTEXITCODE
-          Start-Sleep 5
-          try {
-            Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
-            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
-            $bmp.Save("tests/work/shots/windows-desktop.png")
-          } catch { "(no desktop screenshot here: $_)" }
-          $env:KIT_BROWSER = "msedge"; $env:KIT_LIBRARY_PORT = "8888"; $env:KIT_AI_PORT = "8080"
-          $env:KIT_TEST_SHOTS = "tests/work/shots/windows"
-          python tests/ui_test.py
-          if ($checked -ne 0 -or $LASTEXITCODE -ne 0) { exit 1 }
+          try { Set-DisplayResolution -Width 1280 -Height 800 -Force } catch { "(the screen stays at its size: $_)" }
+          python tests/drive.py record windows -- pwsh -NoProfile -File tests/drive_windows.ps1 -Drive
       - if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: windows-screenshots
           path: tests/work/shots
+      - if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: raw-video-windows
+          path: tests/work/video
+          retention-days: 1
+          overwrite: true
 
   windows-setup:
     needs: fixtures
@@ -183,18 +178,30 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
+      - run: |
+          pip install pywinpty
+          choco install ffmpeg -y --no-progress | Out-Null
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: mock-internet
           path: tests/work/remote
-      - name: Unzip the kit in Downloads, double-click SETUP-Windows.bat, START-HERE-Windows.bat, UNINSTALL-Windows.bat
+      - name: Unzip the kit in Downloads, double-click SETUP-Windows.bat, START-HERE-Windows.bat, UNINSTALL-Windows.bat (filmed)
         shell: pwsh
-        run: tests/drive_windows.ps1
+        run: |
+          try { Set-DisplayResolution -Width 1280 -Height 800 -Force } catch { "(the screen stays at its size: $_)" }
+          python tests/drive.py record windows-setup -- pwsh -NoProfile -File tests/drive_windows.ps1
       - if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: windows-setup-logs
           path: tests/work/logs
+      - if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: raw-video-windows-setup
+          path: tests/work/video
+          retention-days: 1
+          overwrite: true
 
   linux:
     needs: mac
@@ -205,13 +212,88 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg xterm > /dev/null
+          pip install playwright
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: drive
           path: tests/work
-      - run: tests/drive_test.sh linux
+      - name: Plug in the drive, start the kit on Ubuntu and four more, use the page in Chrome; a home server, uninstall (filmed)
+        run: python3 tests/drive.py record linux -- tests/drive_test.sh linux
       - if: always()
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: linux-logs
-          path: tests/work/logs
+          path: |
+            tests/work/logs
+            tests/work/shots
+      - if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: raw-video-linux
+          path: tests/work/video
+          retention-days: 1
+          overwrite: true
+
+  videos:    # the recordings as captioned MP4s, each a link on the run's page that downloads it
+    needs: [changes, mac, windows, windows-setup, linux]
+    if: ${{ !cancelled() && needs.changes.outputs.run == 'yes' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: raw-video-*
+          path: tests/work/video
+          merge-multiple: true
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core > /dev/null
+      - run: python3 tests/drive.py videos tests/work/video
+      # One file each, not zipped (archive: false), so the link on the run's page downloads the video itself.
+      - id: mac
+        if: hashFiles('tests/work/video/mac.mp4') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: tests/work/video/mac.mp4
+          archive: false
+          retention-days: 7
+          overwrite: true
+      - id: windows
+        if: hashFiles('tests/work/video/windows.mp4') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: tests/work/video/windows.mp4
+          archive: false
+          retention-days: 7
+          overwrite: true
+      - id: windows-setup
+        if: hashFiles('tests/work/video/windows-setup.mp4') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: tests/work/video/windows-setup.mp4
+          archive: false
+          retention-days: 7
+          overwrite: true
+      - id: linux
+        if: hashFiles('tests/work/video/linux.mp4') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: tests/work/video/linux.mp4
+          archive: false
+          retention-days: 7
+          overwrite: true
+      - name: List the videos on the run's page
+        env:
+          MAC: ${{ steps.mac.outputs.artifact-url }}
+          WINDOWS: ${{ steps.windows.outputs.artifact-url }}
+          WINDOWS_SETUP: ${{ steps.windows-setup.outputs.artifact-url }}
+          LINUX: ${{ steps.linux.outputs.artifact-url }}
+        run: |
+          python3 tests/drive.py summary "mac=$MAC" "windows=$WINDOWS" "windows-setup=$WINDOWS_SETUP" "linux=$LINUX" \
+            >> "$GITHUB_STEP_SUMMARY"

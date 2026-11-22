@@ -51,7 +51,7 @@ terminal() { # FOLDER LOG ANSWERS COMMAND...
   } > "$run"
   chmod +x "$run"
   if [ "$(uname -s)" = Darwin ]; then open "$run"
-  elif [ -n "${DISPLAY:-}" ] && command -v xterm > /dev/null; then xterm $XTERM -T "${2%.log}" -e bash "$run" &
+  elif [ -n "${DISPLAY:-}" ] && command -v xterm > /dev/null; then xterm $XTERM -T "${2%.log}" -e bash "$run" > /dev/null 2>&1 &
   else bash "$run" > /dev/null 2>&1 & fi
   for ((i = 0; i < 1800; i++)); do [ -f "$log.exit" ] && break; sleep 1; done
   [ -f "$log.exit" ] || { echo "(still running after 30 minutes)"; return 124; }
@@ -63,7 +63,7 @@ XTERM="-geometry 100x34+0+0 -fa Monospace -fs 11 -bg #1d1f21 -fg #e0e0e0"
 window() { # TITLE COMMAND...
   [ -n "${DISPLAY:-}" ] && command -v xterm > /dev/null || return 0
   local title="$1"; shift
-  xterm $XTERM -T "$title" -e "$@" &
+  xterm $XTERM -T "$title" -e "$@" > /dev/null 2>&1 &
 }
 # SETUP with the mock internet, a stock Mac's PATH and bash, and these answers.
 setup() { # FOLDER LOG ANSWERS [SETUP'S OPTIONS]

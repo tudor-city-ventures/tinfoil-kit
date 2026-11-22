@@ -24,6 +24,7 @@ import socket
 import struct
 import subprocess
 import sys
+import threading
 import time
 import uuid
 import urllib.parse
@@ -247,16 +248,22 @@ def record(name, cmd):
     started = time.time() + 0.5    # about when the first frame is taken
     time.sleep(1)
     steps.write_text(f"{started:.2f}\t\n", encoding="utf-8")
-    try:
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
-        for line in iter(p.stdout.readline, b""):
+    def relay(out):
+        for line in iter(out.readline, b""):
             sys.stdout.buffer.write(line)
             sys.stdout.buffer.flush()
             text = line.decode("utf-8", "replace").strip()
             if text.startswith("=== "):
                 with steps.open("a", encoding="utf-8") as f:
                     f.write(f"{time.time():.2f}\t{text[4:]}\n")
-        return p.wait()
+
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+        reader = threading.Thread(target=relay, args=(p.stdout,), daemon=True)
+        reader.start()
+        code = p.wait()
+        reader.join(10)    # not until the pipe closes: something CMD left running may hold it open
+        return code
     finally:
         time.sleep(2)    # the last screen, for a moment
         if rec:
@@ -450,10 +457,11 @@ def make_videos(folder):
         start = float(rows[0][0])
         marks = [(min(max(0.0, float(t) - start), length), text) for t, text in rows[1:] if text]
         run = " ".join(x for x in (os.environ.get("GITHUB_SHA", "")[:7], time.strftime("%Y-%m-%d")) if x)
-        cues = [(0.0, f"Tinfoil Kit drive test, {run}: {TITLES.get(name, name)}")] + marks
-        srt = []
-        for i, (t, text) in enumerate(cues):
-            end = cues[i + 1][0] if i + 1 < len(cues) else length
+        # What it is, at the top for the first seconds; then each step at the bottom until the next.
+        srt = [f"1\n{srt_time(0)} --> {srt_time(min(8.0, length))}\n"
+               f"{{\\an8}}Tinfoil Kit drive test, {run}: {TITLES.get(name, name)}\n"]
+        for i, (t, text) in enumerate(marks):
+            end = marks[i + 1][0] if i + 1 < len(marks) else length
             if end - t >= 0.3:
                 srt.append(f"{len(srt) + 1}\n{srt_time(t)} --> {srt_time(end)}\n{text}\n")
         steps.with_suffix(".srt").write_text("\n".join(srt), encoding="utf-8")
@@ -462,7 +470,7 @@ def make_videos(folder):
                  "Outline=0,Shadow=0,MarginV=6,MarginL=8,MarginR=8")
         subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", raw.name, "-an", "-vf",
                         f"fps=10,scale='min(1280,iw)':-2:flags=lanczos,subtitles={name}.srt:force_style='{style}'",
-                        "-c:v", "libx264", "-preset", "slow", "-crf", "30", "-pix_fmt", "yuv420p",
+                        "-c:v", "libx264", "-preset", "medium", "-crf", "30", "-pix_fmt", "yuv420p",
                         "-movflags", "+faststart", f"{name}.mp4"], cwd=steps.parent, check=True)
         mp4 = steps.with_suffix(".mp4")
         print(f"\n######## {mp4.name}: {clock(length)}, {mp4.stat().st_size // 1024} KB")
@@ -478,13 +486,14 @@ def srt_time(t):
 def summary(pairs):
     """The run page's list of videos: each one's link, what it shows, and its chapters."""
     out = ["## Videos of this run", "",
-           "Each video is the screen of one machine while the drive test ran, captioned with what it was doing. "
-           "Click one to download it; it plays in QuickTime or any browser. The AI in them is a tiny test model, "
-           "so its answers are gibberish: what matters is that it answers.", ""]
+           "Each video is the screen of one machine while the drive test ran on it, captioned with what it was "
+           "doing. Click one to download it; it plays in QuickTime or a browser. The AI in them is a tiny test "
+           "model, so its answers are nonsense: what matters is that it answers.", ""]
     for pair in pairs:
         name, url = pair.split("=", 1)
         mp4 = VIDEO / f"{name}.mp4"
         if not url or not mp4.exists():
+            out += [f"No video of {name}: that part didn't run, or stopped before it was filmed.", ""]
             continue
         length = clock(ffprobe_seconds(mp4))
         out += [f"### [{name}.mp4]({url}) ({length}, {mp4.stat().st_size // 1024 // 1024 or 1} MB)", "",
