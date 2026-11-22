@@ -17,8 +17,8 @@ on:
         default: all
   push:
     branches: [main]
-concurrency:    # per event too, so a push run whose jobs are skipped can't cancel a run in progress
-  group: drive-${{ github.ref }}-${{ github.event_name }}
+concurrency:    # runs by hand never cancel each other (each is someone's check); a newer nightly or push run replaces an older one
+  group: drive-${{ github.ref }}-${{ github.event_name }}${{ github.event_name == 'workflow_dispatch' && github.run_id || '' }}
   cancel-in-progress: true
 permissions:
   contents: read
