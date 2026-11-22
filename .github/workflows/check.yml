@@ -16,6 +16,8 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
+      # the developer tools in package.json, for the kit page's formatting and lint, with no install scripts
+      - run: npm ci --ignore-scripts
       - run: tests/check.sh
   oldest-python:
     runs-on: ubuntu-latest
@@ -54,7 +56,7 @@ jobs:
       - run: npm ci --ignore-scripts
         working-directory: site
       - run: pip install playwright && playwright install --with-deps chromium
-      - run: npm i --no-save axe-core@4.10.2
+      - run: npm ci --ignore-scripts    # axe-core, for the accessibility checks, from package.json
       - run: python3 tests/site_test.py
         env:
           KIT_AXE: node_modules/axe-core/axe.min.js

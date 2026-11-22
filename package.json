@@ -1,0 +1,21 @@
+{
+  "name": "tinfoilkit-dev",
+  "private": true,
+  "description": "Developer tools only: format and lint the kit's page, and the tests' accessibility checks. Nothing on a drive installs or runs them.",
+  "scripts": {
+    "format": "prettier --write tools/portal.html",
+    "lint": "prettier --check tools/portal.html && eslint tools/portal.html",
+    "fix": "eslint --fix tools/portal.html && prettier --write tools/portal.html"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "axe-core": "4.10.2",
+    "eslint": "10.15.0",
+    "eslint-plugin-html": "8.2.1",
+    "globals": "17.14.0",
+    "prettier": "3.10.1"
+  },
+  "prettier": {
+    "printWidth": 120
+  }
+}

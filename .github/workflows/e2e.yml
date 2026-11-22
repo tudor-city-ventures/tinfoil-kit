@@ -33,7 +33,7 @@ jobs:
       - run: tests/build_fixtures.sh
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      - run: npm i --no-save axe-core@4.10.2
+      - run: npm ci --ignore-scripts    # axe-core, for the accessibility checks, from package.json
       - run: tests/run_all.sh
         env:
           KIT_AXE: ${{ github.workspace }}/node_modules/axe-core/axe.min.js

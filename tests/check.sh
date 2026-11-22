@@ -43,6 +43,8 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
   run sh -c 'git check-attr export-subst tools/kit.py | grep -q ": set$"'
   # and carry the kit's own files only: no tests, docs, website (besides the two site files the kit reads) or Mac app
   run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -Ev "^(site/|site/kit.json|site/sources.json)$" | grep -E "^(tests|docs|\.github|site|mac)/"'
+  # and none of the developer tools (package.json's)
+  run sh -c '! git archive --worktree-attributes HEAD | tar -t | grep -E "(^|/)(package(-lock)?\.json|eslint\.config\.mjs|node_modules/)"'
 else
   echo "skipped (not a git checkout)"
 fi
@@ -64,6 +66,17 @@ const h = require("fs").readFileSync("tools/portal.html", "utf8");
 const m = { exports: {} };
 new Function("module", "exports", h.split("<script>")[1].split("</script>")[0])(m, m.exports);
 if (typeof m.exports.isMapQuestion !== "function") throw new Error("Kit not exported");'
+
+step "the kit page's formatting and lint (npm run lint)"
+if [ -x node_modules/.bin/prettier ] && [ -x node_modules/.bin/eslint ]; then
+  run npm run --silent lint
+else
+  echo "skipped (not installed: npm ci --ignore-scripts)"
+fi
+
+step "nothing the kit runs installs or runs npm's developer tools"
+run sh -c '! grep -nwE "npm|npx|node_modules" kit kit.cmd SETUP.command SETUP-Windows.bat UNINSTALL.command UNINSTALL-Windows.bat \
+  "Open Tinfoil Kit.command" "Open Tinfoil Kit for Windows.bat" tools/launch.sh tools/share.py mac/app.sh mac/TinfoilKit.m'
 
 step "contribution gate"
 out=$(node tests/pr_gate_test.js 2>&1); rc=$?

@@ -5,8 +5,9 @@
 *.icns binary
 # Archives of the kit (a release, or Code > Download ZIP) stamp KIT_COMMIT in kit.py with their commit.
 tools/kit.py export-subst
-# Releases and Download ZIP carry the kit and nothing else: no tests, docs, website or Mac app, except the two files of
-# site/ the kit reads (kit.json's last version, for ./kit update's merge, and the builder's sizes, for estimate).
+# Releases and Download ZIP carry the kit and nothing else: no tests, docs, website, Mac app or developer tools, except
+# the two files of site/ the kit reads (kit.json's last version, for ./kit update's merge, and the builder's sizes, for
+# estimate).
 /tests export-ignore
 /docs export-ignore
 /mac export-ignore
@@ -16,3 +17,6 @@ tools/kit.py export-subst
 /site/** export-ignore
 /site/kit.json -export-ignore
 /site/sources.json -export-ignore
+/package.json export-ignore
+/package-lock.json export-ignore
+/eslint.config.mjs export-ignore

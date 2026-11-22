@@ -1,6 +1,7 @@
 """Smoke test the website: build site/ (a static Next.js app), serve the build locally, and drive it in headless
 Chromium. usage: python3 tests/site_test.py   (needs Node, and: pip install playwright && playwright install chromium)
-Set KIT_AXE to axe-core's axe.min.js (npm i axe-core) to also check accessibility."""
+Set KIT_AXE to axe-core's axe.min.js (node_modules/axe-core/axe.min.js, after npm ci --ignore-scripts in the repo root)
+to also check accessibility."""
 import datetime
 import functools
 import glob

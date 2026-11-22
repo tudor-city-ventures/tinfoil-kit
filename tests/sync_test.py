@@ -836,8 +836,11 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         shutil.copy(TESTS.parent / "kit.json", path)     # ./kit region changes it
         (path / "site").mkdir()
         shutil.copy(TESTS.parent / "site" / "sources.json", path / "site")    # for ./kit pick --ask
-        if git:
+        if git:    # a developer's, with npm's packages and a website build in it
             (path / ".git").mkdir()
+            for d in ("node_modules/prettier", "site/node_modules/next", "site/.next"):
+                (path / d).mkdir(parents=True)
+                (path / d / "index.js").write_text("")
         return path
 
     setup = kit_folder(work / "setup")
@@ -1224,9 +1227,12 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
                   and not (drv / "USB DRIVE" / "TinfoilKit.partial").exists(), out)
             shutil.rmtree(drv / "USB DRIVE" / "TinfoilKit")
             rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", git=True, KIT_DRIVES=drv)
-            check("SETUP first run: a git checkout is copied to the drive, .git and all, and stays where it was",
-                  rc == 0 and placed_ok(drv / "USB DRIVE" / "TinfoilKit") and (drv / "USB DRIVE" / "TinfoilKit" / ".git").is_dir()
-                  and dl.exists() and "Use that copy from now on" in out, out)
+            tk = drv / "USB DRIVE" / "TinfoilKit"
+            check("SETUP first run: a git checkout is copied to the drive, .git and all, and stays where it was; "
+                  "npm's packages and the website's build stay behind",
+                  rc == 0 and placed_ok(tk) and (tk / ".git").is_dir() and dl.exists() and "Use that copy from now on" in out
+                  and (tk / "site" / "sources.json").exists() and not (tk / "node_modules").exists()
+                  and not (tk / "site" / "node_modules").exists() and not (tk / "site" / ".next").exists(), out)
         finally:
             shutil.rmtree(drv, ignore_errors=True)
     else:
