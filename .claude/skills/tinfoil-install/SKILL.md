@@ -31,12 +31,12 @@ One or two questions at a time. For each, say what it's for and roughly how big 
 1. Their computer: a Mac with Apple Silicon, or a Windows or Linux PC on x64 (Intel Macs and ARM PCs can't run it), its memory and free space. If you can run commands, look instead of asking, with commands that only read: `system_profiler SPHardwareDataType` and `df -h ~` on a Mac; `Get-CimInstance Win32_ComputerSystem | Select-Object SystemType, TotalPhysicalMemory` and `Get-PSDrive C` on Windows; `uname -m`, `free -g` and `df -h ~` on Linux. Windows and Linux are experimental for now: tell them, so rough edges don't surprise them.
 2. Where it lives: the drive, this computer, or a home server (see the tinfoil-home-server skill).
 3. Where they live, for the map (`--region`), and any places nearby they want on it too, Wikipedia's languages (`--wikipedia`), and how much of Wikipedia (`--wikipedia-size`): all of it (127 GB in English) or just the best 50,000 articles (7 GB, or 2.7 GB as text).
-4. The AI: the one their computer runs (the default), none (`--no-ai`), or exact models (`--models`).
-5. The library, group by group. The huge collections are off unless added (`--add`).
-6. All of it, or just the essentials (`--essentials`) when space is short.
+4. Where to start: the recommended kit (`--recommended`, about 300 GB), just the essentials (`--essentials`, 35 to 55 GB, for when space is short) or everything (`--everything`).
+5. The AI: the one their computer runs (the default), none (`--no-ai`), or exact models (`--models`).
+6. The library, group by group. The huge collections are off unless added (`--add`).
 7. Sharing with the phones and laptops at home behind an access code (`--share`), or a home server (`--home-server`).
 
-If they pasted options from the website's kit builder (like `--region bayern --wikipedia de --skip mdwiki_en_all_maxi`), use them as they are and ask only about the rest.
+If they pasted options from the website's kit builder (like `--recommended --region bayern --wikipedia de --wikipedia-size all --skip mdwiki_en_all_maxi --this-computer`), use them as they are and ask only about the rest. They say where it lives too when the person picked that there: `--this-computer` (add nothing), or for a drive you add `--drive` with its path once you've checked it.
 
 ## 3. Give them the command
 
@@ -48,7 +48,7 @@ First tell them how long the downloads take. Find their internet speed: on a Mac
 | Just the essentials | 35 to 55 GB | 8 to 12 hours | about an hour | 10 to 15 minutes |
 | All of it | about 300 GB | about 3 days | 7 hours | 1.5 hours |
 
-The command gets just the kit to try, unless it has `--all`, `--essentials` or `--home-server`, which go straight on to the rest: then say how long all of it takes too. SETUP also times the connection before it downloads anything, says how long it takes, and shows the time left as it goes.
+The command gets just the kit to try, unless it has `--no-pause` or `--home-server`, which go straight on to the rest: then say how long all of it takes too. SETUP also times the connection before it downloads anything, says how long it takes, and shows the time left as it goes.
 
 Mac or Linux:
 
@@ -64,15 +64,17 @@ If the kit's code is already there, it's `bash TinfoilKit/app/SETUP.command OPTI
 | --- | --- |
 | `--region PLACES` | Where they live: "Texas", "Ontario", "Germany: Bayern", or an id from `./kit region --find WORDS`. Quote names with spaces. Places nearby for the map go after it as ids, with commas: `us/new-york,us/new-jersey` |
 | `--wikipedia CODES` | Wikipedia's languages: `de`, or `de,en` |
-| `--wikipedia-size SIZE` | How much of Wikipedia: `all` (the default), `all-text`, `top` (the best 50,000 articles), `top-text` or `top-intros` (their opening paragraphs). With `--essentials`, add `--add wikipedia` for anything bigger than `top-text` |
+| `--wikipedia-size SIZE` | How much of Wikipedia: `all` (the default), `all-text`, `top` (the best 50,000 articles), `top-text` or `top-intros` (their opening paragraphs). With `--essentials`, Wikipedia comes whole in that size |
+| `--recommended`, `--essentials`, `--everything` | Start what goes in over from the kit builder's preset: what we'd take, just the essentials, or every AI model and book. The options below change it. Without one, they change the kit as it is |
 | `--drive PATH` | The drive: /Volumes/NAME on a Mac, E: on Windows, /media/USER/NAME on Linux. The kit goes in a TinfoilKit folder at its top |
 | `--this-computer` | The kit goes in the home folder instead |
-| `--no-ai`, `--models IDS` | No AI, or exactly these models |
+| `--no-ai`, `--models IDS` | No AI, or exactly these models, even ones too big for this computer |
 | `--skip IDS`, `--add IDS` | Leave out or add items, comma-separated: ids, `maps`, or a whole part (`models`, `library`, `extras`) |
-| `--essentials`, `--all` | Go straight on to the rest after the try-it kit: just the essentials, or all of it even if space gets tight |
 | `--share` | Share it at home, behind an access code, whenever it's open |
 | `--home-server` | Share it and start it with the computer. Goes straight on to the rest |
-| `--yes` | Ask nothing. Without it, SETUP asks in the terminal whatever the options didn't answer |
+| `--no-pause` | Go straight on to the rest after the try-it kit, instead of stopping there |
+| `--even-if-tight` | All of what's picked rather than just the essentials, even if that leaves less free space than SETUP likes |
+| `--yes`, `-y` | Ask nothing. Without it, SETUP asks in the terminal whatever the options didn't answer. The first time, it needs `--drive` or `--this-computer` |
 
 Then tell them:
 
@@ -83,7 +85,7 @@ Then tell them:
 
 ## 4. The rest
 
-When they've tried it and are ready, tell them how long the rest takes (SETUP said it; `./kit estimate --rest` in the kit's app folder prints it again: GB, a tab, then how long), and give them the command SETUP printed: `bash "/Volumes/Kit/TinfoilKit/app/SETUP.command" --yes`, or on Windows `& "E:\TinfoilKit\app\SETUP-Windows.bat" --yes` (in ~/TinfoilKit on this computer). It gets everything they picked, checks every file, and deletes the try-it files their picks left out. Add `--all` to get all of it even if that leaves less free space than SETUP likes, or `--essentials` for just those.
+When they've tried it and are ready, tell them how long the rest takes (SETUP said it; `./kit estimate --rest` in the kit's app folder prints it again: GB, a tab, then how long), and give them the command SETUP printed: `bash "/Volumes/Kit/TinfoilKit/app/SETUP.command" --yes`, or on Windows `& "E:\TinfoilKit\app\SETUP-Windows.bat" --yes` (in ~/TinfoilKit on this computer). It gets everything they picked, checks every file, and deletes the try-it files their picks left out. Add `--even-if-tight` to get all of it even if that leaves less free space than SETUP likes, or `--essentials` for just the essentials.
 
 ## When it fails
 

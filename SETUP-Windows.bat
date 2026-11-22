@@ -4,22 +4,26 @@ rem The first time, it asks where you live and whether the kit goes on an extern
 rem much fits there, and copies it there. Then it's kit update, sync and test, as SETUP.command does on a Mac or
 rem Linux: first a small kit to try (kit starter), then the rest when SETUP runs again.
 rem The answers can come with it instead, the same ones SETUP.command takes, so one command sets the kit up: an AI
-rem helping someone asks them the questions, then gives them that command. It asks only what these leave out:
+rem helping someone asks them the questions, then gives them that command. The kit builder on tinfoilkit.com writes
+rem them too, one for each of its settings. It asks only what these leave out:
 rem   --region PLACES     where you live: a US state, a country or a part of one, as kit region takes it, and any
 rem                       places nearby for the map, after commas (like us/new-york,us/new-jersey)
 rem   --wikipedia CODES   Wikipedia's languages, like de or de,en
-rem   --wikipedia-size SIZE  how much of Wikipedia: all (the default), all-text, top (the best 50,000 articles), top-text or top-intros (their opening paragraphs)
+rem   --wikipedia-size SIZE  how much of Wikipedia: all, all-text, top (the best 50,000 articles), top-text or top-intros (their opening paragraphs)
+rem   --recommended       what goes in starts over from the kit builder's Recommended: what we'd take
+rem   --essentials        or from Essentials: the programs, the map, the most important books, Wikipedia's best articles, and the AI this PC runs plus the smallest
+rem   --everything        or from Everything: every AI model and book. Without one of these, the options below change the kit as it is (the first time, the recommended kit)
+rem   --no-ai             no AI models
+rem   --models IDS        just these AI models
+rem   --skip IDS          leave these out: AI models, books, maps, extras
+rem   --add IDS           add these, like the books that are off unless asked for
 rem   --this-computer     the kit goes on this PC, in your user folder
 rem   --drive PATH        the kit goes on the drive at PATH (like E:), in a TinfoilKit folder at its top
-rem   --essentials        just the essentials (the first time, right after the kit to try)
-rem   --all               all of it, even when that leaves less free space than SETUP likes (the first time, right after the kit to try)
-rem   --no-ai             no AI models
-rem   --models IDS        just these AI models (kit pick)
-rem   --skip IDS          leave these out: AI models, books, maps, extras (kit pick)
-rem   --add IDS           add these, like the books that are off unless asked for (kit pick)
 rem   --share             share the kit on the home network, behind an access code, whenever it's open
-rem   --home-server       share it, and start it whenever you sign in: for a PC that stays on
-rem   --yes               ask nothing: what isn't given keeps its default, and SETUP stops and says why instead of asking
+rem   --home-server       share it, and start it whenever you sign in: for a PC that stays on. The first time, it gets the rest right after the kit to try
+rem   --no-pause          the first time, get the rest right after the kit to try, instead of stopping there
+rem   --even-if-tight     all of what's picked rather than just the essentials, even when that leaves less free space than SETUP likes
+rem   --yes, -y           ask nothing: what isn't given keeps its default, and SETUP stops and says why instead of asking. The first time, it needs --drive or --this-computer
 rem The kit's commands run on its own program, tools\tinfoilkit-windows-x64.exe, which every download carries.
 rem GitHub's Download ZIP is just the source code, without it: SETUP says where to get the kit instead.
 rem cmd reads this file a line at a time while it runs, and kit update can replace it, so each line that hands
@@ -122,6 +126,7 @@ if exist "%KIT%\downloads\" (
   if defined KIT_PLACE call :stays
 ) else (
   call :other_kit
+  call :need_place
   set "KIT_STEPS=3"
   call :goes_on && set "KIT_STEPS=4"
   call :pick_region first
@@ -132,7 +137,6 @@ goto checks
 rem The first run's copy of this script chose this place and copied the kit here.
 :placed
 if not "%~2"=="" call :remove_download "%~2"
-if defined KIT_ESSENTIALS call :kit essentials !KIT_ESSENTIALS! >nul
 :checks
 call :writable || call :finish 1
 echo(
@@ -143,10 +147,12 @@ if defined KIT_YES set "UPDATE_ARGS=--yes"
 :download
 call :runtime || call :finish 1
 rem The answers that came with SETUP, after kit update so that new items can be left out too. The first run said
-rem them before moving the kit, and says them again quietly in case a kit was already where it landed.
+rem them before moving the kit, and says them again quietly in case a kit was already where it landed, then how much
+rem fits here, which it worked out before it put the kit here.
 if defined KIT_GIVEN (
   call :given_region >nul 2>&1
   call :given_parts >nul 2>&1
+  if defined KIT_ESSENTIALS call :kit essentials !KIT_ESSENTIALS! >nul
 ) else (
   call :given_region || call :finish 1
   call :given_parts || call :finish 1
@@ -156,8 +162,8 @@ if not defined KIT_REGION_ASKED call :pick_region
 set "ONLY=all"
 findstr /r /c:"\"essentials_only\": *true" "%KIT%\data\kit.json" >nul 2>&1 && set "ONLY=essentials"
 rem The first time, SETUP gets the try-it kit (kit starter): a few GB, checked, then the kit opens to be tried. The
-rem rest comes when SETUP runs again (that's saying it's ready), or right after the try-it kit with --all,
-rem --essentials or --home-server. After that, SETUP updates what's there. TRY: the first run, or one on a try-it
+rem rest comes when SETUP runs again (that's saying it's ready), or right after the try-it kit with --no-pause or
+rem --home-server. After that, SETUP updates what's there. TRY: the first run, or one on a try-it
 rem kit. REST: with TRY, the rest comes in this run. LATER: the rest, on a run after the try-it kit's: it asks what
 rem goes in.
 set "TRY=" & set "REST=" & set "LATER="
@@ -168,11 +174,7 @@ call :goes_on && set "REST=1"
 if defined TRY if defined UPDATE set "LATER=1"
 rem An update can bring models too big for this computer
 if not defined KIT_FIT_ASKED if not defined LATER call :fit_ai
-if not defined UPDATE (
-  call :kit starter on >nul
-  if "!KIT_HOW_MUCH!"=="all" set "ONLY=all"
-  if "!KIT_HOW_MUCH!"=="essentials" set "ONLY=essentials"
-)
+if not defined UPDATE call :kit starter on >nul
 if defined UPDATE if not defined TRY call :how_much_now
 if not defined TRY goto update_all
 if defined UPDATE goto the_rest
@@ -184,7 +186,7 @@ call :gb SMALL
 call :step "a small kit to try first (about !SMALL_GB!). Here's what it gets:"
 call :kit plan || call :finish 1
 rem kit plan timed the connection and said how long the try-it kit takes: now how long all of it takes, which comes
-rem next with --all, --essentials or --home-server, or else once the try-it kit has been tried.
+rem next with --no-pause or --home-server, or else once the try-it kit has been tried.
 set "ALL=0" & set "TOOK="
 "%TK%" --root "%KIT%" estimate --rest > "%OUT%" 2>nul
 for /f "usebackq tokens=1,2 delims=	" %%a in ("%OUT%") do (set "ALL=%%a" & set "TOOK=%%b")
@@ -376,25 +378,22 @@ if "%TESTED%"=="130" (
 )
 goto :eof
 
-rem An update: --essentials or --all switches how much of the kit it gets, and a kit with just the essentials is
-rem offered the rest once it fits.
+rem An update of a kit with just the essentials: --even-if-tight gets the rest, and without a preset (which says how
+rem much), it's offered the rest once it fits.
 :how_much_now
-if "!KIT_HOW_MUCH!/!ONLY!"=="essentials/all" (
-  call :kit essentials on
-  set "ONLY=essentials"
-)
-if "!KIT_HOW_MUCH!/!ONLY!"=="all/essentials" (
+if not "!ONLY!"=="essentials" goto :eof
+if defined KIT_PRESET goto :eof
+if defined KIT_TIGHT (
   call :kit essentials off
   set "ONLY=all"
+  goto :eof
 )
-if defined KIT_HOW_MUCH goto :eof
-if not "!ONLY!"=="essentials" goto :eof
 call :space "!KIT!"
 if not "!FULL!"=="fits" goto :eof
 echo(
 echo This kit has just the essentials, and now there's room for the rest (about !NEED_GB! more).
 if defined KIT_YES (
-  echo SETUP-Windows.bat --all gets it.
+  echo To get it too: .\kit.cmd essentials off, then SETUP again.
   goto :eof
 )
 call :ask_no "Get the rest too?" || goto :eof
@@ -534,20 +533,26 @@ if not defined REGION_ARGS exit /b 0
 call :kit region !REGION_ARGS!
 exit /b !errorlevel!
 
-rem (say: and say so first)
+rem All of them go to one kit pick, so a preset, where you live and Wikipedia's size work together as in the kit
+rem builder. (say: and say so first)
 :given_parts
 set "PICKS="
-if defined KIT_NO_AI set "PICKS=--no-ai"
+if defined KIT_PRESET set "PICKS=--!KIT_PRESET!"
+if defined KIT_NO_AI set "PICKS=!PICKS! --no-ai"
 if defined KIT_MODELS set "PICKS=!PICKS! --models "!KIT_MODELS!""
 if defined KIT_SKIP set "PICKS=!PICKS! --skip "!KIT_SKIP!""
 if defined KIT_ADD set "PICKS=!PICKS! --add "!KIT_ADD!""
 if not defined PICKS exit /b 0
+if defined KIT_REGION set "PICKS=!PICKS! --region "!KIT_REGION!""
+if defined KIT_WIKIPEDIA set "PICKS=!PICKS! --wikipedia "!KIT_WIKIPEDIA!""
+if defined KIT_WIKIPEDIA_SIZE set "PICKS=!PICKS! --wikipedia-size "!KIT_WIKIPEDIA_SIZE!""
 if "%~1"=="say" echo What goes in it:
 call :kit pick !PICKS!
 exit /b !errorlevel!
 
 rem Whether someone has said what goes in the kit, now or before (kit pick sets "picked").
 :chosen
+if defined KIT_PRESET exit /b 0
 if defined KIT_NO_AI exit /b 0
 if defined KIT_MODELS exit /b 0
 if defined KIT_SKIP exit /b 0
@@ -557,8 +562,7 @@ exit /b 1
 
 rem Whether the first run goes on to the rest of the kit right after the kit to try, instead of stopping there.
 :goes_on
-if "!KIT_HOW_MUCH!"=="all" exit /b 0
-if "!KIT_HOW_MUCH!"=="essentials" exit /b 0
+if defined KIT_NO_PAUSE exit /b 0
 if defined KIT_HOME_SERVER exit /b 0
 exit /b 1
 
@@ -568,7 +572,7 @@ rem skipped before on a computer with less memory). Models chosen with --models 
 set "KIT_FIT_ASKED=1"
 set "FIT=--ask"
 rem (what --ask does when nobody answers)
-if defined KIT_YES set "FIT=--restore --skip"
+if defined KIT_YES set "FIT=--restore --skip-too-big"
 if defined KIT_MODELS set "FIT="
 if defined KIT_NO_AI set "FIT="
 call :kit fit !FIT!
@@ -611,14 +615,22 @@ if not exist "!THERE!" (
 )
 del "%OUT%" 2>nul & cd /d "!OTHER_KIT!" & call "!THERE!" & exit
 
+rem With --yes, a new kit needs --drive or --this-computer: all of it may not fit on this PC's own disk.
+:need_place
+if not defined KIT_YES goto :eof
+if defined KIT_PLACE goto :eof
+echo(
+echo With --yes, SETUP needs to know where the kit goes: --drive PATH for an external drive (recommended),
+echo or --this-computer for your user folder here. Run the command again with one of them.
+call :finish 2
+goto :eof
+
 :place
 call :step "where should the kit go?"
 call :given_parts say || call :finish 1
 call :fit_ai
 set "KIT_GIVEN=1"
-if defined KIT_PLACE goto place_options
-if not defined KIT_YES goto place_ask
-:place_options
+if not defined KIT_PLACE goto place_ask
 call :place_given && goto :eof
 if defined KIT_YES (
   echo Run the command again once that's sorted. Without --yes, SETUP asks instead.
@@ -696,15 +708,12 @@ rem kit place says what it did, or why it can't, and prints the kit's new folder
 set "NEW="
 for /f "usebackq delims=" %%l in ("%OUT%") do set "NEW=%%l"
 if not defined NEW call :finish 1
-if /i "!NEW!"=="!KIT!" (
-  call :kit essentials !KIT_ESSENTIALS! >nul
-  goto :eof
-)
+rem (it says how much once the options are said again, after kit update)
+if /i "!NEW!"=="!KIT!" goto :eof
 call :setup_in "!NEW!"
 cd /d "!NEW!" & call "!THERE!" --placed "!KIT!" & exit
 
-rem Where --this-computer or --drive puts the kit (with --yes and neither, this PC), in DEST, and the folder it goes
-rem in, in VOL: --drive E: or E:\ is E:\TinfoilKit, and a PATH that ends in TinfoilKit is the kit's folder itself.
+rem Where --this-computer or --drive puts the kit, in DEST, and the folder it goes in, in VOL: --drive E: or E:\ is E:\TinfoilKit, and a PATH that ends in TinfoilKit is the kit's folder itself.
 :given_dest
 set "DEST=%USERPROFILE%\%NAME%"
 set "VOL=%USERPROFILE%"
@@ -782,8 +791,11 @@ set "TIGHT=All of it fits on !AT!, but leaves only !LEFT_GB! free. Better to lea
 set "TIGHT_ESS=Only the essentials fit on !AT!, and they leave only !LEFT_ESS_GB! free. Better to leave at least !LEAVE_GB!!KEEPS!."
 set "NOT_ALL=All of it won't fit on !AT!: it needs about !NEED_GB! plus some to spare, and !FREE_GB! is free."
 set "NO_ROOM=There isn't room on !AT!, even for the essentials: they need about !NEED_ESS_GB! plus some to spare, and !FREE_GB! is free."
-rem --essentials or --all, and what fits
-set "PREF=!KIT_HOW_MUCH!"
+rem Just the essentials, when they were picked (--essentials, or the Essentials of kit pick --ask), or all of it
+rem even if that's tight, with --even-if-tight: and what fits
+set "PREF="
+if defined KIT_TIGHT set "PREF=all"
+findstr /r /c:"\"essentials_only\": *true" "%KIT%\data\kit.json" >nul 2>&1 && set "PREF=essentials"
 if "!PREF!/!FULL!"=="/fits" set "ONLY=all" & exit /b 0
 if "!PREF!/!FULL!"=="all/fits" set "ONLY=all" & exit /b 0
 if "!PREF!/!ESS!"=="essentials/fits" set "ONLY=essentials" & exit /b 0
@@ -820,7 +832,8 @@ echo   2  !OTHER!
 call :choose "Type 1 or 2, then press Enter:" 2
 if "!PICK!"=="1" set "ONLY=essentials" & exit /b 0
 exit /b 1
-rem Nobody to ask: just the essentials where all of it doesn't fit with room to spare, unless --all said otherwise
+rem Nobody to ask: just the essentials where all of it doesn't fit with room to spare, unless --even-if-tight said
+rem otherwise
 :how_much_given
 if "!ESS!"=="no" (echo !NO_ROOM!) & exit /b 1
 set "SAID=!NOT_ALL!"
@@ -1019,6 +1032,7 @@ rem cmd splits words at commas and spaces, so a value is every word up to the ne
 rem New York and --region us/new-york,us/new-jersey all work (kit region takes ids with spaces between them too). OPTS is help once it has listed them, and bad when it can't take them (SETUP exits 2).
 :options
 set "OPTS="
+set "PRESET="
 :options_next
 if "%~1"=="" exit /b 0
 set "OPT=%~1"
@@ -1027,9 +1041,11 @@ rem (this script starting itself again)
 if "!OPT!"=="--placed" exit /b 0
 if "!OPT!"=="--updated" exit /b 0
 if /i "!OPT!"=="--yes" (set "KIT_YES=1" & goto options_next)
+if /i "!OPT!"=="-y" (set "KIT_YES=1" & goto options_next)
 if /i "!OPT!"=="--this-computer" (set "KIT_PLACE=computer" & goto options_next)
-if /i "!OPT!"=="--essentials" (set "KIT_HOW_MUCH=essentials" & goto options_next)
-if /i "!OPT!"=="--all" (set "KIT_HOW_MUCH=all" & goto options_next)
+for %%o in (recommended essentials everything) do if /i "!OPT!"=="--%%o" (set "P=%%o" & goto options_preset)
+if /i "!OPT!"=="--no-pause" (set "KIT_NO_PAUSE=1" & goto options_next)
+if /i "!OPT!"=="--even-if-tight" (set "KIT_TIGHT=1" & goto options_next)
 if /i "!OPT!"=="--no-ai" (set "KIT_NO_AI=1" & goto options_next)
 if /i "!OPT!"=="--share" (set "KIT_SHARE=1" & goto options_next)
 if /i "!OPT!"=="--home-server" (set "KIT_HOME_SERVER=1" & goto options_next)
@@ -1065,6 +1081,16 @@ if /i "!OPT!"=="--drive" set "KIT_PLACE=drive" & set "KIT_DRIVE=!VAL!"
 if /i "!OPT!"=="--models" set "KIT_MODELS=!VAL!"
 if /i "!OPT!"=="--skip" set "KIT_SKIP=!VAL!"
 if /i "!OPT!"=="--add" set "KIT_ADD=!VAL!"
+goto options_next
+rem One of the kit builder's presets, at most
+:options_preset
+if defined PRESET if not "!PRESET!"=="!P!" (
+  >&2 echo SETUP: choose one of --recommended, --essentials and --everything.
+  set "OPTS=bad"
+  exit /b 2
+)
+set "PRESET=!P!"
+set "KIT_PRESET=!P!"
 goto options_next
 :options_help
 call :options_list

@@ -736,15 +736,7 @@ func setRegion(root string, rs []*obj, wiki []string, edition string) *obj {
 		if old != nil {
 			enabled = old.getOr("enabled", true)
 		}
-		var ids []any
-		for _, r := range rs {
-			ids = append(ids, r.get("id"))
-		}
-		region := any(ids)
-		if len(ids) == 1 {
-			region = ids[0]
-		}
-		maps := newObj("enabled", enabled, "region", region)
+		maps := newObj("enabled", enabled, "region", regionValue(rs))
 		for _, k := range old.Keys() {
 			if !maps.has(k) && !contains(regionKeys, k) {
 				maps.set(k, old.get(k))
@@ -764,6 +756,29 @@ func setRegion(root string, rs []*obj, wiki []string, edition string) *obj {
 	return out
 }
 
+// regionValue is kit.json's region for these places: one place's id, or a list of them.
+func regionValue(rs []*obj) any {
+	var ids []any
+	for _, r := range rs {
+		ids = append(ids, r.get("id"))
+	}
+	if len(ids) == 1 {
+		return ids[0]
+	}
+	return ids
+}
+
+// wikipediaZims is the names of kit.json's Wikipedias, switched on or not.
+func wikipediaZims(cfg *obj) []string {
+	var out []string
+	for _, z := range cfg.objs("library") {
+		if wikipediaRE.MatchString(z.str("zim")) {
+			out = append(out, z.str("zim"))
+		}
+	}
+	return out
+}
+
 func wikiSize(name string) string {
 	for _, ws := range wikiSizes {
 		if ws[0] == name {
@@ -773,27 +788,16 @@ func wikiSize(name string) string {
 	return ""
 }
 
-// cmdRegion is where you live, and any places nearby: it sets the map areas, the road data for directions, the
-// address search, home, units and the language Wikipedia comes in. SETUP and the website's kit builder use it. Also
-// how much of Wikipedia.
-func cmdRegion(root string, a *cliArgs) {
-	if len(regions().list("regions")) == 0 {
-		die(regionsFile() + " is missing or broken; get the kit again (./kit update) to restore it")
-	}
-	if a.has("find") {
-		for _, r := range findRegions(strings.Join(a.list("find"), " ")) {
-			out(pyStr(r.get("id")) + "\t" + pyStr(r.get("name")) + "\t" + pyStr(r.get("group")) + "\n")
-		}
-		return
-	}
-	cfg := loadConfig(root)
+// wikipediaOptions is --wikipedia and --wikipedia-size, checked: the languages (nil when not given) and Kiwix's edition
+// for the size ("" when not given). Stops with a message on one the kit doesn't offer.
+func wikipediaOptions(cfg *obj, codes, size string) ([]string, string) {
 	langs := regions().child("languages")
 	var wiki []string
 	edition := ""
-	if w := a.str("wikipedia"); w != "" {
+	if codes != "" {
 		wiki = []string{}
 		var bad []string
-		for _, c := range strings.Split(w, ",") {
+		for _, c := range strings.Split(codes, ",") {
 			if c = strings.ToLower(strings.TrimSpace(c)); c != "" {
 				wiki = append(wiki, c)
 				if !langs.has(c) {
@@ -809,19 +813,55 @@ func cmdRegion(root string, a *cliArgs) {
 			die("Wikipedia doesn't come in '" + strings.Join(bad, ",") + "' here. Languages: " + strings.Join(all, ", "))
 		}
 	}
-	if s := a.str("wikipedia_size"); s != "" {
-		edition = wikiSize(strings.ToLower(strings.TrimSpace(s)))
+	if size != "" {
+		edition = wikiSize(strings.ToLower(strings.TrimSpace(size)))
 		if edition == "" {
 			var ns []string
 			for _, ws := range wikiSizes {
 				ns = append(ns, ws[0])
 			}
-			die(fmt.Sprintf("Wikipedia doesn't come in a size called '%s'. The sizes: %s.", s, strings.Join(ns, ", ")))
+			die(fmt.Sprintf("Wikipedia doesn't come in a size called '%s'. The sizes: %s.", size, strings.Join(ns, ", ")))
 		}
 		if wiki == nil && wikipediaEdition(cfg) == "" {
 			die("kit.json has no Wikipedia. Add one in a language: ./kit region --wikipedia CODES")
 		}
 	}
+	return wiki, edition
+}
+
+// needRegions stops when tools/regions.json, the places the kit offers, is missing.
+func needRegions() {
+	if len(regions().list("regions")) == 0 {
+		die(regionsFile() + " is missing or broken; get the kit again (./kit update) to restore it")
+	}
+}
+
+// wikipediaMarks: a size of Wikipedia someone asks for while the kit gets just the essentials comes whole in that size,
+// rather than the best articles' text standing in for it (wikiStandIns). So its entries switched on get "essential":
+// true.
+func wikipediaMarks(cfg *obj) changes {
+	var marks changes
+	for _, z := range cfg.objs("library") {
+		if wikipediaRE.MatchString(z.str("zim")) && z.on() {
+			marks.set(entry{"library", z.str("zim")}, true)
+		}
+	}
+	return marks
+}
+
+// cmdRegion is where you live, and any places nearby: it sets the map areas, the road data for directions, the
+// address search, home, units and the language Wikipedia comes in. SETUP and the website's kit builder use it. Also
+// how much of Wikipedia.
+func cmdRegion(root string, a *cliArgs) {
+	needRegions()
+	if a.has("find") {
+		for _, r := range findRegions(strings.Join(a.list("find"), " ")) {
+			out(pyStr(r.get("id")) + "\t" + pyStr(r.get("name")) + "\t" + pyStr(r.get("group")) + "\n")
+		}
+		return
+	}
+	cfg := loadConfig(root)
+	wiki, edition := wikipediaOptions(cfg, a.str("wikipedia"), a.str("wikipedia_size"))
 	if a.flag("sizes") { // for the languages given, or kit.json's
 		codes := wiki
 		if len(codes) == 0 {
@@ -833,6 +873,7 @@ func cmdRegion(root string, a *cliArgs) {
 		return
 	}
 	place := a.list("place")
+	var rs []*obj
 	if len(place) == 0 {
 		rs, unknown := regionsOf(cfg.child("maps").get("region"))
 		switch {
@@ -841,24 +882,37 @@ func cmdRegion(root string, a *cliArgs) {
 				die("kit.json has no region yet: ./kit region PLACE")
 			}
 			place = []string{pyStr(rs[0].get("id"))}
-		case wiki != nil || edition != "":
-			cfg = setRegion(root, nil, wiki, edition)
-			log("Wikipedia: " + describeWikipedia(cfg) + ".")
-			return
-		default:
+		case wiki == nil && edition == "":
 			out(describeRegion(cfg) + "\n")
 			return
 		}
 	}
-	rs := placesIn(strings.Join(place, " "))
-	first := rs[0]
+	if len(place) > 0 {
+		rs = placesIn(strings.Join(place, " "))
+	}
 	if a.flag("languages") {
-		for _, c := range languageChoices(first) {
+		for _, c := range languageChoices(rs[0]) {
 			out(strings.Join(c.codes, ",") + "\t" + c.label + "\t" + strconv.FormatInt(c.gb, 10) + "\n")
 		}
 		return
 	}
 	cfg = setRegion(root, rs, wiki, edition)
+	if edition != "" && isTrue(cfg.child("settings").get("essentials_only")) {
+		if marks := wikipediaMarks(cfg); len(marks) > 0 {
+			switchParts(root, nil, marks)
+		}
+	}
+	sayRegion(cfg, rs)
+}
+
+// sayRegion says what ./kit region set: the map's places, its address search and home, and Wikipedia; or, with no
+// places, just Wikipedia.
+func sayRegion(cfg *obj, rs []*obj) {
+	if len(rs) == 0 {
+		log("Wikipedia: " + describeWikipedia(cfg) + ".")
+		return
+	}
+	first := rs[0]
 	m := mapsSettings(cfg)
 	label, name := pyStr(m.get("label")), pyStr(first.get("name"))
 	log("Maps: " + label + ". Street maps and directions for " + label + ", and a simple map of the whole world.")
@@ -900,6 +954,57 @@ func cmdRegion(root string, a *cliArgs) {
 	log("Wikipedia: " + describeWikipedia(cfg) + ".")
 }
 
+// standardList is the kit's standard list, app/kit.json, as this version of the kit has it.
+func standardList(root string) *obj {
+	data, err := os.ReadFile(filepath.Join(appDir(root), "kit.json"))
+	if err != nil {
+		die(oserr(err))
+	}
+	std, err := parseObj(data)
+	if err != nil {
+		die(oserr(err))
+	}
+	return std
+}
+
+// presetChanges is what a preset of the kit builder's switches on and off, and the "essential" marks it takes off:
+// every model and book of the standard list, and the map, as the list has them (recommended, and essentials, which
+// essentials_only then narrows), or all of them (everything). Models switched off for this computer's memory stay
+// off, except for everything. What someone added to kit.json themselves, and the extras, stay as they are. A
+// Wikipedia in any language and size is the list's Wikipedia.
+func presetChanges(root string, cfg *obj, key string) (ch, marks changes) {
+	std := standardList(root)
+	off := cfg.child("settings").list("models_off_for_memory")
+	listed := func(section, id string) *obj {
+		for _, e := range std.objs(section) {
+			name := pyStr(e.get(partKey(section)))
+			if name == id || section == "library" && wikipediaRE.MatchString(name) && wikipediaRE.MatchString(id) {
+				return e
+			}
+		}
+		return nil
+	}
+	for _, section := range []string{"models", "library"} {
+		for _, e := range cfg.objs(section) {
+			id := pyStr(e.get(partKey(section)))
+			s := listed(section, id)
+			if s == nil {
+				continue
+			}
+			on := key == "everything" || truthy(s.getOr("enabled", true))
+			if section == "models" && key != "everything" && containsAny(off, id) {
+				on = false
+			}
+			ch.set(entry{section, id}, on)
+			if isTrue(e.get("essential")) && !isTrue(s.get("essential")) {
+				marks.set(entry{section, id}, false)
+			}
+		}
+	}
+	ch.set(entry{"maps", "maps"}, key == "everything" || std.child("maps") == nil || truthy(std.child("maps").getOr("enabled", true)))
+	return ch, marks
+}
+
 // ----------------------------------------------------------------------------- how much room it takes
 
 var yes, no = true, false
@@ -909,6 +1014,13 @@ var yes, no = true, false
 // choosing where. essentials, starter: only those (see essential() and starterPart()); nil: kit.json's
 // essentials_only and starter_only decide. left: only what isn't in the kit yet.
 func estimateBytes(root string, cfg *obj, essentials, starter *bool, left bool) float64 {
+	total, _ := estimateItems(root, cfg, essentials, starter, left)
+	return total
+}
+
+// estimateItems is estimateBytes, and the items it counts ("models/ID", "library/ZIM", "maps/basemap" and so on,
+// not the programs), in kit.json's order.
+func estimateItems(root string, cfg *obj, essentials, starter *bool, left bool) (float64, []string) {
 	s := cfg.child("settings")
 	st := essentials == nil && isTrue(s.get("starter_only"))
 	if starter != nil {
@@ -1022,12 +1134,14 @@ func estimateBytes(root string, cfg *obj, essentials, starter *bool, left bool) 
 		}
 	}
 	total := 0.0
+	var items []string
 	for _, p := range on {
 		if !have[p.key] {
 			total += sizes[p.id]
+			items = append(items, p.key)
 		}
 	}
-	return total + programs
+	return total + programs, items
 }
 
 func hasKey[V any](m map[string]V, k string) bool {
@@ -1052,6 +1166,14 @@ func cmdEstimate(root string, a *cliArgs) {
 	}
 	if a.flag("starter") {
 		st = &yes
+	}
+	if a.flag("json") {
+		total, items := estimateItems(root, cfg, ess, st, false)
+		j := newObj()
+		j.set("gb", int64(math.Ceil(total/GB)))
+		j.set("items", anyList(items))
+		out(dumps(j, jsonStyle{indent: 2, ascii: true}) + "\n")
+		return
 	}
 	out(fmt.Sprintf("%d\n", estimateGB(root, cfg, ess, st, false)))
 }

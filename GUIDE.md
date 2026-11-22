@@ -180,8 +180,10 @@ new in the kit's own list (`app/kit.json`).
 
 In a terminal, SETUP takes every answer as an option, and with `--yes` it asks nothing: for example
 `bash SETUP.command --region texas --this-computer --yes` (on Windows, `.\SETUP-Windows.bat` with the same options) gets
-the kit to try, and `bash ~/TinfoilKit/app/SETUP.command --yes` the rest. `--help` lists them: a drive, just the
-essentials, how much of Wikipedia, which AI models and books, and sharing on the home network.
+the kit to try, and `bash ~/TinfoilKit/app/SETUP.command --yes` the rest. `--help` lists them, one for each setting of
+the kit builder on tinfoilkit.com, which writes them for you: a preset (`--recommended`, `--essentials` or
+`--everything`), where you live, how much of Wikipedia, which AI models and books, a drive or this computer, and sharing
+on the home network.
 
 ## Removing it
 

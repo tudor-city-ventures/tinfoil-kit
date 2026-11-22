@@ -64,7 +64,7 @@ Commands (run from the kit's app folder, e.g.  ./kit sync):
                      Without on or off, says how big the rest is and how long it takes to download.
   fit [--ask]        Which AI model this computer runs, given its memory, and the switched-on ones
                      too big for it. --ask (SETUP.command) asks whether to download those anyway;
-                     --skip switches them off, --restore back on. --json for scripts and agents.
+                     --skip-too-big switches them off, --restore back on. --json for scripts and agents.
   share [on|off|new-code]
                      Let phones and laptops on your home network use the kit, once they type its
                      access code. Shows the address, the code and a QR code.
@@ -74,10 +74,13 @@ Commands (run from the kit's app folder, e.g.  ./kit sync):
                      areas, the road data for directions, address search, home and units. --wikipedia en,es
                      also picks Wikipedia's languages; --find WORDS lists places; --languages lists a place's
                      languages.
-  pick               What goes in the kit, by name (SETUP's options): --no-ai, --models IDS (just
-                     those), --skip IDS, --add IDS. --ask asks the kit builder's questions instead.
-                     Either one sets "picked" in kit.json, so SETUP doesn't ask again.
-                     Without options, says what's on, its size, and the time to download it.
+  pick               What goes in the kit, as SETUP's options and the website's kit builder say it: a
+                     preset to start over from (--recommended, --essentials, --everything), where you
+                     live and Wikipedia (--region, --wikipedia, --wikipedia-size), then by name: --no-ai,
+                     --models IDS (just those), --skip IDS, --add IDS. Without a preset, these change
+                     the kit as it is. --ask asks the kit builder's questions instead. Choosing sets
+                     "picked" in kit.json, so SETUP doesn't ask again. Without options, says what's
+                     on, its size, and the time to download it.
   remove NAME...     Delete what these downloaded (names as pick takes them), for the space, and switch
                      them off so sync doesn't get them again. Asks first; --yes doesn't.
   layout             Move a kit from before its app, downloads and data folders into them, by
@@ -163,9 +166,6 @@ var standIns = map[string]struct {
 	edition string
 	mb      float64
 }{"starter": {"top_mini", 1000}, "essentials": {"top_nopic", 5000}}
-
-// The kit builder's Essentials takes Wikipedia down to this size (site/components/builder.jsx too).
-var wikiPreset = map[string]string{"essentials": "top-text"}
 
 var ghEncodedValues = map[string][]string{
 	"car": {"car_access", "car_average_speed", "road_access"},
@@ -1815,7 +1815,8 @@ func init() {
 		{name: "estimate", help: "about how many GB this kit.json needs (no internet needed)", run: cmdEstimate, args: []cliArg{
 			flagArg("--essentials", "just the essentials"),
 			flagArg("--starter", "just the try-it kit"),
-			flagArg("--rest", "GB still to download for everything switched on, and how long that takes (tab-separated)")}},
+			flagArg("--rest", "GB still to download for everything switched on, and how long that takes (tab-separated)"),
+			flagArg("--json", "the GB, and the items it counts (not the programs), as JSON")}},
 		{name: "drives", help: "the plugged-in drives the kit could go on", run: cmdDrives, args: []cliArg{
 			flagArg("--json", "with this computer's free space and what the kit needs")}},
 		{name: "kits", help: "kits set up before, in the home folder or on a drive plugged in", run: cmdKits},
@@ -1826,8 +1827,14 @@ func init() {
 		{name: "essentials", help: "get just the essentials from now on (on), or everything again (off)", run: cmdEssentials,
 			args: []cliArg{onOff}},
 		{name: "starter", help: "get just the try-it kit from now on (on), or everything (off)", run: cmdStarter, args: []cliArg{onOff}},
-		{name: "pick", help: "what goes in the kit: switch models, books, extras and the map on or off", run: cmdPick, args: []cliArg{
+		{name: "pick", help: "what goes in the kit, as the website's kit builder picks it: a preset, where you live, then what's different", run: cmdPick, args: []cliArg{
 			flagArg("--ask", "ask the kit builder's questions: a preset, or each part"),
+			flagArg("--recommended", "start over from the recommended kit: what we'd take"),
+			flagArg("--essentials", "start over from just the essentials: the programs, the map, the most important books, Wikipedia's best articles, and the AI this computer runs plus the smallest"),
+			flagArg("--everything", "start over from everything: every AI model and book, the biggest collections too"),
+			valueArg("--region", "PLACES", "where you live, and places nearby after commas, as ./kit region takes them"),
+			valueArg("--wikipedia", "CODES", "Wikipedia's languages, comma-separated (en, es, de...)"),
+			valueArg("--wikipedia-size", "SIZE", "how much of Wikipedia: all, all-text, top, top-text or top-intros (./kit region -h)"),
 			flagArg("--no-ai", "no AI models"),
 			valueArg("--models", "IDS", "only these AI models (ids, comma-separated)"),
 			valueArg("--skip", "IDS", "leave these out: AI models, books (a name, or its start up to an underscore, like wikipedia), maps, or a whole part (models, library, extras)"),
@@ -1837,7 +1844,7 @@ func init() {
 			flagArg("-y --yes", "don't ask first")}},
 		{name: "fit", help: "which AI model this computer runs, and the ones too big for its memory", run: cmdFit, args: []cliArg{
 			flagArg("--ask", "ask whether to download the models it can't run (SETUP)"),
-			flagArg("--skip", "switch off the models it can't run, in kit.json"),
+			flagArg("--skip-too-big", "switch off the models it can't run, in kit.json"),
 			flagArg("--restore", "switch back on the ones skipped for a smaller computer"),
 			flagArg("--json", "print it all as JSON")}},
 		{name: "share", help: "let phones and laptops on your home network use the kit, with an access code", run: cmdShare, args: []cliArg{

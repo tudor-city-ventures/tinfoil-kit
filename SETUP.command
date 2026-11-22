@@ -5,35 +5,49 @@
 # fits there, and moves it there. Then it's ./kit update, ./kit sync and ./kit test, with checks and plain-English
 # prompts for first-timers: first a small kit to try (./kit starter), then the rest when SETUP runs again.
 # The answers can come with it instead, so one command sets the kit up: an AI helping someone asks them the
-# questions, then gives them that command (site/llms.txt). It asks only what these leave out:
+# questions, then gives them that command (site/llms.txt). The kit builder on tinfoilkit.com writes them too, one for
+# each of its settings. It asks only what these leave out:
 #   --region PLACES     where you live: a US state, a country or a part of one, as ./kit region takes it, and any
 #                       places nearby for the map, after commas (like us/new-york,us/new-jersey)
 #   --wikipedia CODES   Wikipedia's languages, like de or de,en
-#   --wikipedia-size SIZE  how much of Wikipedia: all (the default), all-text, top (the best 50,000 articles),
-#                       top-text or top-intros (their opening paragraphs)
+#   --wikipedia-size SIZE  how much of Wikipedia: all, all-text, top (the best 50,000 articles), top-text or
+#                       top-intros (their opening paragraphs)
+#   --recommended       what goes in starts over from the kit builder's Recommended: what we'd take
+#   --essentials        or from Essentials: the programs, the map, the most important books, Wikipedia's best
+#                       articles, and the AI this computer runs plus the smallest
+#   --everything        or from Everything: every AI model and book. Without one of these, the options below
+#                       change the kit as it is (the first time, the recommended kit)
+#   --no-ai             no AI models
+#   --models IDS        just these AI models
+#   --skip IDS          leave these out: AI models, books, maps, extras
+#   --add IDS           add these, like the books that are off unless asked for
 #   --this-computer     the kit goes on this computer, in the home folder
 #   --drive PATH        the kit goes on the drive at PATH (like /Volumes/T7), in a TinfoilKit folder at its top
-#   --essentials        just the essentials (the first time, right after the kit to try)
-#   --all               all of it, even when that leaves less free space than SETUP likes (the first time, right
-#                       after the kit to try)
-#   --no-ai             no AI models
-#   --models IDS        just these AI models (./kit pick)
-#   --skip IDS          leave these out: AI models, books, maps, extras (./kit pick)
-#   --add IDS           add these, like the books that are off unless asked for (./kit pick)
 #   --share             share the kit on the home network, behind an access code, whenever it's open
-#   --home-server       share it, and start it with the computer: for a computer that stays on, no screen needed
-#   --yes               ask nothing: what isn't given keeps its default, and SETUP stops and says why instead of asking
+#   --home-server       share it, and start it with the computer: for a computer that stays on, no screen needed.
+#                       The first time, it gets the rest right after the kit to try
+#   --no-pause          the first time, get the rest right after the kit to try, instead of stopping there
+#   --even-if-tight     all of what's picked rather than just the essentials, even when that leaves less free space
+#                       than SETUP likes
+#   --yes, -y           ask nothing: what isn't given keeps its default, and SETUP stops and says why instead of
+#                       asking. The first time, it needs --drive or --this-computer
 # The whole script is one { } block, so bash reads all of it before running any: ./kit update can replace this
 # file, and the first run moves it.
 {
 cd "$(dirname "$0")" || exit 1
 # The answers go in the environment, since this script starts itself again after moving or updating the kit.
+preset=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --placed|--updated) break ;;    # this script starting itself again
-    --yes) export KIT_YES=1 ;;
+    --yes|-y) export KIT_YES=1 ;;
     --this-computer) export KIT_PLACE=computer ;;
-    --essentials|--all) export KIT_HOW_MUCH="${1#--}" ;;
+    --recommended|--essentials|--everything)
+      [ -z "$preset" ] || [ "$preset" = "${1#--}" ] ||
+        { echo "SETUP: choose one of --recommended, --essentials and --everything." >&2; exit 2; }
+      preset="${1#--}"; export KIT_PRESET="$preset" ;;
+    --no-pause) export KIT_NO_PAUSE=1 ;;
+    --even-if-tight) export KIT_TIGHT=1 ;;
     --no-ai) export KIT_NO_AI=1 ;;
     --share) export KIT_SHARE=1 ;;
     --home-server) export KIT_HOME_SERVER=1 ;;
@@ -134,10 +148,14 @@ room_note() {
 # After space(): how much of the kit goes to the place it looked at ($1 names it). Sets ONLY to all or essentials,
 # or returns 1 for the way out: choosing somewhere else, or $2 if given ("Not now", once the kit is in place).
 how_much() {
-  local spare why="" pref="${KIT_HOW_MUCH:-}" other="${2:-Somewhere else}"
+  local spare why="" pref="" other="${2:-Somewhere else}"
   spare="$(gb "$LEAVE")"
   [ "$1" = "$THIS" ] && why=", so $THIS keeps running well"
-  case "$pref/$FULL/$ESS" in    # --essentials or --all, and what fits
+  # Just the essentials, when they were picked (--essentials, or the Essentials of ./kit pick --ask), or all of it
+  # even if that's tight, with --even-if-tight
+  if grep -q '"essentials_only": *true' "$MINE" 2>/dev/null; then pref=essentials
+  elif [ -n "${KIT_TIGHT:-}" ]; then pref=all; fi
+  case "$pref/$FULL/$ESS" in
     /fits/*|all/fits/*|essentials/*/fits) ONLY="${pref:-all}"; return 0 ;;
     all/tight/*)
       say "All of it fits on $1, but leaves only $(gb $((FREE - NEED))) free. Better to leave at least $spare$why."
@@ -328,27 +346,30 @@ pick_size() {
 }
 
 # The answers that came with SETUP's options (or the first run's, for a kit that was already where it put this one):
-# where you live, and what goes in the kit. Saying them again changes nothing.
+# where you live, and what goes in the kit. Saying them again changes nothing. given_parts hands all of them to one
+# ./kit pick, so a preset, where you live and Wikipedia's size work together as in the kit builder.
 given_region() {
   local wiki=(${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"} ${KIT_WIKIPEDIA_SIZE:+--wikipedia-size "$KIT_WIKIPEDIA_SIZE"})
   if [ -n "${KIT_REGION:-}" ]; then ./kit region "$KIT_REGION" ${wiki[@]+"${wiki[@]}"}
   elif [ ${#wiki[@]} -gt 0 ]; then ./kit region "${wiki[@]}"; fi
 }
-picked() { [ -n "${KIT_NO_AI:-}${KIT_MODELS:-}${KIT_SKIP:-}${KIT_ADD:-}" ]; }
+picked() { [ -n "${KIT_PRESET:-}${KIT_NO_AI:-}${KIT_MODELS:-}${KIT_SKIP:-}${KIT_ADD:-}" ]; }
 # Whether someone has said what goes in the kit, now or before (./kit pick sets "picked").
 chosen() { picked || grep -q '"picked": *true' "$MINE" 2>/dev/null; }
 # Whether the first run goes on to the rest of the kit right after the kit to try, instead of stopping there.
-goes_on() { case "${KIT_HOW_MUCH:-}" in all|essentials) true ;; *) [ "${KIT_HOME_SERVER:-}" = 1 ] ;; esac; }
+goes_on() { [ -n "${KIT_NO_PAUSE:-}" ] || [ "${KIT_HOME_SERVER:-}" = 1 ]; }
 given_parts() {
   picked || return 0
-  ./kit pick ${KIT_NO_AI:+--no-ai} ${KIT_MODELS:+--models "$KIT_MODELS"} ${KIT_SKIP:+--skip "$KIT_SKIP"} ${KIT_ADD:+--add "$KIT_ADD"}
+  ./kit pick ${KIT_PRESET:+--$KIT_PRESET} ${KIT_REGION:+--region "$KIT_REGION"} ${KIT_WIKIPEDIA:+--wikipedia "$KIT_WIKIPEDIA"} \
+    ${KIT_WIKIPEDIA_SIZE:+--wikipedia-size "$KIT_WIKIPEDIA_SIZE"} ${KIT_NO_AI:+--no-ai} ${KIT_MODELS:+--models "$KIT_MODELS"} \
+    ${KIT_SKIP:+--skip "$KIT_SKIP"} ${KIT_ADD:+--add "$KIT_ADD"}
 }
 
 # Which AI model this computer runs, and whether to get the ones too big for it (on an update, also the ones skipped
 # before on a computer with less memory). Models chosen with --models or --no-ai stay as chosen.
 fit_ai() {
   if [ -n "${KIT_NO_AI:-}${KIT_MODELS:-}" ]; then ./kit fit
-  elif [ -n "${KIT_YES:-}" ]; then ./kit fit --restore --skip    # what --ask does when nobody answers
+  elif [ -n "${KIT_YES:-}" ]; then ./kit fit --restore --skip-too-big    # what --ask does when nobody answers
   else ./kit fit --ask; fi
   export KIT_FIT_ASKED=1
 }
@@ -359,7 +380,7 @@ put_kit() {
   local new
   export KIT_ESSENTIALS=off; [ "$ONLY" = essentials ] && KIT_ESSENTIALS=on    # the copy there says so in its kit.json
   new="$(./kit place "$1")" || finish 1
-  [ "$new" = "$KIT" ] && { ./kit essentials "$KIT_ESSENTIALS" >/dev/null; return; }
+  [ "$new" = "$KIT" ] && return    # (it says how much once the options are said again, after ./kit update)
   setup_in "$new" --placed
 }
 
@@ -395,7 +416,7 @@ place() {
   fit_ai
   export KIT_GIVEN=1
   space "$HOME/$NAME"
-  if [ -n "${KIT_PLACE:-}${KIT_YES:-}" ]; then
+  if [ -n "${KIT_PLACE:-}" ]; then
     place_given && return
     [ -n "${KIT_YES:-}" ] && { echo "Run the command again once that's sorted. Without --yes, SETUP asks instead."; finish 1; }
   fi
@@ -421,7 +442,7 @@ place() {
   done
 }
 
-# Where --this-computer or --drive puts the kit (with --yes and neither, this computer), and putting it there.
+# Where --this-computer or --drive puts the kit, and putting it there.
 given_dest() {
   local d="${KIT_DRIVE%/}"
   if [ "${KIT_PLACE:-computer}" = computer ]; then echo "$HOME/$NAME"
@@ -548,11 +569,14 @@ if [ "${1:-}" != "--updated" ]; then
       [ -n "${KIT_PLACE:-}" ] && [ "$(given_dest)" != "$KIT" ] && echo "It stays there: --this-computer and --drive choose where a new kit goes."
     else
       other_kit
+      if [ -n "${KIT_YES:-}" ] && [ -z "${KIT_PLACE:-}" ]; then
+        say "With --yes, SETUP needs to know where the kit goes: --drive PATH for an external drive (recommended),"
+        echo "or --this-computer for the home folder here. Run the command again with one of them."
+        finish 2
+      fi
       KIT_STEPS=3; goes_on && KIT_STEPS=4
       pick_region first; place
     fi
-  else
-    [ -n "${KIT_ESSENTIALS:-}" ] && ./kit essentials "$KIT_ESSENTIALS" >/dev/null
   fi
   checks
   # The Mac app looks for the kit here, and names its drive if it isn't plugged in.
@@ -565,6 +589,8 @@ fi
 # them before moving the kit, and says them again quietly in case a kit was already where it landed.
 if [ -n "${KIT_GIVEN:-}" ]; then
   { given_region; given_parts; } >/dev/null 2>&1
+  # (how much fits here, which the first run worked out before it put the kit here)
+  [ -n "${KIT_ESSENTIALS:-}" ] && ./kit essentials "$KIT_ESSENTIALS" >/dev/null
 else
   given_region || finish 1
   given_parts || finish 1
@@ -573,27 +599,24 @@ fi
 
 ONLY=all; grep -q '"essentials_only": *true' "$MINE" 2>/dev/null && ONLY=essentials
 # The first time, SETUP gets the try-it kit (./kit starter): a few GB, checked, then the kit opens to be tried. The
-# rest comes when SETUP runs again (that's saying it's ready), or right after the try-it kit with --all,
-# --essentials or --home-server. After that, SETUP updates what's there.
+# rest comes when SETUP runs again (that's saying it's ready), or right after the try-it kit with --no-pause or
+# --home-server. After that, SETUP updates what's there.
 TRY=0; { [ $FIRST = 1 ] || grep -q '"starter_only": *true' "$MINE" 2>/dev/null; } && TRY=1
 REST=0; { [ $FIRST = 0 ] || goes_on; } && REST=1    # with TRY: the rest, in this run
 LATER=0; [ $TRY = 1 ] && [ $FIRST = 0 ] && LATER=1   # the rest, on a run after the try-it kit's: it asks what goes in
 [ -n "${KIT_FIT_ASKED:-}" ] || [ $LATER = 1 ] || fit_ai    # an update can bring models too big for this computer
 if [ $FIRST = 1 ]; then
   ./kit starter on >/dev/null
-  case "${KIT_HOW_MUCH:-}" in all|essentials) ONLY="$KIT_HOW_MUCH" ;; esac
-elif [ $TRY = 0 ]; then
-  case "${KIT_HOW_MUCH:-}/$ONLY" in
-    essentials/all) ./kit essentials on; ONLY=essentials ;;
-    all/essentials) ./kit essentials off; ONLY=all ;;
-    /essentials)
-      space "$KIT"
-      if [ "$FULL" = fits ]; then
-        say "This kit has just the essentials, and now there's room for the rest (about $(gb "$NEED") more)."
-        if [ -n "${KIT_YES:-}" ]; then echo "SETUP --all gets it."
-        elif ask_no "Get the rest too?"; then ./kit essentials off >/dev/null; ONLY=all; fi
-      fi ;;
-  esac
+elif [ $TRY = 0 ] && [ "$ONLY" = essentials ] && [ -z "${KIT_PRESET:-}" ]; then    # (a preset said how much)
+  if [ -n "${KIT_TIGHT:-}" ]; then ./kit essentials off; ONLY=all
+  else
+    space "$KIT"
+    if [ "$FULL" = fits ]; then
+      say "This kit has just the essentials, and now there's room for the rest (about $(gb "$NEED") more)."
+      if [ -n "${KIT_YES:-}" ]; then echo "To get it too: ./kit essentials off, then SETUP again."
+      elif ask_no "Get the rest too?"; then ./kit essentials off >/dev/null; ONLY=all; fi
+    fi
+  fi
 fi
 
 # Before a download, after ./kit plan has said how long it takes: $1, whose files they are, and how to keep it going.
@@ -627,7 +650,7 @@ get() {
 }
 
 # The first time, once ./kit plan has timed the connection and said how long the try-it kit takes: how long all of it
-# takes, which comes next with --all, --essentials or --home-server, or else once the try-it kit has been tried.
+# takes, which comes next with --no-pause or --home-server, or else once the try-it kit has been tried.
 whole_kit() {
   local all took what="The whole kit is"
   IFS=$'\t' read -r all took < <(./kit estimate --rest 2>/dev/null)

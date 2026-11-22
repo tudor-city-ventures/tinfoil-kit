@@ -1,6 +1,6 @@
 @echo off
 rem Double-click me (Windows) to remove Tinfoil Kit and everything it downloaded.
-rem It says what it will delete and asks first. --yes skips the question, for scripts and AI agents.
+rem It says what it will delete and asks first. --yes (or -y) skips the question, for scripts and AI agents.
 rem cmd reads a script as it runs, and this one deletes itself, so it carries on from a copy in %TEMP%.
 setlocal EnableExtensions EnableDelayedExpansion
 if "%~1"=="--from-temp" goto start
@@ -15,6 +15,7 @@ set "APP=%~f2"
 set "KIT=%~f2"
 for %%d in ("%~f2") do if /i "%%~nxd"=="app" if not exist "%~f2\.git" for %%p in ("%~f2\..") do set "KIT=%%~fp"
 set "YES=" & if /i "%~3"=="--yes" set "YES=1"
+if /i "%~3"=="-y" set "YES=1"
 title Remove Tinfoil Kit
 echo(
 echo REMOVE TINFOIL KIT

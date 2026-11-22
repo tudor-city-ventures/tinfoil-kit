@@ -376,11 +376,11 @@ Dismount-DiskImage -ImagePath $vhd | Out-Null
 
 # A cmd window, unlike the cmd /c that PowerShell or an AI's shell starts, would close at SETUP's exit: there
 # SETUP runs itself in a cmd of its own. Here cmd reads what's typed from a file, as a window reads the keyboard.
-# With --all, the rest comes right after the try-it kit, in the same run.
-Step "SETUP-Windows.bat --this-computer --models Tiny --all --yes typed in a cmd window: the window stays, and says how SETUP ended"
+# With --no-pause, the rest comes right after the try-it kit, in the same run.
+Step "SETUP-Windows.bat --this-computer --models Tiny --no-pause --yes typed in a cmd window: the window stays, and says how SETUP ended"
 Get-Kit $dl
 $kit = "$env:USERPROFILE\TinfoilKit"
-@("`"$dl\app\SETUP-Windows.bat`" --this-computer --models Tiny --all --yes", "echo SETUP ended with %errorlevel%", "exit") |
+@("`"$dl\app\SETUP-Windows.bat`" --this-computer --models Tiny --no-pause --yes", "echo SETUP ended with %errorlevel%", "exit") |
   Set-Content -Encoding ascii "$work\cmd-window.txt"
 $p = Start-Process cmd.exe -ArgumentList "/d /q" -PassThru -NoNewWindow -RedirectStandardInput "$work\cmd-window.txt" `
   -RedirectStandardOutput "$logs\setup-windows-cmd.log" -RedirectStandardError "$logs\setup-windows-cmd.err"
@@ -391,8 +391,8 @@ if (-not (Select-String -Quiet -Path "$logs\setup-windows-cmd.log" -Pattern "SET
   Fail "SETUP --yes in a cmd window closed it, or didn't end with 0"
   Get-Content "$logs\setup-windows-cmd.log" -Tail 25; Get-Content "$logs\setup-windows-cmd.err" -ErrorAction SilentlyContinue
 }
-Test-Said "setup-windows-cmd.log" "SETUP --all --yes" "Step 3 of 4: a small kit to try first", "Step 4 of 4: the rest of the kit", "All set"
-if (Test-Path "$kit\downloads\models\Two") { Fail "the try-it kit's sample AI is still there after --all, at $kit" }
+Test-Said "setup-windows-cmd.log" "SETUP --no-pause --yes" "Step 3 of 4: a small kit to try first", "Step 4 of 4: the rest of the kit", "All set"
+if (Test-Path "$kit\downloads\models\Two") { Fail "the try-it kit's sample AI is still there after --no-pause, at $kit" }
 if (-not (Test-Path "$kit\downloads\models\Tiny")) { Fail "the kit isn't set up on this PC, at $kit" }
 if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
 Invoke-Uninstall $kit "uninstall-windows-cmd.log"

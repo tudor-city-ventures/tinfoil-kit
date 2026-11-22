@@ -1872,7 +1872,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         "SETUP --yes on a try-it kit: gets the rest, asking nothing",
         rc == 0
         and calls == ["update", "fit"] + rest
-        and "fit --restore --skip" in argv
+        and "fit --restore --skip-too-big" in argv
         and "pick --ask" not in argv
         and not any(a in out for a in asked)
         and "All set" in out,
@@ -1904,15 +1904,15 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     check(
         "SETUP --yes: an update of just the essentials, now that the rest fits: says how to get it, asks nothing",
         rc == 0
-        and "SETUP --all gets it" in out
+        and "To get it too: ./kit essentials off, then SETUP again." in out
         and calls == update_calls
         and not any(a in out for a in asked)
         and "update --yes" in (setup / "data" / "args.log").read_text().splitlines(),
         out,
     )
-    rc, out, calls = run_setup(args=("--all", "--yes"), answers="")
+    rc, out, calls = run_setup(args=("--even-if-tight", "--yes"), answers="")
     check(
-        "SETUP --all: an update of just the essentials gets the rest",
+        "SETUP --even-if-tight: an update of just the essentials gets the rest",
         rc == 0 and calls == ["update", "fit", "essentials-off", "plan", "sync", "test"],
         out,
     )
@@ -1920,8 +1920,9 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     check(
         "SETUP --essentials: an update of all of it gets just the essentials from now on",
         rc == 0
-        and calls == ["update", "fit", "essentials-on", "plan", "sync", "test"]
-        and "essentials_only" in mine.read_text(),
+        and calls == ["update", "fit", "plan", "sync", "test"]
+        and '"essentials_only": true' in mine.read_text()
+        and "Just the essentials: about" in out,
         out,
     )
     rc, out, calls = run_setup(SPACE=space("no", "fits", 300, 1000, 400, 100, 50))
@@ -2035,7 +2036,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         rc == 0
         and calls == first
         and "update --yes" in argv
-        and "fit --restore --skip" in argv
+        and "fit --restore --skip-too-big" in argv
         and not any(a in out for a in asked)
         and "Start downloading" not in out
         and "Open the kit now" not in out
@@ -2080,7 +2081,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         rc == 0
         and all(m.get("enabled") is False for m in json.loads(mine.read_text())["models"])
         and "fit" in argv
-        and "fit --restore --skip" not in argv,
+        and "fit --restore --skip-too-big" not in argv,
         out,
     )
     shutil.copy(TESTS.parent / "kit.json", mine)
@@ -2096,9 +2097,15 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     rc, out, calls = run_setup(args=("--bogus",), answers="")
     rc2, out2, calls2 = run_setup(args=("--drive",), answers="")
     rc3, out3, _ = run_setup(args=("--help",), answers="")
+    rc4, out4, calls4 = run_setup(args=("--essentials", "--everything"), answers="")
     check(
-        "SETUP: an option it doesn't have, or one without its value, stops it at once; --help lists them",
-        rc == 2 and rc2 == 2 and calls == calls2 == [] and rc3 == 0 and "--yes" in out3 and "--drive PATH" in out3,
+        "SETUP: an option it doesn't have, one without its value, or two presets stop it at once; --help lists them",
+        rc == rc2 == rc4 == 2
+        and calls == calls2 == calls4 == []
+        and rc3 == 0
+        and "--yes" in out3
+        and "--drive PATH" in out3
+        and "--even-if-tight" in out3,
         out + out3,
     )
 
@@ -2223,7 +2230,8 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     def placed_ok(where, essentials=False, then_rest=False):
         """Set up at where: the try-it kit, and right after it the rest if told, with just the essentials or all."""
         log = where / "data" / "calls.log"
-        tail = first[:1] + first[2:]  # (fit was before the kit moved)
+        # (fit was before the kit moved; how much fits, after ./kit update)
+        tail = first[:1] + ["essentials-on" if essentials else "essentials-off"] + first[2:]
         if then_rest:
             tail += ["starter-off", "essentials-on" if essentials else "essentials-off"] + rest[2:]
         code = where if (where / ".git").exists() else where / "app"
@@ -2251,7 +2259,8 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         and out.count("TINFOIL KIT SETUP") == 1
         and "Step 3 of 3: a small kit to try first" in out
         and "The try-it kit works" in out
-        and (home / "TinfoilKit" / "data" / "calls.log").read_text().split()[1::2][:2] == ["fit", "essentials-off"],
+        and (home / "TinfoilKit" / "data" / "calls.log").read_text().split()[1::2][:3]
+        == ["fit", "update", "essentials-off"],
         out,
     )
     rc, out, _, _, _ = first_run("1\n1\ny\nn\n\n", drives=["SAMSUNG T7"])
@@ -2447,14 +2456,15 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
             "maps",
             "--add",
             "gutenberg_en_all,wikipedia",
+            "--no-pause",
             "--yes",
         ),
     )
     t7_cfg = t7 / "TinfoilKit" / "data" / "kit.json"
     c = json.loads(t7_cfg.read_text()) if t7_cfg.exists() else {}
     check(
-        "SETUP --drive --essentials --models --skip --add --yes: on the drive, the try-it kit, then just the essentials "
-        "plus what was added",
+        "SETUP --drive --essentials --models --skip --add --no-pause --yes: on the drive, the try-it kit, then just the "
+        "essentials plus what was added",
         rc == 0
         and placed_ok(t7 / "TinfoilKit", essentials=True, then_rest=True)
         and "What goes in it:" in out
@@ -2476,24 +2486,50 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         rc == 0 and "There's no drive at" in out and placed_ok(home / "TinfoilKit"),
         out,
     )
-    rc, out, dl, home, _ = first_run("", where="", args=("--yes",), SPACE=small)
+    rc, out, dl, home, _ = first_run("", where="", args=("--this-computer", "--yes"), SPACE=small)
     check(
         "SETUP --yes: all of it won't fit with room to spare: just the essentials, and says so",
         rc == 0 and "So it gets just the essentials" in out and placed_ok(home / "TinfoilKit", essentials=True),
         out,
     )
-    rc, out, dl, home, _ = first_run("", where="", args=("--all", "--yes"), SPACE=small)
+    rc, out, dl, home, _ = first_run("", where="", args=("--even-if-tight", "--this-computer", "--yes"), SPACE=small)
     rc2, out2, dl2, home2, _ = first_run(
-        "", where="", args=("--yes",), SPACE=space("no", "no", 50, 1000, 400, 100, 100)
+        "", where="", args=("--this-computer", "--yes"), SPACE=space("no", "no", 50, 1000, 400, 100, 100)
     )
     check(
-        "SETUP --yes: all of it with --all, or even the essentials, won't fit: stops before moving anything",
+        "SETUP --yes: all of it with --even-if-tight, or even the essentials, won't fit: stops before moving anything",
         rc == rc2 == 1
         and dl.exists()
         and dl2.exists()
         and not (home / "TinfoilKit").exists()
         and "There isn't room on this computer, even for the essentials" in out2,
         out + out2,
+    )
+    rc, out, dl, home, _ = first_run("", where="", args=("--region", "texas", "--yes"))
+    check(
+        "SETUP --yes the first time, with neither --drive nor --this-computer: says to choose one, and changes nothing",
+        rc == 2
+        and "--drive PATH for an external drive (recommended)" in out
+        and "or --this-computer for the home folder here" in out
+        and dl.exists()
+        and not (home / "TinfoilKit").exists(),
+        out,
+    )
+    rc, out, dl, home, _ = first_run("", where="", args=("--essentials", "--this-computer", "-y"))
+    check(
+        "SETUP --essentials -y the first time: just the essentials, and like any first run it stops after the try-it kit",
+        rc == 0
+        and placed_ok(home / "TinfoilKit", essentials=True)
+        and "Step 3 of 3: a small kit to try first" in out
+        and "The rest of the essentials is about" in out
+        and not any(a in out for a in asked),
+        out,
+    )
+    rc, out, dl, home, _ = first_run("", where="", args=("--no-pause", "--this-computer", "--yes"))
+    check(
+        "SETUP --no-pause the first time: straight on to the rest after the try-it kit",
+        rc == 0 and placed_ok(home / "TinfoilKit", then_rest=True) and "Step 4 of 4: the rest of the kit" in out,
+        out,
     )
     rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Texas\n\n1\n1\n", home_kit="kit")
     check(
@@ -2796,7 +2832,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         rc == 0
         and "its AI will be Mid" in out
         and "It can't run Big: it needs 32 GB of memory or more" in out
-        and "./kit fit --skip" in out
+        and "./kit fit --skip-too-big" in out
         and (fk / "data" / "kit.json").read_text() == fit_json,
         out,
     )
@@ -2833,18 +2869,18 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     )
     (fk / "data" / ".kit").mkdir(exist_ok=True)
     (fk / "data" / ".kit" / "state.json").write_text(json.dumps({"items": {"models/Big": {}}}))
-    rc, out = fit(16, "--skip")
+    rc, out = fit(16, "--skip-too-big")
     check(
-        "kit fit --skip: leaves alone a model that's already downloaded",
+        "kit fit --skip-too-big: leaves alone a model that's already downloaded",
         rc == 0 and "can't run" not in out and (fk / "data" / "kit.json").read_text() == fit_json,
         out,
     )
     (fk / "data" / ".kit" / "state.json").unlink()
     named = fit_json.replace('"id": "Big",', '"id": "Big",\n      "essential": true,')
     (fk / "data" / "kit.json").write_text(named)
-    rc, out = fit(16, "--skip")
+    rc, out = fit(16, "--skip-too-big")
     check(
-        "kit fit --skip: keeps a model asked for by name",
+        "kit fit --skip-too-big: keeps a model asked for by name",
         rc == 0 and "Big comes anyway, as asked" in out and (fk / "data" / "kit.json").read_text() == named,
         out,
     )
@@ -2906,14 +2942,120 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         out + out2,
     )
 
-    # ./kit pick --ask: the kit builder's choices, asked in a terminal: a preset, or each part.
+    # ./kit pick with a preset, as the kit builder writes it: what goes in starts over from the standard list
+    # (app/kit.json), where you live and Wikipedia come with it, and what's named after it changes that.
+    shutil.copy(TESTS.parent / "kit.json", pk / "data" / "kit.json")
+    std = json.loads((TESTS.parent / "kit.json").read_text())
+    builder = ("--essentials", "--region", "texas", "--wikipedia", "en,es", "--wikipedia-size", "top-text")
+    builder += ("--skip", "ifixit_en_all", "--add", "wiktionary_en_all_nopic")
+    rc, out = kit("pick", *builder, root=pk)
+    once = (pk / "data" / "kit.json").read_text()
+    c = json.loads(once)
+    lib = {z["zim"]: z for z in c["library"]}
+    wikis = ["wikipedia_en_top_nopic", "wikipedia_es_top_nopic"]
+    rc2, out2 = kit("pick", *builder, root=pk)
+    check(
+        "kit pick with the builder's options: just the essentials, with Wikipedia whole in the size said, and the same "
+        "again changes nothing",
+        rc == rc2 == 0
+        and c["settings"].get("essentials_only") is True
+        and c["settings"].get("picked") is True
+        and c["maps"]["region"] == "us/texas"
+        and [z for z in lib if z.startswith("wikipedia_")] == wikis
+        and all(lib[z].get("essential") is True for z in wikis + ["wiktionary_en_all_nopic"])
+        and lib["ifixit_en_all"].get("enabled") is False
+        and "Just the essentials: about" in out
+        and (pk / "data" / "kit.json").read_text() == once,
+        out + out2,
+    )
+    c["maps"]["label"] = "Home turf"  # set by hand: saying the same place again keeps it
+    (pk / "data" / "kit.json").write_text(json.dumps(c, indent=1))
+    rc, out = kit("pick", "--recommended", "--region", "texas", root=pk)
+    c = json.loads((pk / "data" / "kit.json").read_text())
+    std_on = {z["zim"]: z.get("enabled", True) for z in std["library"]}
+    check(
+        "kit pick --recommended: what goes in starts over from the standard list; where you live, Wikipedia and the "
+        "map's own settings stay",
+        rc == 0
+        and "essentials_only" not in c["settings"]
+        and c["maps"]["region"] == "us/texas"
+        and c["maps"]["label"] == "Home turf"
+        and [z["zim"] for z in c["library"] if z["zim"].startswith("wikipedia_")] == wikis
+        and not any(e.get("essential") for s in ("models", "library") for e in c[s])
+        and all(z.get("enabled", True) == std_on.get(z["zim"], True) for z in c["library"] if z["zim"] not in wikis)
+        and all(m.get("enabled", True) for m in c["models"]),
+        out,
+    )
+    rc, out = kit("pick", "--everything", root=pk)
+    c = json.loads((pk / "data" / "kit.json").read_text())
+    check(
+        "kit pick --everything: every AI model and book, the biggest collections too, and the map",
+        rc == 0
+        and all(e.get("enabled", True) for s in ("models", "library") for e in c[s])
+        and c["maps"]["enabled"] is True
+        and "essentials_only" not in c["settings"],
+        out,
+    )
+    shutil.copy(TESTS.parent / "kit.json", pk / "data" / "kit.json")
+    rc, out = kit("pick", "--essentials", root=pk)
+    c = json.loads((pk / "data" / "kit.json").read_text())
+    p = subprocess.run(
+        kit_cmd(pk / "app", pk, "estimate", "--json"),
+        capture_output=True,
+        text=True,
+        env={**os.environ, "KIT_MEMORY_MB": str(64 * 1024)},
+    )
+    items = json.loads(p.stdout)["items"] if p.returncode == 0 else []
+    check(
+        "kit pick --essentials: Wikipedia's best articles stand in for all of it, and estimate --json lists what comes",
+        rc == 0
+        and c["settings"].get("essentials_only") is True
+        and not any(z.get("essential") for z in c["library"])
+        and "library/wikipedia_en_top_nopic" in items
+        and "library/wikipedia_en_all_maxi" not in items
+        and "models/Inkling-2-Mini" in items
+        and "maps/basemap" in items
+        and "library/gutenberg_en_all" not in items,
+        out + p.stdout + p.stderr,
+    )
+    now = (pk / "data" / "kit.json").read_text()
+    rc, out = kit("pick", "--essentials", "--everything", root=pk)
+    rc2, out2 = kit("pick", "--wikipedia-size", "huge", root=pk)
+    rc3, out3 = kit("pick", "--recommended", "--region", "atlantis", root=pk)
+    check(
+        "kit pick: two presets, a size Wikipedia doesn't come in, or a place it doesn't know: changes nothing",
+        rc == 2
+        and "Choose one of --recommended, --essentials and --everything" in out
+        and rc2 == rc3 == 1
+        and "doesn't come in a size called 'huge'" in out2
+        and 'No place matches "atlantis"' in out3
+        and (pk / "data" / "kit.json").read_text() == now,
+        out + out2 + out3,
+    )
+
+    # ./kit pick --ask: the kit builder's choices, asked in a terminal: a preset, or each part. A preset is the
+    # standard list's (app/kit.json): what it switches on, with just the essentials for Essentials.
     ak = work / "ask"
     new_kit(ak)
+    (ak / "app" / "kit.json").write_text(
+        json.dumps(
+            {
+                "settings": {},
+                "models": [{"id": "Tiny", "type": "hf"}, {"id": "Two", "type": "hf", "enabled": False}],
+                "library": [
+                    {"zim": "testmed_en_all_maxi", "priority": 1},
+                    {"zim": "testsurvival_en", "enabled": False},
+                    {"zim": "wikipedia_en_all_maxi"},
+                ],
+            },
+            indent=1,
+        )
+    )
     ask_json = json.dumps(
         {
             "settings": {},
             "models": [{"id": "Tiny", "type": "hf"}, {"id": "Two", "type": "hf"}],
-            "library": [{"zim": "testmed_en_all_maxi"}, {"zim": "testsurvival_en"}],
+            "library": [{"zim": "testmed_en_all_maxi", "priority": 1}, {"zim": "testsurvival_en"}],
         },
         indent=1,
     )
@@ -2986,27 +3128,28 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     )
     rc, out, on, _ = ask("9\n4\n")
     check(
-        "kit pick --ask: a number it doesn't have asks again; No AI switches every model off",
-        rc == 0 and "Type a number from 1 to 5" in out and on == ["testmed_en_all_maxi", "testsurvival_en"],
+        "kit pick --ask: a number it doesn't have asks again; No AI is Recommended with every model off",
+        rc == 0 and "Type a number from 1 to 5" in out and on == ["testmed_en_all_maxi"],
         out,
     )
-    rc, out, on, _ = ask("5\n1 4\n\n")
+    rc, out, on, settings = ask("5\n1 4\n\n")
     check(
         "kit pick --ask: choose each part, by group, switching them with their numbers",
         rc == 0
         and "AI models" in out
         and "[ ] Tiny AI (2.0 GB)" in out
-        and "[x] Survival (60.0 GB)" in out
-        and on == ["Tiny", "testmed_en_all_maxi"],
+        and "[ ] Survival (60.0 GB)" in out
+        and on == ["Tiny", "testmed_en_all_maxi", "testsurvival_en"]
+        and "essentials_only" not in settings,
         out,
     )
-    # Essentials takes a smaller Wikipedia, as the kit builder does
+    # Essentials takes Wikipedia's best articles while the rest waits, as the kit builder does
     (ak / "data" / "kit.json").write_text(
         json.dumps(
             {
                 "settings": {},
                 "models": [{"id": "Tiny", "type": "hf"}],
-                "library": [{"zim": "testmed_en_all_maxi"}, {"zim": "wikipedia_en_all_maxi"}],
+                "library": [{"zim": "testmed_en_all_maxi", "priority": 1}, {"zim": "wikipedia_en_all_maxi"}],
             }
         )
     )
@@ -3027,16 +3170,20 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
             }
         )
     )
-    rc, out, on, _ = ask("2\n")
+    rc, out, on, settings = ask("2\n")
     check(
-        "kit pick --ask: Essentials takes Wikipedia down to the best articles' text, sized that way, and says so",
+        "kit pick --ask: Essentials gets just the essentials, Wikipedia's best articles among them, sized that way",
         rc == 0
         and "Recommended: what we'd take. About 134 GB." in out
         and "and Wikipedia's best articles. About 10 GB." in out
-        and on == ["Tiny", "testmed_en_all_maxi", "wikipedia_en_top_nopic"]
-        and "Wikipedia: English, the best 50,000 articles, text only (about 2.7 GB)." in out,
+        and on == ["Tiny", "testmed_en_all_maxi", "wikipedia_en_all_maxi"]
+        and settings.get("essentials_only") is True
+        and "Just the essentials: about 10 GB, of 134 GB in all" in out,
         out,
     )
+    c = json.loads((ak / "data" / "kit.json").read_text())
+    c["library"][1]["zim"] = "wikipedia_en_top_nopic"
+    (ak / "data" / "kit.json").write_text(json.dumps(c))
     rc, out, on, _ = ask("5\n\n")
     check(
         "kit pick --ask: choose each part shows the kit's Wikipedia, in its size",

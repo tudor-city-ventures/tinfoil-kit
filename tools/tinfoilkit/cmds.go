@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -170,9 +171,9 @@ func jsonKey(o, key string, value any) string {
 func isSpace(r rune) bool { return unicode.IsSpace(r) || r >= 0x1c && r <= 0x1f }
 
 // switchParts switches models, books, extras or the map (("maps", "maps")) on or off in kit.json, and marks the ones
-// in essential "essential": true (see essential()), changing only those keys so the file keeps its layout. On is no
-// "enabled" at all, since that's the default.
-func switchParts(root string, ch changes, essential []entry) {
+// on in marks "essential": true (see essential()) and takes the mark off the ones off there, changing only those keys
+// so the file keeps its layout. On is no "enabled" at all, since that's the default.
+func switchParts(root string, ch changes, marks changes) {
 	path := filepath.Join(dataDir(root), "kit.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -196,9 +197,13 @@ func switchParts(root string, ch changes, essential []entry) {
 		}
 		edits = append(edits, edit{c.part, "enabled", v})
 	}
-	for _, p := range essential {
-		if p.section != "maps" { // the map always is
-			edits = append(edits, edit{p, "essential", true})
+	for _, m := range marks {
+		if m.part.section != "maps" { // the map always is
+			var v any
+			if m.on {
+				v = true
+			}
+			edits = append(edits, edit{m.part, "essential", v})
 		}
 	}
 	for _, e := range edits {
@@ -305,7 +310,7 @@ func findParts(cfg *obj, word string) []entry {
 
 var presets = [][3]string{
 	{"recommended", "Recommended", "what we'd take"},
-	{"essentials", "Essentials", "the AI, the medical, preparedness and repair books, the map, and Wikipedia's best articles"},
+	{"essentials", "Essentials", "the AI this computer runs and the smallest, the medical, preparedness and repair books, the map, and Wikipedia's best articles"},
 	{"everything", "Everything", "every AI model and book, the biggest collections too"},
 	{"no-ai", "No AI", "the books and the map"},
 }
@@ -350,9 +355,9 @@ func names(ids []string) string {
 var answerWords = regexp.MustCompile(`[,\s]+`)
 
 // askPicks is ./kit pick --ask: the kit builder's choices on tinfoilkit.com (site/sources.json), asked in a terminal.
-// A preset, or each part. The AI in a preset is one this computer runs, and Essentials takes a smaller Wikipedia
-// (wikiPreset), as the builder does.
-func askPicks(root string) {
+// A preset, which it returns for cmdPick to apply (No AI is the recommended kit without the models), or each part,
+// which it switches on and off itself.
+func askPicks(root string) (preset string, noAI bool) {
 	listed, ok := sourcesList(root)
 	if !ok {
 		die("The kit builder's list (site/sources.json) isn't in this kit. Choose with ./kit pick --skip and --add.")
@@ -385,26 +390,10 @@ func askPicks(root string) {
 		return out
 	}
 	var sources []*obj
-	var ai []string
 	for _, s := range listed {
 		if len(parts(s)) > 0 {
 			sources = append(sources, s)
-			if pyEqual(s.get("group"), "AI models") {
-				ai = append(ai, pyStr(s.get("id")))
-			}
 		}
-	}
-	every := copyOf(cfg).(*obj)
-	for _, m := range every.objs("models") {
-		m.del("enabled")
-	}
-	type fit struct {
-		fits  bool
-		bytes int64
-	}
-	fitsOf := map[string]fit{}
-	for _, m := range fitReport(root, every, loadState(root)).objs("models") {
-		fitsOf[pyStr(m.get("id"))] = fit{truthy(m.get("fits")), intOr(orZero(m.get("bytes")), 0)}
 	}
 	isOn := func(c *obj, p entry) any {
 		if p.section == "maps" {
@@ -426,78 +415,23 @@ func askPicks(root string) {
 		}
 		return out
 	}
-	now := wikipediaEdition(cfg)
-	smaller := func(key string) string { // the edition a preset takes Wikipedia down to, if it's bigger now
-		e := wikiSize(wikiPreset[key])
-		if e != "" && now != "" && editionIndex(now) > editionIndex(e) {
-			return e
+	presetGB := func(key string) int64 {
+		k := map[bool]string{true: "recommended", false: key}[key == "no-ai"]
+		ch, marks := presetChanges(root, cfg, k)
+		if key == "no-ai" {
+			for _, m := range ids["models"] {
+				ch.set(entry{"models", m}, false)
+			}
 		}
-		return ""
+		ess := k == "essentials"
+		return estimateGB(root, withChanges(cfg, ch, marks), &ess, nil, false)
 	}
-	gb := func(picked map[string]bool, edition string) int64 {
-		c := copyOf(cfg).(*obj)
-		for _, x := range applied(picked) {
-			if x.part.section == "maps" {
-				m := c.child("maps")
-				if m == nil {
-					m = newObj()
-					c.set("maps", m)
-				}
-				m.set("enabled", x.on)
-				continue
-			}
-			for _, e := range c.objs(x.part.section) {
-				if pyEqual(e.get(partKey(x.part.section)), x.part.id) {
-					e.set("enabled", x.on)
-				}
-			}
-		}
-		if edition != "" {
-			lib, _ := c.getOr("library", []any{}).([]any)
-			c.set("library", withWikipedia(lib, nil, edition))
-		}
-		return int64(math.Ceil(estimateBytes(root, c, &no, nil, false) / GB))
-	}
-	preset := func(key string) map[string]bool {
-		picked := map[string]bool{}
-		for _, s := range sources {
-			picked[pyStr(s.get("id"))] = containsAny(s.list("presets"), key)
-		}
-		var chosen []string
-		for _, i := range ai {
-			if picked[i] {
-				chosen = append(chosen, i)
-			}
-		}
-		anyFits := false
-		for _, i := range chosen {
-			f, known := fitsOf[i]
-			anyFits = anyFits || !known || f.fits
-		}
-		if len(chosen) > 0 && !anyFits { // none of them runs here
-			pick := ""
-			for _, i := range ai {
-				if f := fitsOf[i]; f.fits && (pick == "" || f.bytes > fitsOf[pick].bytes) {
-					pick = i
-				}
-			}
-			if pick == "" {
-				for _, i := range ai {
-					if pick == "" || fitsOf[i].bytes < fitsOf[pick].bytes {
-						pick = i
-					}
-				}
-			}
-			for _, i := range chosen {
-				picked[i] = false
-			}
-			picked[pick] = true
-		}
-		return picked
+	gb := func(picked map[string]bool) int64 {
+		return estimateGB(root, withChanges(cfg, applied(picked), nil), &no, nil, false)
 	}
 	log("\nWhat goes in the kit? The same choices as the kit builder on tinfoilkit.com:")
 	for n, p := range presets {
-		log(fmt.Sprintf("  %d  %s: %s. About %d GB.", n+1, p[1], p[2], gb(preset(p[0]), smaller(p[0]))))
+		log(fmt.Sprintf("  %d  %s: %s. About %d GB.", n+1, p[1], p[2], presetGB(p[0])))
 	}
 	log(fmt.Sprintf("  %d  Choose each part", len(presets)+1))
 	var said string
@@ -512,56 +446,57 @@ func askPicks(root string) {
 	if said != "" {
 		n, _ = strconv.Atoi(said)
 	}
-	var picked map[string]bool
 	if n <= len(presets) {
-		picked = preset(presets[n-1][0])
-	} else {
-		picked = map[string]bool{}
-		for _, s := range sources {
-			all := true
-			for _, p := range parts(s) {
-				all = all && truthy(isOn(cfg, p))
-			}
-			picked[pyStr(s.get("id"))] = all
+		if key := presets[n-1][0]; key != "no-ai" {
+			return key, false
 		}
-		for {
-			var group any = nil
-			first := true
-			for i, s := range sources {
-				if first || !pyEqual(s.get("group"), group) {
-					first = false
-					group = s.get("group")
-					log("\n  " + pyStr(group))
-				}
-				id := pyStr(s.get("id"))
-				title, size := pyStr(s.getOr("title", s.get("id"))), fmtSizeAny(s.get("bytes"))
-				if wikipediaRE.MatchString(id) { // the kit's own: its languages and size
-					t, rest, _ := strings.Cut("Wikipedia: "+describeWikipedia(cfg), " (about ")
-					title, size = t, strings.TrimRight(rest, ")")
-					if size == "" {
-						size = "?"
-					}
-				}
-				mark := " "
-				if picked[id] {
-					mark = "x"
-				}
-				log(fmt.Sprintf("  %3d  [%s] %s (%s)", i+1, mark, title, size))
+		return "recommended", true
+	}
+	picked := map[string]bool{}
+	for _, s := range sources {
+		all := true
+		for _, p := range parts(s) {
+			all = all && truthy(isOn(cfg, p))
+		}
+		picked[pyStr(s.get("id"))] = all
+	}
+	for {
+		var group any = nil
+		first := true
+		for i, s := range sources {
+			if first || !pyEqual(s.get("group"), group) {
+				first = false
+				group = s.get("group")
+				log("\n  " + pyStr(group))
 			}
-			took := eta(root, float64(gb(picked, "")*GB))
-			if took != "" {
-				took = ", " + took
-			}
-			log(fmt.Sprintf("\nIn all: about %d GB%s.", gb(picked, ""), took))
-			said = ask(fmt.Sprintf("Type numbers to switch them on or off (like 3 12), or press %s when it's right: ", returnKey))
-			if said == "" {
-				break
-			}
-			for _, w := range answerWords.Split(said, -1) {
-				if k, err := strconv.Atoi(w); err == nil && allDigits(w) && k >= 1 && k <= len(sources) {
-					id := pyStr(sources[k-1].get("id"))
-					picked[id] = !picked[id]
+			id := pyStr(s.get("id"))
+			title, size := pyStr(s.getOr("title", s.get("id"))), fmtSizeAny(s.get("bytes"))
+			if wikipediaRE.MatchString(id) { // the kit's own: its languages and size
+				t, rest, _ := strings.Cut("Wikipedia: "+describeWikipedia(cfg), " (about ")
+				title, size = t, strings.TrimRight(rest, ")")
+				if size == "" {
+					size = "?"
 				}
+			}
+			mark := " "
+			if picked[id] {
+				mark = "x"
+			}
+			log(fmt.Sprintf("  %3d  [%s] %s (%s)", i+1, mark, title, size))
+		}
+		took := eta(root, float64(gb(picked)*GB))
+		if took != "" {
+			took = ", " + took
+		}
+		log(fmt.Sprintf("\nIn all: about %d GB%s.", gb(picked), took))
+		said = ask(fmt.Sprintf("Type numbers to switch them on or off (like 3 12), or press %s when it's right: ", returnKey))
+		if said == "" {
+			break
+		}
+		for _, w := range answerWords.Split(said, -1) {
+			if k, err := strconv.Atoi(w); err == nil && allDigits(w) && k >= 1 && k <= len(sources) {
+				id := pyStr(sources[k-1].get("id"))
+				picked[id] = !picked[id]
 			}
 		}
 	}
@@ -574,9 +509,42 @@ func askPicks(root string) {
 	if len(ch) > 0 {
 		switchParts(root, ch, nil)
 	}
-	if n <= len(presets) && smaller(presets[n-1][0]) != "" {
-		log("Wikipedia: " + describeWikipedia(setRegion(root, nil, nil, smaller(presets[n-1][0]))) + ".")
+	setSetting(root, "essentials_only", nil) // all of what's on, the total it showed
+	return "", false
+}
+
+// withChanges is kit.json with these parts switched on or off, and these marks, without saving it.
+func withChanges(cfg *obj, ch, marks changes) *obj {
+	c := copyOf(cfg).(*obj)
+	set := func(p entry, key string, v any) {
+		if p.section == "maps" {
+			if key == "enabled" {
+				m := c.child("maps")
+				if m == nil {
+					m = newObj()
+					c.set("maps", m)
+				}
+				m.set("enabled", v == true)
+			}
+			return
+		}
+		for _, e := range c.objs(p.section) {
+			if pyEqual(e.get(partKey(p.section)), p.id) {
+				if v == nil {
+					e.del(key)
+				} else {
+					e.set(key, v)
+				}
+			}
+		}
 	}
+	for _, x := range ch {
+		set(x.part, "enabled", x.on)
+	}
+	for _, x := range marks {
+		set(x.part, "essential", map[bool]any{true: true, false: nil}[x.on])
+	}
+	return c
 }
 
 // fmtSizeAny is fmt_size of a size from JSON, which may be null.
@@ -588,22 +556,54 @@ func fmtSizeAny(v any) string {
 	return fmtSize(f)
 }
 
-// cmdPick is what goes in the kit: SETUP's --no-ai, --models, --skip and --add, for setting it up with one command,
-// or --ask for the kit builder's questions. Checks every name before it changes anything. Without options, says what's
-// on, its size and the time to download it.
+// cmdPick is what goes in the kit, as SETUP's options and the kit builder on tinfoilkit.com say it: a preset to start
+// over from (--recommended, --essentials, --everything), where you live and Wikipedia, then what's different from it
+// by name (--no-ai, --models, --skip, --add). Without a preset, those change the kit as it is. --ask asks the builder's
+// questions instead. Checks everything before it changes anything. Says what's on, its size and the time to download
+// it.
 func cmdPick(root string, a *cliArgs) {
+	preset := ""
+	for _, p := range []string{"recommended", "essentials", "everything"} {
+		if a.flag(p) {
+			if preset != "" {
+				die("Choose one of --recommended, --essentials and --everything.", 2)
+			}
+			preset = p
+		}
+	}
+	noAI := a.flag("no_ai")
 	if a.flag("ask") {
-		askPicks(root)
+		if p, none := askPicks(root); p != "" {
+			preset, noAI = p, noAI || none
+		}
 	}
 	cfg := rawConfig(root)
+	// Where you live and Wikipedia, checked as ./kit region checks them. The names after them are the kit's as it
+	// will be, with Wikipedia in its new languages and size.
+	var rs []*obj
+	var wiki []string
+	edition := ""
+	if a.str("region") != "" || a.str("wikipedia") != "" || a.str("wikipedia_size") != "" {
+		needRegions()
+		wiki, edition = wikipediaOptions(cfg, a.str("wikipedia"), a.str("wikipedia_size"))
+		if a.str("region") != "" {
+			rs = placesIn(a.str("region"))
+		}
+		if wiki != nil || edition != "" {
+			lib, _ := cfg.getOr("library", []any{}).([]any)
+			cfg.set("library", withWikipedia(lib, wiki, edition))
+		}
+	}
 	var models []string
 	for _, m := range cfg.objs("models") {
 		if m.has("id") {
 			models = append(models, pyStr(m.get("id")))
 		}
 	}
-	var ch changes
-	var named []entry // comes even with just the essentials, since it was asked for
+	var ch, marks, named changes // named: what --no-ai, --models, --skip and --add switch
+	if preset != "" {
+		ch, marks = presetChanges(root, cfg, preset)
+	}
 	want := func(list string, on bool, section string) []string {
 		var missing []string
 		for _, name := range answerWords.Split(list, -1) {
@@ -619,17 +619,14 @@ func cmdPick(root string, a *cliArgs) {
 				missing = append(missing, name)
 			}
 			for _, h := range hits {
-				ch.set(h, on)
-			}
-			if on {
-				named = append(named, hits...)
+				named.set(h, on)
 			}
 		}
 		return missing
 	}
-	if a.flag("no_ai") || a.str("models") != "" {
+	if noAI || a.str("models") != "" {
 		for _, m := range models {
-			ch.set(entry{"models", m}, false)
+			named.set(entry{"models", m}, false)
 		}
 	}
 	if notModels := want(a.str("models"), true, "models"); len(notModels) > 0 {
@@ -652,32 +649,51 @@ func cmdPick(root string, a *cliArgs) {
 			"part: models, library, extras.", names(unknown), strings.Join(models, ", "), strings.Join(books, ", "),
 			strings.Join(extras, ", ")), 2)
 	}
+	for _, x := range named {
+		ch.set(x.part, x.on)
+		if x.on { // it comes even with just the essentials, since it was asked for
+			marks.set(x.part, true)
+		}
+	}
+	essentials := preset == "essentials" || preset == "" && isTrue(cfg.child("settings").get("essentials_only"))
+	if edition != "" && essentials {
+		for _, m := range wikipediaMarks(withChanges(cfg, ch, nil)) {
+			marks.set(m.part, true)
+		}
+	}
+
+	// Where you live and Wikipedia change only if they're different, so saying them again, as SETUP does, keeps
+	// what was set by hand in kit.json's maps.
 	before := loadConfig(root)
-	if a.flag("ask") || a.flag("no_ai") || a.str("models") != "" || a.str("skip") != "" || a.str("add") != "" {
+	newWiki := !slices.Equal(wikipediaZims(before), wikipediaZims(cfg))
+	if rs != nil && !pyEqual(before.child("maps").get("region"), regionValue(rs)) {
+		sayRegion(setRegion(root, rs, wiki, edition), rs)
+	} else if newWiki {
+		sayRegion(setRegion(root, nil, wiki, edition), nil)
+	}
+	if preset != "" || noAI || a.flag("ask") || a.str("models") != "" || a.str("skip") != "" || a.str("add") != "" {
 		setSetting(root, "picked", true) // SETUP asks what goes in only until someone has said
 	}
-	if len(ch) > 0 {
-		var ess []entry
-		for _, h := range named {
-			if on, _ := ch.get(h); on {
-				ess = append(ess, h)
-			}
+	if preset != "" {
+		setSetting(root, "essentials_only", map[bool]any{true: true, false: nil}[preset == "essentials"])
+	}
+	if len(ch) > 0 || len(marks) > 0 {
+		switchParts(root, ch, marks)
+	}
+	// A model someone picks, or leaves out, by name isn't one to offer back on a computer with more memory; nor are
+	// any with everything, which has them all.
+	skipped := before.child("settings").list("models_off_for_memory")
+	var keep []any
+	for _, m := range skipped {
+		if _, isNamed := named.get(entry{"models", pyStr(m)}); !isNamed && preset != "everything" {
+			keep = append(keep, m)
 		}
-		switchParts(root, ch, ess)
-		// A model someone picks, or leaves out, by name isn't one to offer back on a computer with more memory.
-		skipped := before.child("settings").list("models_off_for_memory")
-		var keep []any
-		for _, m := range skipped {
-			if _, named := ch.get(entry{"models", pyStr(m)}); !named {
-				keep = append(keep, m)
-			}
-		}
-		if len(keep) != len(skipped) {
-			if len(keep) == 0 {
-				setSetting(root, "models_off_for_memory", nil)
-			} else {
-				setSetting(root, "models_off_for_memory", keep)
-			}
+	}
+	if len(keep) != len(skipped) {
+		if len(keep) == 0 {
+			setSetting(root, "models_off_for_memory", nil)
+		} else {
+			setSetting(root, "models_off_for_memory", keep)
 		}
 	}
 	cfg = loadConfig(root)
@@ -718,10 +734,14 @@ func cmdPick(root string, a *cliArgs) {
 	if truthy(cfg.get("extras")) {
 		log("Extras: " + orNone(on("extras", "id")) + ".")
 	}
-	log(fmt.Sprintf("All of it is about %d GB; just the essentials, about %d GB.", estimateGB(root, cfg, &no, nil, false),
-		estimateGB(root, cfg, &yes, nil, false)))
+	ess := isTrue(cfg.child("settings").get("essentials_only"))
+	all, just := estimateGB(root, cfg, &no, nil, false), estimateGB(root, cfg, &yes, nil, false)
+	if ess {
+		log(fmt.Sprintf("Just the essentials: about %d GB, of %d GB in all (./kit essentials off gets all of it).", just, all))
+	} else {
+		log(fmt.Sprintf("All of it is about %d GB; just the essentials, about %d GB.", all, just))
+	}
 	if stateItems(loadState(root)).size() > 0 {
-		ess := isTrue(cfg.child("settings").get("essentials_only"))
 		left := estimateBytes(root, cfg, &ess, nil, true)
 		took := eta(root, left)
 		if took != "" {
@@ -1029,7 +1049,7 @@ func cmdFit(root string, a *cliArgs) {
 			}
 		}
 	}
-	if a.flag("skip") && len(asked) > 0 { // nobody is answering, and these were asked for by name
+	if a.flag("skip_too_big") && len(asked) > 0 { // nobody is answering, and these were asked for by name
 		verb := "come"
 		if len(asked) == 1 {
 			verb = "comes"
@@ -1045,12 +1065,12 @@ func cmdFit(root string, a *cliArgs) {
 			return
 		}
 	}
-	if a.flag("skip") || (a.flag("ask") && !answer("Download them anyway?", false)) {
+	if a.flag("skip_too_big") || (a.flag("ask") && !answer("Download them anyway?", false)) {
 		switchModels(root, big, false)
 		setSetting(root, "models_off_for_memory", anyList(uniqueSorted(append(offForMemory(), big...))))
 		log("Skipped them. On a computer with more memory, SETUP offers them again.")
 	} else if !a.flag("ask") {
-		log("To skip them: ./kit fit --skip")
+		log("To skip them: ./kit fit --skip-too-big")
 	}
 }
 

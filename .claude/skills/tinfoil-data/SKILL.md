@@ -10,7 +10,7 @@ What the kit gets is listed in data/kit.json, the person's copy. Never edit app/
 ## See what's there and what fits
 
     ./kit pick              # what's on, the size of all of it and of the essentials, and how long it takes to download
-    ./kit estimate          # GB the kit needs as it's set now, with no internet (--essentials: just those)
+    ./kit estimate          # GB the kit needs as it's set now, with no internet (--essentials: just those; --json: the items too)
     ./kit estimate --rest   # GB still to download, then how long that takes on this connection, tab-separated
     ./kit space . --json    # whether all of it, or just the essentials, fit where the kit is
     ./kit plan --json       # every item with its size and version, switched-off ones too (needs internet)
@@ -22,12 +22,14 @@ The ids are in "What goes in" at https://tinfoilkit.com/llms.txt, and in data/ki
 
 | To | Run |
 | --- | --- |
+| Start over from a kit builder preset (where they live and Wikipedia stay) | `./kit pick --recommended`, `--essentials` or `--everything` |
+| Use the options the website's kit builder wrote | `./kit pick --essentials --region bayern --wikipedia de --wikipedia-size top-text` (all but `--drive`, `--this-computer`, `--share` and `--home-server`, which are SETUP's) |
 | Have no AI | `./kit pick --no-ai` |
 | Have exactly these models | `./kit pick --models Gemma-4-12B,Gemma-4-E4B` |
 | Leave things out | `./kit pick --skip khanacademy_en_all,maps` |
 | Delete something, for its space | `./kit remove khanacademy_en_all` (asks first; `--yes` doesn't) |
 | Add things, like the huge collections | `./kit pick --add gutenberg_en_all` |
-| Keep only the models this computer runs | `./kit fit --skip` (`./kit fit --restore` puts them back) |
+| Keep only the models this computer runs | `./kit fit --skip-too-big` (`./kit fit --restore` puts them back) |
 | Get just the essentials, or everything again | `./kit essentials on`, `./kit essentials off` |
 | Go from the try-it kit to everything picked | `./kit starter off` |
 | Change where they live, and Wikipedia's languages | `./kit region "Germany: Bayern" --wikipedia de,en` |
@@ -39,7 +41,7 @@ The ids are in "What goes in" at https://tinfoilkit.com/llms.txt, and in data/ki
 | Add a Kiwix book that isn't listed | `./kit search WORDS`, then paste the line it prints into "library" in data/kit.json |
 
 - `--skip` and `--add` take ids, `maps`, or a whole part (`models`, `library`, `extras`). A book's name up to its first underscore catches every book that starts with it (`wikipedia` is Wikipedia in any language), and a site's name catches all its books (`stackexchange`, `libretexts`). A wrong name changes nothing and lists the right ones.
-- `--skip` and `--add` change only what they name. `--models` and `--no-ai` replace the whole set of models.
+- `--skip` and `--add` change only what they name. `--models` and `--no-ai` replace the whole set of models. A preset puts the models, books and map back as that preset has them first, and the options after it change that; it leaves where they live, Wikipedia's languages and size, extras and anything added to data/kit.json by hand alone.
 - Then `./kit sync -y`. Big downloads take hours: `./kit plan` says how long, so tell the person, then give them that command to run. `./kit sync -y --only ID` gets just one item.
 
 ## What happens to files already downloaded

@@ -1,13 +1,13 @@
 #!/bin/bash
 # Double-click me (macOS) to remove Tinfoil Kit and everything it downloaded. Linux: bash UNINSTALL.command
-# It says what it will delete and asks first. --yes skips the question, for scripts and AI agents.
+# It says what it will delete and asks first. --yes (or -y) skips the question, for scripts and AI agents.
 # The whole script is one { } block, so bash reads all of it before it deletes this file.
 {
 cd "$(dirname "$0")" || exit 1
 CODE="$(pwd)"    # the kit's code: its app folder, or a git checkout, which is its own kit folder
 KIT="$CODE"
 case "$(basename "$CODE" | tr '[:upper:]' '[:lower:]')" in app) [ -e .git ] || KIT="$(dirname "$CODE")" ;; esac
-YES=0; [ "${1:-}" = "--yes" ] && YES=1
+YES=0; case "${1:-}" in --yes|-y) YES=1 ;; esac
 THIS="this computer"; [ "$(uname -s)" = Darwin ] && THIS="this Mac"
 SUPPORT="$HOME/Library/Application Support/TinfoilKit"    # where the Mac app keeps where the kit is
 say() { printf '\n%s\n' "$*"; }
