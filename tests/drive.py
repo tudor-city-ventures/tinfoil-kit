@@ -203,9 +203,9 @@ TITLES = {
     "linux": "Linux: the drive the Mac made, started on Ubuntu, then Ubuntu 24.04 and 22.04, Debian 12 and Fedora; "
              "the page in Chrome; then a home server, and uninstall",
 }
-# How the scripts' questions end, so `type` knows when to answer: "[Y/n] ", "then press Return: ", "press Enter
-# to close this window. " A line that ends in a plain full stop is news, not a question.
-QUESTION = re.compile(r"(\[Y/n\]|:|\b(Return|Enter)\b.*[.:])\s*$")
+# How the scripts' questions end, so `type` knows when to answer: "[Y/n] ", "[y/N] ", "then press Return: ", "press
+# Enter to close this window. " A line that ends in a plain full stop is news, not a question.
+QUESTION = re.compile(r"(\[y/n\]|:|\b(Return|Enter)\b.*[.:])\s*$", re.I)
 ESCAPES = re.compile(r"\x1b(\[[0-9;?<=>]*[ -/]*[@-~]|\][^\x07\x1b]*(\x07|\x1b\\)?|[()][0-9A-Za-z]|[=>78DEHMc])")
 
 

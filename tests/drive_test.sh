@@ -46,6 +46,7 @@ terminal() { # FOLDER LOG ANSWERS COMMAND...
   { echo '#!/bin/bash'
     echo 'printf "\033[3;0;0t\033[8;34;100t\033[2J\033[H"'    # Terminal: top left, 100 columns by 34 rows, cleared
     printf 'cd %q && . %q\n' "$dir" "$TESTS/env.sh"
+    for i in $(compgen -e | grep '^KIT_'); do printf 'export %s=%q\n' "$i" "${!i}"; done    # KIT_OWN_PYTHON=1 setup ...
     printf '%q ' "$(command -v python3)" "$TESTS/drive.py" type "$log" "$answers" -- "$@"; echo
     printf 'echo $? > %q\n' "$log.exit"
   } > "$run"
