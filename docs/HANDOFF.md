@@ -35,12 +35,12 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 
 **Waiting on Travis**
 - Whether tinfoilkit.com stays public before launch. The project's Vercel Authentication covers everything except custom domains, so the site is public there, and its GitHub buttons 404 until the repo is public. Hiding it means setting protection to all deployments; that needs his OK.
-- Switch GitHub's default branch to `main`. Until then, push `main` to `claude/project-thread-ew0j18` too, because scheduled workflows run from the default branch's copy of `.github/`. (Vercel deploys production from `main`; the sizes workflow checks out and pushes `main`.)
 - A real `SETUP.command` run on his Mac. This is the only test against real downloads and Apple Silicon.
 - Going public: turn off Vercel Authentication for production and make the repo public. Ask first.
-- Contribution policy, in place as recommended until Travis says otherwise: the issue-first gate (not label-only or invite-only), DCO sign-off (not a CLA or nothing), and AI tools allowed with disclosure and a person answering for every PR.
 
 **Decided for now (Travis, 2026-11-21):** llama-server is the only AI runtime (no Ollama or LM Studio), Ask stays one library search then an answer (only map questions use tools), and "AI chat" stays llama-server's own page.
+
+**Contribution policy (Travis, 2026-11-22):** the issue-first gate (not label-only or invite-only), DCO sign-off (not a CLA or nothing), and AI tools allowed with disclosure and a person answering for every issue and PR. GitHub's default branch is `main`, so pushing `main` is enough.
 
 **Ideas not started**
 - Real product screenshots on the site. CI's e2e screenshots use test data (a tiny model, mock places), so they would need real data from Travis's Mac.
@@ -418,7 +418,7 @@ Each step needs Travis's go-ahead, because none of them can be quietly undone.
 2. Done: tinfoilkit.com and `www` (redirecting to it) are on the `tinfoilkit` project.
 3. Make sure the public can see tinfoilkit.com: Vercel Authentication on the `tinfoilkit` project must be "all except custom domains" (or off). Previews stay protected.
 4. Make the GitHub repo public. The site's GitHub button and the install prompt point at it. First:
-   - switch the default branch to `main` (visitors land on it) and delete `claude/project-thread-ew0j18`;
+   - delete `claude/project-thread-ew0j18` (the default branch is already `main`);
    - decide whether this file stays public. Sections 8 and 9 are internal (accounts, how the project started); trim them if not. Commit authors are all `Claude <noreply@anthropic.com>` or the Actions bot, so no personal email is in the history.
    Then turn on the settings in "GitHub settings at launch" below, all but the `main` ruleset's pull request rules (step 7). Several exist only for public repos, and the release protections must be on before step 5.
 5. Before the first release, Travis makes the release key once on his Mac: `.github/release.sh key`. It asks for a passphrase and adds the public half to `tools/release-signers`, which an agent commits. The private key stays on his Mac, backed up with its passphrase in his password manager, and never goes into GitHub: without it, no drive can update again. Before each release, run the `pin program builds` workflow (or wait for its Monday run) and do the real-Mac `./kit sync && ./kit test` on that commit, so the pinned builds are the tested ones. Then he publishes the first release from `main` with `.github/release.sh v1.0.0 NOTES.txt` (needs `gh`, signed in), NOTES.txt being a few lines on what's in it, which SETUP shows before installing. The script checks that CI passed, signs, checks the signature, asks him to type the version, then pushes the tag and creates the release. Until the repo is public and has a release, `./kit update` finds nothing and drives keep their version.
