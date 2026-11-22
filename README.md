@@ -44,7 +44,7 @@ flowchart TB
 
 ### Setting up (online)
 
-The first time, SETUP says which AI model the computer can run (`./kit fit`), then asks where the kit goes: an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free, and on a Mac stays out of Time Machine). `./kit drives` lists the drives with their format, and `./kit space` says whether all of the kit, or just its essentials, fits on each with 10% of the computer's disk (5% of a drive) left free. When all of it won't fit, or leaves less than that, SETUP offers the essentials only (`./kit essentials on`: the AI, the medical, preparedness and repair books, and the map). `./kit place` moves the kit there. Then, that time and every time after, it runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl). The first time, it gets and checks the essentials before the rest, so the kit works hours earlier.
+The first time, SETUP asks where you live (a US state or a country), which sets the maps' area, directions, address search and home, and Wikipedia's language (`./kit region`, from the places in `tools/regions.json`). Then it says which AI model the computer can run (`./kit fit`), and asks where the kit goes: an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free, and on a Mac stays out of Time Machine). `./kit drives` lists the drives with their format, and `./kit space` says whether all of the kit, or just its essentials, fits on each with 10% of the computer's disk (5% of a drive) left free. When all of it won't fit, or leaves less than that, SETUP offers the essentials only (`./kit essentials on`: the AI, the medical, preparedness and repair books, and the map). `./kit place` moves the kit there. Then, that time and every time after, it runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl). The first time, it gets and checks the essentials before the rest, so the kit works hours earlier.
 
 1. **Update** (`./kit update`): installs the kit's own code from the newest Tinfoil Kit release on GitHub, keeping your changes to `kit.json`. It installs only a release signed with the maintainer's key, and shows what's new and asks first.
 2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in [kit.json](kit.json) and downloads only what changed. Programs are the exception: each version of the kit names the exact build of each one it installs (`tools/pins.json`), so a new AI engine arrives with a kit update. A big book can wait for its next edition: Wikipedia (115 GB) keeps the one it has until it's a year old (`refresh_days` in kit.json). Downloads resume after a break, every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
@@ -60,7 +60,7 @@ Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build 
 | --- | --- | --- | --- |
 | AI | `llama-server` (llama.cpp) | 8080 | Runs the AI model (Inkling 2 Mini by default). AI chat is its built-in chat page |
 | Library | `kiwix-serve` (Kiwix) | 8888 | Serves the books (`.zim` files: Wikipedia, medical, repair, preparedness) with full-text search, and the kit page |
-| Map | `pmtiles` | 8090 | Serves the map: street detail for your region (the US Northeast by default) and a low-detail world |
+| Map | `pmtiles` | 8090 | Serves the map: street detail where you live (a US state, a country, or part of a big one) and a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy (the whole US by default) |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
 | Sharing (off by default) | `tools/share.py` | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on, `--share` for one run |
@@ -111,7 +111,7 @@ Download the kit (**Code > Download ZIP** on GitHub) and unzip it. Then, in the 
 - **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat`. If Windows says it protected your PC, click **More info**, then **Run anyway**.
 - **Linux:** run `bash SETUP.command` in a terminal. It needs python3 and curl.
 
-SETUP asks whether the kit goes on an external drive or on this computer, says how much room each has, moves it there, downloads the essentials and tests them, then gets the rest and tests again. Or from a terminal on a Mac or Linux:
+SETUP asks where you live and whether the kit goes on an external drive or on this computer, says how much room each has, moves it there, downloads the essentials and tests them, then gets the rest and tests again. Or from a terminal on a Mac or Linux:
 
 ```sh
 git clone https://github.com/tudor-city-ventures/tinfoilkit ~/TinfoilKit    # or /Volumes/<drive>/TinfoilKit
