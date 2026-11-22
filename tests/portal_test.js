@@ -30,6 +30,13 @@ const check = (name, ok, detail) => {
     Kit.fallbackQueries("my child has a fever of 103, what should I do").length >= 2,
     JSON.stringify(Kit.fallbackQueries("my child has a fever of 103, what should I do")),
   );
+  // Search without the AI searches the question's own words: no contractions, and no search twice in another order
+  const split = Kit.fallbackQueries("Where do we meet if we're split up?");
+  check(
+    "searches without the AI skip contractions and repeats",
+    JSON.stringify(split) === JSON.stringify(["meet split", "split", "meet"]),
+    JSON.stringify(split),
+  );
   check(
     "query line cleanup",
     JSON.stringify(Kit.cleanQueryLines('1. fever\n- Child fever treatment\n"febrile seizure"\nHere are queries:')) ===

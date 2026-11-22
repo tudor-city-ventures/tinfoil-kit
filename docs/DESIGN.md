@@ -144,11 +144,11 @@ kiwix-serve, pmtiles, Photon and GraphHopper have no passwords, so they stay on 
 
 `tools/portal.html` is plain HTML and JavaScript with no build step. The core logic is a `Kit` object, exported with `module.exports` so node tests can run it; browser-only code is in a separate function.
 
-- **Ask:**
-  1. The AI writes search queries (fallback: keyword extraction).
+- **Ask:** two buttons, so it's plain which one wakes the AI.
+  1. **Ask the AI:** the AI writes search queries (fallback: keyword extraction, `fallbackQueries`).
   2. kiwix full-text search runs across every book. Queries stay short because Xapian ANDs every word.
-  3. The top articles are read and an answer streams back with `[n]` citations.
-  4. With the AI off, it shows the most relevant passages instead.
+  3. The top articles are read and an answer streams back with `[n]` citations. "Done in" counts from the click, search included, so it compares with Search's.
+  4. **Search** (and Ask the AI with the AI off) runs steps 2 and 3 on the question's own words and shows the passages in full, with no request to the AI: seconds, on little power. **Have the AI answer from these** hands those passages to step 3, with no second search.
 - **Map questions:**
   - `Kit.isMapQuestion` uses a deliberately strict regex. "How far should I stay from a downed power line" still goes to the library.
   - Map questions go to an AI tool-calling loop with the tools `search_places`, `find_nearby` and `get_directions`, and the results are drawn on the Map tab.

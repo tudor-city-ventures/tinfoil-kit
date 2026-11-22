@@ -979,6 +979,31 @@ with sync_playwright() as p:
         "demo: Stop stops it",
         demo.inner_text(progress) == "Stopped." and demo.is_enabled("#kd-ask button[type=submit]"),
     )
+    demo.fill("#kd-q", "How do I treat a burn?")
+    demo.click("#kd-ask button:text-is('Search')")
+    busy = demo.inner_text(progress)
+    demo.wait_for_selector(f"{progress}:text-is('Done in 2s, without the AI: the best passages from your books.')")
+    these = "#kd-ask button:text-is('Have the AI answer from these')"
+    check(
+        "demo: Search shows the best passages without the AI, and offers the AI's answer from them",
+        busy.startswith("Searching the library")
+        and not demo.is_visible("#kd-ask .kd-answer")
+        and demo.text_content("#kd-ask .kd-sources h3") == "Best passages from your library"
+        and demo.locator("#kd-ask .kd-sources li").count() == 3
+        and demo.is_visible(these),
+        busy,
+    )
+    demo.click(these)
+    busy = demo.inner_text(progress)
+    done(9)
+    check(
+        "demo: Have the AI answer from these answers from the same passages, with no second search",
+        busy.startswith("Found 3 sources")
+        and "cool running water" in demo.inner_text("#kd-ask .kd-answer")
+        and demo.text_content("#kd-ask .kd-sources h3") == "Sources from your library"
+        and not demo.is_visible(these),
+        busy,
+    )
     demo.fill("#kd-q", "What's the capital of France?")
     demo.click("#kd-ask button[type=submit]")
     check(

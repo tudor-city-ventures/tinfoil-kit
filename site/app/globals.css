@@ -1961,6 +1961,23 @@ pre.code {
   line-height: 1.5;
   color: var(--ink2);
 }
+/* Search: the passages are what you read, in full */
+.kd-sources.kd-passages blockquote {
+  margin-top: 10px;
+  font-size: 16px;
+  color: var(--ink);
+}
+.kd-hint {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink2);
+}
+.kd-hint p {
+  margin: 0;
+}
+.kd-these {
+  margin: 8px 0 4px;
+}
 /* Print the essentials: numbered on across both lists, then the household's own page */
 .kd-printlink {
   background: transparent;
@@ -2508,6 +2525,7 @@ pre.code {
   }
   .kd-row .kd-btn {
     flex: 1 1 auto;
+    padding: 0 12px; /* Ask the AI, Search and Stop on one line */
   }
   .kd-sources li {
     padding: 12px 14px 14px 54px;
@@ -2527,6 +2545,9 @@ pre.code {
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
     overflow: hidden;
+  }
+  .kd-sources.kd-passages blockquote {
+    display: block;
   }
   .kd-map {
     grid-template-columns: minmax(0, 1fr);

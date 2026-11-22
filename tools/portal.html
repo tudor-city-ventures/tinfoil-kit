@@ -459,6 +459,19 @@
         line-height: 1.5;
         color: var(--ink2);
       }
+      /* Search: the passages are what you read, in full, a paragraph to a line */
+      #sources.passages blockquote {
+        margin-top: 10px;
+        font-size: 16px;
+        color: var(--ink);
+        white-space: pre-line;
+      }
+      #askHint p {
+        margin: 0;
+      }
+      #answerThese {
+        margin: 8px 0 4px;
+      }
       #ask > .note {
         margin-top: 24px;
       }
@@ -944,6 +957,9 @@
         .row button {
           flex: 1 1 auto;
         }
+        #askForm .row button {
+          padding: 0 12px; /* Ask the AI, Search and Stop on one line */
+        }
         #sources li {
           padding: 12px 14px 14px 54px;
         }
@@ -1068,22 +1084,35 @@
           <div class="row">
             <select id="scope" title="Which books to search" aria-label="Which books to search"></select>
             <select id="model" title="Which AI model answers" aria-label="Which AI model answers"></select>
-            <button id="askBtn" type="submit">Ask</button>
+            <button id="askBtn" type="submit">Ask the AI</button>
+            <button id="searchBtn" type="button" class="secondary">Search</button>
             <button id="stopBtn" type="button" class="secondary" disabled>Stop</button>
+          </div>
+          <div id="askHint" class="note">
+            <p>
+              <b>Ask the AI</b>: it reads your books and writes an answer, with sources. Slower, and it uses a lot of
+              power.
+            </p>
+            <p>
+              <b>Search</b>: the best passages from your books in seconds, without the AI. It uses very little power.
+            </p>
           </div>
         </form>
         <div id="progress" role="status"></div>
+        <p id="answerThese" hidden>
+          <button id="answerBtn" type="button" class="secondary">Have the AI answer from these</button>
+        </p>
         <div id="answer" class="card"></div>
         <details id="thinking" hidden>
           <summary>How the model reasoned</summary>
           <pre></pre>
         </details>
         <div id="sourcesBox" hidden>
-          <h2>Sources from your library</h2>
+          <h2 id="sourcesTitle">Sources from your library</h2>
           <ol id="sources"></ol>
         </div>
         <p class="note">
-          The answer comes from an AI on this computer reading your offline library. It can be wrong. Check the sources,
+          Answers come from an AI on this computer reading your offline library. They can be wrong. Check the sources,
           and follow trained medical help whenever you can reach it.
         </p>
       </section>
@@ -1213,12 +1242,17 @@
         <h2>Using the kit</h2>
         <ul>
           <li>
-            <b>Ask</b> searches your offline books, then the AI answers and cites them as [1], [2]. Click a source to
-            read it in full.
+            On <b>Ask</b>, <b>Ask the AI</b> searches your offline books, then the AI answers and cites them as [1],
+            [2]. Click a source to read it in full. The AI is slower and uses a lot of power.
           </li>
           <li>
-            <b>Library</b> lets you browse or search every book yourself: Wikipedia, medical guides, repair manuals and
-            more.
+            <b>Search</b>, beside it, skips the AI: the best passages from your books in seconds, on very little power.
+            Use it to save battery, or when you'd rather read for yourself. <b>Have the AI answer from these</b> then
+            turns what it found into an answer. With the AI off, Ask the AI shows the passages too.
+          </li>
+          <li>
+            <b>Library</b> lets you browse every book: Wikipedia, medical guides, repair manuals and more. Its search
+            lists every article with the words you type.
           </li>
           <li>
             <b>Notes</b> is where you write down what matters to your household: allergies, medicines, doctors, where to
@@ -1335,7 +1369,8 @@
             out = [];
           words(text).forEach(function (w) {
             w = w.replace(/'s$/, "");
-            if (w.length < 3 || STOP.has(w)) return;
+            // nor contractions (we're, won't, I'd): they find nothing worth reading
+            if (w.length < 3 || STOP.has(w) || /'(re|ve|ll|d|m)$|n't$/.test(w)) return;
             if (!seen.has(w)) {
               seen.add(w);
               out.push(w);
@@ -1527,7 +1562,7 @@
             o = [];
           list.forEach(function (x) {
             x = (x || "").trim();
-            var k = x.toLowerCase();
+            var k = x.toLowerCase().split(/\s+/).sort().join(" "); // "split meet" finds what "meet split" does
             if (x && !s.has(k)) {
               s.add(k);
               o.push(x);
@@ -2892,11 +2927,16 @@
             return books;
           }
 
-          function showSources(sources) {
+          // The sources of an answer, each with the start of what the AI read; or, with no AI, the passages in full.
+          function showSources(sources, passages) {
             $("sourcesBox").hidden = !sources.length;
+            $("sourcesTitle").textContent = passages ? "Best passages from your library" : "Sources from your library";
+            $("sources").classList.toggle("passages", passages);
             $("sources").innerHTML = sources
               .map(function (s, i) {
-                var quote = s.passages[0].slice(0, 280);
+                var quotes = passages
+                  ? s.passages
+                  : [s.passages[0].length > 280 ? s.passages[0].slice(0, 280) + "..." : s.passages[0]];
                 return (
                   '<li id="src-' +
                   (i + 1) +
@@ -2906,23 +2946,35 @@
                   Kit.escapeHtml(s.title) +
                   '</a> <span class="book">' +
                   Kit.escapeHtml(s.book) +
-                  "</span><blockquote>" +
-                  Kit.escapeHtml(quote) +
-                  (s.passages[0].length > 280 ? "..." : "") +
-                  "</blockquote></li>"
+                  "</span>" +
+                  quotes
+                    .map(function (q) {
+                      return "<blockquote>" + Kit.escapeHtml(q) + "</blockquote>";
+                    })
+                    .join("") +
+                  "</li>"
                 );
               })
               .join("");
           }
 
-          async function ask(question) {
-            var ctrl = new AbortController();
+          // Ask the AI: it works out what to search for, then answers from the best passages, citing them. Search, and
+          // Ask the AI with the AI off, never wake the AI: the same search with the question's own words, and the
+          // passages it finds, quick and light on the battery. Have the AI answer from these hands the AI what Search
+          // found (`found`), with no second search.
+          var lastFound = null;
+          async function ask(question, searchOnly, found) {
+            var ctrl = new AbortController(),
+              started = Date.now();
             running = ctrl;
-            $("askBtn").disabled = true;
+            $("askBtn").disabled = $("searchBtn").disabled = true;
             $("stopBtn").disabled = false;
+            $("answerThese").hidden = true;
             $("answer").innerHTML = "";
-            $("sources").innerHTML = "";
-            $("sourcesBox").hidden = true;
+            if (!found) {
+              $("sources").innerHTML = "";
+              $("sourcesBox").hidden = true;
+            }
             $("thinking").hidden = true;
             $("thinking").querySelector("pre").textContent = "";
             var progress = function (t) {
@@ -2932,40 +2984,35 @@
               slowTimer = null;
             store("model", model || "");
             try {
-              if (!aiUp) await checkAI();
-              if (mapsUsable() && Kit.isMapQuestion(question) && (await askMap(question, ctrl, progress, model)))
-                return;
-              if (!books.length) await loadBooks();
+              if (!aiUp && !searchOnly) await checkAI();
+              var useAI = aiUp && !searchOnly;
               var opts = {
-                aiBase: aiUp ? AI : "",
-                model: aiUp ? model : "",
+                aiBase: useAI ? AI : "",
+                model: useAI ? model : "",
                 signal: ctrl.signal,
                 root: ROOT,
                 onProgress: progress,
               };
-              progress(aiUp ? "Working out what to search for..." : "Searching the library (AI is off)...");
-              opts.queries = await Kit.makeQueries(opts, question);
-              var sources = await Kit.gatherSources(question, selectedBooks(), opts);
-              showSources(sources);
-              if (!aiUp) {
+              var sources = found;
+              if (!sources) {
+                if (mapsUsable() && Kit.isMapQuestion(question) && (await askMap(question, ctrl, progress, opts.model)))
+                  return;
+                if (!books.length) await loadBooks();
+                progress(useAI ? "Working out what to search for..." : "Searching the library...");
+                opts.queries = await Kit.makeQueries(opts, question);
+                sources = await Kit.gatherSources(question, selectedBooks(), opts);
+              }
+              showSources(sources, !useAI);
+              if (!useAI) {
+                lastFound = sources.length ? { question: question, sources: sources } : null;
+                $("answerThese").hidden = !lastFound || !aiUp;
                 progress(
-                  sources.length
-                    ? "AI is not running, so here are the most relevant passages."
-                    : "Nothing found. Try other words.",
+                  !sources.length
+                    ? "Nothing found. Try other words."
+                    : searchOnly
+                      ? "Done in " + secondsSince(started) + "s, without the AI: the best passages from your books."
+                      : "The AI isn't running, so here are the best passages from your books.",
                 );
-                $("answer").innerHTML = sources
-                  .map(function (s, i) {
-                    return (
-                      "<p><b>[" +
-                      (i + 1) +
-                      "] " +
-                      Kit.escapeHtml(s.title) +
-                      "</b><br>" +
-                      Kit.escapeHtml(s.passages.join(" ... ")).replace(/\n/g, "<br>") +
-                      "</p>"
-                    );
-                  })
-                  .join("");
                 return;
               }
               progress(
@@ -2993,26 +3040,34 @@
                   progress("Answering...");
                 }
               });
+              // the whole wait, search included, so it compares with Search's
               progress(
-                "Done in " +
-                  Math.round((Date.now() - t0) / 1000) +
-                  "s. " +
-                  (sources.length ? "Sources are listed below." : ""),
+                "Done in " + secondsSince(started) + "s. " + (sources.length ? "Sources are listed below." : ""),
               );
             } catch (e) {
               progress(e.name === "AbortError" ? "Stopped." : "Problem: " + e.message);
             } finally {
               clearTimeout(slowTimer); // or it would write over "Stopped." or the problem a few seconds later
               running = null;
-              $("askBtn").disabled = false;
+              $("askBtn").disabled = $("searchBtn").disabled = false;
               $("stopBtn").disabled = true;
             }
+          }
+          function secondsSince(t) {
+            return Math.max(1, Math.round((Date.now() - t) / 1000));
           }
 
           $("askForm").addEventListener("submit", function (ev) {
             ev.preventDefault();
             var q = $("q").value.trim();
             if (q && !running) ask(q);
+          });
+          $("searchBtn").addEventListener("click", function () {
+            var q = $("q").value.trim();
+            if (q && !running) ask(q, true);
+          });
+          $("answerBtn").addEventListener("click", function () {
+            if (lastFound && !running) ask($("q").value.trim() || lastFound.question, false, lastFound.sources);
           });
           $("q").addEventListener("keydown", function (ev) {
             if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {

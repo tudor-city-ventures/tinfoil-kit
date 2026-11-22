@@ -280,13 +280,20 @@ function meetAnswer(notes) {
   );
 }
 
+const routeSteps = (r) => r.steps.map((s, i) => `${i + 1}. ${s.text}${s.len ? ` (${fmtDist(s.len)})` : ""}`).join("\n");
+
 function hospitalAnswer() {
   const r = START;
   return (
     `The nearest hospital is **${HOSPITAL.name}**, ${HOSPITAL.address}, ${fmtDist(seg(HOME.xy, HOSPITAL.xy))} ${compass(HOME.xy, HOSPITAL.xy)} of home. By car it's ${fmtDist(r.len)}, about ${fmtTime(r.ms)}:\n\n` +
-    r.steps.map((s, i) => `${i + 1}. ${s.text}${s.len ? ` (${fmtDist(s.len)})` : ""}`).join("\n") +
+    routeSteps(r) +
     "\n\nIn an emergency, call 911 first if a phone works."
   );
+}
+
+// With no AI, the kit plans the route itself and lists it, as describe() does in the kit page.
+function routeAnswer() {
+  return `**Driving to ${HOSPITAL.name}:** ${fmtDist(START.len)}, about ${fmtTime(START.ms)}.\n\n` + routeSteps(START);
 }
 
 const SCOPES = [["all", `Search all books (${BOOKS.length})`, BOOKS.length]].concat(
@@ -303,6 +310,7 @@ function AskPanel({ notes, cmd, onMap, say }) {
   const [answer, setAnswer] = useState(FIRST.answer);
   const [sources, setSources] = useState(FIRST.sources);
   const [mapped, setMapped] = useState(false);
+  const [searched, setSearched] = useState(null); // the question whose passages Search shows, for the AI to answer
   const [busy, setBusy] = useState(false);
   const [lit, setLit] = useState(0);
   const run = useRef(0);
@@ -318,51 +326,62 @@ function AskPanel({ notes, cmd, onMap, say }) {
     ask(cmd.q);
   }, [cmd]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function ask(text) {
+  // As the kit page does it: "ai" (Ask the AI: the AI picks what to search for, then answers), "search" (Search: the
+  // question's own words, and the passages, with no AI) or "these" (Have the AI answer from these: no second search).
+  async function ask(text, how = "ai") {
     const item = QUESTIONS.find((x) => norm(x.q) === norm(text));
     const id = ++run.current,
       fast = reduced();
     const wait = (ms) => new Promise((r) => setTimeout(r, fast ? 0 : ms)).then(() => run.current === id);
     setAnswer("");
-    setSources([]);
+    if (how !== "these") setSources([]);
     setMapped(false);
+    setSearched(null);
     setLit(0);
     if (!item) {
       setBusy(false);
-      setProgress(
-        "This demo only knows the sample questions above. On your laptop, Tinfoil Kit answers anything you ask.",
-      );
+      setProgress("This demo only knows the sample questions above. On your laptop, ask or search for anything.");
       return;
     }
     setBusy(true);
     if (item.map) {
+      const ai = how === "ai"; // with no AI, the kit goes straight to directions to the nearest hospital
       for (const [t, ms] of [
         ["Looking it up on the offline map...", 900],
-        ["Looked up find nearby...", 600],
+        ...(ai ? [["Looked up find nearby...", 600]] : []),
         ["Looked up get directions...", 700],
       ]) {
         setProgress(t);
         if (!(await wait(ms))) return;
       }
-      setAnswer(hospitalAnswer());
+      setAnswer(ai ? hospitalAnswer() : routeAnswer());
       setMapped(true);
       setProgress("Done. Map results come from your offline map data.");
       setBusy(false);
       return;
     }
-    const books = SCOPES.find((s) => s[0] === scope)[2],
-      jobs = books * item.queries.length;
-    const steps = [
-      ["Working out what to search for...", 700],
-      [`Searching ${books} books for: ${item.queries.join(" | ")}`, 900],
-    ];
-    for (let n = 10; n < jobs; n += 20) steps.push([`Searching books... ${n}/${jobs}`, 220]);
-    steps.push([`Reading ${item.read} articles...`, 700]);
-    for (const [t, ms] of steps) {
-      setProgress(t);
-      if (!(await wait(ms))) return;
+    if (how !== "these") {
+      const books = SCOPES.find((s) => s[0] === scope)[2],
+        queries = how === "ai" ? item.queries : item.words,
+        jobs = books * queries.length;
+      const steps = [
+        how === "ai" ? ["Working out what to search for...", 700] : ["Searching the library...", 200],
+        [`Searching ${books} books for: ${queries.join(" | ")}`, 900],
+      ];
+      for (let n = 10; n < jobs; n += 20) steps.push([`Searching books... ${n}/${jobs}`, 220]);
+      steps.push([`Reading ${item.read} articles...`, 700]);
+      for (const [t, ms] of steps) {
+        setProgress(t);
+        if (!(await wait(ms))) return;
+      }
+      setSources(item.sources);
     }
-    setSources(item.sources);
+    if (how === "search") {
+      setSearched(item.q);
+      setProgress(`Done in ${item.searchSeconds}s, without the AI: the best passages from your books.`);
+      setBusy(false);
+      return;
+    }
     setProgress(`Found ${item.sources.length} source${item.sources.length === 1 ? "" : "s"}. Asking ${model}...`);
     if (!(await wait(900))) return;
     setProgress("Answering...");
@@ -372,7 +391,9 @@ function AskPanel({ notes, cmd, onMap, say }) {
       setAnswer(toks.slice(0, i).join(""));
       if (!(await wait(30))) return;
     }
-    setProgress(`Done in ${item.seconds}s. Sources are listed below.`);
+    setProgress(
+      `Done in ${how === "these" ? item.seconds - item.searchSeconds : item.seconds}s. Sources are listed below.`,
+    );
     setBusy(false);
   }
   function stop() {
@@ -432,11 +453,30 @@ function AskPanel({ notes, cmd, onMap, say }) {
             ))}
           </select>
           <button type="submit" className="kd-btn" disabled={busy}>
-            Ask
+            Ask the AI
+          </button>
+          <button
+            type="button"
+            className="kd-btn secondary"
+            disabled={busy}
+            onClick={() => {
+              if (q.trim()) ask(q, "search");
+            }}
+          >
+            Search
           </button>
           <button type="button" className="kd-btn secondary" disabled={!busy} onClick={stop}>
             Stop
           </button>
+        </div>
+        <div className="kd-hint">
+          <p>
+            <b>Ask the AI</b>: it reads your books and writes an answer, with sources. Slower, and it uses a lot of
+            power.
+          </p>
+          <p>
+            <b>Search</b>: the best passages from your books in seconds, without the AI. It uses very little power.
+          </p>
         </div>
       </form>
       <div className="kd-try">
@@ -458,6 +498,13 @@ function AskPanel({ notes, cmd, onMap, say }) {
       <div className="kd-progress" role="status">
         {progress}
       </div>
+      {searched && (
+        <p className="kd-these">
+          <button type="button" className="kd-btn secondary" onClick={() => ask(searched, "these")}>
+            Have the AI answer from these
+          </button>
+        </p>
+      )}
       {answer && (
         <div className="kd-answer">
           <Md text={answer} cites={sources.length} onCite={cite} />
@@ -471,8 +518,8 @@ function AskPanel({ notes, cmd, onMap, say }) {
         </div>
       )}
       {sources.length > 0 && (
-        <div className="kd-sources">
-          <h3 className="kd-h">Sources from your library</h3>
+        <div className={"kd-sources" + (searched ? " kd-passages" : "")}>
+          <h3 className="kd-h">{searched ? "Best passages from your library" : "Sources from your library"}</h3>
           <ol>
             {sources.map((s, i) => (
               <li key={s.title} id={"kd-src-" + (i + 1)} tabIndex={-1} className={lit === i + 1 ? "lit" : undefined}>
@@ -491,8 +538,8 @@ function AskPanel({ notes, cmd, onMap, say }) {
         </div>
       )}
       <p className="kd-note">
-        The answer comes from an AI on this computer reading your offline library. It can be wrong. Check the sources,
-        and follow trained medical help whenever you can reach it.
+        Answers come from an AI on this computer reading your offline library. They can be wrong. Check the sources, and
+        follow trained medical help whenever you can reach it.
       </p>
     </>
   );

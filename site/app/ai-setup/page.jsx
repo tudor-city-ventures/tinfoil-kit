@@ -363,11 +363,13 @@ export default function AISetup() {
             </ul>
             <ul className="cards">
               <li>
-                <b>Ask: answers with sources</b>
+                <b>Ask: answers with sources, or search</b>
                 <span>
-                  The LLM turns your question into short searches, kiwix-serve runs them over every ZIM, and the LLM
-                  answers from the top articles with numbered citations. Map questions go to three tools instead: search
-                  places, find nearby, get directions. With the AI off, Ask shows the best passages.
+                  Ask the AI: the LLM turns your question into short searches, kiwix-serve runs them over every ZIM, and
+                  the LLM answers from the top articles with numbered citations. Map questions go to three tools
+                  instead: search places, find nearby, get directions. Search skips the LLM: the question&apos;s own
+                  words over the same full-text indexes, the best passages ranked in the page, in seconds and with no
+                  GPU. The LLM can then answer from those passages, with no second search.
                 </span>
               </li>
               <li>

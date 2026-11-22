@@ -43,6 +43,7 @@ const jsonLd = {
         "Library: all of Wikipedia with pictures, the WikiMed medical encyclopedia, Army field and medical manuals, iFixit repair guides and FEMA emergency guides",
         "Map: address search, driving and walking directions, and the nearest hospital or pharmacy",
         "The AI is optional: the library and the map work without it",
+        "Search every book without the AI: the best passages in seconds, on very little power",
         "Works with no internet, no account and no telemetry",
       ],
       isAccessibleForFree: true,
@@ -244,8 +245,9 @@ export default function Home() {
               explaining things, it shows where its answers come from, and it needs no internet.
             </Question>
             <Question q="Do I need the AI?">
-              No. The books and the map work without it. With the AI off, a question still searches every book and shows
-              the best passages. The installer lets you leave it out.
+              No. The books and the map work without it, and Search finds the best passages in every book in seconds,
+              without the AI, on very little power. The AI is for when you want an answer written for you, with sources.
+              The installer lets you leave it out.
             </Question>
             <Question q="What do I need?">
               A Mac with an M chip (M1 or newer). Windows and Linux PCs with an Intel or AMD chip work too, but they're
@@ -360,8 +362,8 @@ export default function Home() {
             </Question>
             <Question q="How long does it run on battery?">
               The big AI uses a lot of power: expect a couple of hours of active use. The small one uses much less, and
-              reading with the AI off uses almost nothing. A USB-C power station and a folding solar panel keep it
-              going.
+              searching and reading the books without the AI uses almost nothing. A USB-C power station and a folding
+              solar panel keep it going.
             </Question>
             <Question q="Does it run on Windows or Linux?">
               Yes, all of it, but Windows and Linux are experimental for now: they're tested less than the Mac, so

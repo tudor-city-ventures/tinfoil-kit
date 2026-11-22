@@ -26,8 +26,13 @@ Nothing here needs the internet, an account, or an install.
 
 ## Using it
 
-- **Ask**: type a question. The kit searches your offline books, then the AI answers and cites them as [1], [2]. Click a
-  source to read the original. If the AI won't start, Ask still shows the best passages from the books.
+- **Ask**: type a question, then pick one of two buttons:
+  - **Ask the AI**: the kit searches your offline books, then the AI answers and cites them as [1], [2]. Click a source
+    to read the original. It's slower, and it uses a lot of power.
+  - **Search**: the best passages from your books in seconds, without the AI, on very little power. Use it to save
+    battery, or to read for yourself. **Have the AI answer from these** then turns what it found into an answer.
+
+  If the AI won't start, Ask the AI still shows the best passages from the books.
 - **Library**: browse or search every book yourself.
 - **Map**: search an address or place, get driving or walking directions, or find the nearest hospital, pharmacy, gas
   station and more. See [Maps](#maps).
@@ -130,7 +135,7 @@ Other commands:
 Everything the kit keeps is listed in **`data/kit.json`** (open it in any text editor):
 
 - Turn something off: set `"enabled": false` on its line. Turn every model off and the kit runs without the AI: the
-  library and the map work as usual, and Ask shows the best passages from the books. What it downloaded stays until
+  library and the map work as usual, and Search shows the best passages from the books. What it downloaded stays until
   `./kit remove NAME` deletes it.
 - Add a book: `./kit search <words>`, then paste the line it prints into the `"library"` list.
 - Swap a model: change its `"repo"` and `"files"` (Hugging Face repo and file name patterns). Each pattern must match
@@ -199,8 +204,8 @@ To remove the Mac app too, drag it from Applications to the Trash.
 ## Power
 
 Running a big model uses a lot of battery: expect a couple of hours of active use on a laptop battery. A USB-C power
-station plus a folding solar panel keeps it going. Use `Gemma-4-E4B` when power is short, and the Library tab (no AI)
-uses almost nothing. Paper uses none: print the essentials while you can.
+station plus a folding solar panel keeps it going. Use `Gemma-4-E4B` when power is short. **Search** on the Ask page
+and the Library tab don't use the AI, so they use almost nothing. Paper uses none: print the essentials while you can.
 
 ## If something doesn't work
 

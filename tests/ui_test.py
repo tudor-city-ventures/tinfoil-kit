@@ -147,6 +147,48 @@ with sync_playwright() as p:
     href = page.get_attribute("#sources li a", "href")
     r = page.request.get(f"http://127.0.0.1:{LIB}" + href)
     check("source link opens the article", r.ok and "8 drops" in r.text(), href)
+    note("Search: the same books, without the AI. The best passages in seconds, on very little power")
+    ai_calls, searches = [], []
+
+    def watch(req):
+        if "/v1/chat/completions" in req.url:
+            ai_calls.append(req.url)
+        elif "/search?" in req.url:
+            searches.append(req.url)
+
+    page.on("request", watch)
+    page.click("#searchBtn")
+    page.wait_for_function(
+        "document.getElementById('sources').classList.contains('passages') && "
+        "!document.getElementById('askBtn').disabled",
+        timeout=60000,
+    )
+    check("search: the best passages, in full", "8 drops" in page.inner_text("#sources"), page.inner_text("#progress"))
+    check(
+        "search: the AI isn't asked anything, even while it runs",
+        not ai_calls and not page.inner_text("#answer").strip(),
+        f"{len(ai_calls)} requests to the AI",
+    )
+    pause(page, 4)
+    page.screenshot(path=os.path.join(SHOTS, "shot_search.png"), full_page=True)
+    note("Have the AI answer from these: the AI reads what Search found, with no second search")
+    ai_calls.clear()
+    searches.clear()
+    page.click("#answerBtn")
+    page.wait_for_function(
+        "!document.getElementById('sources').classList.contains('passages') && "
+        "document.getElementById('progress').textContent.startsWith('Done') && "
+        "!document.getElementById('askBtn').disabled",
+        timeout=120000,
+    )
+    page.remove_listener("request", watch)
+    check("have the AI answer from these: its answer arrives intact, citing what Search found", *intact(page))
+    check(
+        "have the AI answer from these: one request to the AI, and no second search",
+        len(ai_calls) == 1 and not searches,
+        f"{len(ai_calls)} requests to the AI, {len(searches)} searches",
+    )
+    pause(page, 4)
     if VIDEO:
         note("A source opens its article in the offline library")
         popup(page, "#sources li a", lambda tab: pause(tab, 4))
@@ -216,9 +258,9 @@ with sync_playwright() as p:
                 check(f"{scheme} mode, {tab} tab: no accessibility violations (axe)", not bad, ", ".join(bad))
             pa.close()
 
-    # AI down, on a phone (how family members use a shared kit): answers fall back to library passages
+    # AI down, on a phone (how family members use a shared kit): Ask shows the library's best passages instead
     page2 = b.new_page(viewport={"width": 390, "height": phone_height})
-    note("On a phone, with the AI off: the answer is the library's best passages")
+    note("On a phone, with the AI off: Ask shows the library's best passages")
     page2.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai=18999&data={DATA}")  # nothing listens on 18999
     page2.wait_for_function("document.getElementById('aiStatus').textContent.includes('off')", timeout=15000)
     type_in(page2, "#q", "tourniquet placement")
@@ -228,7 +270,7 @@ with sync_playwright() as p:
         "document.getElementById('progress').textContent.includes('Nothing')",
         timeout=60000,
     )
-    check("AI-off fallback shows passages", "5 to 7 cm" in page2.inner_text("#answer"), page2.inner_text("#progress"))
+    check("AI-off fallback shows passages", "5 to 7 cm" in page2.inner_text("#sources"), page2.inner_text("#progress"))
     pause(page2, 4)
     page2.screenshot(path=os.path.join(SHOTS, "shot_ai_off.png"), full_page=True)
     for tab in ("ask", "map", "library", "notes", "print", "help"):

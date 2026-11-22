@@ -109,14 +109,17 @@ const PAGES = {
 const page = (k) => ({ title: PAGES[k][0], book: PAGES[k][1], passage: PAGES[k][2] });
 export const ALL_PAGES = Object.keys(PAGES).map(page);
 
-// The sample questions. `answer` is markdown, as the AI writes it: [n] cites source n. The answers to `notes` and
-// `map` questions are written in demo.jsx, from the notes and the town below.
+// The sample questions. `queries` are what the AI searches for; `words` what Search searches for, with no AI (the
+// kit's Kit.fallbackQueries). `answer` is markdown, as the AI writes it: [n] cites source n. The answers to `notes`
+// and `map` questions are written in demo.jsx, from the notes and the town below.
 export const QUESTIONS = [
   {
     id: "water",
     chip: "Safe drinking water",
     q: "How do I make water safe to drink without a filter?",
     queries: ["boil drinking water", "disinfect water bleach", "solar water disinfection"],
+    words: ["water safe drink", "filter water", "filter", "water"],
+    searchSeconds: 3,
     read: 9,
     seconds: 12,
     sources: ["boil", "bleach", "sodis", "fuel"].map(page),
@@ -140,6 +143,8 @@ None of this removes fuel or chemicals. If the water might have them, find anoth
     chip: "Treat a burn",
     q: "How do I treat a burn?",
     queries: ["burn first aid", "treating burns", "burn blisters infection"],
+    words: ["treat burn", "treat", "burn"],
+    searchSeconds: 2,
     read: 8,
     seconds: 11,
     sources: ["burn", "armyBurn", "medBurn"].map(page),
@@ -162,6 +167,8 @@ Over the next few days, watch for more pain, redness, swelling or pus. Those can
     chip: "Fix a dripping faucet",
     q: "Our faucet keeps dripping. How do I fix it?",
     queries: ["dripping faucet repair", "replace faucet washer cartridge"],
+    words: ["faucet keeps dripping", "dripping faucet", "dripping", "faucet"],
+    searchSeconds: 3,
     read: 7,
     seconds: 10,
     sources: ["faucet", "faucetQA"].map(page),
@@ -181,6 +188,8 @@ A drip from the spout usually means the washer or cartridge. A leak around the h
     chip: "Where do we meet?",
     q: "Where do we meet if we're split up?",
     queries: ["family meeting place", "family emergency plan"],
+    words: ["meet split", "split", "meet"],
+    searchSeconds: 2,
     read: 4,
     seconds: 7,
     notes: true,
