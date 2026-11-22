@@ -47,6 +47,14 @@ def sha(p):
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
+def new_kit(root):
+    """A kit folder: the code in app/ with the standard list (app/kit.json), and data/ for the person's kit.json."""
+    shutil.copytree(TESTS.parent / "tools", root / "app" / "tools")
+    shutil.copy(TESTS.parent / "kit.json", root / "app" / "kit.json")
+    (root / "data").mkdir(parents=True, exist_ok=True)
+    return root
+
+
 work = Path(tempfile.mkdtemp(prefix="kit sync test "))   # drive names often have spaces ("Samsung T7")
 R = work / "remote"
 for rel, size in (("zim/testmed_en_all_maxi_2026-01.zim", 70_000), ("zim/testsurvival_en_2026-02.zim", 60_000),
@@ -75,7 +83,7 @@ env = {**os.environ, "KIT_KIWIX_CATALOG": f"{base}/catalog/v2/entries?count=-1",
 
 drive = work / "drive" / "TinfoilKit"
 listed = -(-70_000 // 1024) * 1024    # testmed's size in the catalog: Kiwix rounds each up to a whole KiB
-shutil.copytree(TESTS.parent / "tools", drive / "tools")
+new_kit(drive)
 cfg = {
     "settings": {"default_model": "Tiny", "keep_free_gb": 0.001, "keep_free_gb_this_computer": 0.001},
     "models": [
@@ -93,22 +101,24 @@ cfg = {
 
 
 def write_cfg():
-    (drive / "kit.json").write_text(json.dumps(cfg, indent=1))
+    (drive / "data" / "kit.json").write_text(json.dumps(cfg, indent=1))
 
 
 def kit(*args, env=env, root=None):
+    """kit.py in the kit folder root: in its app folder, or at its top in a kit from before app/."""
     root = root or drive
-    p = subprocess.run([sys.executable, str(root / "tools" / "kit.py"), "--root", str(root), *args], env=env,
+    code = root / "app" if (root / "app" / "tools" / "kit.py").exists() else root
+    p = subprocess.run([sys.executable, str(code / "tools" / "kit.py"), "--root", str(root), *args], env=env,
                        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=180)
     return p.returncode, p.stdout + p.stderr
 
 
 def state():
-    return json.loads((drive / ".kit" / "state.json").read_text())
+    return json.loads((drive / "data" / ".kit" / "state.json").read_text())
 
 
 def same(drive_rel, remote_rel):
-    p = drive / drive_rel
+    p = drive / "downloads" / drive_rel
     return p.exists() and sha(p) == sha(R / remote_rel)
 
 
@@ -131,7 +141,7 @@ try:
     rc, out = kit("plan")
     kit("essentials", "off")
     check("plan with essentials_only set: just those, and it says so", rc == 0 and out.count("NEW") == 2
-          and "Just the essentials" in out and "Two" not in out and json.loads((drive / "kit.json").read_text()) == cfg, out)
+          and "Just the essentials" in out and "Two" not in out and json.loads((drive / "data" / "kit.json").read_text()) == cfg, out)
 
     rc, out = kit("sync", "-y")
     check("sync exits 1 when entries are broken", rc == 1, f"exit {rc}")
@@ -148,7 +158,7 @@ try:
           f'testmed_en_all_maxi_2026-01.zim.meta4" length="{listed}"' in catalog and "download interrupted (exit 0" not in out, out)
     check("no partial downloads left", not list(drive.rglob("*.partial")), str(list(drive.rglob("*.partial"))))
     check("portal page built, with no refresh date while a sync hasn't finished cleanly",
-          "window.KIT_REFRESHED = null;" in (drive / ".kit" / "portal.html").read_text())
+          "window.KIT_REFRESHED = null;" in (drive / "data" / ".kit" / "portal.html").read_text())
 
     cfg["models"] = [m for m in cfg["models"] if m["id"] != "Ambiguous"]
     cfg["library"] = [z for z in cfg["library"] if z["zim"] != "does_not_exist_en"]
@@ -156,31 +166,31 @@ try:
     rc, out = kit("sync", "-y")
     check("second sync has nothing to do", rc == 0 and "Everything is up to date." in out, out)
     check("the page shows when everything was last brought up to date",
-          f'window.KIT_REFRESHED = "{state().get("last_sync")}";' in (drive / ".kit" / "portal.html").read_text())
+          f'window.KIT_REFRESHED = "{state().get("last_sync")}";' in (drive / "data" / ".kit" / "portal.html").read_text())
 
     # SETUP's first run gets the essentials first, then the rest.
     ess = work / "essentials"
-    shutil.copytree(TESTS.parent / "tools", ess / "tools")
-    (ess / "kit.json").write_text(json.dumps({"settings": cfg["settings"], "models": [cfg["models"][1]],
+    new_kit(ess)
+    (ess / "data" / "kit.json").write_text(json.dumps({"settings": cfg["settings"], "models": [cfg["models"][1]],
                                               "library": cfg["library"][:2]}))
     rc, out = kit("sync", "-y", "--essentials", root=ess)
-    ess_state = json.loads((ess / ".kit" / "state.json").read_text())
+    ess_state = json.loads((ess / "data" / ".kit" / "state.json").read_text())
     check("sync --essentials: gets only those, and doesn't count as a complete sync",
-          rc == 0 and (ess / "models/Two/Two-Q4_K_M.gguf").exists() and list((ess / "library").glob("testmed_*.zim"))
-          and not list((ess / "library").glob("testsurvival_*")) and "last_sync" not in ess_state, out)
+          rc == 0 and (ess / "downloads" / "models/Two/Two-Q4_K_M.gguf").exists() and list((ess / "downloads" / "library").glob("testmed_*.zim"))
+          and not list((ess / "downloads" / "library").glob("testsurvival_*")) and "last_sync" not in ess_state, out)
     rc, out = kit("sync", "-y", root=ess)
-    check("sync after the essentials: gets the rest", rc == 0 and list((ess / "library").glob("testsurvival_*.zim"))
-          and "last_sync" in json.loads((ess / ".kit" / "state.json").read_text()), out)
+    check("sync after the essentials: gets the rest", rc == 0 and list((ess / "downloads" / "library").glob("testsurvival_*.zim"))
+          and "last_sync" in json.loads((ess / "data" / ".kit" / "state.json").read_text()), out)
 
     # Before that, it gets the try-it kit (./kit starter): this computer's programs, the map, and the AI and books
     # marked "starter", even ones that are switched off (samples). The full sync after it removes the samples.
     tk = work / "try"
-    shutil.copytree(TESTS.parent / "tools", tk / "tools")
-    (tk / "kit.json").write_text(json.dumps({"settings": {**cfg["settings"], "starter_only": True},
+    new_kit(tk)
+    (tk / "data" / "kit.json").write_text(json.dumps({"settings": {**cfg["settings"], "starter_only": True},
                                              "models": [{**cfg["models"][0], "starter": True, "enabled": False}, cfg["models"][1]],
                                              "library": [{**cfg["library"][0], "starter": True}, cfg["library"][1]]}))
-    (tk / "site").mkdir()
-    (tk / "site" / "sources.json").write_text(json.dumps({"sources": [
+    (tk / "app" / "site").mkdir()
+    (tk / "app" / "site" / "sources.json").write_text(json.dumps({"sources": [
         {"id": "Tiny", "bytes": 2 * 10**9}, {"id": "Two", "bytes": 3 * 10**9}, {"id": "testmed_en_all_maxi", "bytes": 4 * 10**9},
         {"id": "testsurvival_en", "bytes": 60 * 10**9}]}))
     rc, out = kit("plan", root=tk)
@@ -188,16 +198,16 @@ try:
     check("plan on a try-it kit: the AI and books marked starter, even one that's switched off, and nothing else",
           rc == 0 and out.count("NEW") == 2 and "Tiny" in out and "testmed_en_all_maxi" in out and "Two" not in out
           and "testsurvival" not in out and rc2 == 0 and out2.strip() == "7", out + out2)
-    (tk / "library").mkdir()
-    (tk / "library" / "testsurvival_en_2026-02.zim.partial").write_bytes((R / "zim/testsurvival_en_2026-02.zim").read_bytes()[:1000])
+    (tk / "downloads" / "library").mkdir(parents=True)
+    (tk / "downloads" / "library" / "testsurvival_en_2026-02.zim.partial").write_bytes((R / "zim/testsurvival_en_2026-02.zim").read_bytes()[:1000])
     rc, out = kit("sync", "-y", root=tk)
-    st = json.loads((tk / ".kit" / "state.json").read_text())
+    st = json.loads((tk / "data" / ".kit" / "state.json").read_text())
     check("sync on a try-it kit: just those, it counts as a complete one, and another item's unfinished download stays",
-          rc == 0 and (tk / "models/Tiny/Tiny-Q4_K_M.gguf").exists() and not (tk / "models/Two").exists()
-          and list((tk / "library").glob("testmed_*.zim")) and not list((tk / "library").glob("testsurvival_*.zim"))
-          and (tk / "library" / "testsurvival_en_2026-02.zim.partial").exists() and "last_sync" in st, out)
+          rc == 0 and (tk / "downloads" / "models/Tiny/Tiny-Q4_K_M.gguf").exists() and not (tk / "downloads" / "models/Two").exists()
+          and list((tk / "downloads" / "library").glob("testmed_*.zim")) and not list((tk / "downloads" / "library").glob("testsurvival_*.zim"))
+          and (tk / "downloads" / "library" / "testsurvival_en_2026-02.zim.partial").exists() and "last_sync" in st, out)
     st["download_speed"] = 10 * 10**6
-    (tk / ".kit" / "state.json").write_text(json.dumps(st))
+    (tk / "data" / ".kit" / "state.json").write_text(json.dumps(st))
     rc, out = kit("starter", root=tk)
     rc2, out2 = kit("estimate", "--rest", root=tk)
     check("kit starter and estimate --rest: how big the rest is, and how long it takes at the speed measured",
@@ -207,18 +217,18 @@ try:
     rc, out = kit("starter", "off", root=tk)
     rc2, out2 = kit("plan", root=tk)
     check("kit starter off: everything switched on, and plan says how long it takes",
-          rc == 0 and "starter_only" not in (tk / "kit.json").read_text() and "To get just the try-it kit" in out
+          rc == 0 and "starter_only" not in (tk / "data" / "kit.json").read_text() and "To get just the try-it kit" in out
           and "Two" in out2 and "That takes about a minute at this connection's speed (10.0 MB/s)." in out2, out + out2)
     rc, out = kit("sync", "-y", root=tk)
-    st = json.loads((tk / ".kit" / "state.json").read_text())
+    st = json.loads((tk / "data" / ".kit" / "state.json").read_text())
     check("the full sync after it gets the rest, then removes the sample nobody picked and keeps the book they did",
-          rc == 0 and (tk / "models/Two/Two-Q4_K_M.gguf").exists() and not (tk / "models/Tiny").exists()
-          and "models/Tiny" not in st["items"] and "Removed Tiny" in out and list((tk / "library").glob("testmed_*.zim"))
-          and list((tk / "library").glob("testsurvival_*.zim")) and "library/testmed_en_all_maxi" in st["items"], out)
+          rc == 0 and (tk / "downloads" / "models/Two/Two-Q4_K_M.gguf").exists() and not (tk / "downloads" / "models/Tiny").exists()
+          and "models/Tiny" not in st["items"] and "Removed Tiny" in out and list((tk / "downloads" / "library").glob("testmed_*.zim"))
+          and list((tk / "downloads" / "library").glob("testsurvival_*.zim")) and "library/testmed_en_all_maxi" in st["items"], out)
 
     rc, out = kit("verify")
     check("verify passes", rc == 0 and "All 5 files OK" in out, out)
-    book = drive / "library/testmed_en_all_maxi_2026-01.zim"
+    book = drive / "downloads" / "library/testmed_en_all_maxi_2026-01.zim"
     data = bytearray(book.read_bytes())
     data[1000] ^= 0xFF
     book.write_bytes(bytes(data))
@@ -234,7 +244,7 @@ try:
     del st["items"]["library/testmed_en_all_maxi"]
     st["partials"] = {"library/testmed_en_all_maxi_2026-01.zim.partial": {"item": "library/testmed_en_all_maxi",
                                                                            "tag": f"2026-01|{listed}"}}
-    (drive / ".kit" / "state.json").write_text(json.dumps(st))
+    (drive / "data" / ".kit" / "state.json").write_text(json.dumps(st))
     rc, out = kit("sync", "-y")
     check("a whole book left as an unfinished download is checked and kept, not downloaded again",
           rc == 0 and "resuming at 70.0 KB" in out and "discarding" not in out
@@ -251,7 +261,7 @@ out.write_bytes(urllib.request.urlopen(sys.argv[-1]).read())
 pathlib.Path(str(out) + ".aria2").unlink()
 """)
     (fakebin / "aria2c").chmod(0o755)
-    model = drive / "models/Two/Two-Q4_K_M.gguf"
+    model = drive / "downloads" / "models/Two/Two-Q4_K_M.gguf"
     model.unlink()
     partial = model.with_name(model.name + ".partial")
     partial.write_bytes(os.urandom((R / "hf/two/Two-Q4_K_M.gguf").stat().st_size))
@@ -276,13 +286,13 @@ pathlib.Path(str(out) + ".aria2").unlink()
 
     # Several connections at once, each with its own part of the file. Ctrl-C partway keeps what arrived, and a record
     # of which parts that was; the next sync fetches only the rest.
-    model = drive / "models/Tiny/Tiny-Q4_K_M.gguf"
+    model = drive / "downloads" / "models/Tiny/Tiny-Q4_K_M.gguf"
     model.unlink()
     partial = model.with_name(model.name + ".partial")
     record = partial.with_name(partial.name + ".parts")
     served("Tiny-Q4_K_M.gguf")
     (R / "SLOW").touch()
-    p = subprocess.Popen([sys.executable, str(drive / "tools" / "kit.py"), "--root", str(drive), "sync", "-y"], env=env,
+    p = subprocess.Popen([sys.executable, str(drive / "app" / "tools" / "kit.py"), "--root", str(drive), "sync", "-y"], env=env,
                          stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for _ in range(400):
         if record.exists() and partial.exists() and partial.stat().st_size:
@@ -308,7 +318,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
           and not any(a < d1 and d0 < b for a, b in again for d0, d1 in rec["done"]), out + str(again))
 
     # Near the end, a connection with nothing left to fetch takes the second half of what another has left
-    (drive / "models/Two/Two-Q4_K_M.gguf").unlink()
+    (drive / "downloads" / "models/Two/Two-Q4_K_M.gguf").unlink()
     (R / "SLOW").touch()
     rc, out = kit("sync", "-y")
     (R / "SLOW").unlink()
@@ -354,12 +364,12 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # Which release of a program: llama.cpp's builds are its nightly prereleases, but Photon's newest release
     # here is a beta, and a beta is taken only when there's nothing else.
     rt = work / "runtimes"
-    shutil.copytree(TESTS.parent / "tools", rt / "tools")
+    new_kit(rt)
     programs = [
         {"id": "llama.cpp-linux-x64", "type": "github", "repo": "ggml-org/llama.cpp", "asset": "llama-*-bin-ubuntu-x64.tar.gz"},
         {"id": "photon", "type": "github", "repo": "komoot/photon", "asset": "photon-[0-9]*.jar"},
         {"id": "java-linux-x64", "type": "adoptium", "os": "linux", "arch": "x64"}]
-    (rt / "kit.json").write_text(json.dumps({"settings": {"pin_programs": False}, "runtimes": programs}))
+    (rt / "data" / "kit.json").write_text(json.dumps({"settings": {"pin_programs": False}, "runtimes": programs}))
     rc, out = kit("plan", root=rt)
     check("plan: llama.cpp's nightly build, and Photon's full release rather than its newer beta",
           rc == 0 and "b99990" in out and "1.3.0" in out and "2.0.0-beta" not in out and "jdk-21.0.9+10" in out, out)
@@ -367,10 +377,10 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # A release names each program's build and its checksum (tools/pins.json): sync takes that build rather than
     # a newer one, and refuses a file that changed after it was pinned.
     def pin(**pins):
-        (rt / "tools" / "pins.json").write_text(json.dumps({"_readme": ["test"], **pins}))
+        (rt / "app" / "tools" / "pins.json").write_text(json.dumps({"_readme": ["test"], **pins}))
     llama, photon_old = sha(R / "gh/llama-b99990-bin-ubuntu-x64.tar.gz"), sha(R / "gh2/photon-1.2.1.jar")
     java = sha(R / "adoptium/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz")
-    (rt / "kit.json").write_text(json.dumps({"runtimes": programs}))
+    (rt / "data" / "kit.json").write_text(json.dumps({"runtimes": programs}))
     pin(photon={"version": "1.2.1", "sha256": photon_old}, **{"llama.cpp-linux-x64": {"version": "b99990", "sha256": llama},
                                                                "java-linux-x64": {"version": "jdk-21.0.9+10", "sha256": java}})
     rc, out = kit("plan", root=rt)
@@ -384,22 +394,22 @@ pathlib.Path(str(out) + ".aria2").unlink()
     rc, out = kit("plan", root=rt)
     check("pins: a pinned build its publisher took down says so", "no longer publishes b12345" in out
           and "no longer publishes Java jdk-21.0.1+12 for linux x64" in out, out)
-    (rt / "kit.json").write_text(json.dumps({"settings": {"pin_programs": False}, "runtimes": programs}))
+    (rt / "data" / "kit.json").write_text(json.dumps({"settings": {"pin_programs": False}, "runtimes": programs}))
     rc, out = kit("plan", root=rt)
     check("pins: \"pin_programs\": false takes the newest builds", rc == 0 and "b99990" in out and "1.3.0" in out, out)
     # Photon opens only address databases made for its own version: when none is published for the pinned one,
     # the kit takes the Photon release that opens the newest database.
-    (rt / "kit.json").write_text(json.dumps({"runtimes": programs, "maps": {"enabled": True}}))
+    (rt / "data" / "kit.json").write_text(json.dumps({"runtimes": programs, "maps": {"enabled": True}}))
     pin(photon={"version": "2.0.0-beta", "sha256": "0" * 64})
     rc, out = kit("plan", root=rt)
     check("pins: a pinned Photon with no address database gives way to the release that opens the newest one",
           re.search(r"photon\s.*1\.3\.0", out) and "2.0.0-beta" not in out and re.search(r"geocoder\s.*1\.3/", out), out)
 
     # ./kit pins, before a release: the newest builds and their checksums
-    (rt / "kit.json").write_text(json.dumps({"runtimes": programs}))
+    (rt / "data" / "kit.json").write_text(json.dumps({"runtimes": programs}))
     pin(photon={"version": "1.2.1", "sha256": photon_old})
     rc, out = kit("pins", root=rt)
-    pins = json.loads((rt / "tools" / "pins.json").read_text())
+    pins = json.loads((rt / "app" / "tools" / "pins.json").read_text())
     check("./kit pins: the newest build of each program, with its publisher's SHA-256", rc == 0
           and pins.get("llama.cpp-linux-x64") == {"version": "b99990", "sha256": llama}
           and pins.get("photon") == {"version": "1.3.0", "sha256": sha(R / "gh2/photon-1.3.0.jar")}
@@ -408,56 +418,153 @@ pathlib.Path(str(out) + ".aria2").unlink()
     pin(photon={"version": "1.3.0", "sha256": "0" * 64})
     rc, out = kit("pins", root=rt)
     check("./kit pins: a file replaced under the same version keeps its old pin, and the run fails", rc != 0
-          and json.loads((rt / "tools" / "pins.json").read_text())["photon"]["sha256"] == "0" * 64
+          and json.loads((rt / "app" / "tools" / "pins.json").read_text())["photon"]["sha256"] == "0" * 64
           and "replaced a file it had already published" in out, out)
 
-    (drive / ".kit" / "state.json").unlink()
+    (drive / "data" / ".kit" / "state.json").unlink()
     rc, out = kit("sync", "-y")
     check("lost state: files on the drive are checked and kept, not downloaded again",
           rc == 0 and out.count("found ") == 5 and "downloading" not in out, out)
 
-    # A kit an older version set up. Its state.json has fewer keys; it calls the model Tiny, where kit.json now says
-    # Tiny-Mini; and it has a book that's switched off now, which the try-it kit lists. The new version downloads none
-    # of it again: the model moves to its new folder, and the book stays.
+    # A kit an older version set up, from before app/, downloads/ and data/: its code, kit.json (the person's) and
+    # downloads all at its top, as that version's ./kit update leaves it with this version's code. Its state.json has
+    # fewer keys; it calls the model Tiny, where kit.json now says Tiny-Mini; and it has a book that's switched off now,
+    # which the try-it kit lists. The first command moves it all into the three folders, by renaming, and the sync after
+    # that downloads none of it again: the model moves to its new folder, and the book stays.
     old = work / "old" / "TinfoilKit"
     shutil.copytree(TESTS.parent / "tools", old / "tools")
+    for f in ("kit", "SETUP.command", "GUIDE.md"):
+        shutil.copy(TESTS.parent / f, old)
+    old_std = {"settings": {}, "models": [], "library": [{"zim": "testsurvival_en"}]}    # the standard list it came with
+    (old / "site").mkdir()
+    (old / "site" / "kit.json").write_text(json.dumps(old_std))
+    (old / "v1-notes.txt").write_text("a file the older version's update installed")
+    (old / "my-notes.txt").write_text("the person's own")
     (old / "models" / "Tiny").mkdir(parents=True)
     (old / "library").mkdir()
     shutil.copy(R / "hf/tiny/Tiny-Q4_K_M.gguf", old / "models" / "Tiny")
     for z in ("testmed_en_all_maxi_2026-01.zim", "testsurvival_en_2026-02.zim"):
         shutil.copy(R / "zim" / z, old / "library")
+    (old / "logs").mkdir()
+    (old / "logs" / "sync-2025-12-01.log").write_text("an older sync\n")
+    (old / ".kit" / "downloads").mkdir(parents=True)
+    (old / ".kit" / "downloads" / "photon.tar.bz2.partial").write_bytes(b"part")
+    (old / ".kit" / "update").mkdir()
+    (old / ".kit" / "update" / "kit").write_text("an update that stopped partway")
 
     def had(version, dest, *names):
         return {"version": version, "dest": dest,
                 "files": {n: {"size": (old / dest / n).stat().st_size, "sha256": sha(old / dest / n)} for n in names}}
-    (old / ".kit").mkdir()
     (old / ".kit" / "state.json").write_text(json.dumps({"version": 1, "last_sync": "2026-01-01T00:00:00", "items": {
         "models/Tiny": had("1", "models/Tiny", "Tiny-Q4_K_M.gguf"),
         "library/testmed_en_all_maxi": had("2026-01", "library", "testmed_en_all_maxi_2026-01.zim"),
-        "library/testsurvival_en": had("2026-02", "library", "testsurvival_en_2026-02.zim")}}))
-    (old / "kit.json").write_text(json.dumps({"settings": cfg["settings"], "models": [
+        "library/testsurvival_en": had("2026-02", "library", "testsurvival_en_2026-02.zim")},
+        "kit_files": ["GUIDE.md", "SETUP.command", "kit", "site/kit.json", "tools/kit.py", "v1-notes.txt"],
+        "partials": {".kit/downloads/photon.tar.bz2.partial": {"item": "maps/geocoder", "tag": "1.3"}}}))
+    mine = {"settings": dict(cfg["settings"]), "models": [
         {"id": "Tiny-Mini", "type": "hf", "repo": "test/Tiny-GGUF", "files": ["*-Q4_K_M.gguf"], "priority": 1}],
-        "library": [{"zim": "testmed_en_all_maxi", "enabled": False, "starter": True}, {"zim": "testsurvival_en"}]}))
+        "library": [{"zim": "testmed_en_all_maxi", "enabled": False, "starter": True}, {"zim": "testsurvival_en"}]}
+    (old / "kit.json").write_text(json.dumps(mine))
+    rc, out = kit("layout", root=old)
+    top = sorted(f.name for f in old.iterdir())
+    st = json.loads((old / "data" / ".kit" / "state.json").read_text())
+    check("an older kit moves into app, downloads and data, by renaming: its code, downloads, kit.json, logs and records; "
+          "an update that stopped partway goes, and a file of the person's at its top stays",
+          rc == 0 and top == ["app", "data", "downloads", "my-notes.txt"] and (old / "app" / "tools" / "kit.py").is_file()
+          and (old / "app" / "SETUP.command").is_file() and (old / "app" / "v1-notes.txt").is_file()
+          and json.loads((old / "data" / "kit.json").read_text()) == mine
+          and json.loads((old / "app" / "kit.json").read_text()) == old_std
+          and json.loads((old / "data" / ".kit" / "kit.base.json").read_text()) == old_std
+          and (old / "downloads" / "models" / "Tiny" / "Tiny-Q4_K_M.gguf").is_file()
+          and len(list((old / "downloads" / "library").glob("*.zim"))) == 2
+          and (old / "downloads" / ".partial" / "photon.tar.bz2.partial").read_bytes() == b"part"
+          and (old / "data" / "logs" / "sync-2025-12-01.log").is_file() and not (old / "data" / ".kit" / "update").exists()
+          and "kit_files" not in st and list(st["partials"]) == [".partial/photon.tar.bz2.partial"]
+          and "Nothing downloads again" in out, out + str(top))
+    rc, out = kit("layout", root=old)
+    check("kit layout on a kit that's laid out already: does nothing, and says nothing", rc == 0 and out == "", out)
     served()
     rc, out = kit("sync", "-y", root=old)
     sent = served()
-    st = json.loads((old / ".kit" / "state.json").read_text())
+    st = json.loads((old / "data" / ".kit" / "state.json").read_text())
     check("a kit an older version set up: nothing downloads again, a renamed model moves to its new folder, and a book "
           "that's switched off stays", rc == 0 and not sent and "moved it here from models/Tiny" in out
-          and (old / "models/Tiny-Mini/Tiny-Q4_K_M.gguf").exists() and not (old / "models/Tiny").exists()
+          and (old / "downloads" / "models/Tiny-Mini/Tiny-Q4_K_M.gguf").exists() and not (old / "downloads" / "models/Tiny").exists()
           and sorted(st["items"]) == ["library/testmed_en_all_maxi", "library/testsurvival_en", "models/Tiny-Mini"]
-          and (old / "library/testmed_en_all_maxi_2026-01.zim").exists(), out + str(sent))
+          and (old / "downloads" / "library/testmed_en_all_maxi_2026-01.zim").exists(), out + str(sent))
+
+    # Travis's rule: the app folder can be deleted any time for a new version's, and downloads/ and data/ stay as they
+    # are. The new version's changes to the standard list go into the person's kit.json, and their own choices stay.
+    on_drive = sorted(p.relative_to(old).as_posix() for p in (old / "downloads").rglob("*"))
+    shutil.rmtree(old / "app")
+    new_kit(old)
+    v2_std = {"settings": {"context_size": 4096}, "models": [], "library": [{"zim": "testsurvival_en"}, {"zim": "new_en"}]}
+    (old / "app" / "kit.json").write_text(json.dumps(v2_std))
+    rc, out = kit("status", root=old)
+    now = json.loads((old / "data" / "kit.json").read_text())
+    check("a new version's app folder in place of the old one: downloads stay as they are, and kit.json gets the new "
+          "version's changes and keeps the person's",
+          rc == 0 and sorted(p.relative_to(old).as_posix() for p in (old / "downloads").rglob("*")) == on_drive
+          and now["settings"] == {"context_size": 4096, **cfg["settings"]} and now["models"] == mine["models"]
+          and [(z["zim"], z.get("enabled", True)) for z in now["library"]]
+          == [("testsurvival_en", True), ("new_en", True), ("testmed_en_all_maxi", False)], out + json.dumps(now))
+
+    # A new download's app folder put into a kit from before the three folders: it takes the old code's place, and
+    # the kit's downloads and kit.json move into theirs.
+    drop = work / "drop" / "TinfoilKit"
+    shutil.copytree(TESTS.parent / "tools", drop / "tools")
+    shutil.copy(TESTS.parent / "kit", drop)
+    (drop / "site").mkdir()
+    (drop / "site" / "kit.json").write_text(json.dumps(old_std))
+    (drop / "kit.json").write_text(json.dumps(mine))
+    (drop / "library").mkdir()
+    (drop / "library" / "book.zim").write_text("a book")
+    (drop / ".kit").mkdir()
+    (drop / ".kit" / "state.json").write_text(json.dumps({"version": 1, "items": {}}))
+    new_kit(drop)
+    (drop / "app" / "kit.json").write_text(json.dumps(v2_std))
+    rc, out = kit("status", root=drop)
+    top = sorted(f.name for f in drop.iterdir())
+    check("an app folder put into an older kit: the old code goes, the downloads and kit.json move, and kit.json gets "
+          "the new version's changes",
+          rc == 0 and top == ["app", "data", "downloads"] and (drop / "app" / "kit").is_file()
+          and (drop / "downloads" / "library" / "book.zim").read_text() == "a book"
+          and json.loads((drop / "data" / "kit.json").read_text())["settings"]["context_size"] == 4096, out + str(top))
+
+    # An app folder put on its own in a folder with things of its own (the Desktop, say): that folder is never taken for
+    # an older kit, and the home folder is never taken for the kit's folder at all.
+    general = work / "general"
+    new_kit(general)
+    for d in ("bin", "models", "logs"):
+        (general / d).mkdir()
+    rc, out = kit("status", root=general)
+    check("an app folder beside folders of the person's called bin, models and logs: they stay where they are",
+          rc == 0 and all((general / d).is_dir() for d in ("bin", "models", "logs")) and not (general / "downloads").exists(), out)
+    rc, out = kit("status", root=general, env={**env, "HOME": str(general)})
+    check("the home folder is never the kit's folder: it says what to do instead",
+          rc == 1 and "can't use" in out and "folder called TinfoilKit" in out, out)
+    flat = work / "flat"    # GitHub's Download ZIP: the code at its top, never set up
+    shutil.copytree(TESTS.parent / "tools", flat / "tools")
+    shutil.copy(TESTS.parent / "kit", flat)
+    shutil.copy(TESTS.parent / "kit.json", flat)
+    for d in ("models", "maps"):
+        (flat / d).mkdir()
+    rc, out = kit("status", root=flat)
+    check("a fresh download with its code at its top, beside folders of the person's called models and maps: only the "
+          "code moves, into app, and the folders stay",
+          rc == 0 and (flat / "app" / "tools" / "kit.py").is_file() and (flat / "data" / "kit.json").is_file()
+          and all((flat / d).is_dir() for d in ("models", "maps")) and not (flat / "downloads").exists(), out)
 
     # Three months later. Plant leftovers an interrupted sync could have left behind:
     # a book download from an older edition, a model download of the old file under the same name,
     # and a download for a book that's switched off (kept, in case it's switched back on).
-    old_book = drive / "library/testsurvival_en_2025-11.zim.partial"
+    old_book = drive / "downloads" / "library/testsurvival_en_2025-11.zim.partial"
     old_book.write_bytes(os.urandom(1000))
-    stale_model = drive / "models/Tiny/Tiny-Q4_K_M.gguf.partial"
+    stale_model = drive / "downloads" / "models/Tiny/Tiny-Q4_K_M.gguf.partial"
     stale_model.write_bytes(os.urandom(100_000))
-    off_book = drive / "library/disabled_one_en_2026-01.zim.partial"
+    off_book = drive / "downloads" / "library/disabled_one_en_2026-01.zim.partial"
     off_book.write_bytes(os.urandom(1000))
-    too_big = drive / "library/testsurvival_en_2026-05.zim.partial"   # not tracked, and bigger than the real file
+    too_big = drive / "downloads" / "library/testsurvival_en_2026-05.zim.partial"   # not tracked, and bigger than the real file
     too_big.write_bytes(os.urandom(70_000))
     st = state()
     st["partials"] = {
@@ -465,9 +572,9 @@ pathlib.Path(str(out) + ".aria2").unlink()
         "models/Tiny/Tiny-Q4_K_M.gguf.partial": {"item": "models/Tiny", "tag": sha(R / "hf/tiny/Tiny-Q4_K_M.gguf")},
         "library/disabled_one_en_2026-01.zim.partial": {"item": "library/disabled_one_en", "tag": "2026-01|1000"},
     }
-    (drive / ".kit" / "state.json").write_text(json.dumps(st))
+    (drive / "data" / ".kit" / "state.json").write_text(json.dumps(st))
     (R / "STATE_V2").touch()
-    (drive / ".kit/cache/kiwix-catalog.xml").unlink()
+    (drive / "data" / ".kit/cache/kiwix-catalog.xml").unlink()
     # A book with refresh_days keeps the edition it has until that one is so many days old.
     survival = next(z for z in cfg["library"] if z["zim"] == "testsurvival_en")
     survival["refresh_days"] = 30
@@ -478,14 +585,14 @@ pathlib.Path(str(out) + ".aria2").unlink()
           line.split()[:1] == ["later"] and "2026-02   (2026-05 waits until" in line and "./kit sync --only NAME" in out, out)
     rc, out = kit("plan", "--only", "testsurvival")
     check("refresh_days: naming it in --only gets the new edition now", "UPDATE  testsurvival_en" in out, out)
-    book = drive / "library/testsurvival_en_2026-02.zim"
+    book = drive / "downloads" / "library/testsurvival_en_2026-02.zim"
     book.rename(book.with_suffix(".gone"))
     rc, out = kit("plan")
     check("refresh_days: a book whose file is missing doesn't wait", "UPDATE  testsurvival_en" in out, out)
     book.with_suffix(".gone").rename(book)
     st = state()
     st["items"]["library/testsurvival_en"]["updated"] = "2025-12-01T09:00:00"
-    (drive / ".kit" / "state.json").write_text(json.dumps(st))
+    (drive / "data" / ".kit" / "state.json").write_text(json.dumps(st))
     rc, out = kit("plan")
     check("refresh_days: once the edition is that old, the new one downloads", "UPDATE  testsurvival_en" in out, out)
     del survival["refresh_days"]
@@ -493,7 +600,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
     rc, out = kit("sync", "-y")
     check("update: new editions installed", rc == 0 and same("library/testsurvival_en_2026-05.zim", "zim/testsurvival_en_2026-05.zim")
           and same("models/Tiny/Tiny-Q4_K_M.gguf", "hf/tiny_v2/Tiny-Q4_K_M.gguf"), out)
-    check("update: old edition removed", not (drive / "library/testsurvival_en_2026-02.zim").exists(), out)
+    check("update: old edition removed", not (drive / "downloads" / "library/testsurvival_en_2026-02.zim").exists(), out)
     check("update: a partial download of an older edition is deleted", not old_book.exists(), out)
     check("update: a partial download of an older file isn't resumed into the new one", "discarding" in out, out)
     check("update: a switched-off book's partial download is kept", off_book.exists())
@@ -501,7 +608,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
     check("update: leftovers are forgotten", sorted(state().get("partials", {})) == ["library/disabled_one_en_2026-01.zim.partial"],
           str(state().get("partials")))
 
-    finder = drive / "library/._disabled_one_en_2026-01.zim.partial"    # what macOS writes beside a file on exFAT
+    finder = drive / "downloads" / "library/._disabled_one_en_2026-01.zim.partial"    # what macOS writes beside a file on exFAT
     finder.write_bytes(b"\0\5\26\7")
     rc, out = kit("status")
     finder.unlink()
@@ -510,13 +617,13 @@ pathlib.Path(str(out) + ".aria2").unlink()
           and "._disabled" not in out, out)
 
     # How much room the kit needs, before anything is looked up online: the builder's sizes for what's switched on.
-    (drive / "site").mkdir()
-    (drive / "site" / "sources.json").write_text(json.dumps({"sources": [
+    (drive / "app" / "site").mkdir()
+    (drive / "app" / "site" / "sources.json").write_text(json.dumps({"sources": [
         {"id": "Tiny", "bytes": 2 * 10**9}, {"id": "Two", "bytes": 3 * 10**9}, {"id": "testmed_en_all_maxi", "bytes": 4 * 10**9},
         {"id": "disabled_one_en", "bytes": 100 * 10**9}, {"id": "maps", "bytes": 20 * 10**9}]}))
     rc, out = kit("estimate")
     check("estimate: the builder's sizes of what's switched on, plus 1 GB of programs", rc == 0 and out.strip() == "10", out)
-    shutil.rmtree(drive / "site")
+    shutil.rmtree(drive / "app" / "site")
 
     # On the computer's own disk (the one with the home folder) the kit leaves more room free than on a drive.
     (work / "home").mkdir()
@@ -531,32 +638,36 @@ pathlib.Path(str(out) + ".aria2").unlink()
     cfg["settings"]["keep_free_gb_this_computer"] = 0.001
     write_cfg()
 
-    junk = [drive / "library" / "._junk.zim", drive / "models" / "Tiny" / "._Tiny-Q4_K_M.gguf",
-            drive / ".git" / "objects" / "pack" / "._pack-1.idx"]
+    junk = [drive / "downloads" / "library" / "._junk.zim", drive / "downloads" / "models" / "Tiny" / "._Tiny-Q4_K_M.gguf"]
     for j in junk:
         j.parent.mkdir(parents=True, exist_ok=True)
         j.write_bytes(b"\0\5\26\7")   # macOS's metadata files on exFAT start like this
-    books = len(list((drive / "library").glob("[!.]*.zim")))
+    books = len(list((drive / "downloads" / "library").glob("[!.]*.zim")))
     rc, out = kit("test")
-    shutil.rmtree(drive / ".git")
-    check("test: clears macOS's ._ files before starting the servers, and from a checkout's .git",
+    check("test: clears macOS's ._ files before starting the servers",
           not any(j.exists() for j in junk) and f"library files present: {books} .zim files" in out, out)
 
     nowhere = "http://127.0.0.1:9"     # nothing listens there
     off = {**env, "KIT_HF": nowhere, "KIT_KIWIX_CATALOG": nowhere + "/catalog"}
-    (drive / ".kit/cache/kiwix-catalog.xml").unlink()
+    (drive / "data" / ".kit/cache/kiwix-catalog.xml").unlink()
     rc, out = kit("sync", "-y", env=off)
     check("offline: sync stops with one clear message", rc == 1 and "Check that this computer is online" in out
           and "Problems" not in out and out.count("Kiwix catalog") <= 3, out)
-    (drive / ".kit/cache").mkdir(exist_ok=True)
+    (drive / "data" / ".kit/cache").mkdir(exist_ok=True)
     portal = env["KIT_KIWIX_CATALOG"].replace("/catalog/v2/entries?count=-1", "/wifi-sign-in")
     rc, out = kit("plan", env={**off, "KIT_KIWIX_CATALOG": portal})
     check("Wi-Fi sign-in page: plan says so and nothing is cached",
-          rc == 1 and not (drive / ".kit/cache/kiwix-catalog.xml").exists(), out)
+          rc == 1 and not (drive / "data" / ".kit/cache/kiwix-catalog.xml").exists(), out)
 
     spec = importlib.util.spec_from_file_location("kitpy", TESTS.parent / "tools" / "kit.py")
     kp = sys.modules["kitpy"] = importlib.util.module_from_spec(spec)    # dataclasses look the module up
     spec.loader.exec_module(kp)
+
+    checkout_junk = work / "checkout" / ".git" / "objects" / "pack" / "._pack-1.idx"
+    checkout_junk.parent.mkdir(parents=True)
+    checkout_junk.write_bytes(b"\0\5\26\7")
+    kp.drop_finder_files(work / "checkout")
+    check("macOS's ._ files go from a checkout's .git too", not checkout_junk.exists())
 
     # pins.yml's commit job holds a new tools/pins.json to the committed note and to the programs it knows
     check("tools/pins.json carries kit.py's note",
@@ -602,9 +713,9 @@ pathlib.Path(str(out) + ".aria2").unlink()
               kp.ed25519_ok(pub, msg, sig) and not kp.ed25519_ok(pub, msg + b"x", sig)
               and not kp.ed25519_ok(pub, msg, flipped) and not kp.ed25519_ok(pub, msg, plus_l))
     signed = work / "signed"
-    (signed / "tools").mkdir(parents=True)
+    (signed / "app" / "tools").mkdir(parents=True)
     sig_file, signer = ssh_sign(b"k" * 32, b"release")
-    (signed / "tools" / "release-signers").write_text("# comment\n" + signer)
+    (signed / "app" / "tools" / "release-signers").write_text("# comment\n" + signer)
 
     def verified(data, sig):
         try:
@@ -613,7 +724,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
         except ValueError as e:
             return str(e)
     other_sig, _ = ssh_sign(b"o" * 32, b"release")
-    forged, _ = ssh_sign(b"o" * 32, b"release", claim=kp.release_keys(signed / "tools" / "release-signers")[0])
+    forged, _ = ssh_sign(b"o" * 32, b"release", claim=kp.release_keys(signed / "app" / "tools" / "release-signers")[0])
     check("release signature: the kit's key checks out", verified(b"release", sig_file) == "ok", verified(b"release", sig_file))
     check("release signature: another file, key, namespace or a damaged signature is refused, and so is another key "
           "claiming to be the kit's",
@@ -625,13 +736,13 @@ pathlib.Path(str(out) + ".aria2").unlink()
     if shutil.which("ssh-keygen"):    # the signatures agree with OpenSSH's
         (signed / "release").write_bytes(b"release")
         (signed / "release.sig").write_bytes(sig_file)
-        p = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", str(signed / "tools" / "release-signers"), "-I", "tinfoilkit-release",
+        p = subprocess.run(["ssh-keygen", "-Y", "verify", "-f", str(signed / "app" / "tools" / "release-signers"), "-I", "tinfoilkit-release",
                             "-n", "tinfoilkit-release", "-s", str(signed / "release.sig")], input=b"release", capture_output=True)
         subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(signed / "key")], stdin=subprocess.DEVNULL, check=True)
         (signed / "release.sig").unlink()
         subprocess.run(["ssh-keygen", "-q", "-Y", "sign", "-f", str(signed / "key"), "-n", "tinfoilkit-release", str(signed / "release")],
                        stdin=subprocess.DEVNULL, capture_output=True, check=True)
-        (signed / "tools" / "release-signers").write_text(f'tinfoilkit-release ssh-ed25519 {(signed / "key.pub").read_text().split()[1]}\n')
+        (signed / "app" / "tools" / "release-signers").write_text(f'tinfoilkit-release ssh-ed25519 {(signed / "key.pub").read_text().split()[1]}\n')
         check("release signature: ssh-keygen accepts the kit's signatures and the kit accepts ssh-keygen's",
               p.returncode == 0 and verified(b"release", (signed / "release.sig").read_bytes()) == "ok",
               p.stderr.decode() + verified(b"release", (signed / "release.sig").read_bytes()))
@@ -640,29 +751,34 @@ pathlib.Path(str(out) + ".aria2").unlink()
     else:
         print("skipped: checking signatures against OpenSSH (no ssh-keygen here)")
 
-    # ./kit update: a kit on the drive, its kit.json changed by its owner, and releases of the kit's code
-    # published on the mock GitHub. site/kit.json is the copy of kit.json the kit's current version came with.
+    # ./kit update: a kit on the drive, its kit.json (data/kit.json) changed by its owner, and releases of the kit's code
+    # published on the mock GitHub. app/kit.json is the standard list the kit's current version came with.
     up = work / "update" / "TinfoilKit"
     code = {rel: (TESTS.parent / rel).read_bytes() for rel in ("kit", "SETUP.command", "Open Tinfoil Kit.command", "UNINSTALL.command")}
     code.update({p.relative_to(TESTS.parent).as_posix(): p.read_bytes() for p in (TESTS.parent / "tools").rglob("*")
                  if p.is_file() and "__pycache__" not in p.parts})
     code["tools/release-signers"] = signer.encode()    # this kit's key, and the one each test release brings
     for rel, data in code.items():
-        (up / rel).parent.mkdir(parents=True, exist_ok=True)
-        (up / rel).write_bytes(data)
+        (up / "app" / rel).parent.mkdir(parents=True, exist_ok=True)
+        (up / "app" / rel).write_bytes(data)
     base_cfg = {"settings": {"default_model": "Tiny", "context_size": 8192},
                 "models": [{"id": "Tiny", "repo": "test/Tiny-GGUF", "files": ["*-Q4_K_M.gguf"]},
                            {"id": "Two", "repo": "test/Two-GGUF", "files": ["*-Q4_K_M.gguf"]}],
                 "library": [{"zim": "testmed_en_all_maxi"}, {"zim": "gone_en"}, {"zim": "testsurvival_en"}]}
-    (up / "site").mkdir()
-    (up / "site" / "kit.json").write_text(json.dumps(base_cfg, indent=1))
+    (up / "app" / "site").mkdir()
+    (up / "app" / "site" / "kit.json").write_text(json.dumps(base_cfg, indent=1))
+    (up / "app" / "kit.json").write_text(json.dumps(base_cfg, indent=1))
+    (up / "downloads" / "library").mkdir(parents=True)
+    (up / "downloads" / "library" / "book.zim").write_text("a book")
+    (up / "data" / "notes").mkdir(parents=True)
+    (up / "data" / "notes" / "plan.txt").write_text("meet at the school")
     mine = json.loads(json.dumps(base_cfg))
     mine["settings"]["default_model"] = "Two"
     mine["library"][0]["enabled"] = False           # switched off
     mine["library"][1]["enabled"] = True            # switched on, then dropped by the new version
     mine["library"].append({"zim": "mine_en"})      # added by hand
     mine_text = json.dumps(mine, indent=1)
-    (up / "kit.json").write_text(mine_text)
+    (up / "data" / "kit.json").write_text(mine_text)
     v2_cfg = json.loads(json.dumps(base_cfg))
     v2_cfg["settings"]["context_size"] = 16384
     v2_cfg["models"][1]["note"] = "new in v2"
@@ -701,7 +817,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
         keyboard, tty = pty.openpty()
         os.write(keyboard, answer.encode())
         try:
-            p = subprocess.run([sys.executable, str(up / "tools" / "kit.py"), "--root", str(up), *args], env=env, stdin=tty,
+            p = subprocess.run([sys.executable, str(up / "app" / "tools" / "kit.py"), "--root", str(up), *args], env=env, stdin=tty,
                                capture_output=True, text=True, timeout=180)
         finally:
             os.close(keyboard)
@@ -719,17 +835,17 @@ pathlib.Path(str(out) + ".aria2").unlink()
     good = {**code, **kit_json(v2_cfg), "docs/v2.txt": b"v2"}
     # A copy from GitHub carries its commit in kit.py, and one taken from the main branch can be newer than the release.
     sha = "a" * 40
-    (up / "tools/kit.py").write_bytes(code["tools/kit.py"].replace(b'KIT_COMMIT = "$Format:%H$"', f'KIT_COMMIT = "{sha}"'.encode()))
+    (up / "app" / "tools/kit.py").write_bytes(code["tools/kit.py"].replace(b'KIT_COMMIT = "$Format:%H$"', f'KIT_COMMIT = "{sha}"'.encode()))
     (R / "kit" / "compare").mkdir(parents=True)
     publish("v1.9", good)
     (R / "kit" / "compare" / f"v1.9...{sha}").write_text('{"status": "ahead"}')
     rc, out = kit("update", root=up)
     check("kit update: a copy newer than the latest release stays", rc == 0 and "newer than its latest release (v1.9)" in out
-          and not (up / "docs").exists(), out)
+          and not (up / "app" / "docs").exists(), out)
     (R / "kit" / "compare" / f"v1.9...{sha}").write_text('{"status": "identical"}')
     rc, out = kit("update", root=up)
     check("kit update: a copy of the latest release notes its version, installs nothing", rc == 0 and "newest version (v1.9)" in out
-          and not (up / "docs").exists() and json.loads((up / ".kit/state.json").read_text())["kit_version"] == "v1.9", out)
+          and not (up / "app" / "docs").exists() and json.loads((up / "data" / ".kit/state.json").read_text())["kit_version"] == "v1.9", out)
     # Each with the reason it gives, so a check that stops working can't hide behind a later one.
     bad = {"a link": (dict(files=good, links=[("tools/evil", "kit.py")]), "a link in it"),
            "a path outside its folder": (dict(files={**good, "../../escaped.txt": b"x"}), "unexpected path"),
@@ -744,28 +860,32 @@ pathlib.Path(str(out) + ".aria2").unlink()
         publish("v2", **release)
         rc, out = kit("update", root=up)
         check(f"kit update: a release with {what} is refused and nothing changes",
-              rc == 1 and "couldn't install version v2" in out and why in out and not (up / "docs").exists()
-              and not (work / "escaped.txt").exists() and (up / "kit.json").read_text() == mine_text, out)
-    (up / "tools/release-signers").write_text("# none\n")
+              rc == 1 and "couldn't install version v2" in out and why in out and not (up / "app" / "docs").exists()
+              and not (work / "escaped.txt").exists() and (up / "data" / "kit.json").read_text() == mine_text, out)
+    (up / "app" / "tools/release-signers").write_text("# none\n")
     publish("v2", good)
     rc, out = kit("update", root=up)
     check("kit update: a copy with no release key refuses every release", rc == 1 and "no release key to check it with" in out
-          and not (up / "docs").exists(), out)
-    (up / "tools/release-signers").write_text(signer)
+          and not (up / "app" / "docs").exists(), out)
+    (up / "app" / "tools/release-signers").write_text(signer)
     publish("v2", good, body="Faster answers.\nBetter maps.")
-    (up / "kit.json").write_text(mine_text.replace('"Two"', '"Two",', 1))
+    (up / "data" / "kit.json").write_text(mine_text.replace('"Two"', '"Two",', 1))
     rc, out = kit("update", root=up)
     check("kit update: a typo in kit.json stops it before anything changes", rc == 1 and "syntax error on line" in out
-          and not (up / "docs").exists(), out)
-    (up / "kit.json").write_text(mine_text)
+          and not (up / "app" / "docs").exists(), out)
+    (up / "data" / "kit.json").write_text(mine_text)
     rc, out = kit_tty("n\n", "update")
     check("kit update: at a keyboard it shows what's new and asks first, and no keeps this version",
           rc == 0 and "Better maps." in out and "Install it now?" in out and "This version stays" in out
-          and not (up / "docs").exists() and (up / "kit.json").read_text() == mine_text, out)
+          and not (up / "app" / "docs").exists() and (up / "data" / "kit.json").read_text() == mine_text, out)
     rc, out = kit("update", root=up)
-    merged = json.loads((up / "kit.json").read_text())
-    check("kit update: installs the release, shows what's new", rc == 3 and "Installed version v2" in out and "Better maps." in out
-          and (up / "docs/v2.txt").exists() and json.loads((up / ".kit/state.json").read_text())["kit_version"] == "v2", out)
+    merged = json.loads((up / "data" / "kit.json").read_text())
+    check("kit update: installs the release in the app folder, shows what's new, and leaves downloads and data alone",
+          rc == 3 and "Installed version v2" in out and "Better maps." in out and (up / "app" / "docs/v2.txt").exists()
+          and json.loads((up / "data" / ".kit/state.json").read_text())["kit_version"] == "v2"
+          and sorted(f.name for f in up.iterdir()) == ["app", "data", "downloads"]
+          and (up / "downloads" / "library" / "book.zim").read_text() == "a book"
+          and (up / "data" / "notes" / "plan.txt").read_text() == "meet at the school", out)
     check("kit update: kit.json keeps this drive's choices and gets the release's changes",
           merged["settings"] == {"default_model": "Two", "context_size": 16384} and merged["models"][1]["note"] == "new in v2"
           and [(z["zim"], z.get("enabled", True)) for z in merged["library"]]
@@ -775,67 +895,80 @@ pathlib.Path(str(out) + ".aria2").unlink()
     v3_cfg = {**v2_cfg, "settings": {**v2_cfg["settings"], "context_size": 32768}}
     publish("v3", {**code, **kit_json(v3_cfg), "docs/v3.txt": b"v3"})
     rc, out = kit_tty("n\n", "update", "--yes")
-    merged = json.loads((up / "kit.json").read_text())
+    merged = json.loads((up / "data" / "kit.json").read_text())
     check("kit update: --yes doesn't ask, and the next release removes files the last one installed and still keeps the choices",
-          rc == 3 and "Install it now?" not in out and not (up / "docs/v2.txt").exists() and (up / "docs/v3.txt").exists()
+          rc == 3 and "Install it now?" not in out and not (up / "app" / "docs/v2.txt").exists() and (up / "app" / "docs/v3.txt").exists()
           and merged["settings"] == {"default_model": "Two", "context_size": 32768} and merged["library"][-1] == {"zim": "mine_en"}, out)
-    (up / "kit.json").write_text((up / "site/kit.json").read_text())
-    rc, out = kit("update", "--force", root=up)
-    check("kit update: a kit.json nobody changed becomes the release's, byte for byte",
-          rc == 3 and (up / "kit.json").read_bytes() == json.dumps(v3_cfg, indent=4).encode(), out)
-    (up / ".git").mkdir()
+    (up / "data" / "kit.json").write_text((up / "app" / "kit.json").read_text())
+    v4_cfg = {**v3_cfg, "settings": {**v3_cfg["settings"], "context_size": 65536}}
+    publish("v4", {**code, **kit_json(v4_cfg)})
     rc, out = kit("update", root=up)
-    check("kit update: leaves a git checkout to git", rc == 0 and "git pull" in out, out)
+    check("kit update: a kit.json nobody changed becomes the release's, byte for byte",
+          rc == 3 and (up / "data" / "kit.json").read_bytes() == json.dumps(v4_cfg, indent=4).encode(), out)
+    checkout = work / "checkout"
+    shutil.copytree(TESTS.parent / "tools", checkout / "tools")
+    shutil.copy(TESTS.parent / "kit.json", checkout)
+    (checkout / ".git").mkdir(exist_ok=True)
+    rc, out = kit("update", root=checkout)
+    check("kit update: leaves a git checkout to git, and the checkout's kit.json as it is",
+          rc == 0 and "git pull" in out and (checkout / "kit.json").read_text() == (TESTS.parent / "kit.json").read_text()
+          and (checkout / "data" / "kit.json").is_file(), out)
 
     # SETUP.command's choices, with a stand-in ./kit that exits as told. Its update rewrites SETUP.command in
     # place, the hard case for bash, which reads a script as it goes. Its space says what SPACE does (all of it, the
     # essentials, GB free, GB in all, GB all of it needs, GB the essentials need, GB worth leaving free), or for a
-    # drive what SPACE_DRIVE does, and its estimate says 8 GB, or with --rest 380 GB in about 4 hours. Calls go in
-    # calls.log (essentials on as essentials-on, starter off as starter-off), all but space and estimate, and every
-    # call goes in args.log with its options.
+    # drive what SPACE_DRIVE does, and its estimate says 8 GB, or with --rest 380 GB in about 4 hours. Calls go in the
+    # kit's data/calls.log (essentials on as essentials-on, starter off as starter-off), all but space and estimate,
+    # and every call goes in data/args.log with its options.
     def space(*v):
         return "\t".join(map(str, v))
     roomy = space("fits", "fits", 900, 1000, 400, 100, 50)
     stand_in = """#!/bin/bash
-case "$1" in drives|kits|place|region|pick) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
-echo "$*" >> args.log
+DIR="$(cd "$(dirname "$0")" && pwd)"; KIT="$DIR"    # as the real one finds the kit folder
+case "$(basename "$DIR")" in app) [ -e "$DIR/.git" ] || KIT="$(dirname "$DIR")";; esac
+case "$1" in drives|kits|place|region|pick) exec python3 "@KIT_PY@" --root "$KIT" "$@";; esac    # the real ones
+[ -f "$KIT/data/kit.json" ] || { mkdir -p "$KIT/data"; cp "$DIR/kit.json" "$KIT/data/kit.json"; }    # as kit.py does
+cd "$KIT" || exit 1
+echo "$*" >> data/args.log
 c="$1"; case " $* " in *" --essentials "*) c="$1-essentials";; esac
 case "$1" in essentials|starter) c="$1-$2";; esac
-case "$1" in space|estimate) ;; *) echo "kit $c" >> calls.log;; esac
+case "$1" in space|estimate) ;; *) echo "kit $c" >> data/calls.log;; esac
 case "$1" in
   space) case "$2" in "${KIT_DRIVES:-/nowhere}"/*) echo "${SPACE_DRIVE:-$SPACE}";; *) echo "$SPACE";; esac;;
   estimate) case " $* " in *" --rest "*) printf '%s\t%s\n' 380 "about 4 hours at this connection's speed (24.0 MB/s)";;
                                      *) echo 8;; esac;;
   essentials|starter) python3 - "$1" "$2" <<'PY'
 import json, sys
-c = json.load(open("kit.json"))
+c = json.load(open("data/kit.json"))
 c.setdefault("settings", {})[sys.argv[1] + "_only"] = True if sys.argv[2] == "on" else None
 c["settings"] = {k: v for k, v in c["settings"].items() if v is not None}
-json.dump(c, open("kit.json", "w"), indent=1)
+json.dump(c, open("data/kit.json", "w"), indent=1)
 PY
               ;;
-  update) [ "$UPDATE" = 3 ] && sed 's/Step [$]KIT_STEP of/Step $KIT_STEP (new version) of/' SETUP.command > new && cat new > SETUP.command
+  update) [ "$UPDATE" = 3 ] && sed 's/Step [$]KIT_STEP of/Step $KIT_STEP (new version) of/' "$DIR/SETUP.command" > new \\
+            && cat new > "$DIR/SETUP.command" && rm new
           exit $UPDATE;;
   plan) exit $PLAN;;
-  sync) mkdir -p logs; echo "===== sync started =====" >> logs/sync-2026-01-01.log
-        [ $SYNC = 1 ] && printf 'Problems (everything else is done):\n  - models/Big: download failed\nRe-run ./kit sync\n' >> logs/sync-2026-01-01.log
+  sync) mkdir -p data/logs; echo "===== sync started =====" >> data/logs/sync-2026-01-01.log
+        [ $SYNC = 1 ] && printf 'Problems (everything else is done):\n  - models/Big: download failed\nRe-run ./kit sync\n' >> data/logs/sync-2026-01-01.log
         exit $SYNC;;
   test) exit $TEST;;
-  share|autostart) echo "$*" >> home.log;;
+  share|autostart) echo "$*" >> data/home.log;;
 esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     def kit_folder(path, git=False):
-        """A kit's code as Download ZIP leaves it (or a git checkout), with the stand-in ./kit."""
-        path.mkdir(parents=True)
-        shutil.copy(TESTS.parent / "SETUP.command", path)
-        (path / "kit").write_text(stand_in)
-        (path / "kit").chmod(0o755)
-        (path / "tools").mkdir()
-        (path / "tools" / "kit.py").write_text("# stand-in\n")
-        (path / "GUIDE.md").write_text("guide\n")
-        shutil.copy(TESTS.parent / "kit.json", path)     # ./kit region changes it
-        (path / "site").mkdir()
-        shutil.copy(TESTS.parent / "site" / "sources.json", path / "site")    # for ./kit pick --ask
+        """A kit as Download ZIP leaves it, its code in app/ (a git checkout's at its top), with the stand-in ./kit."""
+        code = path if git else path / "app"
+        code.mkdir(parents=True)
+        shutil.copy(TESTS.parent / "SETUP.command", code)
+        (code / "kit").write_text(stand_in)
+        (code / "kit").chmod(0o755)
+        (code / "tools").mkdir()
+        (code / "tools" / "kit.py").write_text("# stand-in\n")
+        (code / "GUIDE.md").write_text("guide\n")
+        shutil.copy(TESTS.parent / "kit.json", code)     # the standard list: data/kit.json starts as a copy
+        (code / "site").mkdir()
+        shutil.copy(TESTS.parent / "site" / "sources.json", code / "site")    # for ./kit pick --ask
         if git:    # a developer's, with npm's packages and a website build in it
             (path / ".git").mkdir()
             for d in ("node_modules/prettier", "site/node_modules/next", "site/.next"):
@@ -844,31 +977,34 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         return path
 
     setup = kit_folder(work / "setup")
-    (setup / ".kit").mkdir()     # set up before, so SETUP doesn't ask where it goes
+    (setup / "downloads").mkdir()     # set up before, so SETUP doesn't ask where it goes
+    (setup / "data" / ".kit").mkdir(parents=True)
+    mine = setup / "data" / "kit.json"    # what goes in the kit: SETUP changes this one, never app/kit.json
 
     def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="\ny\nn\n\n", args=(), **env_extra):
-        shutil.copy(TESTS.parent / "SETUP.command", folder)
+        shutil.copy(TESTS.parent / "SETUP.command", folder / "app")
         for log in ("calls.log", "home.log", "args.log"):
-            (folder / log).write_text("")
-        p = subprocess.run(["bash", str(folder / "SETUP.command"), *args], input=answers, capture_output=True, text=True, timeout=60,
+            (folder / "data" / log).write_text("")
+        p = subprocess.run(["bash", str(folder / "app" / "SETUP.command"), *args], input=answers, capture_output=True, text=True, timeout=60,
                            env={**os.environ, "PLAN": str(plan), "SYNC": str(sync), "TEST": str(test), "UPDATE": str(update),
                                 "SPACE": roomy, **env_extra})
-        return p.returncode, p.stdout, (folder / "calls.log").read_text().split()[1::2]
+        return p.returncode, p.stdout, (folder / "data" / "calls.log").read_text().split()[1::2]
 
     first = ["update", "fit", "starter-on", "plan", "sync", "test"]    # the try-it kit
     rest = ["starter-off", "essentials-off", "plan", "sync", "test"]    # the rest of the kit
     asked = ("[Y/n]", "[y/N]", "Type a number", "Press Return")
     rc, out, calls = run_setup()
     check("SETUP the first time: the try-it kit, checked, then how big the rest is, how long it takes, and how to get it",
-          rc == 0 and calls == first and '"starter_only": true' in (setup / "kit.json").read_text()
+          rc == 0 and calls == first and '"starter_only": true' in mine.read_text()
           and "Step 1 of 2: the kit is on" in out and "Step 2 of 2: a small kit to try first (about 8 GB)" in out
           and "The try-it kit works" in out and "Turn off Wi-Fi and try it" in out
           and "The rest of the kit is about 380 GB more: about 4 hours at this connection's speed (24.0 MB/s)" in out
-          and "run bash SETUP.command again: it asks what you want in the kit, then gets that" in out
+          and f'run bash "{setup}/app/SETUP.command" again: it asks what you want in the kit, then gets that' in out
+          and (setup / "app" / "kit.json").read_text() == (TESTS.parent / "kit.json").read_text()
           and "Open the kit now?" in out and "All set" not in out and "where should the kit go" not in out, out)
-    (setup / ".kit" / "state.json").write_text('{"items": {}, "last_sync": "2026-01-01T00:00:00"}')
+    (setup / "data" / ".kit" / "state.json").write_text('{"items": {}, "last_sync": "2026-01-01T00:00:00"}')
     rc, out, calls = run_setup(answers="\n\ny\nn\n\n", KIT_MEMORY_MB="32768")
-    c = json.loads((setup / "kit.json").read_text())
+    c = json.loads(mine.read_text())
     check("SETUP again on the try-it kit: asks the kit builder's questions, shows what it gets, and gets the rest",
           rc == 0 and calls == ["update", "fit"] + rest and "Step 2 of 3: the rest of the kit" in out
           and "What goes in the kit?" in out and "Here's what it gets:" in out and "Start downloading?" in out
@@ -883,41 +1019,54 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     # A new download of SETUP, where a kit was set up before: it updates that one, without asking anything else first
     kits_home = work / "kits home"
     before = kit_folder(kits_home / "TinfoilKit")
-    (before / ".kit").mkdir()
-    (before / ".kit" / "state.json").write_text(json.dumps({"last_sync": "2026-11-01T10:00:00", "items": {
+    (before / "downloads").mkdir()
+    (before / "data" / ".kit").mkdir(parents=True)
+    (before / "data" / ".kit" / "state.json").write_text(json.dumps({"last_sync": "2026-11-01T10:00:00", "items": {
         "library/big": {"dest": "library", "files": {"big.zim": {"size": 5 * 10**9}}}}}))
     new = kit_folder(work / "kits download" / "TinfoilKit")
-    p = subprocess.run(["bash", str(new / "SETUP.command")], input="\n\ny\nn\n\n", capture_output=True, text=True, timeout=60,
+    p = subprocess.run(["bash", str(new / "app" / "SETUP.command")], input="\n\ny\nn\n\n", capture_output=True, text=True, timeout=60,
                        env={**os.environ, "HOME": str(kits_home), "KIT_DRIVES": str(work / "no drives"), "SPACE": roomy,
                             "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0"})
-    calls = (before / "calls.log").read_text().split()[1::2] if (before / "calls.log").exists() else []
+    calls = (before / "data" / "calls.log").read_text().split()[1::2] if (before / "data" / "calls.log").exists() else []
     check("SETUP from a new download, with a kit set up before: it updates that kit, so nothing it has downloads again",
           p.returncode == 0 and f"There's a Tinfoil Kit on this computer already: {before} (5 GB, last updated 2026-11-01)."
           in p.stdout and "TINFOIL KIT UPDATE" in p.stdout and "where should the kit go" not in p.stdout
-          and calls == update_calls and not (new / "calls.log").is_file(), p.stdout + p.stderr)
+          and calls == update_calls and not (new / "data" / "calls.log").is_file(), p.stdout + p.stderr)
+    shutil.rmtree(before / "app")    # deleted, for a new version's
+    (before / "data" / "my-notes.txt").write_text("mine")
+    p = subprocess.run(["bash", str(new / "app" / "SETUP.command")], input="\n\ny\nn\n\n", capture_output=True, text=True, timeout=60,
+                       env={**os.environ, "HOME": str(kits_home), "KIT_DRIVES": str(work / "no drives"), "SPACE": roomy,
+                            "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0"})
+    calls = (before / "data" / "calls.log").read_text().split()[1::2]
+    check("SETUP from a new download, with a kit whose app folder was deleted: puts its own app folder there and "
+          "updates that kit, whose downloads and data stay",
+          p.returncode == 0 and "without its app folder: this version's is in it now" in p.stdout + p.stderr
+          and "TINFOIL KIT UPDATE" in p.stdout and calls[-len(update_calls):] == update_calls
+          and (before / "app" / "SETUP.command").is_file() and (before / "data" / "my-notes.txt").read_text() == "mine"
+          and (before / "downloads").is_dir() and not (before / "app.partial").exists(), p.stdout + p.stderr)
 
     def try_kit(**settings):
         c = json.loads((TESTS.parent / "kit.json").read_text())
         c["settings"].update(starter_only=True, **settings)
-        (setup / "kit.json").write_text(json.dumps(c, indent=1))
+        mine.write_text(json.dumps(c, indent=1))
     try_kit(picked=True)
     rc, out, calls = run_setup(answers="\nn\n\n")
     check("SETUP again on a try-it kit, picked before: doesn't ask again, and a no to downloading keeps the try-it kit",
           rc == 0 and "What goes in the kit?" not in out and "AI models:" in out
           and calls == ["update", "fit", "starter-off", "essentials-off", "plan", "starter-on"]
-          and '"starter_only": true' in (setup / "kit.json").read_text(), out)
+          and '"starter_only": true' in mine.read_text(), out)
     rc, out, calls = run_setup(answers="\n2\n\n", SPACE=space("no", "fits", 300, 1000, 400, 100, 100))
     check("SETUP again on a try-it kit that all of it won't fit: offers the essentials or not now, and not now keeps it",
           rc == 1 and "1  Just the essentials" in out and "2  Not now" in out and "Somewhere else" not in out
           and "The try-it kit keeps working" in out and calls == ["update", "fit"]
-          and '"starter_only": true' in (setup / "kit.json").read_text(), out)
+          and '"starter_only": true' in mine.read_text(), out)
     rc, out, calls = run_setup(answers="\n1\ny\nn\n\n", SPACE=space("no", "fits", 300, 1000, 400, 100, 100))
     check("SETUP again on a try-it kit that all of it won't fit: the essentials, when chosen",
           rc == 0 and calls == ["update", "fit", "starter-off", "essentials-on", "plan", "sync", "test"]
-          and '"essentials_only": true' in (setup / "kit.json").read_text(), out)
+          and '"essentials_only": true' in mine.read_text(), out)
     try_kit()
     rc, out, calls = run_setup(args=("--yes",), answers="")
-    argv = (setup / "args.log").read_text().splitlines()
+    argv = (setup / "data" / "args.log").read_text().splitlines()
     check("SETUP --yes on a try-it kit: gets the rest, asking nothing",
           rc == 0 and calls == ["update", "fit"] + rest and "fit --restore --skip" in argv and "pick --ask" not in argv
           and not any(a in out for a in asked) and "All set" in out, out)
@@ -925,7 +1074,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     def essentials_only():
         c = json.loads((TESTS.parent / "kit.json").read_text())
         c["settings"]["essentials_only"] = True
-        (setup / "kit.json").write_text(json.dumps(c, indent=1))
+        mine.write_text(json.dumps(c, indent=1))
     essentials_only()
     rc, out, calls = run_setup(answers="\ny\ny\nn\n\n")
     check("SETUP: an update of just the essentials, now that the rest fits: offers it, and a yes gets it",
@@ -934,23 +1083,23 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     essentials_only()
     rc, out, calls = run_setup(answers="\n\ny\nn\n\n")
     check("SETUP: an update of just the essentials: just Return keeps it that way",
-          rc == 0 and "room for the rest" in out and calls == update_calls and "essentials_only" in (setup / "kit.json").read_text(), out)
+          rc == 0 and "room for the rest" in out and calls == update_calls and "essentials_only" in mine.read_text(), out)
     rc, out, calls = run_setup(args=("--yes",), answers="")
     check("SETUP --yes: an update of just the essentials, now that the rest fits: says how to get it, asks nothing",
           rc == 0 and "SETUP --all gets it" in out and calls == update_calls and not any(a in out for a in asked)
-          and "update --yes" in (setup / "args.log").read_text().splitlines(), out)
+          and "update --yes" in (setup / "data" / "args.log").read_text().splitlines(), out)
     rc, out, calls = run_setup(args=("--all", "--yes"), answers="")
     check("SETUP --all: an update of just the essentials gets the rest",
           rc == 0 and calls == ["update", "fit", "essentials-off", "plan", "sync", "test"], out)
     rc, out, calls = run_setup(args=("--essentials", "--yes"), answers="")
     check("SETUP --essentials: an update of all of it gets just the essentials from now on",
           rc == 0 and calls == ["update", "fit", "essentials-on", "plan", "sync", "test"]
-          and "essentials_only" in (setup / "kit.json").read_text(), out)
+          and "essentials_only" in mine.read_text(), out)
     rc, out, calls = run_setup(SPACE=space("no", "fits", 300, 1000, 400, 100, 50))
     check("SETUP: an update of just the essentials, and the rest still doesn't fit: doesn't offer it",
           rc == 0 and "room for the rest" not in out and calls == update_calls, out)
-    shutil.copy(TESTS.parent / "kit.json", setup)
-    (setup / ".kit" / "state.json").unlink()
+    shutil.copy(TESTS.parent / "kit.json", mine)
+    (setup / "data" / ".kit" / "state.json").unlink()
     rc, out, calls = run_setup(update=3)
     check("SETUP: after updating the kit it starts over on the new SETUP, once",
           rc == 0 and "Step 2 (new version) of 2: a small kit to try first" in out and out.count("TINFOIL KIT SETUP") == 1
@@ -968,54 +1117,54 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out, calls = run_setup(plan=1)
     check("SETUP: offline: stops before asking to download", rc == 1 and calls == first[:4] and "Start downloading" not in out, out)
     home = ["share on", "autostart on", "share"]
-    check("SETUP: a normal setup doesn't share the kit or start it with the computer", (setup / "home.log").read_text() == "")
+    check("SETUP: a normal setup doesn't share the kit or start it with the computer", (setup / "data" / "home.log").read_text() == "")
     rc, out, calls = run_setup(args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: the try-it kit and right after it the rest, then shares the kit, starts it with the "
           "computer, shows the address, and doesn't open it",
-          rc == 0 and calls == first + rest + ["share", "autostart", "share"] and (setup / "home.log").read_text().splitlines() == home
+          rc == 0 and calls == first + rest + ["share", "autostart", "share"] and (setup / "data" / "home.log").read_text().splitlines() == home
           and "Step 3 of 3: the rest of the kit" in out and "Home server" in out and "Open the kit now" not in out
           and "double-click Open Tinfoil Kit" not in out, out)
     rc, out, calls = run_setup(update=3, args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: still a home server after the kit updates itself and starts over",
-          rc == 0 and "(new version)" in out and (setup / "home.log").read_text().splitlines() == home, out)
+          rc == 0 and "(new version)" in out and (setup / "data" / "home.log").read_text().splitlines() == home, out)
     rc, out, calls = run_setup(sync=1, args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: some downloads failed but the kit works: shares it anyway",
-          rc == 1 and "didn't finish" in out and (setup / "home.log").read_text().splitlines() == home, out)
+          rc == 1 and "didn't finish" in out and (setup / "data" / "home.log").read_text().splitlines() == home, out)
     rc, out, calls = run_setup(test=1, args=("--home-server",), answers="\ny\n\n")
-    check("SETUP --home-server: checks failed: doesn't share it", rc == 1 and (setup / "home.log").read_text() == "", out)
+    check("SETUP --home-server: checks failed: doesn't share it", rc == 1 and (setup / "data" / "home.log").read_text() == "", out)
     rc, out, calls = run_setup(answers="Bavaria\n1\ny\nn\n\n")
-    c = json.loads((setup / "kit.json").read_text())
+    c = json.loads(mine.read_text())
     check("SETUP: says where the maps are for, and changes the place and Wikipedia's language when told",
           rc == 0 and "Maps are for US Northeast" in out and "Maps: Germany: Bayern" in out and c["maps"]["region"] == "bayern"
           and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_de_all_"], out)
-    shutil.copy(TESTS.parent / "kit.json", setup)
+    shutil.copy(TESTS.parent / "kit.json", mine)
     rc, out, calls = run_setup(args=("--yes",), answers="")
-    argv = (setup / "args.log").read_text().splitlines()
+    argv = (setup / "data" / "args.log").read_text().splitlines()
     check("SETUP --yes the first time: asks nothing, gets the try-it kit, says how to open it and get the rest, and closes",
           rc == 0 and calls == first and "update --yes" in argv and "fit --restore --skip" in argv
           and not any(a in out for a in asked) and "Start downloading" not in out and "Open the kit now" not in out
-          and f'When you\'re ready for it: bash "{setup}/SETUP.command" --yes' in out
-          and f'To open it: bash "{setup}/Open Tinfoil Kit.command"' in out, out)
+          and f'When you\'re ready for it: bash "{setup}/app/SETUP.command" --yes' in out
+          and f'To open it: bash "{setup}/app/Open Tinfoil Kit.command"' in out, out)
     rc, out, calls = run_setup(args=("--region", "texas", "--wikipedia", "es", "--skip", "maps", "--add", "gutenberg_en_all",
                                      "--share", "--yes"), answers="")
-    c = json.loads((setup / "kit.json").read_text())
+    c = json.loads(mine.read_text())
     check("SETUP --region, --wikipedia, --skip, --add and --share: kit.json changes, and the kit is shared",
           rc == 0 and c["maps"]["region"] == "us/texas" and c["maps"]["enabled"] is False
           and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_es_all_"]
           and {k: v for k, v in c["library"][-1].items() if k in ("enabled", "essential")} == {"essential": True}
-          and (setup / "home.log").read_text().splitlines() == ["share on", "share"] and "Sharing:" in out
+          and (setup / "data" / "home.log").read_text().splitlines() == ["share on", "share"] and "Sharing:" in out
           and "Open the kit now" not in out and "it gets it" not in out, out)
-    shutil.copy(TESTS.parent / "kit.json", setup)
+    shutil.copy(TESTS.parent / "kit.json", mine)
     rc, out, calls = run_setup(args=("--no-ai", "--yes"), answers="")
-    argv = (setup / "args.log").read_text().splitlines()
+    argv = (setup / "data" / "args.log").read_text().splitlines()
     check("SETUP --no-ai: every AI model off, and fit doesn't put one back",
-          rc == 0 and all(m.get("enabled") is False for m in json.loads((setup / "kit.json").read_text())["models"])
+          rc == 0 and all(m.get("enabled") is False for m in json.loads(mine.read_text())["models"])
           and "fit" in argv and "fit --restore --skip" not in argv, out)
-    shutil.copy(TESTS.parent / "kit.json", setup)
+    shutil.copy(TESTS.parent / "kit.json", mine)
     rc, out, calls = run_setup(args=("--yes", "--skip", "wikipedia,nothing-such"), answers="")
     check("SETUP --skip with a name the kit doesn't have: stops before downloading, and kit.json is as it was",
           rc == 1 and "Nothing in the kit is called nothing-such" in out and calls == ["update"]
-          and (setup / "kit.json").read_text() == (TESTS.parent / "kit.json").read_text(), out)
+          and mine.read_text() == (TESTS.parent / "kit.json").read_text(), out)
     rc, out, calls = run_setup(args=("--bogus",), answers="")
     rc2, out2, calls2 = run_setup(args=("--drive",), answers="")
     rc3, out3, _ = run_setup(args=("--help",), answers="")
@@ -1079,7 +1228,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
     # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.
-    def first_run(answers, drives=(), git=False, home_kit=None, where="\n", args=(), **env_extra):
+    def first_run(answers, drives=(), git=False, home_kit=None, where="\n", args=(), beside=None, **env_extra):
         """SETUP's first run. ./kit space says what SPACE (this computer) and SPACE_DRIVE (drives) say. where: the
         answers to "Where do you live?" (Return keeps the kit's place)."""
         place = work / "place"
@@ -1095,8 +1244,11 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
             (home / "TinfoilKit").mkdir()
             (home / "TinfoilKit" / "notes.txt").write_text("mine")
         dl = kit_folder(place / "Downloads" / "tinfoilkit-main", git=git)
-        (dl / "calls.log").write_text("")
-        p = subprocess.run(["bash", str(dl / "SETUP.command"), *args], input=where + answers, capture_output=True, text=True,
+        if beside:    # the app folder was put in a folder with other things in it
+            (dl / beside).write_text("not the kit's")
+        (dl / "data").mkdir()
+        (dl / "data" / "calls.log").write_text("")
+        p = subprocess.run(["bash", str((dl if git else dl / "app") / "SETUP.command"), *args], input=where + answers, capture_output=True, text=True,
                            timeout=60,
                            env={**os.environ, "HOME": str(home), "KIT_DRIVES": str(env_extra.pop("KIT_DRIVES", vols)),
                                 "SPACE": roomy, "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0", **env_extra})
@@ -1104,13 +1256,14 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     def placed_ok(where, essentials=False, then_rest=False):
         """Set up at where: the try-it kit, and right after it the rest if told, with just the essentials or all."""
-        log = where / "calls.log"
+        log = where / "data" / "calls.log"
         tail = first[:1] + first[2:]    # (fit was before the kit moved)
         if then_rest:
             tail += ["starter-off", "essentials-on" if essentials else "essentials-off"] + rest[2:]
-        return ((where / "SETUP.command").exists() and (where / "kit").exists() and (where / "tools/kit.py").exists()
-                and (where / ".kit").is_dir() and log.exists() and log.read_text().split()[1::2][-len(tail):] == tail
-                and ('"essentials_only": true' in (where / "kit.json").read_text()) == essentials)
+        code = where if (where / ".git").exists() else where / "app"
+        return ((code / "SETUP.command").exists() and (code / "kit").exists() and (code / "tools/kit.py").exists()
+                and (where / "downloads").is_dir() and log.exists() and log.read_text().split()[1::2][-len(tail):] == tail
+                and ('"essentials_only": true' in (where / "data" / "kit.json").read_text()) == essentials)
 
     rc, out, dl, home, vols = first_run("2\ny\nn\n\n")
     check("SETUP first run: this computer: says what fits, moves the kit to TinfoilKit in the home folder, sets up there",
@@ -1119,7 +1272,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           and placed_ok(home / "TinfoilKit") and not dl.exists() and "Moved the kit to this computer" in out
           and out.count("TINFOIL KIT SETUP") == 1 and "Step 3 of 3: a small kit to try first" in out
           and "The try-it kit works" in out
-          and (home / "TinfoilKit" / "calls.log").read_text().split()[1::2][:2] == ["fit", "essentials-off"], out)
+          and (home / "TinfoilKit" / "data" / "calls.log").read_text().split()[1::2][:2] == ["fit", "essentials-off"], out)
     rc, out, _, _, _ = first_run("1\n1\ny\nn\n\n", drives=["SAMSUNG T7"])
     check("SETUP first run: a drive: lists it with what fits, the kit moves to TinfoilKit at its top and sets up there",
           rc == 0 and "1  SAMSUNG T7 (" in out and "900 GB free of 1.0 TB): room for all of it" in out and "Look again" in out
@@ -1161,12 +1314,16 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out, dl, home, _ = first_run("2\n", home_kit="other")
     check("SETUP first run: someone else's TinfoilKit folder is left alone",
           rc == 1 and "isn't a Tinfoil Kit" in out and (home / "TinfoilKit" / "notes.txt").read_text() == "mine"
-          and dl.exists() and not (home / "TinfoilKit" / "SETUP.command").exists(), out)
+          and dl.exists() and sorted(f.name for f in (home / "TinfoilKit").iterdir()) == ["notes.txt"], out)
+    rc, out, dl, home, _ = first_run("2\n", beside="taxes.pdf")
+    check("SETUP first run: an app folder put in a folder with other things in it: neither moves, and it says why",
+          rc == 1 and "isn't in a folder of its own" in out and (dl / "taxes.pdf").exists() and (dl / "app").is_dir()
+          and not (home / "TinfoilKit").exists(), out)
     rc, out, _, _, _ = first_run("3\n")
     check("SETUP first run: a wrong answer asks again, and a closed window stops it", rc == 1 and "Type a number from 1 to 2" in out, out)
 
     def placed_cfg(where):
-        c = json.loads((where / "kit.json").read_text())
+        c = json.loads((where / "data" / "kit.json").read_text())
         return c["maps"].get("region"), [z["zim"] for z in c["library"] if z["zim"].startswith("wikipedia_")]
 
     rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Atlantis\nUSA\nTexas\n1\n")
@@ -1184,13 +1341,14 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     k = home / "TinfoilKit"
     check("SETUP --region texas --this-computer --yes: asks nothing, sets up in the home folder, doesn't open the kit",
           rc == 0 and placed_ok(k) and not dl.exists() and placed_cfg(k) == ("us/texas", ["wikipedia_en_all_maxi"])
-          and "update --yes" in (k / "args.log").read_text().splitlines() and not any(a in out for a in asked)
+          and "update --yes" in (k / "data" / "args.log").read_text().splitlines() and not any(a in out for a in asked)
           and "Open the kit now" not in out and "The try-it kit works" in out, out)
     t7 = work / "place" / "Volumes" / "SAMSUNG T7"
     rc, out, dl, home, _ = first_run("", where="", drives=["SAMSUNG T7"], args=(
         "--drive", str(t7), "--essentials", "--models", "Gemma-4-E4B", "--skip", "maps", "--add", "gutenberg_en_all,wikipedia",
         "--yes"))
-    c = json.loads((t7 / "TinfoilKit" / "kit.json").read_text()) if (t7 / "TinfoilKit" / "kit.json").exists() else {}
+    t7_cfg = t7 / "TinfoilKit" / "data" / "kit.json"
+    c = json.loads(t7_cfg.read_text()) if t7_cfg.exists() else {}
     check("SETUP --drive --essentials --models --skip --add --yes: on the drive, the try-it kit, then just the essentials "
           "plus what was added",
           rc == 0 and placed_ok(t7 / "TinfoilKit", essentials=True, then_rest=True) and "What goes in it:" in out
@@ -1228,32 +1386,37 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
             shutil.rmtree(drv / "USB DRIVE" / "TinfoilKit")
             rc, out, dl, _, _ = first_run("1\n1\ny\nn\n\n", git=True, KIT_DRIVES=drv)
             tk = drv / "USB DRIVE" / "TinfoilKit"
-            check("SETUP first run: a git checkout is copied to the drive, .git and all, and stays where it was; "
-                  "npm's packages and the website's build stay behind",
-                  rc == 0 and placed_ok(tk) and (tk / ".git").is_dir() and dl.exists() and "Use that copy from now on" in out
-                  and (tk / "site" / "sources.json").exists() and not (tk / "node_modules").exists()
-                  and not (tk / "site" / "node_modules").exists() and not (tk / "site" / ".next").exists(), out)
+            check("SETUP first run: a git checkout's code is copied to the drive as its app folder, and the checkout "
+                  "stays where it was; .git, npm's packages and the website's build stay behind",
+                  rc == 0 and placed_ok(tk) and not (tk / ".git").exists() and dl.exists() and "Use that copy from now on" in out
+                  and (tk / "app" / "site" / "sources.json").exists() and not (tk / "node_modules").exists()
+                  and not (tk / "app" / "site" / "node_modules").exists() and not (tk / "app" / "site" / ".next").exists(), out)
         finally:
             shutil.rmtree(drv, ignore_errors=True)
     else:
         print("skip  SETUP first run: copying to another disk (no usable /dev/shm here)")
 
     # UNINSTALL.command: removes the kit and its downloads, only when asked, and stops the kit if it's running.
-    def uninstall(*args, answers="", kit_files=True):
-        gone = work / "gone" / "TinfoilKit"
+    def uninstall(*args, answers="", kit_files=True, name="TinfoilKit", beside=None):
+        gone = work / "gone" / name
         shutil.rmtree(gone.parent, ignore_errors=True)
-        (gone / "models" / "Tiny").mkdir(parents=True)
-        (gone / "models" / "Tiny" / "Tiny.gguf").write_bytes(os.urandom(5000))
-        (gone / "library").mkdir()
-        (gone / "library" / "book.zim").write_bytes(os.urandom(5000))
-        shutil.copy(TESTS.parent / "UNINSTALL.command", gone)
+        (gone / "downloads" / "models" / "Tiny").mkdir(parents=True)
+        (gone / "downloads" / "models" / "Tiny" / "Tiny.gguf").write_bytes(os.urandom(5000))
+        (gone / "downloads" / "library").mkdir()
+        (gone / "downloads" / "library" / "book.zim").write_bytes(os.urandom(5000))
+        (gone / "data").mkdir()
+        (gone / "data" / "kit.json").write_text("{}")
+        (gone / "app").mkdir()
+        shutil.copy(TESTS.parent / "UNINSTALL.command", gone / "app")
         if kit_files:
-            (gone / "kit").write_text(f'#!/bin/bash\necho "$*" >> "{work / "uninstall-kit.log"}"\n')
-            (gone / "kit").chmod(0o755)
-            (gone / "tools").mkdir()
-            (gone / "tools" / "kit.py").write_text("# kit\n")
+            (gone / "app" / "kit").write_text(f'#!/bin/bash\necho "$*" >> "{work / "uninstall-kit.log"}"\n')
+            (gone / "app" / "kit").chmod(0o755)
+            (gone / "app" / "tools").mkdir()
+            (gone / "app" / "tools" / "kit.py").write_text("# kit\n")
         (gone.parent / "keep.txt").write_text("not the kit's")
-        p = subprocess.run(["bash", str(gone / "UNINSTALL.command"), *args], input=answers, capture_output=True, text=True,
+        if beside:
+            (gone / beside).write_text("mine")
+        p = subprocess.run(["bash", str(gone / "app" / "UNINSTALL.command"), *args], input=answers, capture_output=True, text=True,
                            timeout=60, env={**os.environ, "HOME": str(work)})
         return p.returncode, p.stdout, gone
 
@@ -1266,9 +1429,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("UNINSTALL: says what it deletes, and just Return keeps everything",
           rc == 0 and "This deletes Tinfoil Kit" in out and "can't be undone" in out and "Kept" in out
           and "Also the Python it downloaded" in out and own_python.exists()
-          and (gone / "models/Tiny/Tiny.gguf").exists() and kit_log.read_text() == "", out)
+          and (gone / "downloads" / "models/Tiny/Tiny.gguf").exists() and kit_log.read_text() == "", out)
     rc, out, gone = uninstall(answers="yes\n\n")
-    check("UNINSTALL: anything but delete keeps it", rc == 0 and "Kept" in out and (gone / "library/book.zim").exists(), out)
+    check("UNINSTALL: anything but delete keeps it", rc == 0 and "Kept" in out and (gone / "downloads" / "library/book.zim").exists(), out)
     rc, out, gone = uninstall(answers="delete\n\n")
     check("UNINSTALL: typing delete removes the kit, its downloads and its Python, and nothing beside it",
           rc == 0 and not gone.exists() and (gone.parent / "keep.txt").exists() and "Tinfoil Kit is gone" in out
@@ -1279,22 +1442,29 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("UNINSTALL: refuses a folder that isn't a kit", rc == 1 and gone.exists() and "doesn't look like a Tinfoil Kit" in out, out)
     rc, out, gone = uninstall(answers="DELETE\n\n")
     check("UNINSTALL: DELETE in capitals works too", rc == 0 and not gone.exists(), out)
+    rc, out, gone = uninstall(answers="delete\n\n", name="Desktop", beside="taxes.pdf")
+    check("UNINSTALL: an app folder put in a folder with other things in it: deletes nothing, and says why",
+          rc == 1 and "isn't in a folder of its own" in out and (gone / "taxes.pdf").exists() and (gone / "app").is_dir(), out)
+    rc, out, gone = uninstall(answers="delete\n\n", beside="my-notes.txt")
+    rc2, out2, gone2 = uninstall(answers="delete\n\n", name="Old kit")
+    check("UNINSTALL: a TinfoilKit folder goes whole, and so does a renamed one that holds just the kit",
+          rc == rc2 == 0 and not gone.exists() and not gone2.exists(), out + out2)
 
     def running_kit():
         """A kit whose AI server is running (a stand-in that sleeps), removed with --yes."""
         gone = work / "gone" / "TinfoilKit"
         shutil.rmtree(gone.parent, ignore_errors=True)
-        srv = gone / "bin" / "llama.cpp-test" / "llama-server"
+        srv = gone / "downloads" / "bin" / "llama.cpp-test" / "llama-server"
         srv.parent.mkdir(parents=True)
         srv.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(300)\n")
         srv.chmod(0o755)
         proc = subprocess.Popen([str(srv)])
-        shutil.copy(TESTS.parent / "UNINSTALL.command", gone)
-        (gone / "kit").write_text("#!/bin/bash\n")
-        (gone / "tools").mkdir()
-        (gone / "tools" / "kit.py").write_text("# kit\n")
+        (gone / "app" / "tools").mkdir(parents=True)
+        shutil.copy(TESTS.parent / "UNINSTALL.command", gone / "app")
+        (gone / "app" / "kit").write_text("#!/bin/bash\n")
+        (gone / "app" / "tools" / "kit.py").write_text("# kit\n")
         time.sleep(0.5)
-        p = subprocess.run(["bash", str(gone / "UNINSTALL.command"), "--yes"], capture_output=True, text=True, timeout=60,
+        p = subprocess.run(["bash", str(gone / "app" / "UNINSTALL.command"), "--yes"], capture_output=True, text=True, timeout=60,
                            stdin=subprocess.DEVNULL, env={**os.environ, "HOME": str(work)})
         try:
             proc.wait(timeout=10)
@@ -1325,16 +1495,17 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     threading.Thread(target=running.serve_forever, daemon=True).start()
     rport = running.server_address[1]
     lk = work / "launch"
-    (lk / "tools").mkdir(parents=True)
-    shutil.copy(TESTS.parent / "tools" / "launch.sh", lk / "tools")
-    (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": rport, "ai_port": rport}}))
+    (lk / "app" / "tools").mkdir(parents=True)
+    shutil.copy(TESTS.parent / "tools" / "launch.sh", lk / "app" / "tools")
+    (lk / "data").mkdir()
+    (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": rport, "ai_port": rport}}))
     for name, gb in (("Big", 18), ("Mid", 12), ("Small", 5)):
-        (lk / "models" / name).mkdir(parents=True)
-        with open(lk / "models" / name / f"{name}-Q4_K_M.gguf", "wb") as f:
+        (lk / "downloads" / "models" / name).mkdir(parents=True)
+        with open(lk / "downloads" / "models" / name / f"{name}-Q4_K_M.gguf", "wb") as f:
             f.truncate(gb * 10**9)   # sparse, so it takes no space
 
     def launch(mem_gb, *args):
-        p = subprocess.run(["bash", str(lk / "tools" / "launch.sh"), "--no-browser", *args], capture_output=True, text=True,
+        p = subprocess.run(["bash", str(lk / "app" / "tools" / "launch.sh"), "--no-browser", *args], capture_output=True, text=True,
                            timeout=60, stdin=subprocess.DEVNULL, env={**os.environ, "KIT_MEMORY_MB": str(mem_gb * 1024)})
         out = p.stdout + p.stderr
         return (out.split("?model=")[1].split("&")[0] if "?model=" in out else ""), out
@@ -1344,13 +1515,13 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         check(f"launcher: {mem_gb} GB of memory starts {want}", got == want and (want == "Big" or f"{mem_gb} GB of memory" in out), out)
     got, out = launch(16, "--model=Big")
     check("launcher: --model wins over memory", got == "Big", out)
-    (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Gone", "library_port": rport, "ai_port": rport}}))
+    (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Gone", "library_port": rport, "ai_port": rport}}))
     got, out = launch(24)
     check("launcher: without the default model, the biggest that fits", got == "Mid" and "too little" not in out, out)
 
     # ./kit fit: which model this computer runs, and asking before downloading the ones too big for it.
     fk = work / "fit"
-    shutil.copytree(TESTS.parent / "tools", fk / "tools")
+    new_kit(fk)
     fit_json = """{
   "settings": {
     "default_model": "Big"
@@ -1374,10 +1545,10 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
   ]
 }
 """
-    (fk / "kit.json").write_text(fit_json)
+    (fk / "data" / "kit.json").write_text(fit_json)
 
     def fit(mem_gb, *args, answers=""):
-        p = subprocess.run([sys.executable, str(fk / "tools" / "kit.py"), "--root", str(fk), "fit", *args], input=answers,
+        p = subprocess.run([sys.executable, str(fk / "app" / "tools" / "kit.py"), "--root", str(fk), "fit", *args], input=answers,
                            capture_output=True, text=True, timeout=60, env={**os.environ, "KIT_MEMORY_MB": str(mem_gb * 1024)})
         return p.returncode, p.stdout + p.stderr
 
@@ -1387,10 +1558,10 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out = fit(16)
     check("kit fit: too little for the default: the biggest that fits, and which ones it can't run (changes nothing)",
           rc == 0 and "its AI will be Mid" in out and "It can't run Big: it needs 32 GB of memory or more" in out
-          and "./kit fit --skip" in out and (fk / "kit.json").read_text() == fit_json, out)
+          and "./kit fit --skip" in out and (fk / "data" / "kit.json").read_text() == fit_json, out)
     rc, out = fit(16, "--ask", answers="\n")
-    on = {m["id"]: m.get("enabled", True) for m in json.loads((fk / "kit.json").read_text())["models"]}
-    added = [line for line in (fk / "kit.json").read_text().splitlines() if line not in fit_json.splitlines()]
+    on = {m["id"]: m.get("enabled", True) for m in json.loads((fk / "data" / "kit.json").read_text())["models"]}
+    added = [line for line in (fk / "data" / "kit.json").read_text().splitlines() if line not in fit_json.splitlines()]
     check("kit fit --ask: just Return skips them, in kit.json, changing only the lines that say so",
           rc == 0 and "Download them anyway? [y/N]" in out and on == {"Big": False, "Mid": True, "Small": True}
           and added == ['    "models_off_for_memory": ["Big"],', '      "enabled": false,'], out)
@@ -1399,42 +1570,42 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out = fit(64, "--ask", answers="\n")
     check("kit fit --ask: a computer with more memory offers them back, and kit.json is as it was",
           rc == 0 and "skipped before on a computer with less memory" in out and "Its AI will be Big." in out
-          and (fk / "kit.json").read_text() == fit_json, out)
+          and (fk / "data" / "kit.json").read_text() == fit_json, out)
     rc, out = fit(16, "--ask", answers="y\n")
-    check("kit fit --ask: yes keeps them", rc == 0 and (fk / "kit.json").read_text() == fit_json, out)
+    check("kit fit --ask: yes keeps them", rc == 0 and (fk / "data" / "kit.json").read_text() == fit_json, out)
     rc, out = fit(8, "--json")
     report = json.loads(out)
     check("kit fit --json: on 8 GB nothing fits, so the smallest, and the rest are too big",
           rc == 0 and report["runs"] == "Small" and report["too_big"] == ["Big", "Mid"], out)
-    (fk / ".kit").mkdir(exist_ok=True)
-    (fk / ".kit" / "state.json").write_text(json.dumps({"items": {"models/Big": {}}}))
+    (fk / "data" / ".kit").mkdir(exist_ok=True)
+    (fk / "data" / ".kit" / "state.json").write_text(json.dumps({"items": {"models/Big": {}}}))
     rc, out = fit(16, "--skip")
     check("kit fit --skip: leaves alone a model that's already downloaded", rc == 0 and "can't run" not in out
-          and (fk / "kit.json").read_text() == fit_json, out)
-    (fk / ".kit" / "state.json").unlink()
+          and (fk / "data" / "kit.json").read_text() == fit_json, out)
+    (fk / "data" / ".kit" / "state.json").unlink()
     named = fit_json.replace('"id": "Big",', '"id": "Big",\n      "essential": true,')
-    (fk / "kit.json").write_text(named)
+    (fk / "data" / "kit.json").write_text(named)
     rc, out = fit(16, "--skip")
     check("kit fit --skip: keeps a model asked for by name", rc == 0 and "Big comes anyway, as asked" in out
-          and (fk / "kit.json").read_text() == named, out)
-    (fk / "kit.json").write_text(fit_json)
+          and (fk / "data" / "kit.json").read_text() == named, out)
+    (fk / "data" / "kit.json").write_text(fit_json)
 
     # ./kit essentials on|off: just the essentials from now on, or everything again.
     rc, out = kit("essentials", "on", root=fk)
     check("kit essentials on: one line in kit.json's settings", rc == 0 and "Just the essentials" in out
-          and json.loads((fk / "kit.json").read_text())["settings"]["essentials_only"] is True
-          and len((fk / "kit.json").read_text().splitlines()) == len(fit_json.splitlines()) + 1, out)
+          and json.loads((fk / "data" / "kit.json").read_text())["settings"]["essentials_only"] is True
+          and len((fk / "data" / "kit.json").read_text().splitlines()) == len(fit_json.splitlines()) + 1, out)
     rc, out = kit("essentials", "off", root=fk)
-    check("kit essentials off: kit.json as it was", rc == 0 and "Everything" in out and (fk / "kit.json").read_text() == fit_json, out)
+    check("kit essentials off: kit.json as it was", rc == 0 and "Everything" in out and (fk / "data" / "kit.json").read_text() == fit_json, out)
 
     # ./kit pick: what goes in the kit, by name (SETUP's --no-ai, --models, --skip and --add).
     pk = work / "pick"
-    shutil.copytree(TESTS.parent / "tools", pk / "tools")
-    shutil.copy(TESTS.parent / "kit.json", pk)
-    before = (pk / "kit.json").read_text()
+    new_kit(pk)
+    shutil.copy(TESTS.parent / "kit.json", pk / "data" / "kit.json")
+    before = (pk / "data" / "kit.json").read_text()
     rc, out = kit("pick", "--models", "gemma-4-e4b", "--skip", "stackexchange", "--add", "gutenberg_en_all Wikipedia", root=pk)
-    c = json.loads((pk / "kit.json").read_text())
-    diff = list(difflib.ndiff(before.splitlines(), (pk / "kit.json").read_text().splitlines()))
+    c = json.loads((pk / "data" / "kit.json").read_text())
+    diff = list(difflib.ndiff(before.splitlines(), (pk / "data" / "kit.json").read_text().splitlines()))
     added, gone = [x for x in diff if x.startswith("+ ")], [x for x in diff if x.startswith("- ")]
     se = [z for z in c["library"] if ".stackexchange.com_" in z["zim"]]
     check("kit pick: just that model, every Stack Exchange site off, and the adds on, changing only the lines that say so",
@@ -1449,21 +1620,21 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           all(kp.essential(items[k], runs) for k in ("library/gutenberg_en_all", "library/wikipedia_en_all_maxi",
                                                      "models/Gemma-4-E4B"))
           and not kp.essential(items["library/wiktionary_en_all_nopic"], runs))
-    now = (pk / "kit.json").read_text()
+    now = (pk / "data" / "kit.json").read_text()
     rc, out = kit("pick", "--add", "libretexts,nothing-such", root=pk)
     rc2, out2 = kit("pick", "--models", "wikipedia", root=pk)
     check("kit pick: a name the kit doesn't have changes nothing, and says what there is",
           rc == rc2 == 2 and "Nothing in the kit is called nothing-such" in out and "Books: mdwiki_en_all_maxi" in out
-          and "No AI model is called wikipedia" in out2 and (pk / "kit.json").read_text() == now, out + out2)
+          and "No AI model is called wikipedia" in out2 and (pk / "data" / "kit.json").read_text() == now, out + out2)
 
     # ./kit pick --ask: the kit builder's choices, asked in a terminal: a preset, or each part.
     ak = work / "ask"
-    shutil.copytree(TESTS.parent / "tools", ak / "tools")
+    new_kit(ak)
     ask_json = json.dumps({"settings": {}, "models": [{"id": "Tiny", "type": "hf"}, {"id": "Two", "type": "hf"}],
                            "library": [{"zim": "testmed_en_all_maxi"}, {"zim": "testsurvival_en"}]}, indent=1)
-    (ak / "kit.json").write_text(ask_json)
-    (ak / "site").mkdir()
-    (ak / "site" / "sources.json").write_text(json.dumps({"sources": [
+    (ak / "data" / "kit.json").write_text(ask_json)
+    (ak / "app" / "site").mkdir()
+    (ak / "app" / "site" / "sources.json").write_text(json.dumps({"sources": [
         {"id": "Tiny", "group": "AI models", "title": "Tiny AI", "bytes": 2 * 10**9, "presets": ["recommended", "essentials", "everything"]},
         {"id": "Two", "group": "AI models", "title": "Two AI", "bytes": 3 * 10**9, "presets": ["everything"]},
         {"id": "testmed_en_all_maxi", "group": "Medicine", "title": "Medicine", "bytes": 4 * 10**9,
@@ -1471,9 +1642,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         {"id": "testsurvival_en", "group": "Survival", "title": "Survival", "bytes": 60 * 10**9, "presets": ["everything", "no-ai"]}]}))
 
     def ask(answers):
-        p = subprocess.run([sys.executable, str(ak / "tools" / "kit.py"), "--root", str(ak), "pick", "--ask"], input=answers,
+        p = subprocess.run([sys.executable, str(ak / "app" / "tools" / "kit.py"), "--root", str(ak), "pick", "--ask"], input=answers,
                            capture_output=True, text=True, timeout=60, env={**os.environ, "KIT_MEMORY_MB": str(32 * 1024)})
-        c = json.loads((ak / "kit.json").read_text())
+        c = json.loads((ak / "data" / "kit.json").read_text())
         return p.returncode, p.stdout + p.stderr, sorted(e.get("id", e.get("zim")) for s in ("models", "library")
                                                           for e in c[s] if e.get("enabled", True)), c["settings"]
     rc, out, on, settings = ask("\n")
@@ -1505,8 +1676,8 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     # The kit builder's No AI preset switches every model off: ./kit test doesn't ask for one
     noai = work / "noai"
-    shutil.copytree(TESTS.parent / "tools", noai / "tools")
-    (noai / "kit.json").write_text(json.dumps({"settings": {}, "models": [{"id": "Tiny", "enabled": False}],
+    new_kit(noai)
+    (noai / "data" / "kit.json").write_text(json.dumps({"settings": {}, "models": [{"id": "Tiny", "enabled": False}],
                                                "library": [], "maps": {"enabled": False}}))
     rc, out = kit("test", root=noai)
     check("test: a kit with every model off doesn't ask for one", "models present" not in out and "without the AI" in out, out)
@@ -1527,10 +1698,10 @@ threading.Timer(3, server.shutdown).start()
 server.serve_forever()
 """)
     fake.chmod(0o755)
-    (lk / "library").mkdir()
-    (lk / "library" / "book.zim").touch()
-    (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": port, "ai_port": rport}}))
-    p = subprocess.run(["bash", str(lk / "tools" / "launch.sh"), "--no-browser"], capture_output=True, text=True, timeout=60,
+    (lk / "downloads" / "library").mkdir()
+    (lk / "downloads" / "library" / "book.zim").touch()
+    (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": port, "ai_port": rport}}))
+    p = subprocess.run(["bash", str(lk / "app" / "tools" / "launch.sh"), "--no-browser"], capture_output=True, text=True, timeout=60,
                        stdin=subprocess.DEVNULL, env={**os.environ, "KIT_KIWIX_TOOLS_BIN": str(fake)})
     out = p.stdout + p.stderr
     check("launcher: another program on the library's port: it moves to the next free one",
@@ -1569,8 +1740,8 @@ Server(("::1", port), Page).serve_forever()
         print("  SKIP  launcher: a library server that won't use 127.0.0.1 (this computer has no IPv6 to try ::1 on)")
     else:
         lport = free_port()
-        (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": lport, "ai_port": rport}}))
-        p = subprocess.Popen(["bash", str(lk / "tools" / "launch.sh"), "--no-browser"], stdout=subprocess.PIPE,
+        (lk / "data" / "kit.json").write_text(json.dumps({"settings": {"default_model": "Big", "library_port": lport, "ai_port": rport}}))
+        p = subprocess.Popen(["bash", str(lk / "app" / "tools" / "launch.sh"), "--no-browser"], stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, text=True, stdin=subprocess.DEVNULL,
                              env={**os.environ, "KIT_KIWIX_TOOLS_BIN": str(refusing)})
         lines = []
@@ -1595,8 +1766,8 @@ Server(("::1", port), Page).serve_forever()
         with socket.socket() as s:
             stopped = s.connect_ex(("127.0.0.1", lport)) != 0
         check("launcher: closing it stops the library's forwarder too", stopped)
-        (noai / "library").mkdir(exist_ok=True)
-        (noai / "library" / "book.zim").touch()
+        (noai / "downloads" / "library").mkdir(parents=True, exist_ok=True)
+        (noai / "downloads" / "library" / "book.zim").touch()
         rc, out = kit("test", root=noai, env={**env, "KIT_KIWIX_TOOLS_BIN": str(refusing)})
         check("test: a library server that won't use 127.0.0.1 is tested on ::1, where the launcher runs it",
               "PASS  library server starts" in out and "tested on ::1" in out, out)
@@ -1712,11 +1883,11 @@ Server(("::1", port), Page).serve_forever()
 
     # Where you live: ./kit region and the list of places in tools/regions.json (the real one)
     rk = work / "region kit"
-    shutil.copytree(TESTS.parent / "tools", rk / "tools")
-    shutil.copy(TESTS.parent / "kit.json", rk / "kit.json")
+    new_kit(rk)
+    shutil.copy(TESTS.parent / "kit.json", rk / "data" / "kit.json")
 
     def rk_cfg():
-        c = json.loads((rk / "kit.json").read_text())
+        c = json.loads((rk / "data" / "kit.json").read_text())
         return c["maps"], [z for z in c["library"] if z["zim"].startswith("wikipedia_")]
 
     def ids(out):
@@ -1749,7 +1920,7 @@ Server(("::1", port), Page).serve_forever()
     was = rk_cfg()[1]
     rc, out = kit("region", "Bavaria", "--wikipedia", "de,en", root=rk)
     maps, wiki = rk_cfg()
-    lib = json.loads((rk / "kit.json").read_text())["library"]
+    lib = json.loads((rk / "data" / "kit.json").read_text())["library"]
     check("region: sets the maps and swaps Wikipedia in place, keeping its settings",
           rc == 0 and "Maps: Germany: Bayern" in out and "Address search: all of Germany." in out and maps["region"] == "bayern"
           and [z["zim"] for z in wiki] == ["wikipedia_de_all_maxi", "wikipedia_en_all_maxi"]
@@ -1770,7 +1941,7 @@ Server(("::1", port), Page).serve_forever()
     rc, out = kit("region", wide["id"], root=rk)
     check("region: a place with only a continent's address search says so, and how big it is",
           rc == 0 and f"Address search: all of {wide['addresses']}" in out and "Just the essentials leave it out" in out, out)
-    kp_cfg = json.loads((rk / "kit.json").read_text())
+    kp_cfg = json.loads((rk / "data" / "kit.json").read_text())
     geo = next(i for i in kp.items_from_config(kp_cfg) if i.id == "geocoder")
     without = kp.estimate_gb(rk, kp_cfg, True)
     wide["addresses_wide"] = False
@@ -1836,18 +2007,18 @@ Server(("::1", port), Page).serve_forever()
 
     # a Wikipedia in the old language goes once the new one is in
     wr = work / "wiki swap"
-    (wr / "zim").mkdir(parents=True)
-    (wr / "zim" / "wikipedia_en_all_maxi_2026-01.zim").write_bytes(b"en")
+    (wr / "downloads" / "zim").mkdir(parents=True)
+    (wr / "downloads" / "zim" / "wikipedia_en_all_maxi_2026-01.zim").write_bytes(b"en")
     st = {"items": {"library/wikipedia_en_all_maxi": {"dest": "zim", "files": {"wikipedia_en_all_maxi_2026-01.zim": {}}},
                     "library/testmed_en_all_maxi": {"dest": "zim", "files": {}}}}
     items = kp.items_from_config({"settings": {}, "library": [{"zim": "wikipedia_de_all_maxi"}, {"zim": "testmed_en_all_maxi"}]})
     kp.drop_replaced_wikipedias(wr, st, items)
     check("Wikipedia swap: the old one stays until the new one is in", "library/wikipedia_en_all_maxi" in st["items"]
-          and (wr / "zim" / "wikipedia_en_all_maxi_2026-01.zim").exists())
+          and (wr / "downloads" / "zim" / "wikipedia_en_all_maxi_2026-01.zim").exists())
     st["items"]["library/wikipedia_de_all_maxi"] = {"dest": "zim", "files": {"wikipedia_de_all_maxi_2026-01.zim": {}}}
     kp.drop_replaced_wikipedias(wr, st, items)
     check("Wikipedia swap: then the old one goes, and nothing else", "library/wikipedia_en_all_maxi" not in st["items"]
-          and not (wr / "zim" / "wikipedia_en_all_maxi_2026-01.zim").exists() and "library/testmed_en_all_maxi" in st["items"])
+          and not (wr / "downloads" / "zim" / "wikipedia_en_all_maxi_2026-01.zim").exists() and "library/testmed_en_all_maxi" in st["items"])
 
     # Geofabrik's -latest can point at a file that isn't up yet: then the day before's
     saved_head, asked = kp.http_head, []

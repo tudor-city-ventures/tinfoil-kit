@@ -8,13 +8,13 @@ An offline kit for when the internet goes down. One folder, on your computer or 
 - **An offline library** (Kiwix): Wikipedia, medical references, repair guides, preparedness manuals.
 - **Offline maps** with address search, driving and walking directions, and "nearest hospital".
 
-Open the kit folder (or plug in the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library and Map tabs. No internet, account or install needed.
+Open the kit's app folder (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library and Map tabs. No internet, account or install needed.
 
 ![The Ask tab](docs/screenshots/shot_ask.png)
 
 ## How it works
 
-The whole kit is one folder. Put it on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows. On a Mac the Tinfoil Kit app, the website's Mac download, opens them for you: SETUP in Terminal the first time, then the kit, in a window that stops it when you close it.
+The whole kit is one folder, with three inside: `app` (the kit's code, as released), `downloads` (everything it downloads) and `data` (your settings and the kit's records). A new version replaces `app` and leaves the other two as they are. Put the kit on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows. On a Mac the Tinfoil Kit app, the website's Mac download, opens them for you: SETUP in Terminal the first time, then the kit, in a window that stops it when you close it.
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 300}}}%%
@@ -25,7 +25,7 @@ flowchart TB
     publishers["Publishers' downloads<br/>AI models, books,<br/>maps, programs"] --> setup
     setup["SETUP<br/>update, download, check"]
   end
-  folder[("Kit folder<br/>on a drive or your computer")]
+  folder[("Kit folder: app, downloads, data<br/>on a drive or your computer")]
   subgraph offline["Offline, any time"]
     direction TB
     start["Open Tinfoil Kit<br/>starts the servers"]
@@ -44,10 +44,10 @@ flowchart TB
 
 ### Setting up (online)
 
-The first time, SETUP asks where you live (a US state or a country), which sets the maps' area, directions, address search and home, and Wikipedia's language (`./kit region`, from the places in `tools/regions.json`). Then it says which AI model the computer can run (`./kit fit`), and asks where the kit goes: an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free, and on a Mac stays out of Time Machine). `./kit drives` lists the drives with their format, and `./kit space` says whether all of the kit, or just its essentials, fits on each with 10% of the computer's disk (5% of a drive) left free. When all of it won't fit, or leaves less than that, SETUP offers the essentials only (`./kit essentials on`: the AI, the medical, preparedness and repair books, and the map). `./kit place` moves the kit there. Then, that time and every time after, it runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl). The first time, it gets just a small kit to try (`./kit starter on`: this computer's programs, a small AI, a few small books and the area's map, about 10 GB), checks it, opens it, and says how big the rest is and how long it takes at the speed it just measured. Running SETUP again gets the rest: it asks what goes in the kit (`./kit pick --ask`, the website builder's choices) unless that was chosen already, then `./kit starter off`. Once the full sync checks out, it removes the try-it files nobody picked. A newer download of the kit doesn't start over: its SETUP finds a kit set up before, in the home folder or on a drive (`./kit kits`), and updates that one, so nothing it has downloads again.
+The first time, SETUP asks where you live (a US state or a country), which sets the maps' area, directions, address search and home, and Wikipedia's language (`./kit region`, from the places in `tools/regions.json`). Then it says which AI model the computer can run (`./kit fit`), and asks where the kit goes: an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free; on a Mac, its downloads stay out of Time Machine). `./kit drives` lists the drives with their format, and `./kit space` says whether all of the kit, or just its essentials, fits on each with 10% of the computer's disk (5% of a drive) left free. When all of it won't fit, or leaves less than that, SETUP offers the essentials only (`./kit essentials on`: the AI, the medical, preparedness and repair books, and the map). `./kit place` moves the kit there. Then, that time and every time after, it runs three `./kit` commands (`tools/kit.py`: standard-library Python plus curl). The first time, it gets just a small kit to try (`./kit starter on`: this computer's programs, a small AI, a few small books and the area's map, about 10 GB), checks it, opens it, and says how big the rest is and how long it takes at the speed it just measured. Running SETUP again gets the rest: it asks what goes in the kit (`./kit pick --ask`, the website builder's choices) unless that was chosen already, then `./kit starter off`. Once the full sync checks out, it removes the try-it files nobody picked. A newer download of the kit doesn't start over: its SETUP finds a kit set up before, in the home folder or on a drive (`./kit kits`), and updates that one, so nothing it has downloads again. A kit whose app folder was deleted gets the download's.
 
-1. **Update** (`./kit update`): installs the kit's own code from the newest Tinfoil Kit release on GitHub, keeping your changes to `kit.json`. It installs only a release signed with the maintainer's key, and shows what's new and asks first.
-2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in [kit.json](kit.json) and downloads only what changed. Programs are the exception: each version of the kit names the exact build of each one it installs (`tools/pins.json`), so a new AI engine arrives with a kit update. A big book can wait for its next edition: Wikipedia (115 GB) keeps the one it has until it's a year old (`refresh_days` in kit.json). A big file comes over eight connections at once, which is often several times faster than one, and downloads resume after a break. A file the kit already has is never downloaded again, even one an older version kept under another name. Every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
+1. **Update** (`./kit update`): installs the newest Tinfoil Kit release from GitHub into the app folder. Your `kit.json` (in `data`) keeps your changes and takes in the new version's. It installs only a release signed with the maintainer's key, and shows what's new and asks first.
+2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in `kit.json` and downloads only what changed, into `downloads`. Programs are the exception: each version of the kit names the exact build of each one it installs (`tools/pins.json`), so a new AI engine arrives with a kit update. A big book can wait for its next edition: Wikipedia (115 GB) keeps the one it has until it's a year old (`refresh_days` in kit.json). A big file comes over eight connections at once, which is often several times faster than one, and downloads resume after a break. A file the kit already has is never downloaded again, even one an older version kept under another name. Every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
 3. **Check** (`./kit test`): starts every server offline and checks that each one answers.
 
 Windows has no Python, so `SETUP-Windows.bat` first gets python.org's own build from nuget.org (about 15 MB, checked against its SHA-256) and keeps it in `%LOCALAPPDATA%\TinfoilKit`, outside the kit. A Mac's python3 only offers to install Apple's Command Line Tools (several GB) until they're installed, so on a Mac without them `SETUP.command` gets a standalone Python from python-build-standalone on GitHub (about 25 MB, checked against its SHA-256) and keeps it in `~/Library/Application Support/TinfoilKit`, outside the kit (its symlinks wouldn't fit on exFAT). The kit on a drive doesn't need either: Open Tinfoil Kit uses only the programs in the kit (sharing on the home network also needs Python).
@@ -76,26 +76,32 @@ The kit page (`tools/portal.html`) is one HTML file with no build step. Each syn
 
 ```text
 TinfoilKit/
-├── SETUP.command             set up, or update whenever you like (online; Mac, Linux)
-├── Open Tinfoil Kit.command  start the kit offline (Mac, Linux)
-├── UNINSTALL.command         remove the kit and everything it downloaded (Mac, Linux)
-├── SETUP-Windows.bat         the same three, for Windows
-├── Open Tinfoil Kit for Windows.bat
-├── UNINSTALL-Windows.bat
-├── GUIDE.md                  the printable guide
-├── INVENTORY.md              what's installed, with versions and sizes
-├── kit, kit.cmd              the kit's command line (kit.cmd on Windows)
-├── kit.json, tools/          its list of downloads, and its code
-├── bin/                      programs: llama.cpp, Kiwix, Java, the map servers
-├── models/                   AI models
-├── library/                  books (.zim files)
-├── maps/                     map tiles, address database, road network
-├── installers/               the Kiwix app, a backup way to read the books
-├── logs/                     what each sync and launch did
-└── .kit/                     download progress, caches, the built kit page
+├── app/                          the kit's code, as released: a new version replaces it
+│   ├── SETUP.command             set up, or update whenever you like (online; Mac, Linux)
+│   ├── Open Tinfoil Kit.command  start the kit offline (Mac, Linux)
+│   ├── UNINSTALL.command         remove the kit and everything it downloaded (Mac, Linux)
+│   ├── SETUP-Windows.bat         the same three, for Windows
+│   ├── Open Tinfoil Kit for Windows.bat
+│   ├── UNINSTALL-Windows.bat
+│   ├── GUIDE.md                  the printable guide
+│   ├── kit, kit.cmd              the kit's command line (kit.cmd on Windows)
+│   └── kit.json, tools/          the standard list of downloads, and the code
+├── downloads/                    everything the kit downloads
+│   ├── bin/                      programs: llama.cpp, Kiwix, Java, the map servers
+│   ├── models/                   AI models
+│   ├── library/                  books (.zim files)
+│   ├── maps/                     map tiles, address database, road network
+│   ├── installers/               the Kiwix app, a backup way to read the books
+│   └── INVENTORY.md              what's installed, with versions and sizes
+└── data/                         yours: no new version touches it
+    ├── kit.json                  what goes in your kit, and its settings
+    ├── logs/                     what each sync and launch did
+    └── .kit/                     download progress, caches, the built kit page, the access code
 ```
 
-The repo is the kit, so `site/` (the website), `tests/` and `docs/` come along, but the kit doesn't use them.
+Delete `app` any time and put a new version's app folder in its place: `downloads` and `data` stay as they are, and nothing downloads again. `data/kit.json` starts as a copy of `app/kit.json`, and when a new version's list differs, its changes go into yours and your own choices stay. A kit set up before these three folders moves into them by itself the first time a newer version runs (`./kit layout`, which SETUP runs), by renaming, so nothing downloads again. SETUP and UNINSTALL never move or delete a folder that holds other things besides the kit: an app folder put on the Desktop on its own stays where it is, and they say so.
+
+The repo is the app folder, so `site/` (the website), `tests/` and `docs/` come along, but the kit doesn't use them. A git checkout keeps `downloads/` and `data/` inside it (git ignores them).
 
 ## Requirements
 
@@ -109,10 +115,10 @@ A nightly test sets the kit up on a Mac and on Windows, from a download onto the
 Download the kit from [tinfoilkit.com](https://tinfoilkit.com). Its button picks your computer's file from the [latest release](https://github.com/tudor-city-ventures/tinfoil-kit/releases/latest): `TinfoilKit-Mac.zip`, `TinfoilKit-Windows.zip`, or `TinfoilKit.tar.gz` for Linux. Then:
 
 - **Mac:** open the download (Safari unzips it by itself) and double-click **Tinfoil Kit**. Click **Open** when macOS asks about an app from the internet, let it move itself to Applications, then click **Set Up**: SETUP runs in a Terminal window.
-- **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat` in the TinfoilKit folder. If Windows says it protected your PC, click **More info**, then **Run anyway**.
-- **Linux:** run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command` in a terminal. It needs python3 and curl.
+- **Windows:** right-click the ZIP, choose **Extract All**, and double-click `SETUP-Windows.bat` in `TinfoilKit\app`. If Windows says it protected your PC, click **More info**, then **Run anyway**.
+- **Linux:** run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/app/SETUP.command` in a terminal. It needs python3 and curl.
 
-SETUP asks where you live and whether the kit goes on an external drive or on this computer, says how much room each has, moves it there, then gets a small kit to try (about 10 GB), tests it and opens it. Run SETUP again when you're ready for the rest: it asks what goes in the kit, says how long that takes on your connection, gets it and tests again. Every answer can also be given up front, so one command sets it up without asking anything: `bash TinfoilKit/SETUP.command --region texas --this-computer --yes` (`.\TinfoilKit\SETUP-Windows.bat` with the same options on Windows) gets the kit to try, and `bash ~/TinfoilKit/SETUP.command --yes` the rest (with `--all` or `--essentials`, the first command goes straight on to it). `--help` lists the options: a drive, just the essentials, which AI models and books, sharing on the home network.
+SETUP asks where you live and whether the kit goes on an external drive or on this computer, says how much room each has, moves it there, then gets a small kit to try (about 10 GB), tests it and opens it. Run SETUP again when you're ready for the rest: it asks what goes in the kit, says how long that takes on your connection, gets it and tests again. Every answer can also be given up front, so one command sets it up without asking anything: `bash TinfoilKit/app/SETUP.command --region texas --this-computer --yes` (`.\TinfoilKit\app\SETUP-Windows.bat` with the same options on Windows) gets the kit to try, and `bash ~/TinfoilKit/app/SETUP.command --yes` the rest (with `--all` or `--essentials`, the first command goes straight on to it). `--help` lists the options: a drive, just the essentials, which AI models and books, sharing on the home network.
 
 Or from a terminal on a Mac or Linux:
 
@@ -124,15 +130,17 @@ cd ~/TinfoilKit
 ./kit test    # start every server offline and check it answers
 ```
 
-Then turn Wi-Fi off and open the Tinfoil Kit app, or double-click `Open Tinfoil Kit.command` in the kit folder (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the kit folder.
+Then turn Wi-Fi off and open the Tinfoil Kit app, or double-click `Open Tinfoil Kit.command` in the kit's app folder (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the app folder.
 
 ## Update
 
 Double-click SETUP again whenever you want the newest models, books and maps, or run `./kit update`, `./kit sync` and then `./kit test`. There's no schedule. It installs the kit's newest version first, so models and sources added to the kit since then arrive too, and then downloads only what changed (see [How it works](#how-it-works)). If an update is cut off, the kit keeps working with what it has.
 
+Or replace the app folder yourself: delete it, put a new download's app folder in its place and run its SETUP. Or run a new download's SETUP from wherever you unzipped it: it finds your kit, puts its own app folder there and carries on. Either way `downloads` and `data` stay as they are.
+
 ## Remove
 
-Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. It also removes the Python SETUP got, on Windows or on a Mac without its own. `--yes` skips the question.
+Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit's app folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. It also removes the Python SETUP got, on Windows or on a Mac without its own. `--yes` skips the question.
 
 ## Home server
 
@@ -164,7 +172,7 @@ gunzip -c tinfoilkit-TAG.tar.gz | shasum -a 256
 
 ## Customize
 
-Everything the kit keeps is listed in [kit.json](kit.json). Set `"enabled": false` to skip an item, or find more books with `./kit search WORDS`.
+Everything the kit keeps is listed in `data/kit.json`, your copy of the standard list ([kit.json](kit.json)). Set `"enabled": false` to skip an item, or find more books with `./kit search WORDS`.
 
 ## Contributing
 

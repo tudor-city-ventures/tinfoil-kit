@@ -4,6 +4,7 @@
 #                         books), unfinished (setup stopped before it got any) or unplugged (the drive the app last
 #                         opened it on isn't plugged in). WHERE is "this Mac" or "the drive NAME".
 #   app.sh setup [KIT]    SETUP in a Terminal window: in KIT, or in a fresh copy of the kit inside the app
+#                         (KIT is a kit folder: its code is in its app folder, or at its top in an older kit)
 #   app.sh update KIT     SETUP in a Terminal window, in KIT
 #   app.sh remove KIT     UNINSTALL in a Terminal window, in KIT
 #   app.sh remember KIT   look for KIT next time, and name its drive when it isn't plugged in
@@ -19,17 +20,20 @@ LAST="$SUPPORT/last-kit"
 
 drive_of() { local d="${1#"$VOLUMES"/}"; [ "$d" != "$1" ] && echo "${d%%/*}"; }
 where() { local d; d="$(drive_of "$1")"; if [ -n "$d" ]; then echo "the drive $d"; else echo "this Mac"; fi; }
+# The code in the kit folder $1: its app folder, or the folder itself in a kit from before the app folder.
+code_of() { if [ -f "$1/app/SETUP.command" ]; then echo "$1/app"; else echo "$1"; fi; }
 
 find_kits() {
-  local last k seen="|" st d
+  local last k seen="|" st d c
   last="$(cat "$LAST" 2>/dev/null)"
   for k in "$last" "$HOME/TinfoilKit" "$VOLUMES"/*/TinfoilKit; do
     [ -n "$k" ] || continue
     case "$seen" in *"|$k|"*) continue ;; esac
     seen="$seen$k|"
     d="$(drive_of "$k")"
-    if [ -f "$k/kit" ] && [ -f "$k/tools/kit.py" ]; then
-      if ls "$k"/library/*.zim > /dev/null 2>&1; then st=ready; else st=unfinished; fi
+    c="$(code_of "$k")"
+    if [ -f "$c/kit" ] && [ -f "$c/tools/kit.py" ]; then
+      if { ls "$k"/downloads/library/*.zim || ls "$k"/library/*.zim; } > /dev/null 2>&1; then st=ready; else st=unfinished; fi
     elif [ "$k" = "$last" ] && [ -n "$d" ] && [ ! -d "$VOLUMES/$d" ]; then
       st=unplugged
     else
@@ -53,12 +57,12 @@ case "${1:-}" in
     if [ -z "$kit" ]; then
       # SETUP's first question moves it from here to the drive or the home folder the person picks.
       kit="$SUPPORT/Setup/TinfoilKit"
-      rm -rf "$SUPPORT/Setup" && mkdir -p "$SUPPORT/Setup" && cp -pR "$RES/kit" "$kit" || exit 1
+      rm -rf "$SUPPORT/Setup" && mkdir -p "$kit" && cp -pR "$RES/kit" "$kit/app" || exit 1
       xattr -dr com.apple.quarantine "$kit" 2> /dev/null
     fi
-    terminal "$kit/SETUP.command" ;;
-  update) terminal "$2/SETUP.command" ;;
-  remove) terminal "$2/UNINSTALL.command" ;;
+    terminal "$(code_of "$kit")/SETUP.command" ;;
+  update) terminal "$(code_of "$2")/SETUP.command" ;;
+  remove) terminal "$(code_of "$2")/UNINSTALL.command" ;;
   remember) mkdir -p "$SUPPORT" && printf '%s\n' "$2" > "$LAST" ;;
   move)
     dest="${KIT_APPLICATIONS:-/Applications}"

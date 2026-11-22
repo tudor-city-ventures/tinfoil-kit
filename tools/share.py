@@ -270,8 +270,18 @@ def qr_svg(g: Grid, border: int = 4) -> str:
 
 # ----------------------------------------------------------------------------- the access code and the address
 
+def data_dir(root: Path) -> Path:
+    """The person's folder in the kit (kit.py's layout), or the top of a kit from before it, which keeps .kit there."""
+    return root if (root / ".kit").is_dir() else root / "data"
+
+
+def code_dir(root: Path) -> Path:
+    """The kit's code: its app folder, or the kit folder itself (a git checkout, or a kit from before app/)."""
+    return root / "app" if (root / "app" / "tools").is_dir() else root
+
+
 def access_file(root: Path) -> Path:
-    return root / ".kit" / "share.json"
+    return data_dir(root) / ".kit" / "share.json"
 
 
 def save_access(root: Path, access: Dict[str, str]) -> None:
@@ -833,8 +843,9 @@ SERVICE = "tinfoil-kit.service"
 AGENT = "com.tinfoilkit.kit"
 
 
-def launcher(root: Path) -> Path:
-    return root / "Open Tinfoil Kit for Windows.bat" if WINDOWS else root / "tools" / "launch.sh"
+def launcher(root: Path, code: Optional[Path] = None) -> Path:
+    code = code or code_dir(root)
+    return code / "Open Tinfoil Kit for Windows.bat" if WINDOWS else code / "tools" / "launch.sh"
 
 
 def systemd_unit(root: Path) -> str:
@@ -916,14 +927,14 @@ def _linger() -> bool:
     return False
 
 
-def ours(text: str, root: Path) -> bool:
+def ours(text: str, root: Path, code: Optional[Path] = None) -> bool:
     if WINDOWS:    # where names are the same in any case
-        return str(launcher(root)).lower() in text.lower()
-    return str(launcher(root)) in text
+        return str(launcher(root, code)).lower() in text.lower()
+    return str(launcher(root, code)) in text
 
 
-def autostart_state(root: Path) -> str:
-    """'on', 'off' or 'other' (set up for a different kit folder)."""
+def autostart_state(root: Path, code: Optional[Path] = None) -> str:
+    """'on', 'off' or 'other' (set up for a different kit folder, or for this one's code where it was before)."""
     try:
         text = autostart_file().read_text(encoding="utf-8")
     except OSError:
@@ -932,7 +943,7 @@ def autostart_state(root: Path) -> str:
         text = text.replace("%%", "%")
     elif not MAC:
         text = text.replace("%%", "%").replace("$$", "$").replace('\\"', '"').replace("\\\\", "\\")
-    return "on" if ours(text, root) else "other"
+    return "on" if ours(text, root, code) else "other"
 
 
 def autostart(root: Path, action: str) -> int:
@@ -969,7 +980,7 @@ def autostart(root: Path, action: str) -> int:
             _systemctl("daemon-reload")
         print("The kit no longer starts by itself, and the copy it started has stopped.")
         return 0
-    (root / "logs").mkdir(exist_ok=True)
+    (data_dir(root) / "logs").mkdir(parents=True, exist_ok=True)
     if WINDOWS:
         return _startup_on(root)
     if MAC:
@@ -1000,14 +1011,14 @@ def _systemd_on(root: Path) -> int:
     if not lingering:
         print("For now it starts only once you log in. To start it at boot without logging in, run this once:\n"
               f"  sudo loginctl enable-linger {_user()}")
-    print(f"Check on it: systemctl --user status {SERVICE.split('.')[0]}   Logs: the logs folder in the kit.")
+    print(f"Check on it: systemctl --user status {SERVICE.split('.')[0]}   Logs: data/logs in the kit.")
     return 0
 
 
 def _launchd_on(root: Path) -> int:
     f = agent_file()
     f.parent.mkdir(parents=True, exist_ok=True)
-    log = str(root / "logs" / "autostart.log")
+    log = str(data_dir(root) / "logs" / "autostart.log")
     with open(f, "wb") as out:
         plistlib.dump({"Label": AGENT, "ProgramArguments": ["/bin/bash", str(launcher(root)), "--no-browser"],
                        "RunAtLoad": True, "KeepAlive": True, "ThrottleInterval": 30,

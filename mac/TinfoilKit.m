@@ -161,7 +161,10 @@ static void heard(int sig) { (void)sig; }
   pending = [NSMutableData data];
   task = [NSTask new];
   task.executableURL = [NSURL fileURLWithPath:@"/bin/bash"];
-  task.arguments = @[[kit stringByAppendingPathComponent:@"tools/launch.sh"]];
+  NSString *launcher = [kit stringByAppendingPathComponent:@"app/tools/launch.sh"];    // or a kit from before app/
+  if (![NSFileManager.defaultManager fileExistsAtPath:launcher])
+    launcher = [kit stringByAppendingPathComponent:@"tools/launch.sh"];
+  task.arguments = @[launcher];
   task.currentDirectoryURL = [NSURL fileURLWithPath:kit];
   task.standardInput = [NSFileHandle fileHandleWithNullDevice];
   NSPipe *pipe = [NSPipe pipe];

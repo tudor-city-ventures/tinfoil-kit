@@ -80,10 +80,11 @@ trap '[ -n "${pushed:-}" ] || git tag -d "$TAG" > /dev/null' EXIT
 git archive --format=tar --prefix="tinfoilkit-$TAG/" "$TAG" | gzip -n -9 > "$asset"
 ssh-keygen -Y sign -f "$KEY" -n "$NS" "$asset"
 # What the website's download buttons and llms.txt fetch (releases/latest/download/NAME): the same kit files from the
-# same tag, in a folder called TinfoilKit (on a Mac, inside the app); the tar.gz is for Linux and the command line.
-# Not signed with the release key, since they're only a first install: ./kit update takes the signed archive.
-git archive --format=zip --prefix=TinfoilKit/ "$TAG" > "$out/TinfoilKit-Windows.zip"
-git archive --format=tar --prefix=TinfoilKit/ "$TAG" | gzip -n -9 > "$out/TinfoilKit.tar.gz"
+# same tag, as the app folder of a folder called TinfoilKit (on a Mac, inside the app); the tar.gz is for Linux and the
+# command line. Not signed with the release key, since they're only a first install: ./kit update takes the signed
+# archive, which holds just the app folder's files.
+git archive --format=zip --prefix=TinfoilKit/app/ "$TAG" > "$out/TinfoilKit-Windows.zip"
+git archive --format=tar --prefix=TinfoilKit/app/ "$TAG" | gzip -n -9 > "$out/TinfoilKit.tar.gz"
 downloads=("$out/TinfoilKit-Mac.zip" "$out/TinfoilKit-Windows.zip" "$out/TinfoilKit.tar.gz")
 # Drives on the last release check this one with that release's keys, so a key change needs both to accept it.
 for ref in "$TAG" $prev; do

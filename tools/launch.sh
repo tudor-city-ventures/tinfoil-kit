@@ -6,13 +6,19 @@
 #
 #   --share       also serve phones and laptops on the home network, behind the access code (this time
 #                 only; ./kit share on turns it on for good: kit.json's share_on_network)
-#   --model=NAME  model to load first (a folder name in models/)
+#   --model=NAME  model to load first (a folder name in downloads/models)
 #   --no-browser  don't open the browser
 #   --no-maps     don't start the map servers (saves about 5 GB of memory)
 # (no "set -u": macOS ships bash 3.2, which mishandles empty arrays with it)
-KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"    # the kit's code
+KIT="$APP"    # the kit folder: the app folder's, or a git checkout itself
+case "$(basename "$APP" | tr '[:upper:]' '[:lower:]')" in app) [ -e "$APP/.git" ] || KIT="$(dirname "$APP")" ;; esac
+DL="$KIT/downloads"; DATA="$KIT/data"
+# A kit from before those folders, whose new code hasn't moved it into them yet (SETUP does that), still opens.
+[ ! -d "$DL" ] && [ -d "$KIT/bin" ] && { DL="$KIT"; DATA="$KIT"; }
+CONF="$DATA/kit.json"; [ -f "$CONF" ] || CONF="$APP/kit.json"
 cd "$KIT" || exit 1
-mkdir -p "$KIT/logs" "$KIT/.kit"
+mkdir -p "$DATA/logs" "$DATA/.kit"
 SHARE=0; NO_BROWSER=0; NO_MAPS=0; MODEL=""; CHOSEN=0
 for a in "$@"; do
   case "$a" in
@@ -26,7 +32,7 @@ done
 say() { printf '%s\n' "$*"; }
 setting() { # key default: a simple "key": value from kit.json, read without needing python
   local v
-  v="$(sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",}]*\)\"\{0,1\}.*/\1/p" "$KIT/kit.json" 2>/dev/null | head -1)"
+  v="$(sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",}]*\)\"\{0,1\}.*/\1/p" "$CONF" 2>/dev/null | head -1)"
   printf '%s' "${v:-$2}"
 }
 LIB_PORT="$(setting library_port 8888)"
@@ -53,7 +59,7 @@ works() { "$1" --version >/dev/null 2>&1 || "$1" version >/dev/null 2>&1; }
 
 # Find a runnable copy of a program: the current version first, then any older one kept as a fallback.
 pick_bin() { # product binary
-  local base="$KIT/bin/$1-$PLAT" cur="" d p f
+  local base="$DL/bin/$1-$PLAT" cur="" d p f
   local cands=()
   [ -d "$base" ] || return 1
   if [ -f "$base/CURRENT" ]; then
@@ -80,8 +86,8 @@ pick_bin() { # product binary
 # Say why a program is missing, or why the copy on the drive won't run here (such as a library Linux lacks).
 missing() { # name product binary
   local p out rc
-  p="$(find "$KIT/bin/$2-$PLAT" -type f -name "$3" 2>/dev/null | head -1)"
-  if [ -z "$p" ]; then say "  ! $1 not found for $PLAT (bin/$2-$PLAT). Run ./kit sync while online."; return; fi
+  p="$(find "$DL/bin/$2-$PLAT" -type f -name "$3" 2>/dev/null | head -1)"
+  if [ -z "$p" ]; then say "  ! $1 not found for $PLAT (downloads/bin/$2-$PLAT). Run ./kit sync while online."; return; fi
   out="$("$p" --version 2>&1)"; rc=$?
   out="$(printf '%s\n' "$out" | grep -m1 -iE 'error|not found|cannot')"
   out="${out#*"$3": }"
@@ -109,10 +115,10 @@ KIWIX="${KIT_KIWIX_TOOLS_BIN:-$(pick_bin kiwix-tools kiwix-serve)}"
 LLAMA="${KIT_LLAMACPP_BIN:-$(pick_bin llama.cpp llama-server)}"
 # macOS keeps Finder metadata for files on exFAT drives in "._name" files beside them. The servers
 # scan library/ and models/ and could take ._name.zim or ._name.gguf for a book or a model.
-find "$KIT/library" "$KIT/models" -name '._*' -type f -delete 2>/dev/null
+find "$DL/library" "$DL/models" -name '._*' -type f -delete 2>/dev/null
 shopt -s nullglob
-ZIMS=("$KIT"/library/*.zim)
-MODELS=("$KIT"/models/*/)
+ZIMS=("$DL"/library/*.zim)
+MODELS=("$DL"/models/*/)
 shopt -u nullglob
 
 say ""
@@ -120,8 +126,8 @@ say "  TINFOIL KIT"
 say "  ==========="
 [ -n "$KIWIX" ] || missing "Library server" kiwix-tools kiwix-serve
 [ -n "$LLAMA" ] || missing "AI server" llama.cpp llama-server
-[ ${#ZIMS[@]} -gt 0 ] || say "  ! No library files in library/. Run ./kit sync while online."
-[ ${#MODELS[@]} -gt 0 ] || say "  No AI models in models/, so the AI stays off. If kit.json lists some, run ./kit sync while online."
+[ ${#ZIMS[@]} -gt 0 ] || say "  ! No library files in downloads/library. Run ./kit sync while online."
+[ ${#MODELS[@]} -gt 0 ] || say "  No AI models in downloads/models, so the AI stays off. If kit.json lists some, run ./kit sync while online."
 
 # A model has to fit in memory with room for everything else. On a computer with less memory than the
 # first model needs, or without that model, start with the biggest one that fits (./kit fit picks the same way);
@@ -135,8 +141,8 @@ if [ -z "$MEM_MB" ]; then
   esac
 fi
 ROOM=$(( ${MEM_MB:-0} * 6 / 10 ))
-too_big() { [ "$CHOSEN" = 0 ] && [ "$ROOM" -gt 0 ] && [ "$(model_mb "$KIT/models/$MODEL")" -gt "$ROOM" ]; }
-if [ ${#MODELS[@]} -gt 0 ] && { [ ! -d "$KIT/models/$MODEL" ] || too_big; }; then
+too_big() { [ "$CHOSEN" = 0 ] && [ "$ROOM" -gt 0 ] && [ "$(model_mb "$DL/models/$MODEL")" -gt "$ROOM" ]; }
+if [ ${#MODELS[@]} -gt 0 ] && { [ ! -d "$DL/models/$MODEL" ] || too_big; }; then
   FIT=""; FIT_MB=0; SMALL=""; SMALL_MB=""
   for d in "${MODELS[@]}"; do
     mb="$(model_mb "${d%/}")"
@@ -146,7 +152,7 @@ if [ ${#MODELS[@]} -gt 0 ] && { [ ! -d "$KIT/models/$MODEL" ] || too_big; }; the
   done
   FIT="${FIT:-${SMALL:-$(basename "${MODELS[0]}")}}"
   if [ "$FIT" != "$MODEL" ]; then
-    [ -d "$KIT/models/$MODEL" ] && say "  This computer has $(( MEM_MB / 1024 )) GB of memory, too little for $MODEL. Starting with $FIT."
+    [ -d "$DL/models/$MODEL" ] && say "  This computer has $(( MEM_MB / 1024 )) GB of memory, too little for $MODEL. Starting with $FIT."
     MODEL="$FIT"
   fi
 fi
@@ -231,16 +237,16 @@ while True:
 LIB_PID=""; LIB_HOST=""; LIB_AT="$HOST"
 start_library() { # address
   LIB_HOST="$1"
-  "$KIWIX" "${KARGS[@]}" --address "$1" "${ZIMS[@]}" >> "$KIT/logs/kiwix-serve.log" 2>&1 &
+  "$KIWIX" "${KARGS[@]}" --address "$1" "${ZIMS[@]}" >> "$DATA/logs/kiwix-serve.log" 2>&1 &
   LIB_PID=$!; PIDS+=($!)
 }
 # kiwix-serve quit: if it was over 127.0.0.1, start it on ::1. Without Python for the go-between, the library alone
 # works, at [::1]: the page's Ask and Map tabs expect it at 127.0.0.1.
 library_on_ipv6() {
-  [ "$LIB_HOST" = "$HOST" ] && grep -q "not available on this system" "$KIT/logs/kiwix-serve.log" || return 1
+  [ "$LIB_HOST" = "$HOST" ] && grep -q "not available on this system" "$DATA/logs/kiwix-serve.log" || return 1
   start_library ::1
   if [ -n "$PY" ]; then
-    "$PY" -c "$FORWARD" "$LIB_PORT" "$LIB_PID" >> "$KIT/logs/kiwix-serve.log" 2>&1 &
+    "$PY" -c "$FORWARD" "$LIB_PORT" "$LIB_PID" >> "$DATA/logs/kiwix-serve.log" 2>&1 &
     PIDS+=($!)
     say "  The library server won't use $HOST on this computer, so it listens on ::1 and the kit forwards $HOST to it."
   else
@@ -257,11 +263,11 @@ elif [ -n "$KIWIX" ] && [ ${#ZIMS[@]} -gt 0 ]; then
   fi
   # The page ./kit sync builds has the map inside; the bare template has no map. A newer template
   # (kit code updated, no sync since) shows up after the next sync, which rebuilds the page.
-  PORTAL="$KIT/.kit/portal.html"
-  [ -f "$PORTAL" ] || PORTAL="$KIT/tools/portal.html"
+  PORTAL="$DATA/.kit/portal.html"
+  [ -f "$PORTAL" ] || PORTAL="$APP/tools/portal.html"
   KARGS=(--port "$LIB_PORT" --customIndex "$PORTAL" --threads 4)
   "$KIWIX" --help 2>&1 | grep -q -- --skipInvalid && KARGS+=(--skipInvalid)
-  : > "$KIT/logs/kiwix-serve.log"
+  : > "$DATA/logs/kiwix-serve.log"
   start_library "$HOST"
   say "  Starting library (${#ZIMS[@]} books)..."
 fi
@@ -278,13 +284,13 @@ elif [ -n "$LLAMA" ] && [ ${#MODELS[@]} -gt 0 ]; then
   if taken "$AI_PORT"; then
     p="$(free_port "$AI_PORT")"; say "  Another program is using port $AI_PORT, so the AI uses $p."; AI_PORT="$p"
   fi
-  PRESET="$KIT/.kit/presets.ini"
+  PRESET="$DATA/.kit/presets.ini"
   printf 'version = 1\n\n[%s]\nload-on-startup = true\n' "$MODEL" > "$PRESET"
   # AI chat is llama-server's own page, so it gets Ask's safety rules as its default system message. An environment
   # variable, not a flag: a llama-server too old to know it ignores it instead of refusing to start.
-  [ -f "$KIT/tools/ai-chat.json" ] && export LLAMA_ARG_UI_CONFIG_FILE="$KIT/tools/ai-chat.json"
-  "$LLAMA" --models-dir "$KIT/models" --models-preset "$PRESET" --models-max 1 -c "$CTX" \
-    --host "$HOST" --port "$AI_PORT" --cors-origins "$CORS" > "$KIT/logs/llama-server.log" 2>&1 &
+  [ -f "$APP/tools/ai-chat.json" ] && export LLAMA_ARG_UI_CONFIG_FILE="$APP/tools/ai-chat.json"
+  "$LLAMA" --models-dir "$DL/models" --models-preset "$PRESET" --models-max 1 -c "$CTX" \
+    --host "$HOST" --port "$AI_PORT" --cors-origins "$CORS" > "$DATA/logs/llama-server.log" 2>&1 &
   AI_PID=$!; PIDS+=($!)
   say "  Starting AI (loading $MODEL)..."
 fi
@@ -292,35 +298,35 @@ fi
 # --- maps: tiles, address search, directions
 newest() { local f last=""; for f in "$@"; do [ -f "$f" ] && last="$f"; done; printf '%s' "$last"; }  # sync keeps one copy
 MAPS_STARTED=""
-if [ "$NO_MAPS" = 0 ] && [ -d "$KIT/maps" ]; then
+if [ "$NO_MAPS" = 0 ] && [ -d "$DL/maps" ]; then
   PMTILES="$(pick_bin pmtiles pmtiles)"
   JAVA="$(pick_bin java java)"
-  PHOTON_JAR="$(newest "$KIT"/bin/photon/photon-*.jar)"
-  GH_JAR="$(newest "$KIT"/bin/graphhopper/graphhopper-web-*.jar)"
+  PHOTON_JAR="$(newest "$DL"/bin/photon/photon-*.jar)"
+  GH_JAR="$(newest "$DL"/bin/graphhopper/graphhopper-web-*.jar)"
   # Java looks up this computer's name as it starts (the address search's logging does). On a Mac, looking up
   # name.local asks to "find devices on local networks" unless the kit started from Terminal, so Java gets a hosts
   # file of its own that answers that name, and needs no other: every map server listens on 127.0.0.1.
   JOPTS=()
   if [ -n "$JAVA" ] && [ "$(uname -s)" = Darwin ]; then
     n="$(hostname)" s="$(scutil --get LocalHostName 2>/dev/null)"
-    printf '127.0.0.1 localhost %s %s%s\n::1 localhost\n' "$n" "${n%%.*}" "${s:+ $s.local}" > "$KIT/.kit/java-hosts"
-    JOPTS=("-Djdk.net.hosts.file=$KIT/.kit/java-hosts")
+    printf '127.0.0.1 localhost %s %s%s\n::1 localhost\n' "$n" "${n%%.*}" "${s:+ $s.local}" > "$DATA/.kit/java-hosts"
+    JOPTS=("-Djdk.net.hosts.file=$DATA/.kit/java-hosts")
   fi
   # pmtiles answers /basemap.json, the TileJSON that says it is up, only when it has a --public-url
-  if [ -n "$PMTILES" ] && [ -f "$KIT/maps/tiles/basemap.pmtiles" ] && ! up "http://127.0.0.1:$TILES_PORT/basemap.json"; then
-    "$PMTILES" serve "$KIT/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors "$CORS" \
-      --public-url "http://$HOST:$TILES_PORT" > "$KIT/logs/tiles.log" 2>&1 &
+  if [ -n "$PMTILES" ] && [ -f "$DL/maps/tiles/basemap.pmtiles" ] && ! up "http://127.0.0.1:$TILES_PORT/basemap.json"; then
+    "$PMTILES" serve "$DL/maps/tiles" --port "$TILES_PORT" --interface "$HOST" --cors "$CORS" \
+      --public-url "http://$HOST:$TILES_PORT" > "$DATA/logs/tiles.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED map"
   fi
-  if [ -n "$JAVA" ] && [ -n "$PHOTON_JAR" ] && [ -d "$KIT/maps/geocoder/photon_data" ] && ! up "http://127.0.0.1:$GEO_PORT/status"; then
-    "$JAVA" "${JOPTS[@]}" "-Xmx$GEO_HEAP" -jar "$PHOTON_JAR" serve -data-dir "$KIT/maps/geocoder" -listen-ip "$HOST" \
-      -listen-port "$GEO_PORT" -cors-origin "$CORS" > "$KIT/logs/geocoder.log" 2>&1 &
+  if [ -n "$JAVA" ] && [ -n "$PHOTON_JAR" ] && [ -d "$DL/maps/geocoder/photon_data" ] && ! up "http://127.0.0.1:$GEO_PORT/status"; then
+    "$JAVA" "${JOPTS[@]}" "-Xmx$GEO_HEAP" -jar "$PHOTON_JAR" serve -data-dir "$DL/maps/geocoder" -listen-ip "$HOST" \
+      -listen-port "$GEO_PORT" -cors-origin "$CORS" > "$DATA/logs/geocoder.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED address-search"
   fi
-  if [ -n "$JAVA" ] && [ -n "$GH_JAR" ] && [ -f "$KIT/maps/routing/graph-cache/properties" ] && ! up "http://127.0.0.1:$ROUTE_PORT/health"; then
-    (cd "$KIT/maps/routing" && exec "$JAVA" "${JOPTS[@]}" "-Xmx$ROUTE_HEAP" \
+  if [ -n "$JAVA" ] && [ -n "$GH_JAR" ] && [ -f "$DL/maps/routing/graph-cache/properties" ] && ! up "http://127.0.0.1:$ROUTE_PORT/health"; then
+    (cd "$DL/maps/routing" && exec "$JAVA" "${JOPTS[@]}" "-Xmx$ROUTE_HEAP" \
       "-Ddw.server.application_connectors[0].bind_host=$HOST" "-Ddw.server.application_connectors[0].port=$ROUTE_PORT" \
-      -jar "$GH_JAR" server gh-serve.yml) > "$KIT/logs/routing.log" 2>&1 &
+      -jar "$GH_JAR" server gh-serve.yml) > "$DATA/logs/routing.log" 2>&1 &
     PIDS+=($!); MAPS_STARTED="$MAPS_STARTED directions"
   fi
   [ -n "$MAPS_STARTED" ] && say "  Starting maps:$MAPS_STARTED (address search and directions take up to a minute)..."
@@ -343,7 +349,7 @@ if [ "$SHARE" = 1 ]; then
     fi
     GARGS=(--root "$KIT" --port "$SHARE_PORT" --library "$LIB_PORT" --ai "$AI_PORT")
     [ "$NO_MAPS" = 0 ] && GARGS+=(--tiles "$TILES_PORT" --geocoder "$GEO_PORT" --routing "$ROUTE_PORT")
-    "$PY" "$KIT/tools/share.py" serve "${GARGS[@]}" > "$KIT/logs/share.log" 2>&1 &
+    "$PY" "$APP/tools/share.py" serve "${GARGS[@]}" > "$DATA/logs/share.log" 2>&1 &
     GATE_PID=$!; PIDS+=($!)
   fi
 fi
@@ -383,22 +389,22 @@ URL="http://$LIB_AT:$LIB_PORT/?model=$MODEL&ai=$AI_PORT"
 say ""
 if [ "$LIB_OK" = 1 ]; then say "  Library:  ready"
 else
-  why="$(grep ERROR "$KIT/logs/kiwix-serve.log" 2>/dev/null | tail -1)"
-  say "  Library:  NOT running${why:+: ${why#*ERROR: }} (see logs/kiwix-serve.log)"
+  why="$(grep ERROR "$DATA/logs/kiwix-serve.log" 2>/dev/null | tail -1)"
+  say "  Library:  NOT running${why:+: ${why#*ERROR: }} (see data/logs/kiwix-serve.log)"
 fi
 if [ "$AI_OK" = 1 ]; then say "  AI:       ready (the first answer takes longer while the model loads)"
 elif [ ${#MODELS[@]} -eq 0 ]; then say "  AI:       off (no models). The library still works."
-else say "  AI:       NOT running (see logs/llama-server.log). The library still works."; fi
+else say "  AI:       NOT running (see data/logs/llama-server.log). The library still works."; fi
 say ""
 say "  Open:     $URL"
 say "  AI chat:  http://127.0.0.1:$AI_PORT/"
 [ -n "$MAPS_STARTED" ] && say "  Maps:     on the Map tab of the page above"
 say ""
 if [ "$SHARE_OK" = 1 ]; then
-  "$PY" "$KIT/tools/share.py" banner --root "$KIT" --port "$SHARE_PORT"
+  "$PY" "$APP/tools/share.py" banner --root "$KIT" --port "$SHARE_PORT"
   say ""
 elif [ -n "$GATE_PID" ]; then
-  say "  Sharing:  NOT running (see logs/share.log)"; say ""
+  say "  Sharing:  NOT running (see data/logs/share.log)"; say ""
 fi
 say "  Keep this window open. Close it or press Ctrl-C to stop everything."
 
