@@ -2,12 +2,13 @@
 # a person double-clicking it would answer. A kit is three folders: app (the code), downloads and data. First onto
 # this PC (~\TinfoilKit) from the website's download (TinfoilKit\app): the try-it kit, with a small real map
 # (Andorra's tiles), then SETUP again for the rest (the kit builder's questions, the map's roads and address search
-# with the real map programs), SETUP in a new download, which must update that kit rather than set up another, the
-# kit turned into one from before the three folders, which SETUP --updated (what an old SETUP runs after kit update)
-# must move back into them, and --home-server, which must share it on the home network, behind the access code, and
-# set it to start as you sign in. Then onto an exFAT drive from GitHub's Download ZIP (all in one folder), and onto
-# the drive again with the one command an AI hands over (--drive, --yes and more) and the same again for the rest,
-# which must ask nothing.
+# with the real map programs), SETUP in a new download with the kit's app folder deleted, which must put the new one
+# in that kit and update it rather than set up another, the kit turned into one from before the three folders, which
+# SETUP --updated (what an old SETUP runs after kit update) must move back into them, and --home-server, which must
+# share it on the home network, behind the access code, and set it to start as you sign in. UNINSTALL-Windows.bat in
+# an app folder with other things beside it must delete nothing. Then onto an exFAT drive from GitHub's Download ZIP
+# (all in one folder), and onto the drive again with the one command an AI hands over (--drive, --yes and more) and
+# the same again for the rest, which must ask nothing.
 # Each time Open Tinfoil Kit for Windows.bat must serve the library, the AI and any map, and UNINSTALL-Windows.bat
 # must remove it all. Last, Open Tinfoil Kit for Windows.bat --share on a kit with no SETUP, on this PC's own Python.
 # With -Drive, it plugs in the drive the Mac made (tests\work\drive.vhd) instead, starts the kit on it with a
@@ -215,19 +216,24 @@ Step "SETUP-Windows.bat again in ~\TinfoilKit, for the rest: what goes in it (Re
 # Answers: keep where it's for, Recommended, how much if room is short, download, don't open it, close.
 $answers = @("", "") + @(Get-RoomAnswer $kit $kit) + @("y", "n", "")
 Invoke-Setup $kit "setup-windows-rest.log" $answers
-Test-Said "setup-windows-rest.log" "SETUP" "What goes in the kit?", "Step 2 of 3: the rest of the kit", "All set"
+Test-Said "setup-windows-rest.log" "SETUP" "What goes in the kit?", "Step 2 of 3: the rest of the kit", "All set",
+  "Beside it, downloads holds what the kit downloaded"
 foreach ($f in "maps\routing\graph-cache\properties", "maps\geocoder\photon_data") {
   if (-not (Test-Path "$kit\downloads\$f")) { Fail "SETUP didn't make downloads\$f (logs\setup-windows-rest.log)" }
 }
 if (Test-Path "$kit\downloads\models\Two") { Fail "the try-it kit's sample AI is still there after the rest" }
 Test-Layout $kit "the kit"
 Test-Kit $kit "this PC"
-Step "SETUP-Windows.bat in a new download: it finds the kit on this PC and updates that one"
-Get-Kit $dl
+Step "SETUP-Windows.bat in a new download, with the kit's app folder deleted: it finds the kit on this PC, puts the new app folder in it, and updates it"
+Get-Kit $dl -Maps
+Remove-Item -Recurse -Force "$kit\app"
 # Answers: update the kit on this PC, keep where it's for, download, don't open it, close.
 Invoke-Setup $dl "setup-windows-update.log" @("y", "", "y", "n", "")
-Test-Said "setup-windows-update.log" "the update" @("There's a Tinfoil Kit on this PC already: $kit", "TINFOIL KIT UPDATE",
-  "To change that", "Step 3 of 3: start everything offline")
+Test-Said "setup-windows-update.log" "the update" @("There's a Tinfoil Kit on this PC already: $kit",
+  "without its app folder: this version's is in it now", "TINFOIL KIT UPDATE", "To change that",
+  "Step 3 of 3: start everything offline")
+Test-Layout $kit "the kit with the new app folder"
+if (Get-Item -LiteralPath "$kit\app\SETUP-Windows.bat" -Stream Zone.Identifier -ErrorAction SilentlyContinue) { Fail "the new app folder is still marked as from the internet" }
 Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
 Step "a kit from before the three folders, as an old SETUP's kit update leaves it: SETUP-Windows.bat --updated moves it into them"
 # Before, the code, what sync got and the person's own (their kit.json, logs and .kit) were all at the top, and
@@ -266,6 +272,18 @@ if (-not ($fit -match "has \d+ GB of memory")) { Fail "./kit fit can't tell this
 Step "UNINSTALL-Windows.bat --yes: the kit, its downloads and the Python SETUP got are gone"
 Invoke-Uninstall $kit "uninstall-windows-pc.log"
 if (Test-Path $startup) { Fail "UNINSTALL left the kit starting as you sign in ($startup)" }
+Step "UNINSTALL-Windows.bat in an app folder put in a folder with other things: it deletes nothing, then all of it once they're gone"
+$loose = "$HOME\Documents\Stuff"
+Get-Kit $loose
+Set-Content "$loose\notes.txt" "mine"
+$out = Invoke-Cmd "`"$loose\app\UNINSTALL-Windows.bat`" --yes" "uninstall-windows-loose.log" @("")
+Test-Said "uninstall-windows-loose.log" "UNINSTALL beside other things" "isn't in a folder of its own"
+if ($out -ne "exit 1" -or -not (Test-Path "$loose\notes.txt") -or -not (Test-Path "$loose\app\kit.cmd")) {
+  Fail "UNINSTALL deleted something in a folder with more than the kit ($out)"
+}
+Remove-Item "$loose\notes.txt"
+$out = Invoke-Cmd "`"$loose\app\UNINSTALL-Windows.bat`" --yes" "uninstall-windows-alone.log" @("")
+if (Test-Path $loose) { Fail "UNINSTALL left $loose, which held just the kit ($out)"; Get-Content "$logs\uninstall-windows-alone.log" -Tail 5 }
 
 Step "a 2 GB disk, formatted exFAT the way File Explorer does"
 $vhd = "$work\drive-windows.vhd"
@@ -281,13 +299,17 @@ $kit = "${letter}:\TinfoilKit"
 Set-Content "${letter}:\keep-me.txt" "mine"
 
 Step "SETUP-Windows.bat in GitHub's Download ZIP, all in one folder: the drive; it copies the kit there and gets the try-it kit"
-Get-Kit $flat -Flat
-$lines = @(python "$flat\tools\kit.py" --root $flat drives)
+# (where SETUP lists the drive, and what it asks about room there, from a website download with the same kit: any
+# kit command would put the one-folder download's code in its app folder first, which is SETUP's to do here)
+Get-Kit $dl
+$lines = @(python "$dl\app\tools\kit.py" --root $dl drives)
 $lines | ForEach-Object { "  $_" }
 $n = 1 + [array]::FindIndex([string[]]$lines, [Predicate[string]] { param($l) $l.StartsWith("${letter}:\") })
 if ($n -lt 1) { Fail "SETUP doesn't list the drive ${letter}:"; $n = 1 }
 # Answers: keep where it's for, an external drive, this one, how much if room is short, download, don't open it, close.
-$answers = @("", "1", "$n") + @(Get-RoomAnswer $flat $kit) + @("y", "n", "")
+$answers = @("", "1", "$n") + @(Get-RoomAnswer $dl $kit) + @("y", "n", "")
+Remove-Item -Recurse -Force $dl
+Get-Kit $flat -Flat
 Invoke-Setup $flat "setup-windows-drive.log" $answers
 if (-not (Test-Path "$kit\downloads\models\Two")) { Fail "the try-it kit isn't on the drive, at $kit" }
 if (Test-Path $flat) { Fail "the download is still in $flat after the move" }

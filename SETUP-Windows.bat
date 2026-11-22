@@ -45,7 +45,8 @@ if /i not "!CMDLN:/c =!"=="!CMDLN!" goto begin
 cd /d "%~dp0"
 set "APP=%CD%"
 set "KIT=%CD%"
-for %%d in ("%CD%") do if /i "%%~nxd"=="app" for %%p in ("%CD%\..") do set "KIT=%%~fp"
+rem (a git checkout is its own kit folder, even one called app)
+for %%d in ("%CD%") do if /i "%%~nxd"=="app" if not exist "%CD%\.git" for %%p in ("%CD%\..") do set "KIT=%%~fp"
 rem (out of app, so nothing holds it open while kit update replaces it)
 cd /d "%KIT%"
 set "NAME=TinfoilKit"
@@ -67,6 +68,17 @@ if not exist "%APP%\tools\kit.py" (
   echo(
   echo This is only part of Tinfoil Kit. If you opened the ZIP file, extract it first: right-click it, choose
   echo Extract All, then double-click SETUP-Windows.bat in the folder that makes.
+  call :finish 1
+)
+rem An app folder put on its own at the top of a drive or in the user folder, which hold more than the kit: it needs
+rem a folder of its own (kit.py won't use those either).
+set "LOOSE="
+if "%KIT:~3%"=="" set "LOOSE=1"
+if /i "%KIT%"=="%USERPROFILE%" set "LOOSE=1"
+if defined LOOSE (
+  echo(
+  echo The kit can't use !KIT! as its folder. Make a folder called %NAME% there, put the app folder in it, and
+  echo double-click SETUP-Windows.bat again.
   call :finish 1
 )
 rem Code that isn't in an app folder: a download with it all in one folder, or a kit from before the three folders,
@@ -243,7 +255,10 @@ echo Also in the app folder:
 echo   GUIDE.md               a short guide. Print it and keep it handy.
 echo   SETUP-Windows.bat      double-click it again whenever you want the newest AI models, books and maps (needs internet).
 echo   UNINSTALL-Windows.bat  removes the kit and everything it downloaded.
-start "" explorer.exe "%APP%"
+echo Beside it, downloads holds what the kit downloaded, and data your settings. A new version's app folder can
+echo replace this one any time: those two stay.
+rem (shows where it lives)
+start "" explorer.exe "%KIT%"
 if defined KIT_HOME_SERVER (call :home_server & call :finish 0)
 if defined KIT_SHARE call :share_home
 rem (nobody may be there to use it)
@@ -521,7 +536,6 @@ if not defined OTHER_KIT goto :eof
 rem (the home folder's name may not survive the trip through a file: cmd reads it in another code page)
 if "!OTHER_AT!"=="this PC" set "OTHER_KIT=%USERPROFILE%\%NAME%"
 call :setup_in "!OTHER_KIT!"
-if not exist "!THERE!" goto :eof
 set "WHEN="
 if not "!OTHER_WHEN!"=="-" set "WHEN=, last updated !OTHER_WHEN!"
 echo(
@@ -531,6 +545,11 @@ call :ask "Update it?" && goto other_kit_update
 echo Then this sets up another kit.
 goto :eof
 :other_kit_update
+rem (one whose app folder was deleted, for a new version's, gets a copy of this one: kit place says so)
+if not exist "!THERE!" (
+  "%PY%" "%APP%\tools\kit.py" --root "%KIT%" place "!OTHER_KIT!" > "%OUT%" || call :finish 1
+  call :setup_in "!OTHER_KIT!"
+)
 del "%OUT%" 2>nul & cd /d "!OTHER_KIT!" & call "!THERE!" & exit
 
 :place
@@ -764,6 +783,7 @@ if not exist "%OLD_APP%\SETUP-Windows.bat" goto :eof
 if "%OLD:~3%"=="" goto :eof
 if /i "%OLD%"=="%USERPROFILE%" goto :eof
 if /i "%OLD%"=="%KIT%" goto :eof
+call :alone "%OLD%" || goto :eof
 rd /s /q "%OLD%" 2>nul
 if exist "%OLD%\" (
   echo The download it came from is still in !OLD!. You can delete it.
@@ -780,6 +800,15 @@ rem the app folder, which that SETUP moves into one).
 set "THERE=%~1\app\SETUP-Windows.bat"
 if not exist "!THERE!" set "THERE=%~1\SETUP-Windows.bat"
 goto :eof
+
+rem Whether the folder %1 holds just the kit, so it can go whole: app, downloads, data, and what computers leave in
+rem any folder (alone in kit.py). errorlevel 1 when something else is there too.
+:alone
+for /f "eol=: delims=" %%f in ('dir /b /a "%~1" 2^>nul') do (
+  set "ENTRY=%%f"
+  if /i not "!ENTRY!"=="app" if /i not "!ENTRY!"=="downloads" if /i not "!ENTRY!"=="data" if /i not "!ENTRY!"==".DS_Store" if /i not "!ENTRY!"=="desktop.ini" if /i not "!ENTRY!"=="Thumbs.db" if /i not "!ENTRY!"==".kit-write-test" if not "!ENTRY:~0,2!"=="._" exit /b 1
+)
+exit /b 0
 
 :kit
 "%PY%" "%APP%\tools\kit.py" --root "%KIT%" %*

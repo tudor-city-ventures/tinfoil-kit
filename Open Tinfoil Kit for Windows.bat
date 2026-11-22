@@ -10,7 +10,8 @@ rem person's own: their kit.json, logs and .kit). In a git checkout the code is 
 cd /d "%~dp0"
 set "APP=%CD%"
 set "KIT=%CD%"
-for %%d in ("%CD%") do if /i "%%~nxd"=="app" for %%p in ("%CD%\..") do set "KIT=%%~fp"
+rem (a git checkout is its own kit folder, even one called app)
+for %%d in ("%CD%") do if /i "%%~nxd"=="app" if not exist "%CD%\.git" for %%p in ("%CD%\..") do set "KIT=%%~fp"
 set "DL=%KIT%\downloads"
 set "DATA=%KIT%\data"
 rem (a kit from before the three folders, which its next SETUP moves into them, still starts)

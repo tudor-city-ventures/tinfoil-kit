@@ -9,10 +9,11 @@ cd /d "%TEMP%"
 "%TEMP%\tinfoilkit-uninstall.bat" --from-temp "%~dp0." %1
 
 :start
-rem The kit's folder: the one above the app folder this was in (in a git checkout, this folder itself).
+rem The kit's folder: the one above the app folder this was in (in a git checkout, even one called app, this
+rem folder itself).
 set "APP=%~f2"
 set "KIT=%~f2"
-for %%d in ("%~f2") do if /i "%%~nxd"=="app" for %%p in ("%~f2\..") do set "KIT=%%~fp"
+for %%d in ("%~f2") do if /i "%%~nxd"=="app" if not exist "%~f2\.git" for %%p in ("%~f2\..") do set "KIT=%%~fp"
 set "YES=" & if /i "%~3"=="--yes" set "YES=1"
 title Remove Tinfoil Kit
 echo(
@@ -31,6 +32,19 @@ if not defined OK (
   echo This folder ^(!KIT!^) doesn't look like a Tinfoil Kit, so nothing was deleted.
   goto finish1
 )
+rem It goes whole when it holds just the kit (a git checkout, a kit from before the app folder, and one named TinfoilKit
+rem do too). An app folder put somewhere on its own, like the Desktop, has other things beside it, which aren't the kit's.
+set "OTHER="
+for %%d in ("%KIT%") do set "KIT_NAME=%%~nxd"
+if /i not "%KIT%"=="%APP%" if /i not "!KIT_NAME!"=="TinfoilKit" for /f "eol=: delims=" %%f in ('dir /b /a "%KIT%" 2^>nul') do (
+  set "ENTRY=%%f"
+  if /i not "!ENTRY!"=="app" if /i not "!ENTRY!"=="downloads" if /i not "!ENTRY!"=="data" if /i not "!ENTRY!"==".DS_Store" if /i not "!ENTRY!"=="desktop.ini" if /i not "!ENTRY!"=="Thumbs.db" if /i not "!ENTRY!"==".kit-write-test" if not "!ENTRY:~0,2!"=="._" set "OTHER=1"
+)
+if defined OTHER (
+  echo This app folder isn't in a folder of its own: !KIT! has other things in it, so nothing was deleted.
+  echo Delete the app folder yourself, and the downloads and data folders beside it if they're the kit's.
+  goto finish1
+)
 
 set "TK=%KIT%"
 set "DRIVE=" & set "WHERE=from this PC"
@@ -44,7 +58,7 @@ set "SIZE=under 1 GB"
 for /f %%g in ('powershell -NoProfile -Command "[math]::Round((Get-ChildItem -LiteralPath $env:TK -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1e9)" ^<nul 2^>nul') do if %%g geq 1 set "SIZE=%%g GB"
 echo(
 echo This deletes Tinfoil Kit !WHERE!: the folder !KIT!,
-echo with the AI models, books, maps and programs it downloaded (!SIZE! in all).
+echo with the AI models, books, maps and programs it downloaded, and your settings (!SIZE! in all).
 echo It can't be undone. The files don't go to the Recycle Bin.
 if defined DRIVE echo Nothing else on the drive is touched.
 if defined YES goto delete
