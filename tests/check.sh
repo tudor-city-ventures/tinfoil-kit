@@ -37,8 +37,11 @@ else
   echo "skipped (not a git checkout)"
 fi
 
-step "Windows launcher keeps CRLF"
-run python3 -c "import sys; d=open('START-HERE-Windows.bat','rb').read(); sys.exit(d.count(b'\n') != d.count(b'\r\n'))"
+step "Windows scripts keep CRLF and plain ASCII (cmd misreads anything else)"
+run python3 -c "
+import glob, sys
+bad = [f for f in glob.glob('*.bat') for d in [open(f, 'rb').read()] if d.count(b'\n') != d.count(b'\r\n') or not d.isascii()]
+sys.exit(f'not CRLF and ASCII: {bad}' if bad else 0)"
 
 step "page script parses"
 run node -e '

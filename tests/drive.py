@@ -2,6 +2,7 @@
 
   drive.py check LIB_PORT AI_PORT   wait for the kit's library and AI, then search a book and get an answer
   drive.py vhd IMAGE                add a VHD footer to a raw disk image, so Windows can mount the drive a Mac made
+  drive.py kitjson FILE             write the test kit's kit.json, as the website's builder makes one
 """
 import json
 import struct
@@ -9,6 +10,7 @@ import sys
 import time
 import uuid
 import urllib.request
+from pathlib import Path
 
 # A Windows console can't print every character a tiny test model makes up.
 sys.stdout.reconfigure(errors="backslashreplace")
@@ -54,6 +56,18 @@ def check_kit(lib, ai):
         check("AI answers", False, str(e))
 
 
+def kit_json(out):
+    """The test kit: the real Mac, Windows and Linux programs (no maps), the tiny model and two test books."""
+    tests = Path(__file__).resolve().parent
+    t = json.loads((tests / "drive_kit.json").read_text(encoding="utf-8"))
+    k = json.loads((tests.parent / "kit.json").read_text(encoding="utf-8"))
+    t["runtimes"] = [r for r in k["runtimes"] if not r.get("requires")]
+    t["models"] = [m for m in t["models"] if m["id"] == "Tiny"]
+    t["library"] = [z for z in t["library"] if z["zim"] in ("testmed_en_all_maxi", "testsurvival_en")]
+    t["settings"].update(library_port=8888, ai_port=8080)
+    Path(out).write_text(json.dumps(t, indent=2), encoding="utf-8")
+
+
 def chs(total_sectors):
     """Disk geometry, as the VHD format specifies it."""
     total_sectors = min(total_sectors, 65535 * 16 * 255)
@@ -97,5 +111,8 @@ if __name__ == "__main__":
         sys.exit(1 if fails else 0)
     if sys.argv[1:2] == ["vhd"] and len(sys.argv) == 3:
         add_vhd_footer(sys.argv[2])
+        sys.exit(0)
+    if sys.argv[1:2] == ["kitjson"] and len(sys.argv) == 3:
+        kit_json(sys.argv[2])
         sys.exit(0)
     sys.exit(__doc__)

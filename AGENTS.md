@@ -40,7 +40,7 @@ Visual changes to the page or the site come with screenshots.
 - `tools/kit.py`: Python 3.9+ (what macOS's command line tools install), standard library only, all HTTP through curl.
 - Bash must run on macOS's bash 3.2: no `mapfile`, no `set -u` with empty arrays.
 - No symlinks anywhere: drives are exFAT.
-- `START-HERE-Windows.bat` keeps CRLF line endings.
+- `.bat` files keep CRLF line endings and plain ASCII.
 - Every remote endpoint stays overridable by a `KIT_*` env var (see `tests/env.sh`), so tests can point at mocks.
 - Workflows: actions pinned to a full commit SHA with the version as a comment, read-only tokens except the jobs `WRITES` lists in `tests/actions_test.py`, values into `run:` and `script:` only through `env:`, GitHub's runners only, no secrets, and `pull_request_target` only in `pr-gate.yml`, which never touches the pull request's code. The quick gate checks it.
 - Delete an old version only after the new one verifies.

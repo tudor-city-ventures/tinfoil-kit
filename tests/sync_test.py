@@ -787,6 +787,32 @@ server.serve_forever()
         except RuntimeError:
             refused = True
         check(f"unzip in Python refuses a path outside the folder: {bad}", refused and not (work / "escape.txt").exists())
+    # A Mac's or Linux PC's programs come with links, which exFAT can't hold: set up from Windows, they're copies.
+    with tarfile.open(ex / "links.tar.gz", "w:gz") as tf:
+        for name, kind, target in (("lib/libfoo.dylib", tarfile.SYMTYPE, "libfoo.1.dylib"),    # a link to a link
+                                   ("lib/libfoo.1.dylib", tarfile.SYMTYPE, "libfoo.1.2.dylib"),
+                                   ("lib/libfoo.1.2.dylib", tarfile.REGTYPE, ""),
+                                   ("lib/hard.dylib", tarfile.LNKTYPE, "lib/libfoo.1.2.dylib"),
+                                   ("legal", tarfile.SYMTYPE, "lib"),    # a folder
+                                   ("out", tarfile.SYMTYPE, "../../outside.txt"), ("abs", tarfile.SYMTYPE, "/etc/passwd"),
+                                   ("loop", tarfile.SYMTYPE, ".")):
+            ti = tarfile.TarInfo(name)
+            ti.type, ti.linkname = kind, target
+            ti.size = 3 if kind == tarfile.REGTYPE else 0
+            tf.addfile(ti, io.BytesIO(b"lib") if kind == tarfile.REGTYPE else None)
+    kp.untar_py(ex / "links.tar.gz", ex / "l", "gz")
+    copies = [ex / "l" / n for n in ("lib/libfoo.dylib", "lib/libfoo.1.dylib", "lib/hard.dylib", "legal/libfoo.dylib")]
+    check("untar in Python: links become copies, of a link and of a folder too",
+          all(p.exists() and p.read_bytes() == b"lib" and not p.is_symlink() for p in copies)
+          and not any(os.path.lexists(ex / "l" / n) for n in ("out", "abs", "loop")), sorted(map(str, (ex / "l").rglob("*"))))
+    with zipfile.ZipFile(ex / "links.zip", "w") as z:
+        z.writestr("bin/llama-server", b"prog")
+        info = zipfile.ZipInfo("bin/llama")
+        info.external_attr = 0o120777 << 16
+        z.writestr(info, "llama-server")
+    kp.unzip_py(ex / "links.zip", ex / "lz")
+    check("unzip in Python: a link becomes a copy",
+          (ex / "lz/bin/llama").read_bytes() == b"prog" and not (ex / "lz/bin/llama").is_symlink())
     path = os.environ["PATH"]
     try:
         os.environ["PATH"] = str(ex / "empty")    # no unzip or tar: the Python fallback takes over

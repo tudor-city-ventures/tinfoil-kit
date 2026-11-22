@@ -1,12 +1,20 @@
 name: drive test
-# The kit on a real exFAT disk: set up on a Mac, then plugged into Windows and Linux (tests/drive_test.sh).
+# The kit on a real exFAT disk: set up on a Mac, then plugged into Windows and Linux (tests/drive_test.sh). And set
+# up on Windows from a download, onto the PC and onto a drive (tests/drive_windows.ps1).
 # By hand (Actions > drive test > Run workflow) once the bulk of a change is done. Nightly and on pushes only when
 # something it covers changed (the changes job), so site edits never start it. Pushes start it only once the
 # repo is public, since Mac minutes cost money while it's private.
+run-name: drive test${{ inputs.only == 'windows-setup' && ', Windows setup only' || '' }}
 on:
   schedule:
     - cron: "17 9 * * *"
   workflow_dispatch:
+    inputs:
+      only:
+        description: Run just one part (windows-setup skips the Mac, so it costs no Mac minutes)
+        type: choice
+        options: [all, windows-setup]
+        default: all
   push:
     branches: [main]
 concurrency:    # per event too, so a push run whose jobs are skipped can't cancel a run in progress
@@ -36,12 +44,12 @@ jobs:
         run: |
           case "$EVENT" in
             push) base="$BEFORE" ;;
-            schedule) base="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/drive.yml/runs?status=success&per_page=1" \
-                                -q '.workflow_runs[0].head_sha')" || base="" ;;
+            schedule) base="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/drive.yml/runs?status=success&per_page=30" \
+                                -q '[.workflow_runs[] | select(.display_title | contains("only") | not)][0].head_sha')" || base="" ;;
             *) base="" ;;    # by hand: always
           esac
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2> /dev/null &&
-             git diff --quiet "$base" HEAD -- tools kit kit.json SETUP.command START-HERE.command START-HERE-Windows.bat UNINSTALL.command \
+             git diff --quiet "$base" HEAD -- tools kit kit.json SETUP.command START-HERE.command UNINSTALL.command '*.bat' \
                'tests/drive*' tests/build_fixtures.sh tests/env.sh tests/mock_remote.py tests/ui_test.py .github/workflows/drive.yml
           then
             echo "Nothing the drive test covers changed since $base, so it doesn't run."
@@ -77,6 +85,7 @@ jobs:
 
   mac:
     needs: fixtures
+    if: inputs.only != 'windows-setup'
     runs-on: macos-26
     timeout-minutes: 30
     outputs:
@@ -162,6 +171,30 @@ jobs:
         with:
           name: windows-screenshots
           path: tests/work/shots
+
+  windows-setup:
+    needs: fixtures
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v5
+        with:
+          name: mock-internet
+          path: tests/work/remote
+      - name: Unzip the kit in Downloads, double-click SETUP-Windows.bat, START-HERE-Windows.bat, UNINSTALL-Windows.bat
+        shell: pwsh
+        run: tests/drive_windows.ps1
+      - if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: windows-setup-logs
+          path: tests/work/logs
 
   linux:
     needs: mac
