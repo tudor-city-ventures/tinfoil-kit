@@ -22,3 +22,4 @@ node_modules/
 site/.next/
 site/out/
 site/.claude/
+.claude/settings.local.json

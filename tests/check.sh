@@ -88,6 +88,11 @@ out=$(python3 tests/actions_test.py 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
 [ $rc -eq 0 ] || fail=1
 
+step "what AI agents read names only commands and options that exist"
+out=$(python3 tests/skills_test.py 2>&1); rc=$?
+echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1
+[ $rc -eq 0 ] || fail=1
+
 step "sync engine against the mock internet"
 out=$(python3 tests/sync_test.py 2>&1); rc=$?
 echo "$out" | grep -E "^FAIL" ; echo "$out" | tail -1

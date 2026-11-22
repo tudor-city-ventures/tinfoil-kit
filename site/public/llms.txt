@@ -57,6 +57,7 @@ What's in the folder:
     │   ├── Open Tinfoil Kit for Windows.bat
     │   ├── UNINSTALL-Windows.bat
     │   ├── GUIDE.md                  the printable guide
+│   ├── .claude/skills/           how-tos for AI agents: set up, update, change, check, share, remove
     │   ├── kit, kit.cmd              the kit's command line (kit.cmd on Windows)
     │   └── kit.json, tools/          the standard list of downloads, and the code
     ├── downloads/                    everything sync downloads
@@ -295,5 +296,6 @@ Project NOMAD (Crosstalk Solutions, Apache-2.0, https://github.com/Crosstalk-Sol
 - README: https://github.com/tudor-city-ventures/tinfoil-kit#readme
 - GUIDE.md: the printable guide, in the kit's app folder
 - THIRD-PARTY.md: every model, book, map and program, and its license
+- Skills for AI agents, one for each job, with the exact commands: tinfoil-install, tinfoil-update, tinfoil-data, tinfoil-status, tinfoil-home-server and tinfoil-uninstall, in .claude/skills in the kit's app folder and at https://github.com/tudor-city-ventures/tinfoil-kit/tree/main/.claude/skills
 - AGENTS.md: rules for changing the kit's own code
 - Bugs and ideas: https://github.com/tudor-city-ventures/tinfoil-kit/issues

@@ -84,6 +84,7 @@ TinfoilKit/
 │   ├── Open Tinfoil Kit for Windows.bat
 │   ├── UNINSTALL-Windows.bat
 │   ├── GUIDE.md                  the printable guide
+│   ├── .claude/skills/           how-tos for AI agents: set up, update, change, check, share, remove
 │   ├── kit, kit.cmd              the kit's command line (kit.cmd on Windows)
 │   └── kit.json, tools/          the standard list of downloads, and the code
 ├── downloads/                    everything the kit downloads
