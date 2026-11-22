@@ -90,7 +90,7 @@ function Test-Share($kit, $address, $code) {
   }
 }
 
-# Double-click Open Tinfoil Kit for Windows.bat, check the library and the AI, stop it. -Share: with --share, which needs Python
+# Double-click Open Tinfoil Kit for Windows.bat, check the library, the AI and any map, stop it. -Share: with --share, which needs Python
 # and gets this PC's own when SETUP's isn't there.
 function Test-Kit($kit, $name, [switch]$Share) {
   if ($Share) {
@@ -104,9 +104,10 @@ function Test-Kit($kit, $name, [switch]$Share) {
   if ($LASTEXITCODE -ne 0) {
     Fail "the kit $name after a double-click"
     netstat -ano | Select-String "LISTENING" | Select-String ":8[0-9]{3} "
-    foreach ($f in "kiwix-serve.log", "llama-server.log") { "--- $f"; Get-Content "$kit\logs\$f" -Tail 15 -ErrorAction SilentlyContinue }
+    foreach ($f in "kiwix-serve.log", "llama-server.log", "tiles.log", "geocoder.log", "routing.log") {
+      if (Test-Path "$kit\logs\$f") { "--- $f"; Get-Content "$kit\logs\$f" -Tail 15 }
+    }
   }
-  if (Test-Path "$kit\maps\routing") { Test-Map $kit }
   if ($Share) {
     for ($i = 0; $i -lt 60 -and -not (Test-Path "$kit\.kit\share.json"); $i++) { Start-Sleep 1 }    # the gate makes the code
     $ip = python -c "import sys; sys.path.insert(0, sys.argv[1]); import share; print(share.lan_ips()[0])" "$kit\tools"
@@ -114,26 +115,6 @@ function Test-Kit($kit, $name, [switch]$Share) {
   }
   Stop-Kit $kit $p
   Copy-Item -Recurse "$kit\logs" "$logs\$($name -replace '\W', '-')-logs" -ErrorAction SilentlyContinue
-}
-
-# The map servers Open Tinfoil Kit for Windows.bat started: street-level tiles, and directions across Andorra. There's no
-# small real address database to test Photon with, so the test kit's Photon is a stand-in that Java must have tried.
-function Test-Map($kit) {
-  try {
-    $tj = Invoke-RestMethod http://127.0.0.1:8090/basemap.json -TimeoutSec 10
-    $tile = Invoke-WebRequest http://127.0.0.1:8090/basemap/5/16/11.mvt -TimeoutSec 10 -UseBasicParsing
-    "PASS  map tiles: zoom $($tj.minzoom) to $($tj.maxzoom), and a street-level tile ($($tile.RawContentLength) bytes)"
-  } catch { Fail "map tiles: $_"; Get-Content "$kit\logs\tiles.log" -Tail 15 -ErrorAction SilentlyContinue }
-  $route = $null
-  for ($i = 0; $i -lt 60 -and -not $route; $i++) {
-    try { $route = Invoke-RestMethod "http://127.0.0.1:8989/route?point=42.5063,1.5218&point=42.5345,1.5803&profile=car&points_encoded=false" -TimeoutSec 10 }
-    catch { Start-Sleep 2 }
-  }
-  if ($route -and $route.paths[0].distance -gt 0) {
-    "PASS  directions across Andorra: $([math]::Round($route.paths[0].distance)) m in $($route.paths[0].instructions.Count) steps"
-  } else { Fail "directions didn't answer"; Get-Content "$kit\logs\routing.log" -Tail 20 -ErrorAction SilentlyContinue }
-  if (Select-String -Quiet -Path "$kit\logs\geocoder.log" -Pattern "jarfile") { "PASS  address search: Java ran Photon's jar" }
-  else { Fail "Open Tinfoil Kit didn't start Photon"; Get-Content "$kit\logs\geocoder.log" -Tail 10 -ErrorAction SilentlyContinue }
 }
 
 function Invoke-Uninstall($kit, $log) {
@@ -259,7 +240,7 @@ Invoke-Uninstall $kit "uninstall-windows-drive.log"
 if (-not (Test-Path "${letter}:\keep-me.txt")) { Fail "UNINSTALL deleted something else on the drive" }
 Dismount-DiskImage -ImagePath $vhd | Out-Null
 
-Step "the map: ./kit sync builds Andorra's with the real pmtiles, Java and GraphHopper for Windows"
+Step "the map: ./kit sync builds Andorra's with the real pmtiles, Java, Photon and GraphHopper for Windows"
 Get-Kit $dl
 python "$tests\drive.py" kitjson "$dl\kit.json" maps
 Get-ChildItem -Recurse -File $dl | Unblock-File    # no SETUP here to do it, and Open Tinfoil Kit starts with a double-click
@@ -270,6 +251,9 @@ Get-Content "$logs\sync-windows-map.log" | Select-String "map|road|GraphHopper|a
 foreach ($f in "maps\tiles\basemap.pmtiles", "maps\routing\graph-cache\properties", "maps\geocoder\photon_data") {
   if (-not (Test-Path "$dl\$f")) { Fail "sync didn't make $f (logs\sync-windows-map.log)" }
 }
+python "$dl\tools\kit.py" --root $dl test *> "$logs\test-windows-map.log"    # what SETUP-Windows.bat checks last
+if ($LASTEXITCODE -ne 0) { Fail "./kit test with the map (logs\test-windows-map.log)" }
+Get-Content "$logs\test-windows-map.log" | Select-String "map|address|directions|FAIL" | ForEach-Object { $_.Line }
 Test-Kit $dl "the map" -Share
 Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
 

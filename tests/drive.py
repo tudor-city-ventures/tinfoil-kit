@@ -96,8 +96,8 @@ def check_kit(lib, ai):
 
 
 def check_map(page):
-    """The map the kit's page offers (window.KIT_MAPS), if any: the tile over home at street level, and directions,
-    from the servers this computer's own pmtiles and Java run. The test kit's map is Andorra (kitjson maps)."""
+    """The map the kit's page offers (window.KIT_MAPS), if any: the tile over home at street level, address search and
+    directions, from the servers this computer's own pmtiles and Java run. The test kit's map is Andorra (kitjson maps)."""
     m = re.search(r"window\.KIT_MAPS = (.*?);</script>", page, re.S)
     info = json.loads(m.group(1)) if m else {}
     if not info.get("available"):
@@ -115,6 +115,19 @@ def check_map(page):
               f"zoom {tj.get('minzoom')} to {tj.get('maxzoom')}, and the tile over {home['label']} ({len(tile)} bytes)")
     except (OSError, ValueError) as e:
         check("map tiles", False, str(e))
+    if info["services"]["geocoder"]:    # what's near home, then a search for it by name, as ./kit test does
+        geo, near = f"http://127.0.0.1:{ports['geocoder']}", f"lat={home['lat']}&lon={home['lon']}"
+        try:
+            found = json.loads(wait_for(f"{geo}/reverse?{near}&radius=10&limit=1", 180) or "{}").get("features", [])
+            pr = found[0]["properties"] if found else {}
+            name = pr.get("name") or pr.get("street")
+            if name:
+                found = json.loads(fetch(f"{geo}/api?q={urllib.parse.quote(name)}&limit=1&{near}")).get("features", [])
+            pr = found[0]["properties"] if found else {}
+            check(f"address search near {home['label']}", bool(found),
+                  ", ".join(str(pr[k]) for k in ("name", "street", "city", "country") if pr.get(k)) or "nothing found")
+        except (OSError, ValueError) as e:
+            check(f"address search near {home['label']}", False, str(e))
     if info["services"]["routing"]:    # GraphHopper loads the roads first, which takes a while on a slow drive
         route = f"http://127.0.0.1:{ports['routing']}/route?point=42.5063,1.5218&point=42.5345,1.5803" \
                 f"&profile={info['profiles'][0]}&points_encoded=false"

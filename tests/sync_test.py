@@ -6,6 +6,7 @@ Needs only python3 and curl, so it runs in the quick gate and in cloud sessions.
 usage: python3 tests/sync_test.py
 """
 import base64
+import contextlib
 import hashlib
 import http.server
 import importlib.util
@@ -1345,6 +1346,25 @@ server.serve_forever()
     bare = next(r for r in kp.regions()["regions"] if "photon" not in r)
     check("maps: no address search item where nobody publishes one",
           not [i for i in kp.maps_items({"maps": {"enabled": True, "region": bare["id"]}}) if i["id"] == "geocoder"], bare["id"])
+    # ./kit test after just the essentials, as SETUP's first run does: an address search that isn't coming, or that
+    # comes later, isn't a failure
+    no_map = work / "no map yet"
+    no_map.mkdir()
+
+    def map_checks(place):
+        seen, out = [], io.StringIO()
+        with contextlib.redirect_stdout(out):
+            kp.test_maps(no_map, kp.maps_settings({"maps": {"enabled": True, "region": place}}),
+                         lambda name, ok, detail="": seen.append(name), [], no_map)
+        return seen, out.getvalue()
+    seen, out = map_checks(bare["id"])
+    check("test: no address search check where nobody publishes one",
+          "address search installed" not in seen and "SKIP  address search: nobody publishes one" in out, out)
+    seen, out = map_checks(wide["id"])
+    check("test: a continent's address search, which comes after the essentials, isn't missing yet",
+          "address search installed" not in seen and "SKIP  address search: not here yet" in out, out)
+    seen, out = map_checks("us/texas")
+    check("test: a place's own address search must be there", "address search installed" in seen, out)
     check("find_regions: a state's name", [r["id"] for r in kp.find_regions("New York")][:1] == ["us/new-york"])
     check("regions: every place's road data is a Geofabrik extract, with a home inside its box",
           all(kp.region_maps(r)["routing_osm_pbf"].startswith(kp.GEOFABRIK) and r["bbox"][0] <= r["home"]["lon"] <= r["bbox"][2]

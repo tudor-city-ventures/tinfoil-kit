@@ -24,6 +24,11 @@ mkdir -p "$L" "$SHOTS"
 FAILS=0
 fail() { echo "FAIL: $*"; FAILS=$((FAILS + 1)); }
 step() { echo; echo "=== $*"; }
+# The end of the kit's own logs, after a check failed: the job's log is all a cloud session can read.
+kit_logs() { # KIT LOG...
+  local k="$1" f; shift
+  for f in "$@"; do [ -f "$k/logs/$f" ] && { echo "--- $f"; tail -15 "$k/logs/$f"; }; done
+}
 # The kit's servers, gone before the next kit starts: a map server still answering would stand in for the next one's.
 SERVERS='llama-server|kiwix-serve|pmtiles serve|graphhopper-web|photon-'
 stop_kit() {
@@ -137,6 +142,7 @@ mac() {
   # likes (it asks then), start downloading, don't open the kit, close.
   much=""; [ "$("$src/kit" space "$kit" | cut -f1)" = tight ] && much="2\n"
   KIT_OWN_PYTHON=1 setup "$src" setup.log "\n1\n${n:-1}\n${much}y\nn\n\n"
+  grep -q "All set" "$L/setup.log" || kit_logs "$kit" test-tiles.log test-geocoder.log test-routing.log
   [ -f "$kit/maps/routing/graph-cache/properties" ] || fail "SETUP didn't build the map's roads on the drive"
   "$py/python/bin/python3" --version || fail "SETUP didn't get the kit's own Python"
   [ -d "$kit/models" ] || fail "the kit isn't set up on the drive, at $kit"
@@ -153,7 +159,7 @@ mac() {
 
   step "double-click Open Tinfoil Kit.command: Terminal runs it, and it opens the page in Safari"
   open "$kit/Open Tinfoil Kit.command"
-  python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit after a double-click"
+  python3 "$TESTS/drive.py" check 8888 8080 || { fail "the kit after a double-click"; kit_logs "$kit" tiles.log geocoder.log routing.log; }
   sleep 5
   screencapture -x "$SHOTS/mac-desktop.png" 2> /dev/null || echo "(no desktop screenshot here)"
 
@@ -306,7 +312,7 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
     fi
   fi
   if [ -n "$img" ]; then docker logs kit > "$log" 2>&1; docker rm -f kit > /dev/null; else stop_kit; fi
-  if [ "$ok" = 1 ]; then grep -E "Library:|AI:|!" "$log"; else tail -25 "$log"; fi
+  if [ "$ok" = 1 ]; then grep -E "Library:|AI:|!" "$log"; else tail -25 "$log"; kit_logs "$kit" tiles.log geocoder.log routing.log; fi
 }
 
 case "${1:-}" in

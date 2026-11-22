@@ -3139,8 +3139,14 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
     java = runtime_binary(root, "java", "java")
     photon = newest_file(root / "bin" / "photon", "photon-*.jar")
     gdir = root / "maps" / "geocoder"
-    check("address search installed", bool(java and photon and (gdir / "photon_data").is_dir()))
-    if java and photon and (gdir / "photon_data").is_dir():
+    have = bool(java and photon and (gdir / "photon_data").is_dir())
+    if not have and not m.get("geocoder_country"):
+        log("  SKIP  address search: nobody publishes one for this map's area")
+    elif not have and m.get("geocoder_wide"):
+        log("  SKIP  address search: not here yet. It's for a whole region of the world, so it comes after the essentials")
+    else:
+        check("address search installed", have)
+    if have:
         port = free_port()
         start_server(procs, logs_dir / "test-geocoder.log",
                      [java, f"-Xmx{m['geocoder_heap']}", "-jar", photon, "serve", "-data-dir", gdir,
@@ -3149,15 +3155,19 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
         detail = "did not start (see logs/test-geocoder.log)"
         ok = False
         if up:
+            # What's near home, then a search for it by name: that finds something in any place and language
+            near_home = f"lat={home['lat']}&lon={home['lon']}"
             try:
-                res = http_json(f"http://127.0.0.1:{port}/api?q=Main+Street&limit=3&lat={home['lat']}&lon={home['lon']}")
-                feats = res.get("features", [])
-                ok = bool(feats)
-                if feats:
-                    pr = feats[0].get("properties", {})
-                    detail = ", ".join(str(pr[k]) for k in ("name", "city", "state") if pr.get(k))
-                else:
-                    detail = "no results"
+                found = http_json(f"http://127.0.0.1:{port}/reverse?{near_home}&radius=10&limit=1").get("features", [])
+                pr = found[0].get("properties", {}) if found else {}
+                name = pr.get("name") or pr.get("street") or ""
+                if name:
+                    found = http_json(f"http://127.0.0.1:{port}/api?q={urllib.parse.quote(name)}&limit=1&{near_home}"
+                                      ).get("features", [])
+                ok = bool(found)
+                pr = found[0].get("properties", {}) if found else {}
+                detail = (", ".join(str(pr[k]) for k in ("name", "street", "city", "state", "country") if pr.get(k))
+                          if found else f"nothing found near {home.get('label') or 'home'}")
             except (HttpError, ValueError) as e:
                 detail = str(e)
         check("address search works", ok, detail)

@@ -59,9 +59,12 @@ def gh_releases(repo: str):
         return [{"tag_name": "v1.31.2", "draft": False, "prerelease": False, "assets": [
             {"name": a.name, "size": a.stat().st_size, "browser_download_url": f"{BASE}/gh2/{a.name}"}
             for a in sorted((R / "gh2").glob("go-pmtiles?1.31.2_*"))]}]
-    if repo == "komoot/photon":
+    if repo == "komoot/photon":    # stand-ins, plus the real Photon the drive test has for Andorra's address database
         a, a2 = R / "gh2" / "photon-1.3.0.jar", R / "gh2" / "photon-1.2.1.jar"
-        return [
+        real = [{"tag_name": j.stem[len("photon-"):], "draft": False, "prerelease": False, "assets": [
+            {"name": j.name, "size": j.stat().st_size, "digest": "sha256:" + sha(j), "browser_download_url": f"{BASE}/gh2/{j.name}"}]}
+            for j in sorted((R / "gh2").glob("photon-*.jar")) if j not in (a, a2)]
+        return real + [
             {"tag_name": "2.0.0-beta", "draft": False, "prerelease": True, "assets": [
                 {"name": "photon-2.0.0-beta.jar", "size": 5, "browser_download_url": f"{BASE}/gh2/nope.jar"}]},
             {"tag_name": "1.3.0", "draft": False, "prerelease": False, "assets": [
@@ -270,16 +273,17 @@ class H(BaseHTTPRequestHandler):
             return self.send_bytes(b"""<html><body><table><tr><th>Region</th><th>DB dump</th><th>Countries</th></tr>
 <tr><td><a href="andorra/index.html">andorra</a></td><td>\xe2\x9c\x93</td><td>ad</td></tr>
 <tr><td><a href="germany/index.html">germany</a></td><td>\xe2\x9c\x93</td><td>de</td></tr></table></body></html>""", "text/html", head)
-        if path in ("/photon/europe/andorra/", "/photon/europe/andorra/index.html"):    # the drive test's map
-            n = "photon-db-andorra-1.0-latest.tar.bz2"
-            return self.send_bytes(f'<html><body><a href="{n}">{n}</a><br></body></html>'.encode(), "text/html", head)
-        m = re.match(r"^/photon/europe/andorra/photon-db-andorra-1\.0-latest\.tar\.bz2(\.md5)?$", path)
-        if m:    # Andorra's real database where the drive test has it, else the stand-in
-            f = R / "photon" / "europe" / "andorra" / "photon-db-andorra-1.0-latest.tar.bz2"
-            f = f if f.exists() else R / "photon" / "north-america" / "usa" / "photon-db-usa-1.3-latest.tar.bz2"
-            if m.group(1):
-                return self.send_bytes(f"{hashlib.md5(f.read_bytes()).hexdigest()}  {path.split('/')[-1][:-4]}\n".encode(), "text/plain", head)
-            return self.send_file(f, head)
+        if path.startswith("/photon/europe/andorra/"):    # the drive test's map: Andorra's real database, else a stand-in
+            dbs = {f.name: f for f in (R / "photon" / "europe" / "andorra").glob("photon-db-andorra-*-latest.tar.bz2")} or \
+                  {"photon-db-andorra-1.0-latest.tar.bz2": R / "photon" / "north-america" / "usa" / "photon-db-usa-1.3-latest.tar.bz2"}
+            name = path.split("/")[-1]
+            if name in ("", "index.html"):
+                return self.send_bytes(("<html><body>" + "".join(f'<a href="{n}">{n}</a><br>' for n in sorted(dbs))
+                                        + "</body></html>").encode(), "text/html", head)
+            if name.endswith(".md5") and name[:-4] in dbs:
+                return self.send_bytes(f"{hashlib.md5(dbs[name[:-4]].read_bytes()).hexdigest()}  {name[:-4]}\n".encode(),
+                                       "text/plain", head)
+            return self.send_file(dbs[name], head) if name in dbs else self.send_error(404)
         old_dump = (R / "PHOTON_OLD_DUMP").exists()     # only an older database version is published
         if path in ("/photon/north-america/usa/", "/photon/north-america/usa/index.html"):
             names = ["photon-db-usa-1.2-latest.tar.bz2", "photon-db-usa-master-latest.tar.bz2"] if old_dump else \
