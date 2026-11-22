@@ -25,7 +25,7 @@ fi
 if [ "$KIT" != "$CODE" ] && [ "${KIT##*/}" != TinfoilKit ]; then
   for f in "$KIT"/* "$KIT"/.[!.]*; do
     case "${f##*/}" in
-      app | downloads | data | .DS_Store | desktop.ini | Thumbs.db | ._* | '*' | '.[!.]*') ;;
+      app | downloads | data | .DS_Store | desktop.ini | Thumbs.db | .kit-write-test | ._* | '*' | '.[!.]*') ;;
       *)
         echo "This app folder isn't in a folder of its own: $KIT has other things in it, so nothing was deleted."
         echo "Delete the app folder yourself, and the downloads and data folders beside it if they're the kit's."
