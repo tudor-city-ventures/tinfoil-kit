@@ -1,14 +1,17 @@
 """Helpers for the drive test (tests/drive_test.sh, .github/workflows/drive.yml). Standard library only.
 
-  drive.py check LIB_PORT AI_PORT   wait for the kit's library and AI, then search a book and get an answer
+  drive.py check LIB_PORT AI_PORT   wait for the kit's library and AI, then search a book and get an answer; and
+                                    when the kit's page says it has a map, get a street-level tile and directions
   drive.py share ADDRESS CODE LIB_PORT AI_PORT
                                     the kit shared on the home network, as a phone there finds it at ADDRESS
   drive.py vhd IMAGE                add a VHD footer to a raw disk image, so Windows can mount the drive a Mac made
   drive.py kitjson FILE [maps]      write the test kit's kit.json, as the website's builder makes one; with maps,
-                                    also the map of Andorra, with the real map programs for Windows
+                                    also the map of Andorra, with every computer's real map programs
 """
 import http.client
 import json
+import math
+import re
 import socket
 import struct
 import sys
@@ -60,7 +63,8 @@ def answer(body):
 
 def check_kit(lib, ai):
     base = f"http://127.0.0.1:{lib}"
-    check("library page", "Tinfoil Kit" in wait_for(base + "/", 120), base)    # containers install packages first
+    page = wait_for(base + "/", 120)    # containers install packages first
+    check("library page", "Tinfoil Kit" in page, base)
     books = wait_for(base + "/catalog/v2/entries", 5).count("<entry>")
     check("both test books listed", books == 2, f"{books} books")
     found = wait_for(base + "/search?books.filter.lang=eng&pattern=tourniquet", 5)
@@ -74,6 +78,38 @@ def check_kit(lib, ai):
         check("AI answers, every character intact", said == ANSWER, "" if said == ANSWER else ascii(said)[:300])
     except OSError as e:
         check("AI answers, every character intact", False, str(e))
+    check_map(page)
+
+
+def check_map(page):
+    """The map the kit's page offers (window.KIT_MAPS), if any: the tile over home at street level, and directions,
+    from the servers this computer's own pmtiles and Java run. The test kit's map is Andorra (kitjson maps)."""
+    m = re.search(r"window\.KIT_MAPS = (.*?);</script>", page, re.S)
+    info = json.loads(m.group(1)) if m else {}
+    if not info.get("available"):
+        return
+    ports, home, z = info["ports"], info["home"], info["detailMaxzoom"]
+    tiles = f"http://127.0.0.1:{ports['tiles']}"
+    try:
+        tj = json.loads(wait_for(tiles + "/basemap.json", 60) or "{}")
+        lat = math.radians(home["lat"])
+        x = int((home["lon"] + 180) / 360 * 2 ** z)
+        y = int((1 - math.asinh(math.tan(lat)) / math.pi) / 2 * 2 ** z)
+        with urllib.request.urlopen(f"{tiles}/basemap/{z}/{x}/{y}.mvt", timeout=10) as r:
+            tile = r.read()
+        check("map tiles", tj.get("maxzoom") == z and len(tile) > 0,
+              f"zoom {tj.get('minzoom')} to {tj.get('maxzoom')}, and the tile over {home['label']} ({len(tile)} bytes)")
+    except (OSError, ValueError) as e:
+        check("map tiles", False, str(e))
+    if info["services"]["routing"]:    # GraphHopper loads the roads first, which takes a while on a slow drive
+        route = f"http://127.0.0.1:{ports['routing']}/route?point=42.5063,1.5218&point=42.5345,1.5803" \
+                f"&profile={info['profiles'][0]}&points_encoded=false"
+        try:
+            path = json.loads(wait_for(route, 180) or "{}").get("paths", [{}])[0]
+            check("directions across Andorra", path.get("distance", 0) > 0,
+                  f"{round(path.get('distance', 0))} m in {len(path.get('instructions', []))} steps")
+        except ValueError as e:
+            check("directions across Andorra", False, str(e))
 
 
 def ask(method, url, body=None, headers=None, timeout=10):
@@ -139,17 +175,14 @@ def check_share(address, code, lib, ai):
 
 
 def kit_json(out, maps=False):
-    """The test kit: the real Mac, Windows and Linux programs, the tiny model and two test books. The map's programs
-    are the Windows ones only, since that's all the mock internet has, and its roads are Andorra's (small and real)."""
+    """The test kit: the real Mac, Windows and Linux programs, the tiny model and two test books, and with maps, a
+    map whose roads are Andorra's (small and real)."""
     tests = Path(__file__).resolve().parent
     t = json.loads((tests / "drive_kit.json").read_text(encoding="utf-8"))
     k = json.loads((tests.parent / "kit.json").read_text(encoding="utf-8"))
-    t["runtimes"] = [r for r in k["runtimes"] if not r.get("requires")
-                     or maps and not r["id"].endswith(("-macos-arm64", "-linux-x64"))]
-    if maps:
-        t["maps"] = {**k["maps"], "label": "Andorra", "detail_bbox": [1.40, 42.42, 1.80, 42.66], "world_maxzoom": 2,
-                     "detail_maxzoom": 5, "home": {"lat": 42.5063, "lon": 1.5218, "zoom": 13, "label": "Andorra la Vella"},
-                     "routing_osm_pbf": "http://127.0.0.1:19000/geofabrik/andorra-latest.osm.pbf"}
+    t["runtimes"] = [r for r in k["runtimes"] if maps or not r.get("requires")]
+    if maps:    # as "Where do you live?" sets it, with tiles to zoom 5 only, all the mock's map build has
+        t["maps"] = {**k["maps"], "region": "andorra", "world_maxzoom": 2, "detail_maxzoom": 5}
     t["models"] = [m for m in t["models"] if m["id"] == "Tiny"]
     t["library"] = [z for z in t["library"] if z["zim"] in ("testmed_en_all_maxi", "testsurvival_en")]
     t["settings"].update(library_port=8888, ai_port=8080)

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build everything the end-to-end suite's mock internet serves, into tests/work/remote.
 # With "drive", also the real Mac, Windows and Linux Vulkan builds the drive test installs (tests/drive_test.sh),
-# and the Pythons SETUP.command (on a Mac without one) and SETUP-Windows.bat get.
+# the Pythons SETUP.command (on a Mac without one) and SETUP-Windows.bat get, and the real map programs.
 # Linux x86_64 only. Needs internet (GitHub, download.kiwix.org, npm, PyPI) the first time.
 # Python deps: pip install gguf numpy libzim playwright && playwright install chromium
 set -eo pipefail
@@ -143,16 +143,25 @@ print("kiwix-tools_%s-%s.%s" % (plat, newest, ext))' "$TMP/kiwix.html" "$plat")
   python3 -c 'import hashlib, sys; sys.exit(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() != sys.argv[2])' \
     "$R/pbs/python.tar.gz" "$pysha" || { echo "${pyurl##*/} doesn't match the checksum in SETUP.command"; exit 1; }
 
-  echo "== drive test: the real map programs for Windows, Andorra's roads, and a map build with tiles at zoom 0-5"
-  # They replace the e2e's stand-ins: pmtiles and Java for Windows, GraphHopper (the e2e's fake jar)
-  url=$(curl -fsSL "${GH_AUTH[@]}" https://api.github.com/repos/protomaps/go-pmtiles/releases/latest |
-        python3 -c 'import json, sys; print(next(a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if a["name"].endswith("_Windows_x86_64.zip")))')
-  get "$url" "$DL/$(basename "$url")"
-  cp "$DL/$(basename "$url")" "$R/gh2/go-pmtiles_1.31.2_Windows_x86_64.zip"
-  url=$(curl -fsSL "https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jre&os=windows&vendor=eclipse" |
-        python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["binary"]["package"]["link"])')
-  get "$url" "$DL/$(basename "$url")"
-  cp "$DL/$(basename "$url")" "$R/adoptium/"
+  echo "== drive test: the real map programs for each computer, Andorra's roads, and a map build with tiles at zoom 0-5"
+  # They replace the e2e's stand-ins: pmtiles and Java for the Mac, Windows and Linux, and GraphHopper (a fake jar)
+  rm -f "$R"/gh2/go-pmtiles_* "$R"/adoptium/OpenJDK21U-*
+  curl -fsSL "${GH_AUTH[@]}" https://api.github.com/repos/protomaps/go-pmtiles/releases/latest > "$TMP/pmtiles.json"
+  for plat in Darwin_arm64.zip Windows_x86_64.zip Linux_x86_64.tar.gz; do
+    url=$(python3 -c '
+import json, sys
+print(next(a["browser_download_url"] for a in json.load(open(sys.argv[1]))["assets"] if a["name"].endswith("_" + sys.argv[2])))' \
+          "$TMP/pmtiles.json" "$plat")
+    get "$url" "$DL/$(basename "$url")"
+    # published as version 1.31.2, keeping the name's own spelling (the Mac's is go-pmtiles-VERSION_, the others go-pmtiles_VERSION_)
+    cp "$DL/$(basename "$url")" "$R/gh2/$(basename "$url" | sed -E 's/^(go-pmtiles[-_])[0-9.]+_/\11.31.2_/')"
+  done
+  for build in aarch64/mac x64/windows x64/linux; do
+    url=$(curl -fsSL "https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=${build%/*}&image_type=jre&os=${build#*/}&vendor=eclipse" |
+          python3 -c 'import json, sys; print(json.load(sys.stdin)[0]["binary"]["package"]["link"])')
+    get "$url" "$DL/$(basename "$url")"
+    cp "$DL/$(basename "$url")" "$R/adoptium/"
+  done
   ghv=$(curl -fsSL https://repo1.maven.org/maven2/com/graphhopper/graphhopper-web/maven-metadata.xml | python3 -c '
 import re, sys
 print(max((v for v in re.findall(r"<version>([0-9.]+)</version>", sys.stdin.read()) if v.startswith("11.")),

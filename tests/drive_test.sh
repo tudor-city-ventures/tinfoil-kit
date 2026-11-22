@@ -3,7 +3,8 @@
 # CI runs it nightly and on demand (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive.
 #   tests/drive_test.sh mac     erase a disk image as exFAT the way Disk Utility does, unzip the kit as
 #                               Download ZIP leaves it, run its SETUP against the mock internet and pick the
-#                               drive, double-click Open Tinfoil Kit, check the page in WebKit, eject. Leaves
+#                               drive (it builds a small real map there: Andorra's), double-click Open Tinfoil
+#                               Kit, check the library, the AI and the map, check the page in WebKit, eject. Leaves
 #                               tests/work/drive.vhd. Then set the kit up on this Mac (~/TinfoilKit) as a home
 #                               server (SETUP --home-server), check that the Mac started it and that it's shared
 #                               behind the access code, and remove it with UNINSTALL.
@@ -21,14 +22,19 @@ mkdir -p "$L" "$SHOTS"
 FAILS=0
 fail() { echo "FAIL: $*"; FAILS=$((FAILS + 1)); }
 step() { echo; echo "=== $*"; }
-stop_kit() { pkill -f tools/launch.sh; sleep 1; pkill -f llama-server; pkill -f kiwix-serve; sleep 1; } 2>/dev/null
+# The kit's servers, gone before the next kit starts: a map server still answering would stand in for the next one's.
+SERVERS='llama-server|kiwix-serve|pmtiles serve|graphhopper-web|photon-'
+stop_kit() {
+  pkill -f tools/launch.sh; sleep 1; pkill -f "$SERVERS"
+  for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "$SERVERS" > /dev/null || break; sleep 1; done
+} 2>/dev/null
 
 # The kit as Safari leaves a Download ZIP: unzipped into tinfoilkit-main, every file marked as from the internet.
-# Its kit.json is the test kit, put in the folder the way one from the website's builder goes in.
-download_kit() { # DIR
+# Its kit.json is the test kit, put in the folder the way one from the website's builder goes in; with maps, a map too.
+download_kit() { # DIR [maps]
   rm -rf "$1" && mkdir -p "$1"
   git -C "$ROOT" archive HEAD | tar -xf - -C "$1"
-  python3 "$TESTS/drive.py" kitjson "$1/kit.json"
+  python3 "$TESTS/drive.py" kitjson "$1/kit.json" ${2:-}
   xattr -r -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$1"
 }
 # Where SETUP lists a drive: its line in ./kit drives (folder, format, GB free, problem, name).
@@ -62,21 +68,25 @@ mac() {
   python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
   mock=$!
 
-  step "a 2 GB disk, erased as exFAT the way Disk Utility does"
+  step "a 4 GB disk, erased as exFAT the way Disk Utility does"
   hdiutil detach "$vol" > /dev/null 2>&1
-  rm -f "$img" "$W/drive.vhd" && mkfile -n 2g "$img"
+  rm -f "$img" "$W/drive.vhd" && mkfile -n 4g "$img"    # a map's tiles count as about 1 GB until they're built
   disk=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount "$img" | awk 'NR == 1 {print $1}')
   diskutil eraseDisk ExFAT TINFOIL GPT "$disk" || { fail "erase $disk"; kill "$mock"; return; }
 
   step "SETUP.command in the unzipped download, as on a Mac without Python: it gets the kit's own (the real"
-  echo "build, from the mock internet); pick the drive; it moves the kit there and sets it up"
+  echo "build, from the mock internet); pick the drive; it moves the kit there and sets it up, map included"
   src="$W/Downloads/tinfoilkit-main" kit="$vol/TinfoilKit"
   rm -rf "$py"
-  download_kit "$src"
+  download_kit "$src" maps
   n="$(drive_number "$src" TINFOIL)"
   echo "SETUP lists TINFOIL as drive ${n:-(not at all)}"
-  # Answers: keep where it's for, an external drive, TINFOIL, start downloading, don't open the kit, close.
-  KIT_OWN_PYTHON=1 setup "$src" setup.log "\n1\n${n:-1}\ny\nn\n\n"
+  "$src/kit" space "$kit"
+  # Answers: keep where it's for, an external drive, TINFOIL, all of it even if that leaves less free than SETUP
+  # likes (it asks then), start downloading, don't open the kit, close.
+  much=""; [ "$("$src/kit" space "$kit" | cut -f1)" = tight ] && much="2\n"
+  KIT_OWN_PYTHON=1 setup "$src" setup.log "\n1\n${n:-1}\n${much}y\nn\n\n"
+  [ -f "$kit/maps/routing/graph-cache/properties" ] || fail "SETUP didn't build the map's roads on the drive"
   "$py/python/bin/python3" --version || fail "SETUP didn't get the kit's own Python"
   [ -d "$kit/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"

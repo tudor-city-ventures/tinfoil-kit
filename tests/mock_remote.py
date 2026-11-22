@@ -53,10 +53,10 @@ def gh_releases(repo: str):
     """The releases GitHub lists for each program's repo, newest first; None for a repo it doesn't know."""
     if repo == "ggml-org/llama.cpp":
         return json.loads(releases())
-    if repo == "protomaps/go-pmtiles":    # the drive test adds the real Windows build
+    if repo == "protomaps/go-pmtiles":    # Linux's fake, or the real builds the drive test has (the Mac's go-pmtiles-1.31.2_...)
         return [{"tag_name": "v1.31.2", "draft": False, "prerelease": False, "assets": [
             {"name": a.name, "size": a.stat().st_size, "browser_download_url": f"{BASE}/gh2/{a.name}"}
-            for a in sorted((R / "gh2").glob("go-pmtiles_1.31.2_*"))]}]
+            for a in sorted((R / "gh2").glob("go-pmtiles?1.31.2_*"))]}]
     if repo == "komoot/photon":
         a, a2 = R / "gh2" / "photon-1.3.0.jar", R / "gh2" / "photon-1.2.1.jar"
         return [
@@ -193,9 +193,10 @@ class H(BaseHTTPRequestHandler):
             return self.send_file(R / "gh2" / f"basemaps-assets-{m.group(1)}.tar.gz", head)
         if path.startswith("/gh2/"):
             return self.send_file(R / "gh2" / path[5:], head)
-        if path == "/adoptium/v3/assets/latest/21/hotspot":    # Linux's fake, or the real Windows one the drive test adds
-            os_ = parse_qs(u.query).get("os", ["linux"])[0]
-            a = next(iter(sorted((R / "adoptium").glob(f"OpenJDK21U-jre_x64_{os_}_*"))), None)
+        if path == "/adoptium/v3/assets/latest/21/hotspot":    # Linux's fake, or the real builds the drive test has
+            q = parse_qs(u.query)
+            os_, arch = q.get("os", ["linux"])[0], q.get("architecture", ["x64"])[0]
+            a = next(iter(sorted((R / "adoptium").glob(f"OpenJDK21U-jre_{arch}_{os_}_*"))), None)
             if not a:
                 return self.send_bytes(b"[]", "application/json", head)
             return self.send_bytes(json.dumps([{"release_name": "jdk-21.0.9+10", "version": {"semver": "21.0.9+10"}, "binary": {
@@ -251,6 +252,20 @@ class H(BaseHTTPRequestHandler):
 <tr><td><a href="caribbean/index.html">caribbean</a></td><td></td><td>bs, cu, jm</td></tr>
 <tr><td><a href="canada/index.html">canada</a></td><td>\xe2\x9c\x93</td><td>ca</td></tr>
 <tr><td><a href="usa/index.html">usa</a></td><td>\xe2\x9c\x93</td><td>us</td></tr></table></body></html>""", "text/html", head)
+        if path in ("/photon/europe/", "/photon/europe/index.html"):
+            return self.send_bytes(b"""<html><body><table><tr><th>Region</th><th>DB dump</th><th>Countries</th></tr>
+<tr><td><a href="andorra/index.html">andorra</a></td><td>\xe2\x9c\x93</td><td>ad</td></tr>
+<tr><td><a href="germany/index.html">germany</a></td><td>\xe2\x9c\x93</td><td>de</td></tr></table></body></html>""", "text/html", head)
+        if path in ("/photon/europe/andorra/", "/photon/europe/andorra/index.html"):    # the drive test's map
+            n = "photon-db-andorra-1.0-latest.tar.bz2"
+            return self.send_bytes(f'<html><body><a href="{n}">{n}</a><br></body></html>'.encode(), "text/html", head)
+        m = re.match(r"^/photon/europe/andorra/photon-db-andorra-1\.0-latest\.tar\.bz2(\.md5)?$", path)
+        if m:    # Andorra's real database where the drive test has it, else the stand-in
+            f = R / "photon" / "europe" / "andorra" / "photon-db-andorra-1.0-latest.tar.bz2"
+            f = f if f.exists() else R / "photon" / "north-america" / "usa" / "photon-db-usa-1.3-latest.tar.bz2"
+            if m.group(1):
+                return self.send_bytes(f"{hashlib.md5(f.read_bytes()).hexdigest()}  {path.split('/')[-1][:-4]}\n".encode(), "text/plain", head)
+            return self.send_file(f, head)
         old_dump = (R / "PHOTON_OLD_DUMP").exists()     # only an older database version is published
         if path in ("/photon/north-america/usa/", "/photon/north-america/usa/index.html"):
             names = ["photon-db-usa-1.2-latest.tar.bz2", "photon-db-usa-master-latest.tar.bz2"] if old_dump else \
