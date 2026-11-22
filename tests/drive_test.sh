@@ -179,7 +179,7 @@ mac() {
   step "the page in WebKit, Safari's engine"
   KIT_BROWSER=webkit KIT_LIBRARY_PORT=8888 KIT_AI_PORT=8080 KIT_TEST_SHOTS="$SHOTS/mac" \
     python3 "$TESTS/ui_test.py" > "$L/mac_ui.log" 2>&1 || fail "the page in WebKit (logs/mac_ui.log)"
-  grep -E "^FAIL" "$L/mac_ui.log"; tail -1 "$L/mac_ui.log"
+  grep -E "^(FAIL|\(video only)" "$L/mac_ui.log"; tail -1 "$L/mac_ui.log"
 
   step "the app: it finds the kit on the drive and starts it, and quitting it stops the kit"
   stop_kit
@@ -319,7 +319,7 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
       KIT_BROWSER="$(command -v google-chrome > /dev/null && echo chrome || echo chromium)" KIT_LIBRARY_PORT=8888 \
         KIT_AI_PORT=8080 KIT_TEST_SHOTS="$SHOTS/linux" python3 "$TESTS/ui_test.py" > "$L/linux_ui.log" 2>&1 ||
         fail "the page in Chrome (logs/linux_ui.log)"
-      grep -E "^FAIL" "$L/linux_ui.log"; tail -1 "$L/linux_ui.log"
+      grep -E "^(FAIL|\(video only)" "$L/linux_ui.log"; tail -1 "$L/linux_ui.log"
     else
       echo "(no Playwright here, so the page isn't checked)"
     fi

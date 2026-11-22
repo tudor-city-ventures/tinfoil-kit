@@ -1,18 +1,39 @@
 @echo off
 rem Double-click me (Windows) to set up Tinfoil Kit, and again whenever you want the newest models, books and maps.
-rem The first time, it asks whether the kit goes on an external drive or on this PC, says how much fits there, and
-rem copies it there. Then it's kit update, sync and test (the first time, the essentials come first), as
-rem SETUP.command does on a Mac or Linux.
-rem A home server, a PC that stays on: SETUP-Windows.bat --home-server, in a terminal. At the end it shares the kit
-rem on the home network behind an access code, and starts it whenever you sign in to this PC. It goes in the
-rem environment, KIT_HOME_SERVER, since this script starts itself again after moving or updating the kit.
+rem The first time, it asks where you live and whether the kit goes on an external drive or on this PC, says how
+rem much fits there, and copies it there. Then it's kit update, sync and test (the first time, the essentials come
+rem first), as SETUP.command does on a Mac or Linux.
+rem The answers can come with it instead, the same ones SETUP.command takes, so one command sets the kit up: an AI
+rem helping someone asks them the questions, then gives them that command. It asks only what these leave out:
+rem   --region PLACE      where you live: a US state, a country or a part of one, as kit region takes it
+rem   --wikipedia CODES   Wikipedia's languages, like de or de,en
+rem   --this-computer     the kit goes on this PC, in your user folder
+rem   --drive PATH        the kit goes on the drive at PATH (like E:), in a TinfoilKit folder at its top
+rem   --essentials        just the essentials
+rem   --all               all of it, even when that leaves less free space than SETUP likes
+rem   --no-ai             no AI models
+rem   --models IDS        just these AI models (kit pick)
+rem   --skip IDS          leave these out: AI models, books, maps, extras (kit pick)
+rem   --add IDS           add these, like the books that are off unless asked for (kit pick)
+rem   --share             share the kit on the home network, behind an access code, whenever it's open
+rem   --home-server       share it, and start it whenever you sign in: for a PC that stays on
+rem   --yes               ask nothing: what isn't given keeps its default, and SETUP stops and says why instead of asking
 rem The kit's tools run on Python. SETUP gets python.org's own build from nuget.org (about 15 MB, once), checks it
 rem against the checksum below, and keeps it in %LOCALAPPDATA%\TinfoilKit, outside the kit folder, so the kit can
 rem move. UNINSTALL-Windows.bat removes it. KIT_PYTHON_URL: get the same file from there instead (tests).
 rem cmd reads this file a line at a time while it runs, and kit update can replace it, so each line that hands
 rem over to a new copy of SETUP also ends this one.
 setlocal EnableExtensions EnableDelayedExpansion
-for %%a in (%*) do if /i "%%~a"=="--home-server" set "KIT_HOME_SERVER=1"
+set "ME=%~f0"
+call :options %*
+if "!OPTS!"=="help" exit /b 0
+if "!OPTS!"=="bad" exit /b 2
+rem With --yes it ends with exit, which would close the terminal it was typed in, so it runs in a cmd of its own:
+rem this line ends this copy, as the download it's in may be gone by then.
+if not defined KIT_YES goto begin
+if defined KIT_CHILD goto begin
+set "KIT_CHILD=1" & cmd /d /c ""!ME!" %*" & exit /b !errorlevel!
+:begin
 cd /d "%~dp0"
 set "KIT=%CD%"
 set "NAME=TinfoilKit"
@@ -56,6 +77,7 @@ call :python || call :finish 1
 if exist ".kit\" (
   call :where_kit
   call :step "the kit is !WHERE!, in !KIT!"
+  if defined KIT_PLACE call :stays
 ) else (
   set "KIT_STEPS=4"
   call :pick_region first
@@ -67,22 +89,31 @@ rem The first run's copy of this script chose this place and copied the kit here
 :placed
 if not "%~2"=="" call :remove_download "%~2"
 if defined KIT_ESSENTIALS call :kit essentials !KIT_ESSENTIALS! >nul
-rem A kit that was there already gets the answer to "where do you live?" too
-if defined KIT_REGION call :set_region >nul 2>&1
 :checks
 call :writable || call :finish 1
 echo(
-"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" update & if errorlevel 3 call "%KIT%\SETUP-Windows.bat" --updated & exit
+set "UPDATE_ARGS="
+if defined KIT_YES set "UPDATE_ARGS=--yes"
+"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" update !UPDATE_ARGS! & if errorlevel 3 call "%KIT%\SETUP-Windows.bat" --updated & exit
 
 :download
 call :python || call :finish 1
+rem The answers that came with SETUP, after kit update so that new items can be left out too. The first run said
+rem them before moving the kit, and says them again quietly in case a kit was already where it landed.
+if defined KIT_GIVEN (
+  call :given_region >nul 2>&1
+  call :given_parts >nul 2>&1
+) else (
+  call :given_region || call :finish 1
+  call :given_parts || call :finish 1
+)
 rem After kit update, so a kit from before this question gets it
 if not defined KIT_REGION_ASKED call :pick_region
 rem An update can bring models too big for this computer
-if not defined KIT_FIT_ASKED call :kit fit --ask
+if not defined KIT_FIT_ASKED call :fit_ai
 set "ONLY=all"
 findstr /r /c:"\"essentials_only\": *true" kit.json >nul 2>&1 && set "ONLY=essentials"
-if defined UPDATE if "!ONLY!"=="essentials" call :offer_rest
+if defined UPDATE call :how_much_now
 if defined UPDATE (
   call :step "download. Here's what will change:"
   call :kit plan || call :finish 1
@@ -116,6 +147,7 @@ if "%TESTED%"=="0" (
   echo Everything in the kit works, but some downloads didn't finish:
   call :problems
   echo(
+  if defined KIT_SHARE if not defined KIT_HOME_SERVER call :share_home
   if defined KIT_HOME_SERVER (
     call :home_server
     echo Run SETUP again later to get the rest.
@@ -147,6 +179,9 @@ echo   SETUP-Windows.bat      double-click it again whenever you want the newest
 echo   UNINSTALL-Windows.bat  removes the kit and everything it downloaded.
 start "" explorer.exe "%KIT%"
 if defined KIT_HOME_SERVER (call :home_server & call :finish 0)
+if defined KIT_SHARE call :share_home
+rem (nobody may be there to use it)
+if defined KIT_YES call :finish 0
 call :ask "Open the kit now?" && (del "%OUT%" 2>nul & call "%KIT%\Open Tinfoil Kit for Windows.bat" & exit 0)
 call :finish 0
 
@@ -156,6 +191,15 @@ echo(
 echo Home server: sharing the kit on your home network, and starting it whenever you sign in to this PC.
 call :kit share on >nul
 call :kit autostart on
+echo(
+call :kit share
+goto :eof
+
+rem --share: phones and laptops on the home network can use the kit, with its access code, whenever it's open.
+:share_home
+echo(
+echo Sharing: phones and laptops on your home network can use the kit whenever it's open, with its access code.
+call :kit share on >nul
 echo(
 call :kit share
 goto :eof
@@ -183,12 +227,27 @@ if "%TESTED%"=="130" (
 )
 goto :eof
 
-rem An update of a kit with just the essentials: offer the rest once it fits.
-:offer_rest
+rem An update: --essentials or --all switches how much of the kit it gets, and a kit with just the essentials is
+rem offered the rest once it fits.
+:how_much_now
+if "!KIT_HOW_MUCH!/!ONLY!"=="essentials/all" (
+  call :kit essentials on
+  set "ONLY=essentials"
+)
+if "!KIT_HOW_MUCH!/!ONLY!"=="all/essentials" (
+  call :kit essentials off
+  set "ONLY=all"
+)
+if defined KIT_HOW_MUCH goto :eof
+if not "!ONLY!"=="essentials" goto :eof
 call :space "!KIT!"
 if not "!FULL!"=="fits" goto :eof
 echo(
 echo This kit has just the essentials, and now there's room for the rest (about !NEED_GB! more).
+if defined KIT_YES (
+  echo SETUP-Windows.bat --all gets it.
+  goto :eof
+)
 call :ask_no "Get the rest too?" || goto :eof
 call :kit essentials off >nul
 set "ONLY=all"
@@ -201,14 +260,24 @@ rem a kit was there already. Updates ask after kit update, so a kit from before 
 :pick_region
 call :kit region >nul 2>&1 || goto :eof
 set "KIT_REGION_ASKED=1"
+if "%~1"=="first" call :step "where do you live?"
+rem (it came with SETUP)
+if defined KIT_REGION goto region_given
+if defined KIT_YES (
+  if defined KIT_WIKIPEDIA goto region_given
+  if "%~1"=="first" call :kit region
+  goto :eof
+)
 if not "%~1"=="first" goto region_now
-call :step "where do you live?"
 echo The maps show your area in street detail, with directions and address search, and Wikipedia comes in your language.
 <nul set /p "=Right now: "
 call :kit region
 echo(
 set "Q=Type your US state or your country (like Texas, Ontario or Germany), or press Enter to keep that: "
 goto region_ask
+:region_given
+call :given_region || call :finish 1
+goto :eof
 :region_now
 echo(
 call :kit region
@@ -249,6 +318,8 @@ goto region_ask
 set "Q=!N! places match "!PLACE!". Type your state, province or a nearby big town instead: "
 goto region_ask
 :region_languages
+set "WIKI=!KIT_WIKIPEDIA!"
+if defined WIKI goto region_set
 "%PY%" "%KIT%\tools\kit.py" --root "%KIT%" region --languages "!RID!" > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
@@ -265,13 +336,42 @@ echo(
 :region_set
 set "KIT_REGION=!RID!"
 set "KIT_WIKIPEDIA=!WIKI!"
-call :set_region || (set "KIT_REGION=" & set "KIT_WIKIPEDIA=")
+call :given_region || (set "KIT_REGION=" & set "KIT_WIKIPEDIA=")
 goto :eof
 
-rem kit region with the answer: the place in KIT_REGION, and Wikipedia's languages in KIT_WIKIPEDIA if any
-:set_region
-if defined KIT_WIKIPEDIA (call :kit region "!KIT_REGION!" --wikipedia "!KIT_WIKIPEDIA!") else call :kit region "!KIT_REGION!"
-exit /b %errorlevel%
+rem The answers that came with SETUP's options (or the first run's, for a kit that was already where it put this
+rem one): where you live, in KIT_REGION and KIT_WIKIPEDIA, and what goes in the kit. Saying them again changes nothing.
+:given_region
+set "REGION_ARGS="
+if defined KIT_REGION set "REGION_ARGS="!KIT_REGION!""
+if defined KIT_WIKIPEDIA set "REGION_ARGS=!REGION_ARGS! --wikipedia "!KIT_WIKIPEDIA!""
+if not defined REGION_ARGS exit /b 0
+call :kit region !REGION_ARGS!
+exit /b !errorlevel!
+
+rem (say: and say so first)
+:given_parts
+set "PICKS="
+if defined KIT_NO_AI set "PICKS=--no-ai"
+if defined KIT_MODELS set "PICKS=!PICKS! --models "!KIT_MODELS!""
+if defined KIT_SKIP set "PICKS=!PICKS! --skip "!KIT_SKIP!""
+if defined KIT_ADD set "PICKS=!PICKS! --add "!KIT_ADD!""
+if not defined PICKS exit /b 0
+if "%~1"=="say" echo What goes in it:
+call :kit pick !PICKS!
+exit /b !errorlevel!
+
+rem Which AI model this computer runs, and whether to get the ones too big for it (on an update, also the ones
+rem skipped before on a computer with less memory). Models chosen with --models or --no-ai stay as chosen.
+:fit_ai
+set "KIT_FIT_ASKED=1"
+set "FIT=--ask"
+rem (what --ask does when nobody answers)
+if defined KIT_YES set "FIT=--restore --skip"
+if defined KIT_MODELS set "FIT="
+if defined KIT_NO_AI set "FIT="
+call :kit fit !FIT!
+goto :eof
 
 rem The lines kit region wrote, numbered, as "  1  NAME (GROUP)" with this label's argument after GROUP. Python
 rem prints them, since cmd would garble letters with accents.
@@ -283,9 +383,18 @@ rem ----------------------------------------------------------------------------
 
 :place
 call :step "where should the kit go?"
-rem Which AI model this computer runs, and whether to get the ones too big for it
-call :kit fit --ask
-set "KIT_FIT_ASKED=1"
+call :given_parts say || call :finish 1
+call :fit_ai
+set "KIT_GIVEN=1"
+if defined KIT_PLACE goto place_options
+if not defined KIT_YES goto place_ask
+:place_options
+call :place_given && goto :eof
+if defined KIT_YES (
+  echo Run the command again once that's sorted. Without --yes, SETUP asks instead.
+  call :finish 1
+)
+:place_ask
 call :space "%USERPROFILE%\%NAME%"
 echo(
 echo All of the kit is about !NEED_GB!. Just the essentials (the AI, the medical, preparedness and repair
@@ -363,6 +472,60 @@ if /i "!NEW!"=="!KIT!" (
 )
 cd /d "!NEW!" & call "!NEW!\SETUP-Windows.bat" --placed "!KIT!" & exit
 
+rem Where --this-computer or --drive puts the kit (with --yes and neither, this PC), in DEST, and the folder it goes
+rem in, in VOL: --drive E: or E:\ is E:\TinfoilKit, and a PATH that ends in TinfoilKit is the kit's folder itself.
+:given_dest
+set "DEST=%USERPROFILE%\%NAME%"
+set "VOL=%USERPROFILE%"
+if not "!KIT_PLACE!"=="drive" goto :eof
+set "VOL=!KIT_DRIVE:/=\!"
+if "!VOL:~-1!"=="\" set "VOL=!VOL:~0,-1!"
+if "!VOL:~1!"=="" set "VOL=!VOL!:"
+set "DEST=!VOL!\%NAME%"
+if /i "!VOL:~-11!"=="\%NAME%" (set "DEST=!VOL!" & set "VOL=!VOL:~0,-11!")
+goto :eof
+
+rem Putting the kit where the options say. Returns 1, having said why, if it can't go there.
+:place_given
+call :given_dest
+set "LABEL=this PC"
+if not "!KIT_PLACE!"=="drive" goto place_given_room
+set "LABEL=!VOL!"
+if not exist "!VOL!\" (
+  echo(
+  echo There's no drive at !KIT_DRIVE!. Is it plugged in? Give it a few seconds after plugging it in.
+  exit /b 1
+)
+set "WHY=-" & set "FMT="
+"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" drives > "%OUT%" 2>nul
+for /f "usebackq tokens=1-5 delims=	" %%a in ("%OUT%") do (
+  set "P=%%a"
+  if "!P:~-1!"=="\" set "P=!P:~0,-1!"
+  if /i "!P!"=="!VOL!" set "FMT=%%b" & set "WHY=%%d" & set "LABEL=%%e"
+)
+if not "!WHY!"=="-" (
+  echo(
+  echo !LABEL! won't work: !WHY!.
+  echo To use it, erase it as exFAT. Erasing deletes everything on it, so copy off anything you want to keep first.
+  echo In File Explorer: right-click the drive under This PC, choose Format, pick exFAT as the file system, and click Start.
+  exit /b 1
+)
+if /i "!FMT!"=="NTFS" (
+  echo(
+  echo !LABEL! is formatted as NTFS. The kit works on it on Windows and Linux, but a Mac can't save to it.
+)
+:place_given_room
+call :space "!DEST!"
+call :how_much "!LABEL!" || exit /b 1
+call :put_kit
+exit /b 0
+
+rem A kit that's set up stays where it is: --this-computer and --drive are for a new one.
+:stays
+call :given_dest
+if /i not "!DEST!"=="!KIT!" echo It stays there: --this-computer and --drive choose where a new kit goes.
+goto :eof
+
 rem One line of the list of drives: its name, format, free space and what fits there, or why it won't work.
 :drive_line
 if not "!W%~1!"=="-" (
@@ -381,19 +544,27 @@ rem essentials, or returns 1 to choose somewhere else.
 set "AT=%~1"
 set "KEEPS="
 if "!AT!"=="this PC" set "KEEPS=, so this PC keeps running well"
-if "!FULL!"=="fits" (
-  set "ONLY=all"
-  exit /b 0
-)
+set "TIGHT=All of it fits on !AT!, but leaves only !LEFT_GB! free. Better to leave at least !LEAVE_GB!!KEEPS!."
+set "TIGHT_ESS=Only the essentials fit on !AT!, and they leave only !LEFT_ESS_GB! free. Better to leave at least !LEAVE_GB!!KEEPS!."
+set "NOT_ALL=All of it won't fit on !AT!: it needs about !NEED_GB! plus some to spare, and !FREE_GB! is free."
+set "NO_ROOM=There isn't room on !AT!, even for the essentials: they need about !NEED_ESS_GB! plus some to spare, and !FREE_GB! is free."
+rem --essentials or --all, and what fits
+set "PREF=!KIT_HOW_MUCH!"
+if "!PREF!/!FULL!"=="/fits" set "ONLY=all" & exit /b 0
+if "!PREF!/!FULL!"=="all/fits" set "ONLY=all" & exit /b 0
+if "!PREF!/!ESS!"=="essentials/fits" set "ONLY=essentials" & exit /b 0
 echo(
+if "!PREF!/!FULL!"=="all/tight" (echo !TIGHT!) & set "ONLY=all" & exit /b 0
+if "!PREF!/!ESS!"=="essentials/tight" (echo !TIGHT_ESS!) & set "ONLY=essentials" & exit /b 0
+if defined KIT_YES goto how_much_given
 if "!FULL!"=="tight" goto how_much_tight
 if "!ESS!"=="fits" goto how_much_essentials
 if "!ESS!"=="tight" goto how_much_essentials_tight
-echo There isn't room on !AT!, even for the essentials: they need about !NEED_ESS_GB! plus some to spare, and !FREE_GB! is free.
+echo !NO_ROOM!
 echo Make room there, or choose somewhere else.
 exit /b 1
 :how_much_tight
-echo All of it fits on !AT!, but leaves only !LEFT_GB! free. Better to leave at least !LEAVE_GB!!KEEPS!.
+echo !TIGHT!
 echo   1  Just the essentials (about !NEED_ESS_GB!)
 echo   2  All of it anyway (about !NEED_GB!)
 echo   3  Somewhere else
@@ -402,19 +573,30 @@ if "!PICK!"=="1" set "ONLY=essentials" & exit /b 0
 if "!PICK!"=="2" set "ONLY=all" & exit /b 0
 exit /b 1
 :how_much_essentials
-echo All of it won't fit on !AT!: it needs about !NEED_GB! plus some to spare, and !FREE_GB! is free.
+echo !NOT_ALL!
 echo   1  Just the essentials (about !NEED_ESS_GB!). SETUP offers the rest later, once it fits.
 echo   2  Somewhere else
 call :choose "Type 1 or 2, then press Enter:" 2
 if "!PICK!"=="1" set "ONLY=essentials" & exit /b 0
 exit /b 1
 :how_much_essentials_tight
-echo Only the essentials fit on !AT!, and they leave only !LEFT_ESS_GB! free. Better to leave at least !LEAVE_GB!!KEEPS!.
+echo !TIGHT_ESS!
 echo   1  Just the essentials anyway (about !NEED_ESS_GB!)
 echo   2  Somewhere else
 call :choose "Type 1 or 2, then press Enter:" 2
 if "!PICK!"=="1" set "ONLY=essentials" & exit /b 0
 exit /b 1
+rem Nobody to ask: just the essentials where all of it doesn't fit with room to spare, unless --all said otherwise
+:how_much_given
+if "!ESS!"=="no" (echo !NO_ROOM!) & exit /b 1
+set "SAID=!NOT_ALL!"
+if "!ESS!"=="tight" set "SAID=!TIGHT_ESS!"
+if "!FULL!"=="tight" set "SAID=!TIGHT!"
+echo !SAID!
+if "!PREF!"=="all" exit /b 1
+echo So it gets just the essentials (about !NEED_ESS_GB!). SETUP offers the rest later, once it fits.
+set "ONLY=essentials"
+exit /b 0
 
 rem Remove the download the kit was copied from: only a fresh one, never a git checkout, a drive or the user folder.
 :remove_download
@@ -551,7 +733,9 @@ rem The list of what failed, from the newest sync log: the sync's own copy has s
 "%PY%" -c "import glob; f = sorted(glob.glob('logs/sync-*.log'))[-1:]; t = open(f[0], encoding='utf-8', errors='replace').read().split('===== sync started')[-1] if f else ''; p = t.split('Problems', 1)[1].split('Re-run', 1)[0] if 'Problems' in t else ''; print(chr(10).join(l for l in p.splitlines() if l.startswith('  - ')))"
 goto :eof
 
+rem With --yes the questions take their defaults, and one that has none stops SETUP rather than wait for an answer.
 :ask
+if defined KIT_YES exit /b 0
 set "A="
 set /p "A=%~1 [Y/n] "
 if not defined A exit /b 0
@@ -560,6 +744,7 @@ if /i "!A!"=="yes" exit /b 0
 exit /b 1
 
 :ask_no
+if defined KIT_YES exit /b 1
 set "A="
 set /p "A=%~1 [y/N] "
 if /i "!A!"=="y" exit /b 0
@@ -568,6 +753,11 @@ exit /b 1
 
 rem A number from 1 to %2, in PICK. Stops if the window has nothing more to read, rather than asking forever.
 :choose
+if defined KIT_YES (
+  echo(
+  echo SETUP needs an answer here, so it stopped. Run it without --yes to be asked.
+  call :finish 1
+)
 set /a "TRIES+=1"
 if !TRIES! gtr 30 (
   echo(
@@ -591,6 +781,71 @@ exit /b 0
 
 :finish
 del "%OUT%" 2>nul
+if defined KIT_YES exit %~1
 echo(
 set /p "_=Press Enter to close this window. "
 exit %~1
+
+rem The options, into the environment, since this script starts itself again after moving or updating the kit.
+rem cmd splits words at commas and spaces, so a value is every word up to the next option: --skip a,b and --region
+rem New York both work. OPTS is help once it has listed them, and bad when it can't take them (SETUP exits 2).
+:options
+set "OPTS="
+:options_next
+if "%~1"=="" exit /b 0
+set "OPT=%~1"
+shift
+rem (this script starting itself again)
+if "!OPT!"=="--placed" exit /b 0
+if "!OPT!"=="--updated" exit /b 0
+if /i "!OPT!"=="--yes" (set "KIT_YES=1" & goto options_next)
+if /i "!OPT!"=="--this-computer" (set "KIT_PLACE=computer" & goto options_next)
+if /i "!OPT!"=="--essentials" (set "KIT_HOW_MUCH=essentials" & goto options_next)
+if /i "!OPT!"=="--all" (set "KIT_HOW_MUCH=all" & goto options_next)
+if /i "!OPT!"=="--no-ai" (set "KIT_NO_AI=1" & goto options_next)
+if /i "!OPT!"=="--share" (set "KIT_SHARE=1" & goto options_next)
+if /i "!OPT!"=="--home-server" (set "KIT_HOME_SERVER=1" & goto options_next)
+if /i "!OPT!"=="-h" goto options_help
+if /i "!OPT!"=="--help" goto options_help
+set "SEP=,"
+if /i "!OPT!"=="--region" set "SEP= "
+if /i "!OPT!"=="--drive" set "SEP= "
+for %%o in (--region --wikipedia --drive --models --skip --add) do if /i "!OPT!"=="%%o" goto options_value
+>&2 echo SETUP: there's no !OPT!. It takes:
+call :options_list >&2
+set "OPTS=bad"
+exit /b 2
+:options_value
+set "VAL="
+:options_word
+set "W=%~1"
+if not defined W goto options_valued
+if "!W:~0,2!"=="--" goto options_valued
+if defined VAL (set "VAL=!VAL!!SEP!!W!") else set "VAL=!W!"
+shift
+goto options_word
+:options_valued
+if not defined VAL (
+  >&2 echo SETUP: !OPT! needs a value after it. SETUP-Windows.bat --help lists them all.
+  set "OPTS=bad"
+  exit /b 2
+)
+if /i "!OPT!"=="--region" set "KIT_REGION=!VAL!" & set "KIT_REGION_ASKED=1"
+if /i "!OPT!"=="--wikipedia" set "KIT_WIKIPEDIA=!VAL!"
+if /i "!OPT!"=="--drive" set "KIT_PLACE=drive" & set "KIT_DRIVE=!VAL!"
+if /i "!OPT!"=="--models" set "KIT_MODELS=!VAL!"
+if /i "!OPT!"=="--skip" set "KIT_SKIP=!VAL!"
+if /i "!OPT!"=="--add" set "KIT_ADD=!VAL!"
+goto options_next
+:options_help
+call :options_list
+set "OPTS=help"
+exit /b 0
+
+rem The options listed at the top of this file
+:options_list
+for /f "delims=" %%l in ('findstr /b /c:"rem   -" "%ME%"') do (
+  set "L=%%l"
+  echo(!L:~6!
+)
+goto :eof

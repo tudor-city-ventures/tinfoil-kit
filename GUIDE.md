@@ -154,9 +154,9 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
 7. Turn off Wi-Fi and start the kit (see the top of this page).
 
 In a terminal, SETUP takes every answer as an option, and with `--yes` it asks nothing: for example
-`bash SETUP.command --region texas --this-computer --yes` gets the kit to try, and `bash ~/TinfoilKit/SETUP.command
---yes` the rest. `bash SETUP.command --help` lists them: a drive, just the essentials, which AI models and books, and
-sharing on the home network.
+`bash SETUP.command --region texas --this-computer --yes` (on Windows, `.\SETUP-Windows.bat` with the same options)
+gets the kit to try, and `bash ~/TinfoilKit/SETUP.command --yes` the rest. `--help` lists them: a drive, just the
+essentials, which AI models and books, and sharing on the home network.
 
 ## Removing it
 
