@@ -89,6 +89,7 @@ if exist ".kit\" (
   call :step "the kit is !WHERE!, in !KIT!"
   if defined KIT_PLACE call :stays
 ) else (
+  call :other_kit
   set "KIT_STEPS=3"
   call :goes_on && set "KIT_STEPS=4"
   call :pick_region first
@@ -496,6 +497,30 @@ goto :eof
 
 rem ---------------------------------------------------------------------------- first run: where the kit goes
 
+rem A new download of the kit, where one was set up before: SETUP carries on with that one, so what it has stays and
+rem only what's new downloads, rather than setting up a second kit. --this-computer or --drive says where instead.
+:other_kit
+if defined KIT_PLACE goto :eof
+set "OTHER_KIT=" & set "OTHER_AT=" & set "OTHER_GB=" & set "OTHER_WHEN="
+"%PY%" "%KIT%\tools\kit.py" --root "%KIT%" kits > "%OUT%" 2>nul
+for /f "usebackq tokens=1-4 delims=	" %%a in ("%OUT%") do if not defined OTHER_KIT (
+  set "OTHER_KIT=%%a" & set "OTHER_AT=%%b" & set "OTHER_GB=%%c" & set "OTHER_WHEN=%%d"
+)
+if not defined OTHER_KIT goto :eof
+rem (the home folder's name may not survive the trip through a file: cmd reads it in another code page)
+if "!OTHER_AT!"=="this PC" set "OTHER_KIT=%USERPROFILE%\%NAME%"
+if not exist "!OTHER_KIT!\SETUP-Windows.bat" goto :eof
+set "WHEN="
+if not "!OTHER_WHEN!"=="-" set "WHEN=, last updated !OTHER_WHEN!"
+echo(
+echo There's a Tinfoil Kit on !OTHER_AT! already: !OTHER_KIT! (!OTHER_GB! GB!WHEN!).
+echo SETUP can update that one: everything it has stays, and only what's new downloads.
+call :ask "Update it?" && goto other_kit_update
+echo Then this sets up another kit.
+goto :eof
+:other_kit_update
+del "%OUT%" 2>nul & cd /d "!OTHER_KIT!" & call "!OTHER_KIT!\SETUP-Windows.bat" & exit
+
 :place
 call :step "where should the kit go?"
 call :given_parts say || call :finish 1
@@ -515,8 +540,8 @@ echo(
 echo All of the kit is about !NEED_GB!. Just the essentials (the AI, the medical, preparedness and repair
 echo books, and the map) are about !NEED_ESS_GB!.
 echo(
-echo   1  An external drive
-echo      Keep it somewhere safe and plug it in when you need it: into any Windows PC, Mac or Linux PC.
+echo   1  An external drive (recommended)
+echo      It goes with you: plug it into any Windows PC, Mac or Linux PC, and keep it somewhere safe.
 echo   2  This PC
 echo      Nothing to plug in. Its disk has !FREE_GB! free of !TOTAL_GB!: !NOTE!.
 call :choose "Type 1 or 2, then press Enter:" 2

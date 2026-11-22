@@ -1,9 +1,10 @@
 # The drive test's Windows setup: SETUP-Windows.bat from a fresh download, against the mock internet, the way
 # a person double-clicking it would answer. First onto this PC (~\TinfoilKit): the try-it kit, with a small real
 # map (Andorra's tiles), then SETUP again for the rest (the kit builder's questions, the map's roads and address
-# search with the real map programs), an update, and --home-server, which must share it on the home network, behind
-# the access code, and set it to start as you sign in. Then onto an exFAT drive, and onto the drive again with the
-# one command an AI hands over (--drive, --yes and more) and the same again for the rest, which must ask nothing.
+# search with the real map programs), SETUP in a new download, which must update that kit rather than set up another,
+# and --home-server, which must share it on the home network, behind the access code, and set it to start as you
+# sign in. Then onto an exFAT drive, and onto the drive again with the one command an AI hands over (--drive, --yes
+# and more) and the same again for the rest, which must ask nothing.
 # Each time Open Tinfoil Kit for Windows.bat must serve the library, the AI and any map, and UNINSTALL-Windows.bat
 # must remove it all. Last, Open Tinfoil Kit for Windows.bat --share on a kit with no SETUP, on this PC's own Python.
 # With -Drive, it plugs in the drive the Mac made (tests\work\drive.vhd) instead, starts the kit on it with a
@@ -198,10 +199,13 @@ foreach ($f in "maps\routing\graph-cache\properties", "maps\geocoder\photon_data
 }
 if (Test-Path "$kit\models\Two") { Fail "the try-it kit's sample AI is still there after the rest" }
 Test-Kit $kit "this PC"
-Step "SETUP-Windows.bat again in ~\TinfoilKit: an update"
-# Answers: keep where it's for, download, don't open it, close.
-Invoke-Setup $kit "setup-windows-update.log" @("", "y", "n", "")
-Test-Said "setup-windows-update.log" "the update" "TINFOIL KIT UPDATE", "To change that", "Step 3 of 3: start everything offline"
+Step "SETUP-Windows.bat in a new download: it finds the kit on this PC and updates that one"
+Get-Kit $dl
+# Answers: update the kit on this PC, keep where it's for, download, don't open it, close.
+Invoke-Setup $dl "setup-windows-update.log" @("y", "", "y", "n", "")
+Test-Said "setup-windows-update.log" "the update" @("There's a Tinfoil Kit on this PC already: $kit", "TINFOIL KIT UPDATE",
+  "To change that", "Step 3 of 3: start everything offline")
+Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
 Step "SETUP-Windows.bat --home-server: shared on the home network, and started now and whenever you sign in"
 $startup = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Tinfoil Kit.cmd"
 # Answers: keep where it's for, download, close.
