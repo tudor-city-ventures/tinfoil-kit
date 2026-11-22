@@ -1,6 +1,6 @@
-"""Render the site's icon files and link-preview cards from site/icon.svg, in headless Chromium.
+"""Render the site's icon files and link-preview cards from site/public/icon.svg, in headless Chromium.
 usage: python3 site/build_images.py   (needs: pip install playwright && playwright install chromium)
-Writes site/favicon.ico, site/apple-touch-icon.png, site/og.png, docs/social-preview.png and the Mac app's icon,
+Writes site/public/favicon.ico, apple-touch-icon.png and og.png, docs/social-preview.png and the Mac app's icon,
 mac/AppIcon.icns.
 GitHub can't read a repo's preview image from the repo: upload social-preview.png under Settings > General > Social preview."""
 import base64
@@ -19,8 +19,8 @@ def data_uri(path, mime):
     return f"data:{mime};base64," + base64.b64encode(open(path, "rb").read()).decode()
 
 
-ICON = data_uri(os.path.join(SITE, "icon.svg"), "image/svg+xml")
-FONT = data_uri(os.path.join(SITE, "fonts", "plex-sans.woff2"), "font/woff2")
+ICON = data_uri(os.path.join(SITE, "public", "icon.svg"), "image/svg+xml")
+FONT = data_uri(os.path.join(SITE, "app", "fonts", "plex-sans.woff2"), "font/woff2")
 
 # Link previews show the card at a quarter of its size or less, so it holds only the name, the headline and the mark, all large.
 CARD = Template("""<style>
@@ -89,10 +89,10 @@ with sync_playwright() as p:
         page.evaluate("document.fonts.ready")
         return page.screenshot(omit_background=transparent)
 
-    save("site/favicon.ico", ico([(s, render(icon_page(s), s, s, True)) for s in (16, 32, 48)]))
+    save("site/public/favicon.ico", ico([(s, render(icon_page(s), s, s, True)) for s in (16, 32, 48)]))
     # iOS rounds the corners itself and shows transparency as black, so the touch icon is the mark on a full orange square.
-    save("site/apple-touch-icon.png", render(icon_page(180, SIGNAL, 18), 180, 180))
-    save("site/og.png", render(card(1200, 630), 1200, 630))
+    save("site/public/apple-touch-icon.png", render(icon_page(180, SIGNAL, 18), 180, 180))
+    save("site/public/og.png", render(card(1200, 630), 1200, 630))
     save("docs/social-preview.png", render(card(1280, 640), 1280, 640))
     save("mac/AppIcon.icns", icns([(s, render(mac_icon_page(s), s, s, True)) for s in (16, 32, 64, 128, 256, 512, 1024)]))
     browser.close()

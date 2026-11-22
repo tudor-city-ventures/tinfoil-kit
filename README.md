@@ -1,4 +1,4 @@
-<img src="site/icon.svg" width="72" alt="">
+<img src="site/public/icon.svg" width="72" alt="">
 
 # Tinfoil Kit
 

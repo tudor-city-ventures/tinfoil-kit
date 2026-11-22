@@ -47,6 +47,12 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+      # the site is a Next.js app: its exact packages, with no install scripts (the test builds it)
+      - run: npm ci --ignore-scripts
+        working-directory: site
       - run: pip install playwright && playwright install --with-deps chromium
       - run: npm i --no-save axe-core@4.10.2
       - run: python3 tests/site_test.py

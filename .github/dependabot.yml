@@ -1,5 +1,6 @@
-# Keeps the workflows' pinned actions current: at most one pull request a week, for all of them together.
-# A release has to be out a week before it's proposed, so a hijacked one is usually caught first.
+# Keeps the workflows' pinned actions and the website's npm packages current: at most one pull request a week for
+# each, for all of them together. A release has to be out a week before it's proposed, so a hijacked one is usually
+# caught first.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -13,3 +14,14 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: "Actions"
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      site:
+        patterns: ["*"]
+    commit-message:
+      prefix: "Site"

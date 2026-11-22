@@ -1,11 +1,28 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { loadJSON } from '@/lib/data';
+
 // The hero figure: a dotted globe spins up and streams down into the drive, the Wi-Fi drops, and the drive lights up what it holds.
 // Drawn on a canvas each frame from a 12-second timeline, so it can pause, hold a still frame, and stop when off screen.
-(function () {
-  var fig = document.querySelector('.fig.viz');
-  if (!fig || !window.ResizeObserver) return;
+// It runs outside React: start() owns the canvas and the button's aria-pressed, and returns the function that stops it.
+export default function Hero({ label }) {
+  const fig = useRef(null);
+  useEffect(() => start(fig.current), []);
+  return (
+    <figure className="fig viz" ref={fig}>
+      <canvas role="img" aria-label={label} />
+      <button type="button" className="viz-toggle" aria-label="Pause the animation" aria-pressed="false"><span className="viz-state" aria-hidden="true"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 0L10 5L1 10z" fill="currentColor" /></svg>PLAY</span></button>
+    </figure>
+  );
+}
+
+function start(fig) {
+  if (!window.ResizeObserver) return;
+  var stopped = false;
   var cv = fig.querySelector('canvas'), ctx = cv.getContext('2d'), btn = fig.querySelector('.viz-toggle');
   var INK = '#1C1F1A', SIG = '#D9531E', SIGT = '#9A3A10', OLIVE = '#4A5A2A', PAPER = '#F3F0E6', D = Math.PI / 180, TAU = 2 * Math.PI;
-  var MONO = '"IBM Plex Mono", ui-monospace, monospace';
+  var MONO = getComputedStyle(fig).getPropertyValue('--mono').trim() || 'ui-monospace, monospace';   // next/font's name for Plex Mono
 
   // Land as a 180x90 bitmap of 2-degree cells, rows from the north, bits low first (Natural Earth 110m land, public domain).
   var bits = Uint8Array.from(atob('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAfAP8DAAAAAAAAAAAAAAAAAAAAAADo//z//wcAAAAAAAACAAAAAAAAAAAAhvvw//8PAPABAAAAwAMAAAAAAAAAwADkw////wEABAAAAABgAAAAAAAAAADAUT8A/v8PAAAAAAwA/j8AuAEAAAAAcBHtDcD/fwAAAAAwAPz/fwMAABCAAQD5w/wD8P8FAAAMAIL7//////9/AP//////////////B/D/SAAAAAAAQID//////////////x8AKAAEAAAAAAAA8///////////////YCgAAAAAAAAAAADw/////wEs4AEAAHz+////////////gL////8HeAAcAADg5///////////9ADgAf7/f4AnAAAAAH78////////H0QAAAiA//8f8AcAAIBB4////////38ADwAQAOD//5//AQAAHAT/////////A3AAAAAA/v//+T8AAGDz//////////8DAQAAAMD/////AwAAsP//////////LwAAAAAA6P///2IAAAD+//////////8CAAAAAAD///8/CAAA4P//////////JwAAAAAA8P///wYAAAD+/unz/////z8AAAAAAAD///8HAAAA/pgPPP//////MQAAAAAA8P//PwAAAMBD9v7n/////wcBAAAAAAD///8AAAAAPkD7f/7///8hEAAAAAAA4P//DwAAAIDhAv/n////f8YAAAAAAAD8//8AAAAA+AdE//////8jDwAAAAAAgP//AwAAAMD/APD/////PxgAAAAAAADw/x8AAAAA/n/v//////8HAAAAAAAAAPwDAgAAAOD////7////fwAAAAAAAACgHyAAAACA//9/f/7///8DAAAAAAAAAPQBAAAAAPj//+cv+P//PwAAAAAAAAAAHjAAAADA/////g/+//8EAAAAAAAAAOBhCAAAAP7//99/4D//AAAAAAAAAAAAPAMEAADA////+Qf84BcAAAAAAAAAAAA/AAAAAPz//58fgAf+QAAAAAAAAAAAAA8AAADg////ewA4gA8EAAAAAAAAAADAAAAAAPz//38BgAP4QQAAAAAAAAAAAAgPAADA////zwAwgAwQAAAAAAAAAAAA9Q8AAPj///8HAAVIAAAAAAAAAAAAAID/AQAA////fwBAAAAQAAAAAAAAAAAA+P8AAGDh//8DAAA0GAAAAAAAAAAAAID/HwAAAPj/HwAAgMIBAAAAAAAAAAAA/P8BAACA//8AAAAYXgAAAAAAAAAAAMD/fwAAAPz/BwAAAOOBAQAAAAAAAAAA/P8/AACA/z8AAABgbtQBAAAAAAAAAOD//w8AAPD/AwAAAAQIeAAAAAAAAAAA/P//AQAA/z8AAACAA4APAQAAAAAAAID//w8AAPD/AwAAAAARsEAAAAAAAAAA+P9/AAAA/j8AAAAAAAAAAAAAAAAAAAD//wcAAPD/QwAAAACAIwAAAAAAAAAA8P9/AAAA/z8EAAAAAD8GIAAAAAAAAAD8/wMAAPD/cQAAAAD4ZwAAAAAAAAAAgP8/AAAA/w8HAAAAgP8HAAAAAAAAAAD4/wMAAOD/MAAAAAD//wEBAAAAAAAAgP8PAAAA/g8DAAAA+P8fAAAAAAAAAAD4PwAAAOB/EAAAAID//wMAAAAAAAAAgP8DAAAA/AMAAAAA+P9/AAAAAAAAAAD8HwAAAMA/AAAAAID//wcAAAAAAAAAwP8BAAAA+AEAAAAA8P9/AAAAAAAAAAD8DwAAAIAPAAAAAAAP/gMAAAAAAAAAwB8AAAAAAAAAAAAAEIAfAAEAAAAAAAD+AwAAAAAAAAAAAAAA8AEgAAAAAAAA4AcAAAAAAAAAAAAAAAAAAAYAAAAAAABeAAAAAAAAAAAAAAAAwAAwAAAAAAAAwAMAAAAAAAAAAAAAAAAIgAEAAAAAAAAeAAAAAAAAAAAAAAAAAAAMAAAAAAAA4AEAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAAAAAAAAAAABAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAAAAAAB4AEDwn/8HAAAAAAAAAAAwAAAAAACA/P/h/////w8AAAAAAAAAwAcAAAD4////z///////PwAAAAAAHALwAACA//////////////8HAADw/y///wMAAP7/////////////HwAA+P///38AAID///////////////8AAPL/////BwAO////////////////DwAA8P////8HEPD//////////////z8AAOD/////////////////////////HwDgPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'), function (c) { return c.charCodeAt(0); });
@@ -27,7 +44,8 @@
 
   // What fills the drive: the recommended kit, in GB. Replaced by the live sizes from sources.json once it loads.
   var PARTS = [['WIKIPEDIA', 127], ['AI MODELS', 56], ['MAPS', 17], ['GUIDES', 62]], TOTAL = 262;
-  fetch('sources.json').then(function (r) { return r.json(); }).then(function (data) {
+  loadJSON('sources.json').then(function (data) {
+    if (stopped) return;
     var gb = [0, 0, 0, 0];
     data.sources.forEach(function (s) {
       if (s.presets.indexOf('recommended') < 0 || !s.bytes) return;
@@ -240,21 +258,31 @@
   // Playback: clicking the figure pauses it (WCAG 2.2.2), a still frame for reduced motion, nothing drawn while off screen.
   var still = window.matchMedia('(prefers-reduced-motion: reduce)'), playing = !still.matches, visible = true;
   var STILL_AT = 4.4, clock = playing ? 0 : STILL_AT, last = 0, raf = 0;
-  function frame() { if (L) draw(clock % LOOP, Math.floor(clock / LOOP)); }
+  function frame() { draw(clock % LOOP, Math.floor(clock / LOOP)); }
   function tick(ms) {
     raf = 0;
     if (last) clock += Math.min(.05, (ms - last) / 1000);
     last = ms; frame();
     if (playing && visible) raf = requestAnimationFrame(tick);
   }
-  function kick() { if (!raf && playing && visible) { last = 0; raf = requestAnimationFrame(tick); } }
+  function kick() { if (!stopped && !raf && playing && visible) { last = 0; raf = requestAnimationFrame(tick); } }
   function label() { btn.setAttribute('aria-pressed', String(!playing)); }
   // dropping the queued frame makes a pause hold exactly what's on screen
-  btn.addEventListener('click', function () { playing = !playing; cancelAnimationFrame(raf); raf = 0; label(); kick(); });
-  still.addEventListener && still.addEventListener('change', function () { playing = !still.matches; if (!playing) clock = STILL_AT; label(); frame(); kick(); });
-  new IntersectionObserver(function (es) { visible = es[0].isIntersecting; kick(); }).observe(cv);
+  function toggle() { playing = !playing; cancelAnimationFrame(raf); raf = 0; label(); kick(); }
+  function motion() { playing = !still.matches; if (!playing) clock = STILL_AT; label(); frame(); kick(); }
+  btn.addEventListener('click', toggle);
+  still.addEventListener('change', motion);
+  var io = new IntersectionObserver(function (es) { visible = es[0].isIntersecting; kick(); });
+  io.observe(cv);
   // resize on the next frame, so changing the canvas height doesn't re-trigger the observer mid-delivery
-  new ResizeObserver(function () { requestAnimationFrame(function () { layout(); frame(); }); }).observe(fig);
-  if (document.fonts) document.fonts.ready.then(frame);
+  var ro = new ResizeObserver(function () { requestAnimationFrame(function () { if (!stopped) { layout(); frame(); } }); });
+  ro.observe(fig);
+  if (document.fonts) document.fonts.ready.then(function () { if (!stopped) frame(); });
   label(); layout(); frame(); kick();
-})();
+  return function stop() {
+    stopped = true;
+    cancelAnimationFrame(raf);
+    btn.removeEventListener('click', toggle); still.removeEventListener('change', motion);
+    io.disconnect(); ro.disconnect();
+  };
+}

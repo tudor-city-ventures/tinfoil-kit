@@ -1,18 +1,21 @@
-"""Smoke test the website: serve site/ locally, drive the kit builder in headless Chromium.
-usage: python3 tests/site_test.py   (needs: pip install playwright && playwright install chromium)
+"""Smoke test the website: build site/ (a static Next.js app), serve the build locally, and drive it in headless
+Chromium. usage: python3 tests/site_test.py   (needs Node, and: pip install playwright && playwright install chromium)
 Set KIT_AXE to axe-core's axe.min.js (npm i axe-core) to also check accessibility."""
 import datetime
 import functools
+import glob
 import http.server
 import json
 import os
 import re
 import struct
+import subprocess
 import sys
 import threading
 from playwright.sync_api import sync_playwright
 
 SITE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site")
+OUT = os.path.join(SITE, "out")     # what next build writes, and what Vercel serves
 SHOTS = os.environ.get("KIT_TEST_SHOTS", os.path.join(os.path.dirname(__file__), "work", "shots"))
 os.makedirs(SHOTS, exist_ok=True)
 fails = 0
@@ -31,6 +34,10 @@ def axe(page, label):
         check(f"{label}: no accessibility violations (axe)", not bad, ", ".join(bad))
 
 
+if not os.path.isdir(os.path.join(SITE, "node_modules")):
+    subprocess.run(["npm", "ci", "--ignore-scripts"], cwd=SITE, check=True)
+subprocess.run(["npm", "run", "build"], cwd=SITE, check=True, env={**os.environ, "NEXT_TELEMETRY_DISABLED": "1"})
+
 # Serve with the same headers Vercel adds (site/vercel.json), so a too-strict CSP fails here first.
 HEADERS = json.load(open(os.path.join(SITE, "vercel.json")))["headers"][0]["headers"]
 
@@ -45,7 +52,7 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
 
-handler = functools.partial(Quiet, directory=SITE)
+handler = functools.partial(Quiet, directory=OUT)
 srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
 URL = f"http://127.0.0.1:{srv.server_address[1]}/"
@@ -58,10 +65,23 @@ STAR = """(() => { const r = s => document.querySelector(s).getBoundingClientRec
   return Math.abs(s.top + s.height / 2 - g.top - g.height / 2) < 8 ? 'beside' : s.top >= g.bottom ? 'below' : 'misplaced'; })()"""
 
 # Travis: never mention 2 TB; the drive's size isn't the point
-site_text = " ".join(open(os.path.join(SITE, f), encoding="utf-8").read() for f in ("index.html", "hero.js", "llms.txt"))
+copy = glob.glob(os.path.join(SITE, "app", "**", "*.jsx"), recursive=True) + glob.glob(os.path.join(SITE, "components", "**", "*.js*"), recursive=True)
+site_text = " ".join(open(f, encoding="utf-8").read() for f in copy + [os.path.join(SITE, "public", "llms.txt")])
 check("the site never mentions 2 TB", not re.search(r"\b2(\s|&nbsp;)*TB\b", site_text, re.I))
 # Travis: people update whenever they like, so no copy names a schedule
 check("the site names no update schedule", not re.search(r"\bmonths?\b|\bquarterly\b", site_text, re.I))
+
+
+
+def choose(page, select, option, group=None):
+    """Picks an option in one of the builder's dropdowns: by its exact text, or a pattern, within a group if given."""
+    page.click(select)
+    scope = page.locator("[role=listbox]")
+    if group:
+        scope = scope.locator("[role=group]", has=page.get_by_text(group, exact=True))
+    scope.get_by_role("option", name=option, exact=isinstance(option, str)).click()
+    page.wait_for_selector("[role=listbox]", state="detached")
+
 
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path=os.environ.get("KIT_CHROMIUM") or None)
@@ -74,8 +94,9 @@ with sync_playwright() as p:
         page.goto(URL)
         page.wait_for_selector(".card")
         faces = page.evaluate("document.fonts.ready.then(() => [...document.fonts].map(f => f.family.replace(/\"/g, '') + ' ' + f.weight + ': ' + f.status))")
-        check(f"{name}: fonts load from the site", not [f for f in faces if f.endswith("error")]
-              and all(any(f.startswith(fam) and f.endswith("loaded") for f in faces) for fam in ("IBM Plex Sans", "IBM Plex Mono")), ", ".join(faces))
+        own = [f for f in faces if "Fallback" not in f]     # next/font's size-matched stand-ins come from the computer, if it has them
+        check(f"{name}: fonts load from the site", not [f for f in own if f.endswith("error")]
+              and all(any(f.startswith(fam) and f.endswith("loaded") for f in own) for fam in ("plexSans", "plexMono")), ", ".join(faces))
         # the hero is drawn on a canvas each frame: it should move, and hold still once paused
         page.locator(".fig canvas").scroll_into_view_if_needed()
         inked = page.evaluate(INKED)
@@ -95,7 +116,7 @@ with sync_playwright() as p:
             page.click(f"[data-preset={preset}]")
             totals[preset] = int(page.inner_text("#totalText").split("ABOUT ")[1].split(" GB")[0])
             if preset == "no-ai":
-                models = page.locator(".group", has=page.locator("h3", has_text="AI models")).locator("input:checked").count()
+                models = page.locator(".group", has=page.locator("h3", has_text="AI models")).locator("[role=checkbox][aria-checked=true]").count()
         check(f"{name}: presets order by size", totals["essentials"] < totals["recommended"] < totals["everything"], str(totals))
         check(f"{name}: No AI picks no models and is smaller than Recommended", models == 0 and totals["no-ai"] < totals["recommended"],
               f"{models} models, {totals}")
@@ -118,7 +139,7 @@ with sync_playwright() as p:
                   and page.get_attribute("#menu", "aria-expanded") == "false" and not page.is_visible("nav.links a[href='#faq']"))
         else:
             check("desktop: sections listed, no Menu button", page.is_visible("nav.links a[href='#faq']") and not page.is_visible("#menu"))
-        first = page.locator(".card input").first
+        first = page.locator(".card [role=checkbox]").first
         before = page.inner_text("#totalText")
         first.uncheck()
         check(f"{name}: unticking a source changes the total", page.inner_text("#totalText") != before)
@@ -153,41 +174,48 @@ with sync_playwright() as p:
             stuck.close()
             unticked = page.locator(".card strong").first.inner_text()
             # Where you live: sets the map card and Wikipedia's language, and goes into the setup prompt
+            regions = json.load(open(os.path.join(SITE, "regions.json"), encoding="utf-8"))["regions"]
+            home = next(r["name"] for r in regions if r["id"] == json.load(open(os.path.join(SITE, "kit.json")))["maps"]["region"])
             wiki_titles = "[...document.querySelectorAll('.card strong')].map(e => e.textContent).filter(t => t.startsWith('Wikipedia'))"
             check("the builder starts at kit.json's place, with Wikipedia in English",
-                  page.input_value("#place") == "us-northeast" and page.evaluate(wiki_titles) == ["Wikipedia, with images"]
-                  and page.locator("#wikiLang option").first.inner_text().startswith("English"), page.input_value("#place"))
-            groups = page.evaluate("[...document.querySelectorAll('#place optgroup')].map(g => [g.label, g.children.length])")
-            places = page.evaluate("fetch('regions.json').then(r => r.json()).then(d => d.regions.length)")
+                  page.inner_text("#place") == home and page.evaluate(wiki_titles) == ["Wikipedia, with images"]
+                  and page.inner_text("#wikiLang").startswith("English"), page.inner_text("#place"))
+            page.click("#place")
+            groups = page.evaluate("[...document.querySelectorAll('[role=listbox] [role=group]')].map(g => "
+                                   "[g.querySelector('[data-slot=select-label]').textContent, g.querySelectorAll('[role=option]').length])")
+            page.locator("[role=listbox]").screenshot(path=os.path.join(SHOTS, "site_place_list.png"))
+            page.keyboard.press("Escape")
             check("the place dropdown lists every place, by part of the world, the US first",
-                  groups[0][0] == "United States" and sum(n for _, n in groups) == places and len(groups) >= 6, str(groups))
+                  groups and groups[0][0] == "United States" and sum(n for _, n in groups) == len(regions) and len(groups) >= 6, str(groups))
             before = page.inner_text("#totalText")
-            page.select_option("#place", label="Germany: Bayern")
+            choose(page, "#place", "Germany: Bayern")
             maps_why = page.locator(".card", has_text="Offline maps").locator(".why").inner_text()
             check("a place sets the map card and offers its language first",
-                  page.input_value("#place") == "bayern" and "Germany: Bayern" in maps_why
+                  page.inner_text("#place") == "Germany: Bayern" and "Germany: Bayern" in maps_why
                   and "address search for all of Germany" in maps_why
-                  and page.locator("#wikiLang option").first.inner_text().startswith("German")
+                  and page.inner_text("#wikiLang").startswith("German")
                   and page.evaluate(wiki_titles) == ["Wikipedia in German, with images"] and page.inner_text("#totalText") != before,
                   maps_why)
-            page.select_option("#wikiLang", "de,en")
+            choose(page, "#wikiLang", re.compile(r"^German and English \("))
             check("two languages: a Wikipedia card for each", page.evaluate(wiki_titles) == ["Wikipedia in German, with images",
                                                                                          "Wikipedia, with images"])
-            page.select_option("#wikiLang", "de")
+            choose(page, "#wikiLang", re.compile(r"^German \("))
             page.click("#copySetup")
             page.wait_for_selector("#toast:has-text('Copied')", timeout=5000)
             prompt = page.evaluate("navigator.clipboard.readText()")
-            ticked = page.evaluate("[...document.querySelectorAll('.card')].filter(c => c.querySelector('input').checked)"
+            ticked = page.evaluate("[...document.querySelectorAll('.card')].filter(c => c.querySelector('[role=checkbox]').ariaChecked === 'true')"
                                    ".map(c => c.querySelector('strong').textContent)")
             check("the setup prompt lists the picks, and not what was unticked", "- Wikipedia in German, with images (" in prompt
                   and all("- " + t + " (" in prompt for t in ticked) and "- " + unticked + " (" not in prompt, unticked)
             check("the setup prompt says where you live, as a ./kit region command", "./kit region bayern --wikipedia de" in prompt)
-            page.select_option("#place", "georgia")
-            check("the builder: two places called Georgia, the country under Europe",
-                  page.locator("#place optgroup[label=Europe] option[value=georgia]").count() == 1
-                  and page.locator("#place optgroup[label='United States'] option[value='us/georgia']").count() == 1
+            us_georgia = next(r["name"] for r in regions if r["id"] == "us/georgia")
+            page.click("#place")
+            in_us = page.locator("[role=listbox] [role=group]", has=page.get_by_text("United States", exact=True)).get_by_role("option", name=us_georgia, exact=True).count()
+            page.keyboard.press("Escape")
+            choose(page, "#place", "Georgia", group="Europe")
+            check("the builder: two places called Georgia, the country under Europe", in_us == 1
                   and "for Georgia" in page.locator(".card", has_text="Offline maps").locator(".why").inner_text()
-                  and page.locator("#wikiLang option").first.inner_text().startswith("Georgian"))
+                  and page.inner_text("#wikiLang").startswith("Georgian"), us_georgia)
             page.locator(".where").screenshot(path=os.path.join(SHOTS, "site_place_picker.png"))
         # Read as: the human page is the default; AI agent shows the markdown with no images or icons, and the pick sticks
         def wide_enough(label):
@@ -205,7 +233,7 @@ with sync_playwright() as p:
         if name == "desktop":
             page.click("[data-copy=agentDoc]")
             page.wait_for_selector("[data-copy=agentDoc]:text-is('Copied')", timeout=5000)
-            check("Copy puts the markdown on the clipboard", page.evaluate("navigator.clipboard.readText()") == open(os.path.join(SITE, "llms.txt")).read())
+            check("Copy puts the markdown on the clipboard", page.evaluate("navigator.clipboard.readText()") == open(os.path.join(SITE, "public", "llms.txt")).read())
         wide_enough(f"{name} agent page")
         if name == "phone":
             page.set_viewport_size({"width": 320, "height": 640})
@@ -215,6 +243,7 @@ with sync_playwright() as p:
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}_agent.png"), full_page=True)
         page.goto(URL)
         check(f"{name}: the pick sticks on the next visit", page.is_visible("#instructions") and not page.is_visible(".hero"))
+        page.wait_for_selector(".card", state="attached")
         page.click(".readas [data-reader=human]")
         check(f"{name}: Human switches back", page.is_visible(".hero h1") and page.is_visible(".fig") and "for=" not in page.url)
         page.screenshot(path=os.path.join(SHOTS, f"site_{name}.png"), full_page=True)
@@ -235,6 +264,7 @@ with sync_playwright() as p:
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.route("https://github.com/**", attach)
         pg.goto(URL)
+        pg.wait_for_selector(".card")
         label, href = pg.inner_text("#getKit"), pg.get_attribute("#getKit", "href")
         with pg.expect_download() as dl:
             pg.click("#getKit")
@@ -257,6 +287,7 @@ with sync_playwright() as p:
     ctx = b.new_context(**p.devices["iPhone 15"])
     pg = ctx.new_page()
     pg.goto(URL)
+    pg.wait_for_selector(".card")
     pg.click("#getKit")
     check("phone: Download lists every computer's file and says it runs on a laptop",
           pg.evaluate("document.getElementById('downloads').open") and pg.evaluate(VIEWS) == ["all"]
