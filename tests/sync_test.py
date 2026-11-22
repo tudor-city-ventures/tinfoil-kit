@@ -69,6 +69,7 @@ env = {**os.environ, "KIT_KIWIX_CATALOG": f"{base}/catalog/v2/entries?count=-1",
        "KIT_PROTOMAPS_BUILD_BASE": base + "/protomaps", "KIT_PHOTON_DUMPS": base + "/photon/", "KIT_GEOFABRIK": base + "/geofabrik"}
 
 drive = work / "drive" / "TinfoilKit"
+listed = -(-70_000 // 1024) * 1024    # testmed's size in the catalog: Kiwix rounds each up to a whole KiB
 shutil.copytree(TESTS.parent / "tools", drive / "tools")
 cfg = {
     "settings": {"default_model": "Tiny", "keep_free_gb": 0.001, "keep_free_gb_this_computer": 0.001, "downloader": "curl"},
@@ -137,6 +138,9 @@ try:
           and same("models/Tiny/Tiny-Q4_K_M.gguf", "hf/tiny/Tiny-Q4_K_M.gguf")
           and same("models/Tiny/Tiny-Q8_0.gguf", "hf/tiny/Tiny-Q8_0.gguf")
           and same("models/Two/Two-Q4_K_M.gguf", "hf/two/Two-Q4_K_M.gguf"), out)
+    catalog = subprocess.run(["curl", "-fsS", env["KIT_KIWIX_CATALOG"]], capture_output=True, text=True).stdout
+    check("books listed at sizes rounded up to a whole KiB, as Kiwix's catalog does, download on the first try",
+          f'testmed_en_all_maxi_2026-01.zim.meta4" length="{listed}"' in catalog and "download interrupted (exit 0" not in out, out)
     check("no partial downloads left", not list(drive.rglob("*.partial")), str(list(drive.rglob("*.partial"))))
     check("portal page built, with no refresh date while a sync hasn't finished cleanly",
           "window.KIT_REFRESHED = null;" in (drive / ".kit" / "portal.html").read_text())
@@ -175,6 +179,17 @@ try:
     check("verify --fix removes it", rc == 1 and not book.exists(), out)
     rc, out = kit("sync", "-y")
     check("sync replaces it", rc == 0 and same("library/testmed_en_all_maxi_2026-01.zim", "zim/testmed_en_all_maxi_2026-01.zim"), out)
+    # A whole book left as an unfinished download, as syncs that took Kiwix's rounded sizes for exact ones left them
+    book.rename(book.with_name(book.name + ".partial"))
+    st = state()
+    del st["items"]["library/testmed_en_all_maxi"]
+    st["partials"] = {"library/testmed_en_all_maxi_2026-01.zim.partial": {"item": "library/testmed_en_all_maxi",
+                                                                           "tag": f"2026-01|{listed}"}}
+    (drive / ".kit" / "state.json").write_text(json.dumps(st))
+    rc, out = kit("sync", "-y")
+    check("a whole book left as an unfinished download is checked and kept, not downloaded again",
+          rc == 0 and "resuming at 70.0 KB" in out and "discarding" not in out
+          and same("library/testmed_en_all_maxi_2026-01.zim", "zim/testmed_en_all_maxi_2026-01.zim"), out)
 
     # aria2c (optional, faster) fills a file in several places at once, so a download it was stopped on can already
     # be full length. Its record beside the file says it isn't whole. A stand-in aria2c finishes the job.
@@ -319,9 +334,13 @@ pathlib.Path(str(out) + ".aria2").unlink()
     check("update: leftovers are forgotten", sorted(state().get("partials", {})) == ["library/disabled_one_en_2026-01.zim.partial"],
           str(state().get("partials")))
 
+    finder = drive / "library/._disabled_one_en_2026-01.zim.partial"    # what macOS writes beside a file on exFAT
+    finder.write_bytes(b"\0\5\26\7")
     rc, out = kit("status")
-    check("status, including the switched-off book's unfinished download",
-          rc == 0 and "Last complete sync" in out and "library/disabled_one_en_2026-01.zim.partial" in out, out)
+    finder.unlink()
+    check("status, including the switched-off book's unfinished download, but not macOS's ._ file beside it",
+          rc == 0 and "Last complete sync" in out and "library/disabled_one_en_2026-01.zim.partial" in out
+          and "._disabled" not in out, out)
 
     # How much room the kit needs, before anything is looked up online: the builder's sizes for what's switched on.
     (drive / "site").mkdir()
@@ -345,12 +364,15 @@ pathlib.Path(str(out) + ".aria2").unlink()
     cfg["settings"]["keep_free_gb_this_computer"] = 0.001
     write_cfg()
 
-    junk = [drive / "library" / "._junk.zim", drive / "models" / "Tiny" / "._Tiny-Q4_K_M.gguf"]
+    junk = [drive / "library" / "._junk.zim", drive / "models" / "Tiny" / "._Tiny-Q4_K_M.gguf",
+            drive / ".git" / "objects" / "pack" / "._pack-1.idx"]
     for j in junk:
+        j.parent.mkdir(parents=True, exist_ok=True)
         j.write_bytes(b"\0\5\26\7")   # macOS's metadata files on exFAT start like this
     books = len(list((drive / "library").glob("[!.]*.zim")))
     rc, out = kit("test")
-    check("test: clears macOS's ._ files before starting the servers",
+    shutil.rmtree(drive / ".git")
+    check("test: clears macOS's ._ files before starting the servers, and from a checkout's .git",
           not any(j.exists() for j in junk) and f"library files present: {books} .zim files" in out, out)
 
     nowhere = "http://127.0.0.1:9"     # nothing listens there
@@ -1328,6 +1350,19 @@ server.serve_forever()
           all(kp.region_maps(r)["routing_osm_pbf"].startswith(kp.GEOFABRIK) and r["bbox"][0] <= r["home"]["lon"] <= r["bbox"][2]
               and r["bbox"][1] <= r["home"]["lat"] <= r["bbox"][3] and all(c in kp.regions()["languages"] for c in r["langs"])
               for r in kp.regions()["regions"]))
+
+    # Given a size rounded up to a whole KiB, download() takes a file a hair short of it once the server has nothing more
+    # (its checksum decides), whether it starts from nothing or from the whole file a sync before left.
+    book, part = R / "zim/testmed_en_all_maxi_2026-01.zim", work / "rounded" / "book.zim.partial"
+    part.parent.mkdir()
+    took = []
+    for _ in range(2):
+        try:
+            kp.download(f"{base}/zim/{book.name}", part, listed, "curl")
+            took.append(part.read_bytes() == book.read_bytes())
+        except RuntimeError as e:
+            took.append(str(e))
+    check("download: a size rounded up to a whole KiB doesn't fail a whole file", took == [True, True], str(took))
 
     # a Wikipedia in the old language goes once the new one is in
     wr = work / "wiki swap"

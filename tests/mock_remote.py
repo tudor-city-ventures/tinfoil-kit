@@ -34,6 +34,7 @@ def catalog() -> bytes:
     for z in zims:
         p = R / "zim" / z
         name = z.rsplit("_", 1)[0]
+        kib = -(-p.stat().st_size // 1024)    # Kiwix lists a book's size rounded up to a whole KiB, never to the byte
         entries.append(f"""  <entry>
     <id>urn:uuid:{hashlib.md5(z.encode()).hexdigest()}</id>
     <title>{name.replace('_', ' ').title()}</title>
@@ -44,7 +45,7 @@ def catalog() -> bytes:
     <category>test</category>
     <tags>_ftindex:yes</tags>
     <link type="text/html" href="/content/{z[:-4]}" />
-    <link rel="http://opds-spec.org/acquisition/open-access" type="application/x-zim" href="{BASE}/zim/{z}.meta4" length="{p.stat().st_size}" />
+    <link rel="http://opds-spec.org/acquisition/open-access" type="application/x-zim" href="{BASE}/zim/{z}.meta4" length="{kib * 1024}" />
   </entry>""")
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n'
             + "\n".join(entries) + "\n</feed>\n").encode()
@@ -109,6 +110,16 @@ class H(BaseHTTPRequestHandler):
         if not head:
             self.wfile.write(data)
 
+    def redirect(self, url: str, head=False):
+        body = f'<a href="{url}">Found</a>'.encode()    # a redirect has a size of its own, which isn't the file's
+        self.send_response(302)
+        self.send_header("Location", url)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if not head:
+            self.wfile.write(body)
+
     def send_file(self, p: Path, head=False):
         if not p.is_file():
             return self.send_error(404)
@@ -161,7 +172,9 @@ class H(BaseHTTPRequestHandler):
             p = R / "zim" / m.group(1)
             if m.group(2):
                 return self.send_bytes(f"{sha(p)}  {p.name}\n".encode(), "text/plain", head) if p.exists() else self.send_error(404)
-            return self.send_file(p, head)
+            return self.redirect(f"{BASE}/mirror/zim/{m.group(1)}", head)    # download.kiwix.org sends you on to a mirror
+        if path.startswith("/mirror/zim/"):
+            return self.send_file(R / "zim" / path.split("/")[-1], head)
         m = re.match(r"^/release/([^/]+)/(.*)$", path)
         if m:
             d = R / "release" / m.group(1)
