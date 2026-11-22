@@ -40,7 +40,8 @@ Nothing here needs the internet, an account, or an install.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
 - **Share with family** (Mac, Linux): start with `bash START-HERE.command --share`. It shows an address, an access code and a QR
   code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. No internet
-  needed: a router with power, or a phone's hotspot, is enough. Nobody without the code gets in. To share every time
+  needed, only a Wi-Fi network: your router on a battery backup, a small battery-powered travel router, or a phone's
+  hotspot (an iPhone's may not turn on without cell service). Nobody without the code gets in. To share every time
   the kit starts, run `./kit share on` once in the kit folder. If macOS asks whether to accept incoming connections,
   click **Allow**.
 
@@ -81,7 +82,8 @@ or Linux, open a terminal in the kit folder (Mac: drag the `TinfoilKit` folder o
 
 Either way it is safe to stop (Ctrl-C or close the window) and re-run; it picks up where it left off, and the kit
 keeps working with what it has meanwhile. A normal update gets the
-newest version of the kit itself, new library editions, the latest AI engine, any re-released models and fresh map data (rebuilding the
+newest version of the kit itself and the programs it was released with (the AI engine and the rest), new library
+editions, any re-released models and fresh map data (rebuilding the
 directions network takes 10 to 40 minutes). Wikipedia is the exception: at 115 GB, it keeps the edition it has
 until that one is a year old. Then pull the plug on Wi-Fi and open the kit once for real.
 

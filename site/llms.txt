@@ -28,7 +28,7 @@ You are setting this up for a person, probably not a programmer. Work in their t
 
 The whole kit is one folder, TinfoilKit, used in two ways:
 
-1. Online, whenever the person wants: SETUP (SETUP.command, or SETUP-Windows.bat on Windows), or `./kit update`, `./kit sync` and `./kit test`, fills the folder. kit.json lists every model, book, map and program with its publisher's download, and sync fetches the newest version of each straight from the publisher. Tinfoil Kit never hosts any of these files.
+1. Online, whenever the person wants: SETUP (SETUP.command, or SETUP-Windows.bat on Windows), or `./kit update`, `./kit sync` and `./kit test`, fills the folder. kit.json lists every model, book, map and program with its publisher's download, and sync fetches each straight from the publisher: the newest edition of every book, model and map, and each program at the exact build this version of the kit names in tools/pins.json. Tinfoil Kit never hosts any of these files.
 2. Offline, any time: START-HERE (START-HERE.command, or START-HERE-Windows.bat on Windows) starts a few servers from the folder on 127.0.0.1, and the browser page talks to them. Nothing goes over the internet.
 
 | Part | Program | Port | What it does |
@@ -201,7 +201,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 - An update can bring models too big for this computer: `./kit fit` names them, and `./kit fit --skip` leaves them out. On a kit with just the essentials, `./kit space . --json` says when the rest fits; then run `./kit essentials off` before syncing. SETUP asks about both by itself.
 - If `./kit update` says a version isn't signed with the kit's release key, stop: don't install it another way. Tell the person, and report it at https://github.com/tudor-city-ventures/tinfoilkit/security.
 - Double-clicking SETUP again (SETUP.command, or SETUP-Windows.bat on Windows) does all four.
-- A normal update brings new library editions, the newest AI engine, any re-released models and fresh map data. Only what changed downloads.
+- A normal update brings new library editions, the program builds the new kit version names (the AI engine and the rest), any re-released models and fresh map data. Only what changed downloads.
 - A book with `refresh_days` in kit.json keeps the edition it has until it's that many days old: Wikipedia (115 GB) has 365, so most updates don't download it again. The plan marks it `later`. `./kit sync --only wikipedia_en_all_maxi` gets the newest now.
 - It's safe to stop at any point and run it again: it picks up where it left off, and the old files keep working until the new ones check out.
 - `./kit status` shows what's installed and when it was last updated. INVENTORY.md lists every item with its version and size.
@@ -216,6 +216,7 @@ Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit fol
 - "Windows protected your PC" on a double-click: More info, then Run anyway, once.
 - "Operation not permitted" in Terminal: macOS is keeping Terminal off the drive. System Settings > Privacy & Security > Files and Folders > Terminal: turn on Removable Volumes, then start again.
 - Sync ended with exit 1, or SETUP says some downloads didn't finish: run `./kit sync -y` again. It resumes and names what's left. The kit already works with what it has.
+- Sync says a program's publisher no longer publishes the build the kit names: run `./kit update` first, since a newer kit names newer builds. If it says a program's file changed after the kit pinned it, don't work around it: tell the person, and report it at https://github.com/tudor-city-ventures/tinfoilkit/security.
 - Not enough space: sync stops short of the free space it keeps (50 GB on the computer's own disk, 25 GB on a drive). Get just the essentials (`./kit essentials on`), turn items off in kit.json, or move the kit to a bigger drive.
 - A file may be corrupt: `./kit verify` re-checks every file. `./kit verify --fix` removes bad ones, and the next sync replaces them.
 - A model won't load or is very slow: quit other apps, pick Gemma 4 E4B, or start with `--no-maps` to free about 5 GB. Advanced, with the person's password: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
@@ -237,7 +238,7 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 ## Security
 
 - `./kit update` installs new kit code only if the maintainer's release key signed it, checked against tools/release-signers in the copy already there. The key never touches GitHub.
-- Every download comes straight from its publisher over HTTPS, and is checked against the publisher's checksum wherever one is posted (the map tiles and fonts have none). Nothing is hosted or mirrored by this project.
+- Every download comes straight from its publisher over HTTPS. Each release names the exact build of every program, with its SHA-256, in tools/pins.json, signed with the rest. Books, models and map data are checked against the publisher's checksum wherever one is posted (the map tiles and fonts have none). Nothing is hosted or mirrored by this project.
 - The servers listen on 127.0.0.1. Sharing is off until the person turns it on; then a gate, on port 8000 by default, asks for an 8-digit code. It's plain HTTP, so share on the person's own Wi-Fi or hotspot, not a public network.
 - To check a release before running it, download tinfoilkit-TAG.tar.gz and its .sig from the release, then run `ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz`.
 - Security problems go to https://github.com/tudor-city-ventures/tinfoilkit/security/advisories/new, never a public issue.

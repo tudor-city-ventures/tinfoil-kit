@@ -169,7 +169,7 @@ foreach ($f in "maps\tiles\basemap.pmtiles", "maps\routing\graph-cache\propertie
   if (-not (Test-Path "$dl\$f")) { Fail "sync didn't make $f (logs\sync-windows-map.log)" }
 }
 Test-Kit $dl "the map"
-Remove-Item -Recurse -Force $dl
+Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
 
 Stop-Process -Id $mock.Id -Force -ErrorAction SilentlyContinue
 ""

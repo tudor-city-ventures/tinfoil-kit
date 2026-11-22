@@ -13,8 +13,11 @@ Commands (run from the kit folder, e.g.  ./kit sync):
   status             What's installed, when it was last updated, free space.
   search WORDS...    Search the Kiwix catalog for more library content to add to kit.json.
   test               Start the offline servers briefly and check they actually work.
-  update             Replace the kit's own code with its newest release on GitHub, keeping
-                     your kit.json changes. SETUP.command runs it first.
+  update [-y]        Replace the kit's own code with its newest release on GitHub, if it's signed
+                     with the kit's release key (tools/release-signers), keeping your kit.json
+                     changes. Shows what's new and asks first. SETUP.command runs it first.
+  pins               Pin the newest build of every program, with its SHA-256, in tools/pins.json.
+                     Run before a release: drives install exactly those builds.
   estimate           About how many GB this kit.json needs, from the sizes the website's kit
                      builder lists (--essentials: just those). Needs no internet. SETUP.command uses it.
   drives [--json]    The plugged-in drives the kit could go on: folder, format, GB free, and why
@@ -322,6 +325,24 @@ def load_config(root: Path) -> Dict[str, Any]:
     return cfg
 
 
+# Programs, as opposed to the books, models and map data they serve: the kinds of source tools/pins.json can pin.
+PINNED_TYPES = ("github", "kiwix_release", "adoptium", "maven", "npm", "github_archive")
+
+
+def load_pins(root: Path, cfg: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """tools/pins.json: the exact build of each program this version of the kit installs, and its SHA-256.
+    Every release brings its own copy, signed with the rest, so a drive gets a new build of a program only with a new
+    version of the kit, and a file swapped upstream under the same version is refused. ./kit pins writes it.
+    "pin_programs": false in kit.json's settings takes the newest builds instead."""
+    if cfg["settings"].get("pin_programs", True) is False:
+        return {}
+    try:
+        pins = json.loads((root / "tools" / "pins.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in pins.items() if isinstance(v, dict) and isinstance(v.get("version"), str)}
+
+
 def maps_settings(cfg: Dict[str, Any]) -> Dict[str, Any]:
     m = {**MAPS_DEFAULTS, **(cfg.get("maps") or {})}
     m["home"] = {**MAPS_DEFAULTS["home"], **(m.get("home") or {})}
@@ -405,6 +426,7 @@ class Resolver:
         self._releases: Dict[str, Any] = {}
         self._listings: Dict[str, str] = {}
         self.resolved: Dict[str, Item] = {}
+        self.pins = load_pins(root, cfg)
 
     # --- kiwix catalog
     def catalog(self, max_age_hours: float = 12) -> Dict[str, Dict[str, Any]]:
@@ -450,6 +472,13 @@ class Resolver:
             if t not in handlers:
                 raise ValueError(f"unknown type '{t}'")
             handlers[t](item)
+            pin = self.pins.get(item.id) if t in PINNED_TYPES else None
+            if pin and pin.get("sha256") and item.files:
+                f = item.files[0]
+                if f.sha256 and f.sha256.lower() != pin["sha256"].lower():
+                    raise ValueError(f"the file published as {item.version} changed after this version of the kit "
+                                     f"pinned it (tools/pins.json), so it's left alone. Please report it at {REPORT}")
+                f.sha256 = pin["sha256"].lower()
         except (HttpError, ValueError, KeyError, IndexError, TypeError, json.JSONDecodeError, ET.ParseError) as e:
             item.error = str(e)
         self.resolved[item.id] = item
@@ -489,21 +518,41 @@ class Resolver:
                 sha256=(lfs.get("oid") or "").lower() or None))
 
     def pin_github(self, item: Item, prefix: str) -> bool:
-        """Re-resolve a GitHub runtime to the newest release whose version starts with prefix."""
-        old = dict(item.cfg)
-        item.cfg = {**item.cfg, "version_prefix": prefix}
+        """Re-resolve a GitHub runtime to the newest release whose version starts with prefix, even past its pin in
+        tools/pins.json: a program that can't open its data is no use."""
+        old, pins = dict(item.cfg), self.pins
+        item.cfg, self.pins = {**item.cfg, "version_prefix": prefix}, {}
         try:
             self._github(item)
             return True
         except (ValueError, HttpError):
             item.cfg = old
             return False
+        finally:
+            self.pins = pins
+
+    def pinned(self, item: Item) -> str:
+        return str(self.pins.get(item.id, {}).get("version") or "")
 
     def _github(self, item: Item) -> None:
-        repo, pattern = item.cfg["repo"], item.cfg["asset"]
-        if repo not in self._releases:
-            self._releases[repo] = http_json(f"{GITHUB_API}/repos/{repo}/releases?per_page=30")
-        candidates = [r for r in self._releases[repo] if not r.get("draft")]
+        repo, pattern, pin = item.cfg["repo"], item.cfg["asset"], self.pinned(item)
+        if pin:    # llama.cpp publishes several builds a day, so a pinned one is soon past the first page
+            if f"{repo}@{pin}" not in self._releases:
+                try:
+                    rel = http_json(f"{GITHUB_API}/repos/{repo}/releases/tags/{urllib.parse.quote(pin)}")
+                except HttpError as e:
+                    if e.status != 404:
+                        raise
+                    raise ValueError(f"{repo} no longer publishes {pin}, the build this version of the kit names "
+                                     "(tools/pins.json). Run SETUP to update the kit, or set \"pin_programs\": false "
+                                     "in kit.json") from e
+                self._releases[f"{repo}@{pin}"] = [rel]
+            repo_key = f"{repo}@{pin}"
+        else:
+            repo_key = repo
+            if repo not in self._releases:
+                self._releases[repo] = http_json(f"{GITHUB_API}/repos/{repo}/releases?per_page=30")
+        candidates = [r for r in self._releases[repo_key] if not r.get("draft")]
         # llama.cpp's builds are its nightly prereleases. Every other program takes a full release while it has one.
         nightly = repo.endswith("/llama.cpp") and self.cfg["settings"].get("llama_cpp_channel", "nightly") != "stable"
         if not nightly:
@@ -534,8 +583,10 @@ class Resolver:
             m = rx.match(name)
             if m:
                 found.append((tuple(int(x) for x in re.split(r"[.-]", m.group(1))), m.group(1), name))
+        pin = self.pinned(item)
+        found = [f for f in found if f[1] == pin] if pin else found
         if not found:
-            raise ValueError(f"no file matching '{pattern}' in {base}")
+            raise ValueError(f"no file matching '{pattern}'{f' for version {pin}' if pin else ''} in {base}")
         _, version, name = max(found)
         url = base + name
         is_archive = name.endswith(ARCHIVE_SUFFIXES)
@@ -556,13 +607,21 @@ class Resolver:
     # --- maps: runtimes, viewer assets and data
     def _adoptium(self, item: Item) -> None:
         c = item.cfg
-        url = (f"{ADOPTIUM_API}/v3/assets/latest/{c.get('feature_version', 21)}/hotspot?"
-               f"architecture={c.get('arch', 'aarch64')}&image_type={c.get('image_type', 'jre')}"
-               f"&os={c.get('os', 'mac')}&vendor=eclipse")
-        data = http_json(url)
-        if not data:
-            raise ValueError("no Java runtime published for this platform")
-        rel, pkg = data[0], data[0]["binary"]["package"]
+        query = f"architecture={c.get('arch', 'aarch64')}&image_type={c.get('image_type', 'jre')}&os={c.get('os', 'mac')}"
+        pin = self.pinned(item)
+        if pin:    # a list of releases, each with its builds
+            rels = http_json(f"{ADOPTIUM_API}/v3/assets/version/{urllib.parse.quote(pin.removeprefix('jdk-'))}?{query}"
+                             "&jvm_impl=hotspot&project=jdk&release_type=ga&vendor=eclipse")
+            rel = next((r for r in rels if isinstance(r, dict) and r.get("release_name") == pin), {})
+            builds = [b for b in rel.get("binaries", []) if b.get("image_type") == c.get("image_type", "jre") and b.get("package")]
+            if not builds:
+                raise ValueError(f"Java {pin} for {c.get('os', 'mac')} {c.get('arch', 'aarch64')} isn't published any more")
+            pkg = builds[0]["package"]
+        else:
+            data = http_json(f"{ADOPTIUM_API}/v3/assets/latest/{c.get('feature_version', 21)}/hotspot?{query}&vendor=eclipse")
+            if not data:
+                raise ValueError("no Java runtime published for this platform")
+            rel, pkg = data[0], data[0]["binary"]["package"]
         item.kind, item.dest = "archive", f"bin/{item.id}"
         item.version = rel.get("release_name") or rel["version"]["semver"]
         item.files = [RemoteFile(name=pkg["name"], url=pkg["link"], size=pkg.get("size"), sha256=pkg.get("checksum"))]
@@ -574,8 +633,10 @@ class Resolver:
         prefix = str(c.get("version_prefix", ""))
         versions = [v for v in re.findall(r"<version>([^<]+)</version>", meta)
                     if v.startswith(prefix) and re.fullmatch(r"\d+(\.\d+)*", v)]
+        pin = self.pinned(item)
+        versions = [v for v in versions if v == pin] if pin else versions
         if not versions:
-            raise ValueError(f"no release of {c['artifact']} matching '{prefix}*'")
+            raise ValueError(f"no release of {c['artifact']} matching '{pin or prefix + '*'}'")
         v = max(versions, key=version_key)
         jar = f"{c['artifact']}-{v}.jar"
         url = f"{base}{v}/{jar}"
@@ -593,8 +654,10 @@ class Resolver:
         pkg, prefix = item.cfg["package"], str(item.cfg.get("version_prefix", ""))
         doc = http_json(f"{NPM}/{pkg}", timeout=180)
         versions = [v for v in doc.get("versions", {}) if v.startswith(prefix) and re.fullmatch(r"\d+\.\d+\.\d+", v)]
+        pin = self.pinned(item)
+        versions = [v for v in versions if v == pin] if pin else versions
         if not versions:
-            raise ValueError(f"no version of {pkg} matching '{prefix}*'")
+            raise ValueError(f"no version of {pkg} matching '{pin or prefix + '*'}'")
         v = max(versions, key=version_key)
         dist = doc["versions"][v]["dist"]
         checks = {}
@@ -608,7 +671,7 @@ class Resolver:
 
     def _github_archive(self, item: Item) -> None:
         repo, branch = item.cfg["repo"], item.cfg.get("branch", "main")
-        sha = http_json(f"{GITHUB_API}/repos/{repo}/commits/{branch}")["sha"]
+        sha = self.pinned(item) or http_json(f"{GITHUB_API}/repos/{repo}/commits/{branch}")["sha"]
         item.kind, item.dest, item.version = "archive", f"maps/viewer/{item.id}", sha[:12]
         item.files = [RemoteFile(name=f"{item.id}-{sha[:12]}.tar.gz", url=f"{GITHUB_WEB}/{repo}/archive/{sha}.tar.gz")]
 
@@ -2201,6 +2264,69 @@ def plan_json(root: Path, cfg: Dict[str, Any], only: List[str]) -> None:
     print(json.dumps(out, indent=1, sort_keys=True))
 
 
+PINS_README = ["The exact build of each program this version of the kit installs, and its SHA-256. ./kit pins writes it,",
+               "and every release carries it, signed with the rest. To take each program's newest build instead, set",
+               "\"pin_programs\": false in kit.json's settings."]
+
+
+def cmd_pins(root: Path, args: argparse.Namespace) -> None:
+    """Write tools/pins.json: the newest build of every program kit.json lists, for every system, with its SHA-256 from
+    its publisher, or from downloading it where the publisher gives none. Run before a release (a weekly workflow
+    does it). A program that can't be looked up keeps its old pin, and so does one whose file changed under the same
+    version, which also fails the command: a publisher shouldn't replace a file it has published."""
+    cfg = json.loads(json.dumps(load_config(root)))
+    cfg["settings"]["pin_programs"] = False
+    cfg["models"], cfg["library"] = [], []
+    for entry in cfg["runtimes"] + cfg["extras"]:
+        entry["enabled"] = True
+    cfg["maps"] = {**(cfg.get("maps") or {}), "enabled": True}
+    path = root / "tools" / "pins.json"
+    try:
+        old = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        old = {}
+    pins, problems, changed = {}, [], []
+    # the plan's own lookup, so Photon is the release that opens the newest address database
+    for item in build_plan(root, cfg, {"version": 1, "items": {}}, []):
+        if not item.enabled or item.cfg.get("type") not in PINNED_TYPES:
+            continue
+        was = old.get(item.id) if isinstance(old.get(item.id), dict) else {}
+        try:
+            if item.error or not item.files:
+                raise ValueError(item.error or "nothing to download")
+            f = item.files[0]
+            if item.cfg.get("type") == "github_archive":    # GitHub can repack its archives, so only the commit is pinned
+                pins[item.id] = {"version": f.url.rsplit("/", 1)[-1].split(".")[0]}
+            else:
+                digest = f.sha256 or (fetch_sha256_sidecar(f.url) if f.sha256_sidecar else None)
+                if not digest and was.get("version") == item.version and was.get("sha256"):
+                    digest = was["sha256"]    # pinned before and its publisher gives no SHA-256: no need to download it again
+                if not digest:
+                    data = http_get(f.url, timeout=900)
+                    for algo, want in f.checks.items():
+                        if hashlib.new(algo, data).hexdigest() != want.lower():
+                            raise ValueError(f"the download doesn't match its published {algo}")
+                    digest = hashlib.sha256(data).hexdigest()
+                if was.get("version") == item.version and was.get("sha256", digest).lower() != digest.lower():
+                    changed.append(item.id)
+                    raise ValueError(f"the file published as {item.version} changed after it was pinned. Find out why "
+                                     "before you pin it again: delete its entry in tools/pins.json and run ./kit pins")
+                pins[item.id] = {"version": item.version, "sha256": digest.lower()}
+        except (HttpError, ValueError) as e:
+            problems.append(f"  {item.id}: {e}")
+            if was:
+                pins[item.id] = was
+        if was.get("version") != pins.get(item.id, {}).get("version"):
+            log(f"  {item.id}: {was.get('version', 'not pinned')} -> {pins.get(item.id, {}).get('version', 'not pinned')}")
+    path.write_text(json.dumps({"_readme": PINS_README, **dict(sorted(pins.items()))}, indent=1) + "\n", encoding="utf-8")
+    log(f"Pinned {len(pins)} program builds in tools/pins.json.")
+    if problems:
+        log("Couldn't pin these, so each keeps the pin it had, if any:\n" + "\n".join(problems))
+    if changed:
+        sys.exit(f"A publisher replaced a file it had already published ({', '.join(changed)}). Don't release the kit "
+                 "until you know why.")
+
+
 def cmd_sync(root: Path, args: argparse.Namespace) -> None:
     global LOG_FILE
     (root / "logs").mkdir(exist_ok=True)
@@ -3055,6 +3181,7 @@ def main() -> None:
     p = sub.add_parser("update", help="install the newest version of the kit's own code, keeping kit.json changes")
     p.add_argument("--force", action="store_true", help="reinstall even if this is the newest version")
     p.add_argument("-y", "--yes", action="store_true", help="don't ask before installing")
+    sub.add_parser("pins", help="pin the newest build of every program, with its checksum, in tools/pins.json (before a release)")
     p = sub.add_parser("estimate", help="about how many GB this kit.json needs (no internet needed)")
     p.add_argument("--essentials", action="store_true", help="just the essentials")
     p = sub.add_parser("drives", help="the plugged-in drives the kit could go on")
@@ -3084,7 +3211,7 @@ def main() -> None:
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
                 "drives": cmd_drives, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials, "fit": cmd_fit, "share": cmd_share,
-                "autostart": cmd_autostart}
+                "autostart": cmd_autostart, "pins": cmd_pins}
     if args.cmd not in commands:
         ap.print_help()
         return

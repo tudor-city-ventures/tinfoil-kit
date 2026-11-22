@@ -12,6 +12,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -51,7 +52,8 @@ for rel, size in (("zim/testmed_en_all_maxi_2026-01.zim", 70_000), ("zim/testsur
     (R / rel).parent.mkdir(parents=True, exist_ok=True)
     (R / rel).write_bytes(os.urandom(size))
 shutil.copy(R / "hf/tiny/Tiny-Q8_0.gguf", R / "hf/tiny_v2/Tiny-Q8_0.gguf")
-for rel in ("gh/llama-b99990-bin-ubuntu-x64.tar.gz", "gh2/photon-1.3.0.jar", "gh2/photon-1.2.1.jar"):   # only looked up, never unpacked
+for rel in ("gh/llama-b99990-bin-ubuntu-x64.tar.gz", "gh2/photon-1.3.0.jar", "gh2/photon-1.2.1.jar",   # only looked up, never unpacked
+            "adoptium/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz", "photon/north-america/usa/photon-db-usa-1.3-latest.tar.bz2"):
     (R / rel).parent.mkdir(parents=True, exist_ok=True)
     (R / rel).write_bytes(os.urandom(1000))
 (R / "FLAKY").touch()   # the first model download drops halfway, so sync has to resume it
@@ -202,12 +204,60 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # here is a beta, and a beta is taken only when there's nothing else.
     rt = work / "runtimes"
     shutil.copytree(TESTS.parent / "tools", rt / "tools")
-    (rt / "kit.json").write_text(json.dumps({"runtimes": [
+    programs = [
         {"id": "llama.cpp-linux-x64", "type": "github", "repo": "ggml-org/llama.cpp", "asset": "llama-*-bin-ubuntu-x64.tar.gz"},
-        {"id": "photon", "type": "github", "repo": "komoot/photon", "asset": "photon-[0-9]*.jar"}]}))
+        {"id": "photon", "type": "github", "repo": "komoot/photon", "asset": "photon-[0-9]*.jar"},
+        {"id": "java-linux-x64", "type": "adoptium", "os": "linux", "arch": "x64"}]
+    (rt / "kit.json").write_text(json.dumps({"settings": {"pin_programs": False}, "runtimes": programs}))
     rc, out = kit("plan", root=rt)
     check("plan: llama.cpp's nightly build, and Photon's full release rather than its newer beta",
-          rc == 0 and "b99990" in out and "1.3.0" in out and "2.0.0-beta" not in out, out)
+          rc == 0 and "b99990" in out and "1.3.0" in out and "2.0.0-beta" not in out and "jdk-21.0.9+10" in out, out)
+
+    # A release names each program's build and its checksum (tools/pins.json): sync takes that build rather than
+    # a newer one, and refuses a file that changed after it was pinned.
+    def pin(**pins):
+        (rt / "tools" / "pins.json").write_text(json.dumps({"_readme": ["test"], **pins}))
+    llama, photon_old = sha(R / "gh/llama-b99990-bin-ubuntu-x64.tar.gz"), sha(R / "gh2/photon-1.2.1.jar")
+    java = sha(R / "adoptium/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz")
+    (rt / "kit.json").write_text(json.dumps({"runtimes": programs}))
+    pin(photon={"version": "1.2.1", "sha256": photon_old}, **{"llama.cpp-linux-x64": {"version": "b99990", "sha256": llama},
+                                                               "java-linux-x64": {"version": "jdk-21.0.9+10", "sha256": java}})
+    rc, out = kit("plan", root=rt)
+    check("pins: plan takes the pinned builds, not Photon's newest release", rc == 0 and "b99990" in out
+          and "1.2.1" in out and "1.3.0" not in out and "jdk-21.0.9+10" in out and "error" not in out, out)
+    pin(photon={"version": "1.2.1", "sha256": "0" * 64})
+    rc, out = kit("plan", root=rt)
+    check("pins: a file that changed after it was pinned is refused",
+          "changed after this version of the kit pinned it" in out and "1.3.0" not in out, out)
+    pin(**{"llama.cpp-linux-x64": {"version": "b12345", "sha256": llama}})
+    rc, out = kit("plan", root=rt)
+    check("pins: a pinned build its publisher took down says so", "no longer publishes b12345" in out, out)
+    (rt / "kit.json").write_text(json.dumps({"settings": {"pin_programs": False}, "runtimes": programs}))
+    rc, out = kit("plan", root=rt)
+    check("pins: \"pin_programs\": false takes the newest builds", rc == 0 and "b99990" in out and "1.3.0" in out, out)
+    # Photon opens only address databases made for its own version: when none is published for the pinned one,
+    # the kit takes the Photon release that opens the newest database.
+    (rt / "kit.json").write_text(json.dumps({"runtimes": programs, "maps": {"enabled": True}}))
+    pin(photon={"version": "2.0.0-beta", "sha256": "0" * 64})
+    rc, out = kit("plan", root=rt)
+    check("pins: a pinned Photon with no address database gives way to the release that opens the newest one",
+          re.search(r"photon\s.*1\.3\.0", out) and "2.0.0-beta" not in out and re.search(r"geocoder\s.*1\.3/", out), out)
+
+    # ./kit pins, before a release: the newest builds and their checksums
+    (rt / "kit.json").write_text(json.dumps({"runtimes": programs}))
+    pin(photon={"version": "1.2.1", "sha256": photon_old})
+    rc, out = kit("pins", root=rt)
+    pins = json.loads((rt / "tools" / "pins.json").read_text())
+    check("./kit pins: the newest build of each program, with its publisher's SHA-256", rc == 0
+          and pins.get("llama.cpp-linux-x64") == {"version": "b99990", "sha256": llama}
+          and pins.get("photon") == {"version": "1.3.0", "sha256": sha(R / "gh2/photon-1.3.0.jar")}
+          and pins.get("java-linux-x64") == {"version": "jdk-21.0.9+10", "sha256": java}
+          and "photon: 1.2.1 -> 1.3.0" in out and "llama.cpp-linux-x64: not pinned -> b99990" in out, out)
+    pin(photon={"version": "1.3.0", "sha256": "0" * 64})
+    rc, out = kit("pins", root=rt)
+    check("./kit pins: a file replaced under the same version keeps its old pin, and the run fails", rc != 0
+          and json.loads((rt / "tools" / "pins.json").read_text())["photon"]["sha256"] == "0" * 64
+          and "replaced a file it had already published" in out, out)
 
     (drive / ".kit" / "state.json").unlink()
     rc, out = kit("sync", "-y")
