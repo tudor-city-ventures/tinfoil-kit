@@ -53,7 +53,8 @@ for rel, size in (("zim/testmed_en_all_maxi_2026-01.zim", 70_000), ("zim/testsur
     (R / rel).write_bytes(os.urandom(size))
 shutil.copy(R / "hf/tiny/Tiny-Q8_0.gguf", R / "hf/tiny_v2/Tiny-Q8_0.gguf")
 for rel in ("gh/llama-b99990-bin-ubuntu-x64.tar.gz", "gh2/photon-1.3.0.jar", "gh2/photon-1.2.1.jar",   # only looked up, never unpacked
-            "adoptium/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz", "photon/north-america/usa/photon-db-usa-1.3-latest.tar.bz2"):
+            "adoptium/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz", "photon/north-america/usa/photon-db-usa-1.3-latest.tar.bz2",
+            "geofabrik/us-northeast-latest.osm.pbf"):
     (R / rel).parent.mkdir(parents=True, exist_ok=True)
     (R / rel).write_bytes(os.urandom(1000))
 (R / "FLAKY").touch()   # the first model download drops halfway, so sync has to resume it
@@ -65,7 +66,7 @@ mock = subprocess.Popen([sys.executable, str(TESTS / "mock_remote.py"), str(port
 env = {**os.environ, "KIT_KIWIX_CATALOG": f"{base}/catalog/v2/entries?count=-1", "KIT_KIWIX_RELEASES": base + "/release/{product}/",
        "KIT_GITHUB_API": base, "KIT_HF": base, "KIT_ADOPTIUM_API": base + "/adoptium", "KIT_MAVEN": base + "/maven",
        "KIT_NPM": base + "/npm", "KIT_GITHUB_WEB": base + "/ghweb", "KIT_PROTOMAPS_BUILDS": base + "/protomaps/builds.json",
-       "KIT_PROTOMAPS_BUILD_BASE": base + "/protomaps", "KIT_PHOTON_DUMPS": base + "/photon/"}
+       "KIT_PROTOMAPS_BUILD_BASE": base + "/protomaps", "KIT_PHOTON_DUMPS": base + "/photon/", "KIT_GEOFABRIK": base + "/geofabrik"}
 
 drive = work / "drive" / "TinfoilKit"
 shutil.copytree(TESTS.parent / "tools", drive / "tools")
