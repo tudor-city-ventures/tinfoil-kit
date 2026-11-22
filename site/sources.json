@@ -124,8 +124,8 @@
    "group": "Medical",
    "title": "MedlinePlus",
    "why": "Plain-language guides to illnesses, tests and medicines, from the US National Library of Medicine.",
-   "bytes": 1900000000,
-   "estimated": true,
+   "bytes": 1944841216,
+   "estimated": false,
    "presets": [
     "recommended",
     "no-ai",
@@ -137,8 +137,8 @@
    "group": "Medical",
    "title": "CDC Travelers' Health",
    "why": "The CDC's guide to diseases, vaccines and safe food and water.",
-   "bytes": 200000000,
-   "estimated": true,
+   "bytes": 178327552,
+   "estimated": false,
    "presets": [
     "recommended",
     "no-ai",
@@ -233,8 +233,8 @@
    "group": "Preparedness",
    "title": "Learning Self-Reliance",
    "why": "Videos on homesteading, beekeeping and getting ready for emergencies.",
-   "bytes": 4000000000,
-   "estimated": true,
+   "bytes": 3974044672,
+   "estimated": false,
    "presets": [
     "recommended",
     "no-ai",
@@ -274,8 +274,8 @@
    "group": "Repair and skills",
    "title": "CD3WD",
    "why": "Over 900 practical manuals on farming, water, health and building, from aid groups.",
-   "bytes": 600000000,
-   "estimated": true,
+   "bytes": 572638208,
+   "estimated": false,
    "presets": [
     "recommended",
     "no-ai",
