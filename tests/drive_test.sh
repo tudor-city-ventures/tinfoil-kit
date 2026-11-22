@@ -72,8 +72,8 @@ mac() {
   download_kit "$src"
   n="$(drive_number "$src" TINFOIL)"
   echo "SETUP lists TINFOIL as drive ${n:-(not at all)}"
-  # Answers: an external drive, TINFOIL, start downloading, don't open the kit, close.
-  setup "$src" setup.log "1\n${n:-1}\ny\nn\n\n"
+  # Answers: keep where it's for, an external drive, TINFOIL, start downloading, don't open the kit, close.
+  setup "$src" setup.log "\n1\n${n:-1}\ny\nn\n\n"
   [ -d "$kit/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
   echo "$(find "$kit" -name '._*' | wc -l | tr -d ' ') ._ files on the drive"
@@ -105,9 +105,9 @@ mac() {
   kit="$HOME/TinfoilKit" agent="$HOME/Library/LaunchAgents/com.tinfoilkit.kit.plist"
   rm -rf "$kit"
   download_kit "$src"
-  # Answers: this Mac, yes even if the disk is short of room (SETUP asks then), download, close.
+  # Answers: keep where it's for, this Mac, yes even if the disk is short of room (SETUP asks then), download, close.
   room=""; [ "$(df -Pk "$HOME" | awk 'NR == 2 {print int($4 * 1024 / 1e9)}')" -lt 51 ] && room="y\n"
-  setup "$src" setup-mac.log "2\n${room}y\n\n" --home-server
+  setup "$src" setup-mac.log "\n2\n${room}y\n\n" --home-server
   [ -d "$kit/models" ] || fail "the kit isn't set up in $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
   tmutil isexcluded "$kit" | grep -q Excluded || fail "Time Machine would back up $kit"

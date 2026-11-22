@@ -1,4 +1,5 @@
-"""Build site/sources.json (the kit builder's data) and site/kit.json from the repo's kit.json.
+"""Build site/sources.json (the kit builder's data), and copy kit.json and tools/regions.json (the places it offers
+for "Where do you live?") into site/.
 
 usage: python3 site/build_sources.py [plan.json]
 plan.json (optional) is the output of `./kit plan --json`: live sizes for every item. Without it,
@@ -125,9 +126,11 @@ def main():
         add(m["id"], "AI models", m.get("note", ""), m.get("enabled", True),
             m["id"] in (default_model, "Gemma-4-E4B"))
     mp = cfg["maps"]
-    add("maps", "Maps", f"{mp['label']}: about 20-30 GB", mp.get("enabled", True), True)
-    if "maps" not in live:
-        out[-1]["bytes"] = int(25 * GB)
+    regions = json.loads((ROOT / "tools" / "regions.json").read_text(encoding="utf-8"))
+    place = next(r for r in regions["regions"] if r["id"] == mp["region"])
+    add("maps", "Maps", place["name"], mp.get("enabled", True), True)
+    if "maps" not in live:     # the map viewer, fonts and icons, and the place's map, road data and address search
+        out[-1]["bytes"] = int(0.1 * GB + sum(place["mb"].values()) * 1e6)
     for z in cfg["library"]:
         add(z["zim"], group_for(z["zim"]), z.get("note", ""), z.get("enabled", True),
             z.get("enabled", True) and z.get("priority", 9) == 1)
@@ -135,6 +138,7 @@ def main():
     site = ROOT / "site"
     (site / "sources.json").write_text(json.dumps({"default_model": default_model, "sources": out}, indent=1) + "\n")
     (site / "kit.json").write_text((ROOT / "kit.json").read_text())
+    (site / "regions.json").write_text((ROOT / "tools" / "regions.json").read_text(encoding="utf-8"), encoding="utf-8")
     print(f"wrote {len(out)} sources")
 
 

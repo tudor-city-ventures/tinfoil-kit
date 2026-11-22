@@ -1,6 +1,7 @@
 name: refresh builder sizes
-# Asks every source for its current size (./kit plan --json downloads nothing) and commits
-# site/sources.json when it changed, so the website's kit builder stays accurate.
+# Asks every source for its current size (./kit plan --json downloads nothing), and rebuilds the places SETUP and the
+# builder offer for "Where do you live?" (site/build_regions.py), and commits site/sources.json and tools/regions.json
+# when they changed, so the website's kit builder and the kit's region list stay accurate.
 # Only the commit job can write to the repo, and it runs none of the kit's code: the build job, which talks to
 # every download host, has a read-only token and hands its result over as an artifact.
 on:
@@ -12,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -23,11 +24,14 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - name: list sources that couldn't be resolved (they would fail in a real sync too)
         run: python3 -c "import json, sys; [print(k, '->', v['error']) for k, v in json.load(open(sys.argv[1])).items() if v['error']]" "$RUNNER_TEMP/plan.json"
+      - run: python3 site/build_regions.py
       - run: python3 site/build_sources.py "$RUNNER_TEMP/plan.json"
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: sizes
-          path: site/sources.json
+          path: |
+            site/sources.json
+            tools/regions.json
           retention-days: 1
 
   commit:
@@ -44,9 +48,10 @@ jobs:
         with:
           name: sizes
           path: ${{ runner.temp }}/sizes
-      - name: commit the new sizes, and nothing else
+      - name: commit the new sizes and places, and nothing else
         env:
-          NEW: ${{ runner.temp }}/sizes/sources.json
+          NEW: ${{ runner.temp }}/sizes/site/sources.json
+          REGIONS: ${{ runner.temp }}/sizes/tools/regions.json
         run: |
           python3 -I - "$NEW" site/sources.json <<'PY'
           import json, sys
@@ -56,10 +61,29 @@ jobs:
           ok = rest(new) == rest(old) and all(type(s["bytes"]) is int and type(s["estimated"]) is bool for s in new["sources"])
           sys.exit(0 if ok else "The new sources.json changes more than sizes, so it isn't committed. Run build_sources.py by hand.")
           PY
+          # The kit downloads what regions.json names: only Geofabrik extracts and Photon databases (by relative path,
+          # no ".."), two-letter country codes, and Wikipedia's file names.
+          python3 -I - "$REGIONS" <<'PY'
+          import json, re, sys
+          d = json.load(open(sys.argv[1], encoding="utf-8"))
+          pbf = re.compile(r"[a-z0-9][a-z0-9/_-]*-latest\.osm\.pbf")
+          photon = re.compile(r"[a-z0-9][a-z0-9/_-]*/photon-db-[a-z0-9_-]+-\d+\.\d+-latest\.tar\.bz2")
+          regions, langs = d.get("regions"), d.get("languages")
+          ok = isinstance(regions, list) and len(regions) > 100 and isinstance(langs, dict) and "en" in langs
+          ok = ok and all(pbf.fullmatch(r["pbf"]) and re.fullmatch(r"[a-z]{2}", r["country"])
+                          and (photon.fullmatch(r["photon"]) if "photon" in r else True)
+                          and all(c in langs for c in r["langs"]) for r in regions)
+          ok = ok and all(re.fullmatch(r"[a-z]{2,3}(-[a-z]+)?", c) and re.fullmatch(r"wikipedia_[a-z-]+_all_(maxi|nopic|mini)", v["zim"])
+                          for c, v in langs.items())
+          ok = ok and not any(".." in r["pbf"] or ".." in r.get("photon", "") for r in regions)
+          sys.exit(0 if ok else "The new regions.json has something the kit shouldn't download, so it isn't committed.")
+          PY
           cp "$NEW" site/sources.json
-          git diff --quiet site/ && { echo "no change"; exit 0; }
+          cp "$REGIONS" tools/regions.json
+          cp "$REGIONS" site/regions.json
+          git diff --quiet site/ tools/ && { echo "no change"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "Refresh kit builder sizes"
+          git commit -am "Refresh kit builder sizes and places"
           git pull --rebase origin main
           git push origin HEAD:main

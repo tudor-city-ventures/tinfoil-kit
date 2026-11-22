@@ -542,11 +542,11 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # SETUP.command's choices, with a stand-in ./kit that exits as told. Its update rewrites SETUP.command in
     # place, the hard case for bash, which reads a script as it goes.
     stand_in = """#!/bin/bash
-case "$1" in drives|place) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
+case "$1" in drives|place|region) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
 echo "kit $1" >> calls.log
 case "$1" in
   estimate) echo "${ESTIMATE:-1}";;
-  update) [ "$UPDATE" = 3 ] && sed 's/Step 2 of 3:/Step 2 of 3 (new version):/' SETUP.command > new && cat new > SETUP.command
+  update) [ "$UPDATE" = 3 ] && sed 's/: download\. Here/: download (new version). Here/' SETUP.command > new && cat new > SETUP.command
           exit $UPDATE;;
   plan) exit $PLAN;;
   sync) mkdir -p logs; echo "===== sync started =====" >> logs/sync-2026-01-01.log
@@ -565,6 +565,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         (path / "tools").mkdir()
         (path / "tools" / "kit.py").write_text("# stand-in\n")
         (path / "GUIDE.md").write_text("guide\n")
+        shutil.copy(TESTS.parent / "kit.json", path)     # ./kit region changes it
         if git:
             (path / ".git").mkdir()
         return path
@@ -572,7 +573,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     setup = kit_folder(work / "setup")
     (setup / ".kit").mkdir()     # set up before, so SETUP doesn't ask where it goes
 
-    def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="y\nn\n\n", args=(), **env_extra):
+    def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="\ny\nn\n\n", args=(), **env_extra):
         shutil.copy(TESTS.parent / "SETUP.command", folder)
         (folder / "calls.log").write_text("")
         (folder / "home.log").write_text("")
@@ -592,7 +593,8 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     (setup / ".kit" / "state.json").unlink()
     rc, out, calls = run_setup(update=3)
     check("SETUP: after updating the kit it starts over on the new SETUP, once",
-          rc == 0 and "Step 2 of 3 (new version):" in out and out.count("TINFOIL KIT SETUP") == 1
+          rc == 0 and "Step 2 of 3: download (new version)" in out and out.count("TINFOIL KIT SETUP") == 1
+          and out.count("Maps are for") == 1
           and calls == ["update", "plan", "sync", "test"], out)
     rc, out, calls = run_setup(update=1)
     check("SETUP: the kit's own update failed: carries on", rc == 0 and "All set" in out and calls == ["update", "plan", "sync", "test"], out)
@@ -607,18 +609,24 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("SETUP: offline: stops before asking to download", rc == 1 and calls == ["update", "plan"] and "Start downloading" not in out, out)
     home = ["share on", "autostart on", "share"]
     check("SETUP: a normal setup doesn't share the kit or start it with the computer", (setup / "home.log").read_text() == "")
-    rc, out, calls = run_setup(args=("--home-server",), answers="y\n\n")
+    rc, out, calls = run_setup(args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: shares the kit, starts it with the computer, shows the address, and doesn't open it",
           rc == 0 and calls[:4] == ["update", "plan", "sync", "test"] and (setup / "home.log").read_text().splitlines() == home
           and "Home server" in out and "Open the kit now" not in out and "double-click START-HERE" not in out, out)
-    rc, out, calls = run_setup(update=3, args=("--home-server",), answers="y\n\n")
+    rc, out, calls = run_setup(update=3, args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: still a home server after the kit updates itself and starts over",
           rc == 0 and "(new version)" in out and (setup / "home.log").read_text().splitlines() == home, out)
-    rc, out, calls = run_setup(sync=1, args=("--home-server",), answers="y\n\n")
+    rc, out, calls = run_setup(sync=1, args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: some downloads failed but the kit works: shares it anyway",
           rc == 1 and "didn't finish" in out and (setup / "home.log").read_text().splitlines() == home, out)
-    rc, out, calls = run_setup(test=1, args=("--home-server",), answers="y\n\n")
+    rc, out, calls = run_setup(test=1, args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: checks failed: doesn't share it", rc == 1 and (setup / "home.log").read_text() == "", out)
+    rc, out, calls = run_setup(answers="Bavaria\n1\ny\nn\n\n")
+    c = json.loads((setup / "kit.json").read_text())
+    check("SETUP update: says where the maps are for, and changes the place and Wikipedia's language when told",
+          rc == 0 and "Maps are for US Northeast" in out and "Maps: Germany: Bayern" in out and c["maps"]["region"] == "bayern"
+          and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_de_all_"], out)
+    shutil.copy(TESTS.parent / "kit.json", setup)
 
     # The first run asks where the kit goes, moves it there, and the copy there does the rest. Drives are folders
     # in a stand-in for /Volumes; /dev/shm, a different disk, stands in for a drive the kit has to be copied to.
@@ -628,8 +636,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
                               "echo 'disk 2000000000 1000000000 1000000000 50% /'\n")
     (roomy / "df").chmod(0o755)
 
-    def first_run(answers, drives=(), git=False, home_kit=None, **env_extra):
-        """SETUP's first run, on a computer whose disk has 1 TB free (a stand-in df)."""
+    def first_run(answers, drives=(), git=False, home_kit=None, where="\n", **env_extra):
+        """SETUP's first run, on a computer whose disk has 1 TB free (a stand-in df). where: the answers to "Where do
+        you live?" (Return keeps the kit's place)."""
         place = work / "place"
         shutil.rmtree(place, ignore_errors=True)
         home, vols = place / "home", place / "Volumes"
@@ -644,7 +653,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
             (home / "TinfoilKit" / "notes.txt").write_text("mine")
         dl = kit_folder(place / "Downloads" / "tinfoilkit-main", git=git)
         (dl / "calls.log").write_text("")
-        p = subprocess.run(["bash", str(dl / "SETUP.command")], input=answers, capture_output=True, text=True, timeout=60,
+        p = subprocess.run(["bash", str(dl / "SETUP.command")], input=where + answers, capture_output=True, text=True, timeout=60,
                            env={**os.environ, "HOME": str(home), "KIT_DRIVES": str(env_extra.pop("KIT_DRIVES", vols)),
                                 "PATH": f"{roomy}:{os.environ['PATH']}",
                                 "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0", **env_extra})
@@ -685,6 +694,25 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           and dl.exists() and not (home / "TinfoilKit" / "SETUP.command").exists(), out)
     rc, out, _, _, _ = first_run("3\n")
     check("SETUP first run: a wrong answer asks again, and a closed window stops it", rc == 1 and "Type a number from 1 to 2" in out, out)
+
+    def placed_cfg(where):
+        c = json.loads((where / "kit.json").read_text())
+        return c["maps"].get("region"), [z["zim"] for z in c["library"] if z["zim"].startswith("wikipedia_")]
+
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Atlantis\nUSA\nTexas\n1\n")
+    check("SETUP first run: asks where you live first, says when it can't tell, and sets the maps and Wikipedia",
+          rc == 0 and "Step 1 of 4: where do you live?" in out and 'No place called "Atlantis"' in out
+          and '"USA" matches' in out and "Maps: Texas" in out and "Step 2 of 4: where should the kit go" in out
+          and "Step 3 of 4: download" in out and "Step 4 of 4:" in out and placed_ok(home / "TinfoilKit")
+          and placed_cfg(home / "TinfoilKit") == ("us/texas", ["wikipedia_en_all_maxi"]), out)
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Georgia\n1\n2\n")
+    check("SETUP first run: a name two places share: asks which, then which language",
+          rc == 0 and "Which one?" in out and "Georgia (United States)" in out and "Georgia (Asia)" in out
+          and "Which language should Wikipedia be in?" in out
+          and placed_cfg(home / "TinfoilKit") == ("us/georgia", ["wikipedia_es_all_maxi"]), out)
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Texas\n1\n", home_kit="kit")
+    check("SETUP first run: a kit already in the home folder gets the place chosen in the download",
+          rc == 0 and "already a Tinfoil Kit" in out and placed_cfg(home / "TinfoilKit")[0] == "us/texas", out)
     shm = Path("/dev/shm")
     # (Docker mounts /dev/shm noexec, where the copied ./kit can't run.)
     if (shm.is_dir() and os.access(shm, os.W_OK) and shm.stat().st_dev != work.stat().st_dev

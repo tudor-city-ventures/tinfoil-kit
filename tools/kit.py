@@ -96,7 +96,7 @@ MAPS_DEFAULTS: Dict[str, Any] = {
     "detail_bbox": [-80.6, 38.8, -66.8, 47.6],
     "detail_maxzoom": 15,
     "world_maxzoom": 7,
-    "routing_osm_pbf": "https://download.geofabrik.de/north-america/us-northeast-latest.osm.pbf",
+    "routing_osm_pbf": f"{GEOFABRIK.rstrip('/')}/north-america/us-northeast-latest.osm.pbf",
     "routing_profiles": ["car", "foot"],
     "geocoder_country": "us",
     "units": "imperial",
@@ -685,13 +685,13 @@ class Resolver:
 
     def _routing(self, item: Item) -> None:
         self._map_area()
-        url = item.cfg["url"]
-        h = http_head(url)
+        latest = item.cfg["url"]
+        url, h = geofabrik_head(latest)
         size = content_length(h)
         gh = self.resolved.get("graphhopper")
         item.kind, item.dest = "custom", "maps/routing"
         # which extract it is, then its date: another place's road data is new even on the same day
-        item.version = f"{url.rsplit('/', 1)[-1].replace('-latest.osm.pbf', '')} {http_day(h) or size}"
+        item.version = f"{latest.rsplit('/', 1)[-1].replace('-latest.osm.pbf', '')} {http_day(h) or size}"
         item.extra["gh_version"] = gh.version if gh is not None and not gh.error else ""
         item.files = [RemoteFile(name="region.osm.pbf", url=url, size=size, md5_sidecar=True)]
 
@@ -737,6 +737,23 @@ class Resolver:
             item.files = [RemoteFile(name=url.rsplit("/", 1)[-1], url=url, size=size, md5_sidecar=True)]
             return
         raise ValueError(f"couldn't find a Photon database file in {folder} for version(s) {', '.join(wanted)}")
+
+
+def geofabrik_head(url: str) -> Tuple[str, Dict[str, str]]:
+    """A road data file's address and headers. Geofabrik's -latest sends you on to the day's file (name-YYMMDD), which
+    can be missing while they publish it: then the newest of the week before."""
+    try:
+        return url, http_head(url)
+    except HttpError as first:
+        if not url.endswith("-latest.osm.pbf"):
+            raise
+        for days in range(1, 8):
+            dated = url[:-len("-latest.osm.pbf")] + (dt.date.today() - dt.timedelta(days=days)).strftime("-%y%m%d.osm.pbf")
+            try:
+                return dated, http_head(dated)
+            except HttpError:
+                continue
+        raise first
 
 
 def tiles_estimate(bbox: List[float], maxzoom: Any, roads_bytes: Optional[int] = None) -> int:
@@ -1191,6 +1208,21 @@ def sweep_partials(root: Path, state: Dict[str, Any], items: List[Item]) -> None
             log(f"Removed an unfinished download that's out of date: {rel}")
         if not p.exists():
             partials.pop(rel)
+
+
+def drop_replaced_wikipedias(root: Path, state: Dict[str, Any], items: List[Item]) -> None:
+    """A Wikipedia in a language ./kit region switched away from (50 to 130 GB) goes once the new one is in."""
+    wanted = [i for i in items if i.section == "library" and WIKIPEDIA_RE.match(i.id) and i.enabled]
+    if not wanted or any(state["items"].get(i.key, {}).get("version") != i.version for i in wanted):
+        return
+    listed = {i.key for i in items}
+    for key, v in list(state["items"].items()):
+        section, _, ident = key.partition("/")
+        if section == "library" and WIKIPEDIA_RE.match(ident) and key not in listed and "files" in v:
+            for name in v["files"]:
+                (root / v["dest"] / name).unlink(missing_ok=True)
+            del state["items"][key]
+            log(f"Removed {ident}: kit.json has Wikipedia in another language now.")
 
 
 def matches(path: Path, f: RemoteFile, expected: Dict[str, str]) -> Optional[str]:
@@ -2308,6 +2340,8 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
             log("\nStopped. Everything finished so far is saved; run ./kit sync again to resume.")
             sys.exit(130)
         errors = [i for i in items if i.enabled and i.status == "error"]
+        if not part:
+            drop_replaced_wikipedias(root, state, items)
         if not failures and not errors and not part:
             state["last_sync"] = now_iso()
         save_state(root, state)
@@ -2672,10 +2706,12 @@ def fold(s: str) -> str:
 
 
 def find_regions(text: str) -> List[Dict[str, Any]]:
-    """Places matching what someone typed, best first: an exact name, then names starting with it, then the rest."""
+    """The places that best match what someone typed: exact names (or other names: "UK", "Bavaria", a big town) if
+    any, else names that start with it, else names with a word that starts with it, else names that contain it.
+    Nothing typed: all of them."""
     q = fold(text)
     if not q:
-        return []
+        return list(regions()["regions"])
     found = []
     for r in regions()["regions"]:
         keys = [fold(k) for k in [r["name"], r["id"], *r.get("also", []), *r["name"].split(": ")[1:]]]
@@ -2691,7 +2727,7 @@ def find_regions(text: str) -> List[Dict[str, Any]]:
             continue
         found.append((rank, r))
     best = min((rank for rank, _ in found), default=None)
-    return [r for rank, r in found if best != 0 or rank == 0]
+    return [r for rank, r in found if rank == best]
 
 
 def wikipedia_langs(cfg: Dict[str, Any]) -> List[str]:
