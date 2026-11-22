@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,9 +70,10 @@ Commands (run from the kit's app folder, e.g.  ./kit sync):
                      access code. Shows the address, the code and a QR code.
   autostart [on|off] Start the kit whenever this computer starts, for a home server (Linux: a
                      systemd user service; Mac: when you log in).
-  region [PLACE]     Where you live (a US state or a country): sets the map area, the road data for
-                     directions, address search, home and units. --wikipedia en,es also picks Wikipedia's
-                     languages; --find WORDS lists places; --languages lists a place's languages.
+  region [PLACE]     Where you live (a US state or a country; places nearby too, with commas): sets the map
+                     areas, the road data for directions, address search, home and units. --wikipedia en,es
+                     also picks Wikipedia's languages; --find WORDS lists places; --languages lists a place's
+                     languages.
   pick               What goes in the kit, by name (SETUP's options): --no-ai, --models IDS (just
                      those), --skip IDS, --add IDS. --ask asks the kit builder's questions instead.
                      Either one sets "picked" in kit.json, so SETUP doesn't ask again.
@@ -951,29 +953,95 @@ func regionByID(ident any) *obj {
 	return nil
 }
 
+// regionsOf is the places kit.json's region names, one id or a list of them as ./kit region sets it, and the first
+// id the kit doesn't know, if any.
+func regionsOf(v any) ([]*obj, string) {
+	ids, ok := v.([]any)
+	if !ok {
+		ids = []any{v}
+	}
+	var rs []*obj
+	for _, id := range ids {
+		r := regionByID(id)
+		if r == nil {
+			return nil, pyStr(id)
+		}
+		if !slices.Contains(rs, r) {
+			rs = append(rs, r)
+		}
+	}
+	return rs, ""
+}
+
 var pbfPath = regexp.MustCompile(`^[a-z0-9][a-z0-9/_-]*-latest\.osm\.pbf$`)
 
-// regionMaps is a place's map settings, as kit.json's maps would spell them. Its road data can only come from
-// Geofabrik.
-func regionMaps(r *obj) (*obj, error) {
-	pbf := r.str("pbf")
-	if strings.Contains(pbf, "..") || !pbfPath.MatchString(pbf) {
-		return nil, fmt.Errorf("tools/regions.json has a bad road data path for %s", pyStr(r.get("id")))
+// regionMaps is the map settings for places, as kit.json's maps would spell them: street detail and directions for
+// all of them (several places have a list of map areas and of road data, which can only come from Geofabrik), and
+// the first place's home, units, language and address search.
+func regionMaps(rs ...*obj) (*obj, error) {
+	var called []string
+	var boxes, roads []any
+	for _, r := range rs {
+		pbf := r.str("pbf")
+		if strings.Contains(pbf, "..") || !pbfPath.MatchString(pbf) {
+			return nil, fmt.Errorf("tools/regions.json has a bad road data path for %s", pyStr(r.get("id")))
+		}
+		called, boxes = append(called, r.str("name")), append(boxes, r.get("bbox"))
+		roads = append(roads, strings.TrimRight(geofabrik, "/")+"/"+pbf)
 	}
+	first := rs[0]
 	country := ""
-	if truthy(r.get("photon")) { // Photon publishes none for a few places
-		country = r.str("country")
+	if truthy(first.get("photon")) { // Photon publishes none for a few places
+		country = first.str("country")
 	}
 	lang := any("en")
-	if l := r.list("langs"); len(l) > 0 {
+	if l := first.list("langs"); len(l) > 0 {
 		lang = l[0]
 	}
-	return newObj("label", r.get("name"), "home", with(r.child("home"), "zoom", 10), "detail_bbox", r.get("bbox"),
-		"routing_osm_pbf", strings.TrimRight(geofabrik, "/")+"/"+pbf,
+	m := newObj("label", names(called), "home", with(first.child("home"), "zoom", 10), "detail_bbox", boxes[0],
+		"routing_osm_pbf", roads[0],
 		"geocoder_country", country,
 		// a place with no address database of its own gets its whole region of the world's (most of Europe)
-		"geocoder_wide", truthy(r.get("addresses_wide")),
-		"units", r.get("units"), "lang", lang), nil
+		"geocoder_wide", truthy(first.get("addresses_wide")),
+		"units", first.get("units"), "lang", lang)
+	if len(rs) > 1 {
+		m.set("detail_bbox", boxes)
+		m.set("routing_osm_pbf", roads)
+	}
+	return m, nil
+}
+
+// mapAreas is the map's areas, [west, south, east, north] each: detail_bbox is one, or a list of them.
+func mapAreas(m *obj) ([][]float64, error) {
+	v := m.get("detail_bbox")
+	l, _ := v.([]any)
+	if len(l) == 0 {
+		return nil, fmt.Errorf("detail_bbox in kit.json's maps isn't a map area: %s", pyRepr(v))
+	}
+	if _, nested := l[0].([]any); !nested {
+		l = []any{v}
+	}
+	var out [][]float64
+	for _, b := range l {
+		box, err := floats(b)
+		if err != nil {
+			return nil, err
+		}
+		if len(box) != 4 {
+			return nil, fmt.Errorf("expected 4 values in detail_bbox, got %d", len(box))
+		}
+		out = append(out, box)
+	}
+	return out, nil
+}
+
+// numbers is a map area's numbers, as the map programs take them.
+func numbers(box []float64) []string {
+	var out []string
+	for _, x := range box {
+		out = append(out, strconv.FormatFloat(x, 'f', -1, 64))
+	}
+	return out
 }
 
 func mapsSettings(cfg *obj) *obj {
@@ -983,10 +1051,10 @@ func mapsSettings(cfg *obj) *obj {
 	}
 	preset := newObj()
 	if truthy(user.get("region")) {
-		if r := regionByID(user.get("region")); r == nil {
-			preset = newObj("region_error", "kit.json's region '"+pyStr(user.get("region"))+"' isn't one the kit "+
+		if rs, unknown := regionsOf(user.get("region")); unknown != "" {
+			preset = newObj("region_error", "kit.json's region '"+unknown+"' isn't one the kit "+
 				"knows; ./kit region --find WORDS lists them")
-		} else if p, err := regionMaps(r); err != nil {
+		} else if p, err := regionMaps(rs...); err != nil {
 			preset = newObj("region_error", err.Error())
 		} else {
 			preset = p
@@ -1777,9 +1845,9 @@ func init() {
 			valueArg("--code", "", "the access code to use (6 to 64 letters or digits) instead of a random one"),
 			flagArg("--qr", "draw the QR code even when not printing to a terminal")}},
 		{name: "autostart", help: "start the kit whenever this computer starts, for a home server", run: cmdAutostart, args: []cliArg{onOff}},
-		{name: "region", help: "where you live: sets the map area, directions, address search, home and Wikipedia's language; and how much of Wikipedia",
+		{name: "region", help: "where you live, and places nearby: sets the map areas, directions, address search, home and Wikipedia's language; and how much of Wikipedia",
 			run: cmdRegion, args: []cliArg{
-				posArg("place", "*", "a US state or a country (a name, or an id from --find)"),
+				posArg("place", "*", "a US state or a country (a name, or an id from --find); several with commas, where you live first"),
 				listArg("--find", "WORDS", "list the places matching WORDS: id, name, group"),
 				flagArg("--languages", "the Wikipedia languages to offer for the place: codes, name, GB"),
 				valueArg("--wikipedia", "CODES", "Wikipedia's languages, comma-separated (en, es, de...)"),

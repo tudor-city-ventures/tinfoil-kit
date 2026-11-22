@@ -5,7 +5,8 @@ rem much fits there, and copies it there. Then it's kit update, sync and test, a
 rem Linux: first a small kit to try (kit starter), then the rest when SETUP runs again.
 rem The answers can come with it instead, the same ones SETUP.command takes, so one command sets the kit up: an AI
 rem helping someone asks them the questions, then gives them that command. It asks only what these leave out:
-rem   --region PLACE      where you live: a US state, a country or a part of one, as kit region takes it
+rem   --region PLACES     where you live: a US state, a country or a part of one, as kit region takes it, and any
+rem                       places nearby for the map, after commas (like us/new-york,us/new-jersey)
 rem   --wikipedia CODES   Wikipedia's languages, like de or de,en
 rem   --wikipedia-size SIZE  how much of Wikipedia: all (the default), all-text, top (the best 50,000 articles), top-text or top-intros (their opening paragraphs)
 rem   --this-computer     the kit goes on this PC, in your user folder
@@ -386,14 +387,17 @@ call :kit essentials off >nul
 set "ONLY=all"
 goto :eof
 
-rem Where the person lives sets the maps (street detail, directions, address search, home) and Wikipedia's language.
-rem kit region does the work; this asks. The first run asks before the kit moves (its size depends on the answer),
-rem and hands the answer on in KIT_REGION and KIT_WIKIPEDIA to the copy of this script where the kit lands, in case
-rem a kit was there already. Updates ask after kit update, so a kit from before this question gets it too. The first
-rem run also asks how much of Wikipedia (region_size).
+rem Where the person lives sets the maps (street detail, directions, address search, home) and Wikipedia's language,
+rem and places nearby can go on the map too. kit region does the work; this asks. The first run asks before the kit
+rem moves (its size depends on the answer), and hands the answer on in KIT_REGION and KIT_WIKIPEDIA to the copy of
+rem this script where the kit lands, in case a kit was there already. Updates ask after kit update, so a kit from
+rem before this question gets it too. The first run also asks how much of Wikipedia (region_size).
 :pick_region
 call :kit region >nul 2>&1 || goto :eof
 set "KIT_REGION_ASKED=1"
+set "RIDS="
+set "KEEP=or press Enter to keep the maps as they are"
+set "AGAIN=Type where you live: "
 if "%~1"=="first" call :step "where do you live?"
 rem (it came with SETUP)
 if defined KIT_REGION goto region_given
@@ -404,7 +408,8 @@ if defined KIT_YES (
   goto :eof
 )
 if not "%~1"=="first" goto region_now
-echo The maps show your area in street detail, with directions and address search, and Wikipedia comes in your language.
+echo The map shows where you live in street detail, with directions and address search, and places nearby can go
+echo on it too. Wikipedia comes in your language.
 <nul set /p "=Right now: "
 call :kit region
 echo(
@@ -421,6 +426,8 @@ set "Q=To change that, type where you live (a US state or a country), or press E
 set "PLACE="
 set /p "PLACE=!Q!"
 if defined PLACE set "PLACE=!PLACE:"=!"
+rem (Enter: that's all of them)
+if not defined PLACE if defined RIDS goto region_languages
 if not defined PLACE goto region_size
 "%TK%" --root "%KIT%" region --find "!PLACE!" > "%OUT%" 2>nul
 set "N=0"
@@ -432,7 +439,7 @@ echo(
 if !N!==0 goto region_none
 if !N! gtr 20 goto region_many
 set "RID=!RID1!"
-if !N!==1 goto region_languages
+if !N!==1 goto region_add
 echo Which one?
 call :list
 set /a "NONE=N+1"
@@ -441,21 +448,30 @@ call :choose "Type a number, then press Enter:" !NONE!
 if !PICK!==!NONE! goto region_other
 set "RID=!RID%PICK%!"
 echo(
-goto region_languages
+goto region_add
 :region_other
 echo(
-set "Q=Type where you live: "
+set "Q=!AGAIN!"
 goto region_ask
 :region_none
-set "Q=No place called "!PLACE!" here. Type a US state or a country, in English (or press Enter to keep the maps as they are): "
+set "Q=No place called "!PLACE!" here. Type a US state or a country, in English (!KEEP!): "
 goto region_ask
 :region_many
-set "Q=!N! places match "!PLACE!". Type your state, province or a nearby big town instead: "
+set "Q=!N! places match "!PLACE!". Type a state, province or a nearby big town instead: "
+goto region_ask
+rem A place, once: where they live first (RFIRST), then any nearby
+:region_add
+set "CHECK=,!RIDS!,"
+if not defined RIDS (set "RIDS=!RID!" & set "RFIRST=!RID!") else if "!CHECK:,%RID%,=!"=="!CHECK!" set "RIDS=!RIDS!,!RID!"
+set "KEEP=or press Enter if that's all"
+set "AGAIN=Type the place: "
+set "Q=Another place for your map, like a state or country next door? Type it, or press Enter if that's all: "
+echo(
 goto region_ask
 :region_languages
 set "WIKI=!KIT_WIKIPEDIA!"
 if defined WIKI goto region_set
-"%TK%" --root "%KIT%" region --languages "!RID!" > "%OUT%" 2>nul
+"%TK%" --root "%KIT%" region --languages "!RFIRST!" > "%OUT%" 2>nul
 set "N=0"
 for /f "usebackq tokens=1 delims=	" %%a in ("%OUT%") do (
   set /a "N+=1"
@@ -469,7 +485,7 @@ call :choose "Type a number, then press Enter:" !N!
 set "WIKI=!WIKI%PICK%!"
 echo(
 :region_set
-set "KIT_REGION=!RID!"
+set "KIT_REGION=!RIDS!"
 set "KIT_WIKIPEDIA=!WIKI!"
 call :given_region || (set "KIT_REGION=" & set "KIT_WIKIPEDIA=")
 rem How much of Wikipedia, the first time: the sizes Kiwix makes in its languages (kit region --sizes), biggest first.
@@ -984,8 +1000,8 @@ set /p "_=Press Enter to close this window. "
 exit %~1
 
 rem The options, into the environment, since this script starts itself again after moving or updating the kit.
-rem cmd splits words at commas and spaces, so a value is every word up to the next option: --skip a,b and --region
-rem New York both work. OPTS is help once it has listed them, and bad when it can't take them (SETUP exits 2).
+rem cmd splits words at commas and spaces, so a value is every word up to the next option: --skip a,b, --region
+rem New York and --region us/new-york,us/new-jersey all work (kit region takes ids with spaces between them too). OPTS is help once it has listed them, and bad when it can't take them (SETUP exits 2).
 :options
 set "OPTS="
 :options_next

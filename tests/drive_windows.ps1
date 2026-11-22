@@ -233,7 +233,7 @@ Step "SETUP-Windows.bat again in ~\TinfoilKit, for the rest: what goes in it (Re
 $answers = @("", "") + @(Get-RoomAnswer $kit $kit) + @("y", "n", "")
 Invoke-Setup $kit "setup-windows-rest.log" $answers
 Test-Said "setup-windows-rest.log" "SETUP" "What goes in the kit?", "Step 2 of 3: the rest of the kit", "All set",
-  "Beside it, downloads holds what the kit downloaded"
+  "Beside it, downloads holds what the kit downloaded", "merging the road data of 2 places"
 foreach ($f in "maps\routing\graph-cache\properties", "maps\geocoder\photon_data") {
   if (-not (Test-Path "$kit\downloads\$f")) { Fail "SETUP didn't make downloads\$f (logs\setup-windows-rest.log)" }
 }

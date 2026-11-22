@@ -77,7 +77,7 @@ for rel, size in (("zim/testmed_en_all_maxi_2026-01.zim", 70_000), ("zim/testsur
 shutil.copy(R / "hf/tiny/Tiny-Q8_0.gguf", R / "hf/tiny_v2/Tiny-Q8_0.gguf")
 for rel in ("gh/llama-b99990-bin-ubuntu-x64.tar.gz", "gh2/photon-1.3.0.jar", "gh2/photon-1.2.1.jar",   # only looked up, never unpacked
             "adoptium/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz", "photon/north-america/usa/photon-db-usa-1.3-latest.tar.bz2",
-            "geofabrik/us-northeast-latest.osm.pbf"):
+            "geofabrik/us-northeast-latest.osm.pbf", "geofabrik/new-york-latest.osm.pbf", "geofabrik/new-jersey-latest.osm.pbf"):
     (R / rel).parent.mkdir(parents=True, exist_ok=True)
     (R / rel).write_bytes(os.urandom(1000))
 (R / "FLAKY").touch()   # the first model download drops halfway, so sync has to resume it
@@ -454,6 +454,11 @@ pathlib.Path(str(out) + ".aria2").unlink()
     rc, out = kit("plan", root=rt)
     check("pins: a pinned Photon with no address database gives way to the release that opens the newest one",
           re.search(r"photon\s.*1\.3\.0", out) and "2.0.0-beta" not in out and re.search(r"geocoder\s.*1\.3/", out), out)
+    (rt / "data" / "kit.json").write_text(json.dumps({"runtimes": programs, "maps": {"enabled": True, "region": ["us/new-york", "us/new-jersey"]}}))
+    rc, out = kit("plan", root=rt)
+    check("plan: places nearby: directions from both places' road data, one map of both, one address search",
+          rc == 0 and re.search(r"routing\s.*new-york\+new-jersey", out) and re.search(r"basemap\s.*New York and New Jersey", out)
+          and len(re.findall(r"geocoder\s", out)) == 1, out)
 
     # ./kit pins, before a release: the newest builds and their checksums
     (rt / "data" / "kit.json").write_text(json.dumps({"runtimes": programs}))
@@ -1226,10 +1231,11 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
           rc == 1 and "didn't finish" in out and (setup / "data" / "home.log").read_text().splitlines() == home, out)
     rc, out, calls = run_setup(test=1, args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: checks failed: doesn't share it", rc == 1 and (setup / "data" / "home.log").read_text() == "", out)
-    rc, out, calls = run_setup(answers="Bavaria\n1\ny\nn\n\n")
+    rc, out, calls = run_setup(answers="Bavaria\nAustria\nBavaria\n\n1\ny\nn\n\n")
     c = json.loads(mine.read_text())
-    check("SETUP: says where the maps are for, and changes the place and Wikipedia's language when told",
-          rc == 0 and "Maps are for US Northeast" in out and "Maps: Germany: Bayern" in out and c["maps"]["region"] == "bayern"
+    check("SETUP: says where the maps are for, and changes the place, places nearby and Wikipedia's language when told",
+          rc == 0 and "Maps are for US Northeast" in out and "Another place for your map" in out
+          and "Maps: Germany: Bayern and Austria" in out and c["maps"]["region"] == ["bayern", "austria"]
           and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_de_all_"], out)
     shutil.copy(TESTS.parent / "kit.json", mine)
     rc, out, calls = run_setup(args=("--yes",), answers="")
@@ -1416,13 +1422,13 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         c = json.loads((where / "data" / "kit.json").read_text())
         return c["maps"].get("region"), [z["zim"] for z in c["library"] if z["zim"].startswith("wikipedia_")]
 
-    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Atlantis\nUSA\nTexas\n1\n1\n")
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Atlantis\nUSA\nTexas\n\n1\n1\n")
     check("SETUP first run: asks where you live first, says when it can't tell, and sets the maps and Wikipedia",
           rc == 0 and "Step 1 of 3: where do you live?" in out and 'No place called "Atlantis"' in out
           and '"USA" matches' in out and "Maps: Texas" in out and "Step 2 of 3: where should the kit go" in out
           and "Step 3 of 3: a small kit to try first" in out and placed_ok(home / "TinfoilKit")
           and placed_cfg(home / "TinfoilKit") == ("us/texas", ["wikipedia_en_all_maxi"]), out)
-    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Georgia\n1\n2\n1\n")
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Georgia\n1\n\n2\n1\n")
     check("SETUP first run: a name two places share: asks which, then which language",
           rc == 0 and "Which one?" in out and "Georgia (United States)" in out and "Georgia (Europe)" in out
           and "Which language should Wikipedia be in?" in out
@@ -1467,7 +1473,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     check("SETUP --yes: all of it with --all, or even the essentials, won't fit: stops before moving anything",
           rc == rc2 == 1 and dl.exists() and dl2.exists() and not (home / "TinfoilKit").exists()
           and "There isn't room on this computer, even for the essentials" in out2, out + out2)
-    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Texas\n1\n1\n", home_kit="kit")
+    rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Texas\n\n1\n1\n", home_kit="kit")
     check("SETUP first run: a kit already in the home folder gets the place chosen in the download",
           rc == 0 and "already a Tinfoil Kit" in out and placed_cfg(home / "TinfoilKit")[0] == "us/texas", out)
     shm = Path("/dev/shm")
@@ -1960,6 +1966,27 @@ Server(("::1", port), Page).serve_forever()
     rc, out = kit("region", wide["id"], root=rk)
     check("region: a place with only a continent's address search says so, and how big it is",
           rc == 0 and f"Address search: all of {wide['addresses']}" in out and "Just the essentials leave it out" in out, out)
+    # Places nearby, after where you live (Travis: "Weird I can only select my state and not other states nearby")
+    rc, out = kit("region", "New York, New Jersey", root=rk)
+    check("region: places nearby after commas: maps and directions for each, home and address search from the first",
+          rc == 0 and rk_cfg()[0]["region"] == ["us/new-york", "us/new-jersey"] and "Maps: New York and New Jersey." in out
+          and "Address search: all of the United States." in out and "Not for" not in out and "Home: New York" in out, out)
+    rc, out = kit("region", root=rk)
+    check("region: says which places the maps are for", rc == 0 and "Maps are for New York and New Jersey" in out, out)
+    rc, out = kit("region", "us/new-york", "us/new-jersey", "us/new-york", root=rk)    # as cmd hands SETUP-Windows.bat new-york,new-jersey
+    check("region: ids with spaces between them are places too, each once",
+          rc == 0 and rk_cfg()[0]["region"] == ["us/new-york", "us/new-jersey"], out)
+    rc, out = kit("region", "Bavaria, Austria", root=rk)
+    check("region: a place in another country is on the map, and address search is the first place's",
+          rc == 0 and rk_cfg()[0]["region"] == ["bayern", "austria"] and "Address search: all of Germany." in out
+          and "Not for Austria: the kit has one address search, the first place's." in out, out)
+    rc, out = kit("region", "Texas, Atlantis", root=rk)
+    check("region: a place it doesn't know among several changes nothing",
+          rc == 1 and 'No place matches "Atlantis"' in out and rk_cfg()[0]["region"] == ["bayern", "austria"], out)
+    rc, out = kit("region", "--languages", root=rk)
+    check("region --languages: where you live's, the first place's", rc == 0 and out.startswith("de\t"), out)
+    rc, out = kit("region", "US Northeast (CT, MA, ME, NH, NJ, NY, PA, RI, VT)", root=rk)
+    check("region: a place whose name has commas in it", rc == 0 and rk_cfg()[0]["region"] == "us-northeast", out)
 finally:
     mock.terminate()
     shutil.rmtree(work, ignore_errors=True)

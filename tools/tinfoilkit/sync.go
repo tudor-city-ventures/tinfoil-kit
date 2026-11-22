@@ -24,6 +24,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1546,9 +1547,24 @@ func installProtomaps(root string, it *item, state, cfg *obj, force bool) (int64
 	}
 	src := it.files[0].url
 	wmax, dmax := intOr(m.get("world_maxzoom"), 7), intOr(m.get("detail_maxzoom"), 15)
-	var bbox []string
-	for _, x := range m.list("detail_bbox") {
-		bbox = append(bbox, pyStr(x))
+	areas, err := mapAreas(m)
+	if err != nil {
+		return 0, err
+	}
+	where := "--bbox=" + strings.Join(numbers(areas[0]), ",")
+	if len(areas) > 1 { // several places: their areas, as one GeoJSON shape
+		var shapes []string
+		for _, b := range areas {
+			w, s, e, n := numbers(b)[0], numbers(b)[1], numbers(b)[2], numbers(b)[3]
+			shapes = append(shapes, fmt.Sprintf("[[[%s,%s],[%s,%s],[%s,%s],[%s,%s],[%s,%s]]]", w, s, e, s, e, n, w, n, w, s))
+		}
+		shape := filepath.Join(work, "areas.geojson")
+		geo := `{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"MultiPolygon",` +
+			`"coordinates":[` + strings.Join(shapes, ",") + `]}}]}`
+		if err := os.WriteFile(shape, []byte(geo), 0o644); err != nil {
+			return 0, err
+		}
+		where = "--region=" + shape
 	}
 	world, region, outFile := filepath.Join(work, "world.pmtiles"), filepath.Join(work, "region.pmtiles"), filepath.Join(work, "basemap.pmtiles")
 	log(fmt.Sprintf("    map tiles: world overview (zoom 0-%d) from build %s...", wmax, it.version))
@@ -1556,7 +1572,7 @@ func installProtomaps(root string, it *item, state, cfg *obj, force bool) (int64
 		return 0, err
 	}
 	log(fmt.Sprintf("    map tiles: %s street detail (zoom %d-%d)...", pyStr(m.get("label")), wmax+1, dmax))
-	if err := runLogged([]string{pm, "extract", src, region, "--bbox=" + strings.Join(bbox, ","), fmt.Sprintf("--minzoom=%d", wmax+1),
+	if err := runLogged([]string{pm, "extract", src, region, where, fmt.Sprintf("--minzoom=%d", wmax+1),
 		fmt.Sprintf("--maxzoom=%d", dmax)}, "map extract (region)", "", 3); err != nil {
 		return 0, err
 	}
@@ -1704,6 +1720,21 @@ func buildRouting(java, gh string, m *obj, dest string) error {
 	return nil
 }
 
+// roadsFromBefore is f's road data if the kit has it from before under another name, moved to f's name: one place's
+// is region.osm.pbf, several places' keep their own names. Returns its SHA-256, or "".
+func roadsFromBefore(dest string, old *obj, it *item, f *remoteFile, expected [][2]string) string {
+	for _, name := range old.child("files").Keys() {
+		if slices.ContainsFunc(it.files, func(g *remoteFile) bool { return g.name == name }) {
+			continue // (another place's now)
+		}
+		if sha := matches(filepath.Join(dest, name), f, expected); sha != "" &&
+			replace(filepath.Join(dest, name), filepath.Join(dest, f.name)) == nil {
+			return sha
+		}
+	}
+	return ""
+}
+
 func installRouting(root string, it *item, state, cfg *obj, force bool) (int64, error) {
 	m := mapsSettings(cfg)
 	java := runtimeBinary(root, "java", "java")
@@ -1713,35 +1744,50 @@ func installRouting(root string, it *item, state, cfg *obj, force bool) (int64, 
 	}
 	dest := filepath.Join(dlDir(root), filepath.FromSlash(it.dest))
 	os.MkdirAll(dest, 0o755)
-	f := it.files[0]
-	pbf := filepath.Join(dest, f.name)
 	old := stateItems(state).child(it.key())
-	var downloaded int64
-	var sha string
-	if !pyEqual(old.get("version"), it.version) || !exists(pbf) {
-		expected := expectedDigests(f)
-		sha = matches(pbf, f, expected) // downloaded last time, but the import failed (e.g. out of memory)
-		if sha == "" {
-			partial, err := fetchFile(root, state, it, f, cfg, force, 3, "road data")
-			if err != nil {
-				return 0, err
+	var downloaded, total int64
+	var parts []string
+	files := newObj()
+	for _, f := range it.files {
+		pbf := filepath.Join(dest, f.name)
+		var sha string
+		if !pyEqual(old.get("version"), it.version) || !exists(pbf) {
+			expected := expectedDigests(f)
+			sha = matches(pbf, f, expected) // downloaded last time, but the import failed (e.g. out of memory)
+			if sha == "" {
+				sha = roadsFromBefore(dest, old, it, f, expected)
 			}
-			if sha, err = verifyDownload(partial, f, expected); err != nil {
-				return 0, err
+			if sha == "" {
+				partial, err := fetchFile(root, state, it, f, cfg, force, 3, "road data")
+				if err != nil {
+					return downloaded, err
+				}
+				if sha, err = verifyDownload(partial, f, expected); err != nil {
+					return downloaded, err
+				}
+				if err := replace(partial, pbf); err != nil {
+					return downloaded, err
+				}
+				forgetPartial(root, state, partial)
+				downloaded += fileSize(pbf)
 			}
-			if err := replace(partial, pbf); err != nil {
-				return 0, err
-			}
-			forgetPartial(root, state, partial)
-			downloaded = fileSize(pbf)
-		}
-	} else {
-		sha = pyStr(orEmpty(old.child("files").child(f.name).get("sha256")))
-		if sha == "" {
+		} else if sha = pyStr(orEmpty(old.child("files").child(f.name).get("sha256"))); sha == "" {
 			var err error
 			if sha, err = sha256File(pbf); err != nil {
-				return 0, err
+				return downloaded, err
 			}
+		}
+		files.set(f.name, newObj("size", fileSize(pbf), "sha256", sha, "verified", true))
+		parts = append(parts, pbf)
+		total += fileSize(pbf)
+	}
+	if len(parts) > 1 { // GraphHopper reads one file: several places' road data, merged
+		if !force && !ensureSpace(root, total, cfg) {
+			return downloaded, fmt.Errorf("not enough free space to merge the road data (needs about %s)", fmtBytes(total))
+		}
+		log(fmt.Sprintf("    merging the road data of %d places...", len(parts)))
+		if err := mergePBF(filepath.Join(dest, "region.osm.pbf"), parts); err != nil {
+			return downloaded, err
 		}
 	}
 	os.WriteFile(filepath.Join(dest, "gh-serve.yml"), []byte(graphhopperYAML(m, "graph-cache", "MMAP")), 0o644)
@@ -1759,14 +1805,21 @@ func installRouting(root string, it *item, state, cfg *obj, force bool) (int64, 
 		return downloaded, err
 	}
 	os.RemoveAll(trash)
+	// road data no place needs now (a place from before), and the merged copy: merging again is quick
+	if found, err := filepath.Glob(filepath.Join(dest, "*.osm.pbf")); err == nil {
+		for _, p := range found {
+			if !files.has(filepath.Base(p)) {
+				os.Remove(p)
+			}
+		}
+	}
 	log("    ok: maps/routing/graph-cache")
 	ghVersion := it.extra.get("gh_version")
 	if !truthy(ghVersion) {
 		ghVersion = filepath.Base(gh)
 	}
 	stateItems(state).set(it.key(), newObj("version", it.version, "gh_version", ghVersion, "dest", it.dest,
-		"updated", nowISO(), "note", it.note(), "unpacked_size", dirBytes(current),
-		"files", newObj(f.name, newObj("size", fileSize(pbf), "sha256", sha, "verified", true))))
+		"updated", nowISO(), "note", it.note(), "unpacked_size", dirBytes(current), "files", files))
 	return downloaded, nil
 }
 
@@ -1971,7 +2024,15 @@ func buildPortal(root string, cfg *obj) (string, error) {
 			if truthy(m.get("lang")) {
 				lang = m.get("lang")
 			}
-			info = newObj("available", true, "label", m.get("label"), "home", m.get("home"), "bbox", m.get("detail_bbox"),
+			bbox := m.get("detail_bbox") // several places': the area around them all
+			if areas, err := mapAreas(m); err == nil && len(areas) > 1 {
+				all := slices.Clone(areas[0])
+				for _, b := range areas[1:] {
+					all = []float64{min(all[0], b[0]), min(all[1], b[1]), max(all[2], b[2]), max(all[3], b[3])}
+				}
+				bbox = []any{all[0], all[1], all[2], all[3]}
+			}
+			info = newObj("available", true, "label", m.get("label"), "home", m.get("home"), "bbox", bbox,
 				"detailMaxzoom", intOr(m.get("detail_maxzoom"), 15), "units", m.get("units"), "lang", lang,
 				"profiles", profiles,
 				"ports", newObj("tiles", intOr(m.get("tiles_port"), 8090), "geocoder", intOr(m.get("geocoder_port"), 2322),
