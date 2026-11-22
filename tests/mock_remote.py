@@ -201,16 +201,18 @@ class H(BaseHTTPRequestHandler):
             return self.send_bytes(json.dumps([{"release_name": "jdk-21.0.9+10", "version": {"semver": "21.0.9+10"}, "binary": {
                 "image_type": "jre", "package": {"name": a.name, "link": f"{BASE}/adoptium/file/{a.name}", "size": a.stat().st_size,
                                                  "checksum": sha(a)}}}]).encode(), "application/json", head)
-        m = re.match(r"^/adoptium/v3/assets/version/([^/?]+)$", path)
-        if m:    # a pinned Java: the releases matching that version, each with its builds
-            name = "jdk-" + unquote(m.group(1))
+        m = re.match(r"^/adoptium/v3/assets/release_name/eclipse/([^/?]+)$", path)
+        if m:    # a pinned Java: that one release, with builds the kit must pick from
+            if unquote(m.group(1)) != "jdk-21.0.9+10":
+                return self.send_error(404)
             a = R / "adoptium" / "OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz"
-            rels = [{"release_name": "jdk-21.0.9+10", "binaries": [
-                {"image_type": "jdk", "os": "linux", "architecture": "x64", "package": {"name": "wrong.tar.gz", "link": f"{BASE}/nope"}},
+            wrong = {"name": "wrong.tar.gz", "link": f"{BASE}/nope"}
+            return self.send_bytes(json.dumps({"release_name": "jdk-21.0.9+10", "binaries": [
+                {"image_type": "jdk", "os": "linux", "architecture": "x64", "package": wrong},
+                {"image_type": "jre", "os": "mac", "architecture": "aarch64", "package": wrong},
                 {"image_type": "jre", "os": "linux", "architecture": "x64", "package": {
                     "name": a.name, "link": f"{BASE}/adoptium/file/{a.name}", "size": a.stat().st_size if a.exists() else 0,
-                    "checksum": sha(a) if a.exists() else None}}]}]
-            return self.send_bytes(json.dumps([r for r in rels if r["release_name"] == name]).encode(), "application/json", head)
+                    "checksum": sha(a) if a.exists() else None}}]}).encode(), "application/json", head)
         if path.startswith("/adoptium/file/"):
             return self.send_file(R / "adoptium" / path.split("/")[-1], head)
         if path.startswith("/maven/"):
