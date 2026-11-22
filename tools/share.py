@@ -391,7 +391,24 @@ def join_url(host: str, code: str) -> str:
     return f"http://{host}/?code={urllib.parse.quote(code)}"
 
 
+def gate_port(port: int) -> int:
+    """The port the gate answers on: share_port, or the next free one the launcher took because another program
+    had it. 0 when the kit isn't shared right now."""
+    for p in range(port, port + 10):
+        c = http.client.HTTPConnection("127.0.0.1", p, timeout=1)
+        try:
+            c.request("HEAD", "/")
+            if c.getresponse().getheader("Server") == "TinfoilKit":
+                return p
+        except OSError:
+            pass
+        finally:
+            c.close()
+    return 0
+
+
 def banner(root: Path, port: int, qr: bool) -> str:
+    port = gate_port(port) or port
     code = load_access(root)["code"]
     ips = lan_ips()
     if not ips:
@@ -493,9 +510,10 @@ class Gate(http.server.ThreadingHTTPServer):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = "TinfoilKit"
-    sys_version = ""
     server: Gate
+
+    def version_string(self) -> str:
+        return "TinfoilKit"
 
     def log_request(self, code: object = "-", size: object = "-") -> None:
         pass    # the request line can hold the access code (the QR code's link)

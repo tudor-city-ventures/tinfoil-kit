@@ -1,14 +1,19 @@
 """Helpers for the drive test (tests/drive_test.sh, .github/workflows/drive.yml). Standard library only.
 
   drive.py check LIB_PORT AI_PORT   wait for the kit's library and AI, then search a book and get an answer
+  drive.py share ADDRESS CODE LIB_PORT AI_PORT
+                                    the kit shared on the home network, as a phone there finds it at ADDRESS
   drive.py vhd IMAGE                add a VHD footer to a raw disk image, so Windows can mount the drive a Mac made
   drive.py kitjson FILE             write the test kit's kit.json, as the website's builder makes one
 """
+import http.client
 import json
+import socket
 import struct
 import sys
 import time
 import uuid
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -54,6 +59,67 @@ def check_kit(lib, ai):
         check("AI answers", bool(out.get("choices")), str(out)[:200])
     except (OSError, ValueError) as e:
         check("AI answers", False, str(e))
+
+
+def ask(method, url, body=None, headers=None, timeout=10):
+    """(status, body, headers), whatever the status, and without following redirects."""
+    u = urllib.parse.urlsplit(url)
+    c = http.client.HTTPConnection(u.hostname, u.port, timeout=timeout)
+    try:
+        c.request(method, (u.path or "/") + ("?" + u.query if u.query else ""), body, headers or {})
+        r = c.getresponse()
+        return r.status, r.read().decode("utf-8", "replace"), {k.lower(): v for k, v in r.getheaders()}
+    except OSError as e:
+        return 0, str(e), {}
+    finally:
+        c.close()
+
+
+def check_share(address, code, lib, ai):
+    """The gate at ADDRESS asks for the access code, then serves the page, the library and the AI. The servers
+    behind it don't answer on the network themselves."""
+    status, page = 0, ""
+    for _ in range(90):
+        status, page, _ = ask("GET", address + "/", headers={"Accept": "text/html"})
+        if status:
+            break
+        time.sleep(1)
+    check("the gate asks for the access code", status == 401 and "Access code" in page, str(status))
+    status, _, _ = ask("GET", address + "/ai/v1/models")
+    check("without the code, no AI", status == 401, str(status))
+    form = {"Content-Type": "application/x-www-form-urlencoded"}
+    status, _, _ = ask("POST", address + "/_kit/login", "code=00000001&next=/", form)
+    check("a wrong code is turned away", status == 401, str(status))
+    status, _, h = ask("POST", address + "/_kit/login", f"code={code}&next=/", form)
+    cookie = h.get("set-cookie", "").split(";")[0]
+    check("the right code lets the phone in", status == 303 and cookie.startswith("tinfoilkit="), str(status))
+    signed = {"Cookie": cookie}
+    status, page, _ = ask("GET", address + "/", headers=signed)
+    check("the kit page, told it's shared", status == 200 and "Tinfoil Kit" in page and "KIT_GATE" in page, str(status))
+    _, entries, _ = ask("GET", address + "/catalog/v2/entries", headers=signed)
+    check("the library, through the gate", entries.count("<entry>") == 2, f"{entries.count('<entry>')} books")
+    models = ""
+    for _ in range(90):
+        status, models, _ = ask("GET", address + "/ai/v1/models", headers=signed)
+        if status == 200:
+            break
+        time.sleep(1)
+    check("the AI, through the gate", "Tiny" in models, models[:200])
+    status, out, _ = ask("POST", address + "/ai/v1/chat/completions", json.dumps({
+        "model": "Tiny", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 8}),
+        {**signed, "Content-Type": "application/json"}, timeout=180)
+    check("the AI answers, through the gate", status == 200 and '"choices"' in out, f"{status} {out[:200]}")
+    status, svg, _ = ask("GET", address + "/_kit/qr.svg", headers=signed)
+    check("the QR code", status == 200 and svg.startswith("<svg"), str(status))
+    status, _, _ = ask("GET", address + "/", headers={**signed, "Host": "evil.example.com"})
+    check("a website's own name for this computer is turned away", status == 403, str(status))
+    host = urllib.parse.urlsplit(address).hostname
+    for name, port in (("library", lib), ("AI", ai)):
+        try:
+            socket.create_connection((host, int(port)), timeout=3).close()
+            check(f"the {name} server doesn't answer on the network itself", False, f"{host}:{port} answered")
+        except OSError:
+            check(f"the {name} server doesn't answer on the network itself", True)
 
 
 def kit_json(out):
@@ -107,6 +173,10 @@ def add_vhd_footer(path):
 if __name__ == "__main__":
     if sys.argv[1:2] == ["check"] and len(sys.argv) == 4:
         check_kit(sys.argv[2], sys.argv[3])
+        print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
+        sys.exit(1 if fails else 0)
+    if sys.argv[1:2] == ["share"] and len(sys.argv) == 6:
+        check_share(*sys.argv[2:6])
         print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
         sys.exit(1 if fails else 0)
     if sys.argv[1:2] == ["vhd"] and len(sys.argv) == 3:

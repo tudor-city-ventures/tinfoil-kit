@@ -233,7 +233,10 @@ try:
     check(f"gate: after {share.TRIES} wrong codes, a device waits, even with the right one",
           r.status == 429 and b"Too many tries" in data)
     gate.failures.clear()
+    check("./kit share finds the port the gate answers on", share.gate_port(gport) == gport)
     gate.shutdown()
+    gate.server_close()
+    check("...and that it's gone when the kit stops", share.gate_port(gport) != gport)
 
     # ------------------------------------------------------------------------- ./kit share and ./kit autostart
     k2 = work / "kit2"
@@ -294,6 +297,10 @@ try:
         rc, out = kit_cmd("share", "on")
         check("./kit share on: restarts the kit the computer started",
               "try-restart tinfoil-kit.service" in calls.read_text() and "restarted" in out, out)
+        calls.unlink()
+        rc, out = kit_cmd("share", "on")
+        check("./kit share on, when it's on already: leaves the running kit be",
+              rc == 0 and "already on" in out and not calls.exists(), out)
         other = unit.read_text().replace(str(k2), str(work / "elsewhere"))
         unit.write_text(other)
         rc, out = kit_cmd("autostart", "off")

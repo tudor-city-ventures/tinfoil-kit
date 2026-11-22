@@ -1,5 +1,7 @@
 """Drive the real portal page in a headless browser against the live kit servers.
-KIT_BROWSER picks chromium (default), webkit (Safari's engine) or msedge; KIT_LIBRARY_PORT and KIT_AI_PORT the ports."""
+KIT_BROWSER picks chromium (default), webkit (Safari's engine) or msedge; KIT_LIBRARY_PORT and KIT_AI_PORT the ports.
+With KIT_SHARE_URL (the address the launcher shows for the home network) and KIT_SHARE_CODE, it also uses the kit
+the way a phone on the home network does: through the gate, with the access code, AI chat page included."""
 import os
 import sys
 from playwright.sync_api import sync_playwright
@@ -86,6 +88,70 @@ with sync_playwright() as p:
         page2.click(f"nav a[data-tab={tab}]")
         width = page2.evaluate("document.documentElement.scrollWidth")
         check(f"phone, {tab} tab: no sideways scroll", width <= 390, f"{width}px")
+
+    share = os.environ.get("KIT_SHARE_URL")
+    if share:
+        code = os.environ["KIT_SHARE_CODE"]
+        phone = b.new_context(viewport={"width": 390, "height": 844})
+        p3 = phone.new_page()
+        bad, js = [], []
+        p3.on("response", lambda r: bad.append(f"{r.status} {r.url}") if r.status >= 400 and "favicon" not in r.url else None)
+        p3.on("pageerror", lambda e: js.append(str(e)))
+        p3.goto(share + "/?model=Tiny")
+        check("shared: a phone on the network gets the access code page", p3.locator("input[name=code]").count() == 1, p3.url)
+        width = p3.evaluate("document.documentElement.scrollWidth")
+        check("shared: the access code page fits a phone", width <= 390, f"{width}px")
+        p3.screenshot(path=os.path.join(SHOTS, "shot_share_code.png"))
+        bad.clear()    # the code page itself answers 401
+        p3.fill("input[name=code]", code[:4] + " " + code[4:])
+        p3.click("button[type=submit]")
+        p3.wait_for_function("document.getElementById('aiStatus').textContent.includes('ready')", timeout=30000)
+        check("shared: in with the code, and the AI is ready through the gate", p3.url.startswith(share), p3.url)
+        check("shared: the page says it's shared", p3.is_visible("#sharePill"))
+        p3.screenshot(path=os.path.join(SHOTS, "shot_share_page.png"))
+        p3.fill("#q", "How much bleach per gallon of water to make it safe to drink?")
+        p3.click("#askBtn")
+        p3.wait_for_function("document.getElementById('progress').textContent.startsWith('Done')", timeout=120000)
+        srcs = p3.eval_on_selector_all("#sources li a", "els => els.map(e => e.textContent)")
+        check("shared: asking works through the gate", "Water purification" in srcs, ", ".join(srcs))
+        r = p3.request.get(share + p3.get_attribute("#sources li a", "href"))
+        check("shared: a source opens through the gate", r.ok and "8 drops" in r.text())
+        p3.click("nav a[data-tab=help]")
+        check("shared: Help shows the address and the access code",
+              share.split("//")[1] in p3.inner_text("#shareAddr") and p3.inner_text("#shareCode").replace(" ", "") == code,
+              p3.inner_text("#shareOn"))
+        p3.wait_for_function("document.getElementById('shareQr').naturalWidth > 0", timeout=10000)
+        p3.screenshot(path=os.path.join(SHOTS, "shot_share_help.png"), full_page=True)
+        p3.click("nav a[data-tab=map]")
+        p3.wait_for_function("/Address search: ready.*Directions: ready/.test(document.getElementById('mapStatus').textContent)",
+                             timeout=90000)
+        check("shared: address search and directions answer through the gate", True)
+        p3.wait_for_function("window.__kitMap && window.__kitMap.loaded()", timeout=30000)
+        with p3.expect_response(lambda r: "/tiles/" in r.url, timeout=30000) as tile:
+            p3.evaluate("window.__kitMap.zoomIn()")
+        check("shared: map tiles come through the gate", tile.value.ok, tile.value.url)
+        check("shared: nothing failed", not bad and not js, "; ".join(bad + js))
+
+        # The AI chat link opens llama-server's own chat page, which asks for its API by paths of its own.
+        bad.clear()
+        try:
+            p3.goto(share + "/ai/")
+            p3.wait_for_load_state("networkidle", timeout=30000)
+            box = p3.locator("textarea").first
+            box.wait_for(timeout=20000)
+            with p3.expect_response(lambda r: "chat/completions" in r.url, timeout=120000) as reply:
+                box.fill("Hello")
+                box.press("Enter")
+            answered, why = reply.value.ok, reply.value.url
+            p3.wait_for_timeout(2000)
+        except Exception as e:    # a timeout: the screenshot shows where it got stuck
+            answered, why = False, str(e).splitlines()[0]
+        p3.screenshot(path=os.path.join(SHOTS, "shot_share_ai_chat.png"))
+        check("shared: AI chat answers through the gate", answered, why)
+        check("shared: AI chat's requests all work", not bad, "; ".join(bad))
+        outsider = b.new_context().request.get(share + "/ai/v1/models")
+        check("shared: no AI without the code", outsider.status == 401, str(outsider.status))
+        phone.close()
     b.close()
 
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")

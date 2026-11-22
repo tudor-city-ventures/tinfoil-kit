@@ -118,6 +118,11 @@ try:
     check("plan --essentials: the AI this computer runs and the most important books, nothing else",
           rc == 0 and out.count("NEW") == 2 and "Tiny" in out and "testmed_en_all_maxi" in out and "Two" not in out
           and "testsurvival" not in out and "ERROR" not in out, out)
+    kit("essentials", "on")
+    rc, out = kit("plan")
+    kit("essentials", "off")
+    check("plan with essentials_only set: just those, and it says so", rc == 0 and out.count("NEW") == 2
+          and "Just the essentials" in out and "Two" not in out and json.loads((drive / "kit.json").read_text()) == cfg, out)
 
     rc, out = kit("sync", "-y")
     check("sync exits 1 when entries are broken", rc == 1, f"exit {rc}")
@@ -810,7 +815,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     fk = work / "fit"
     shutil.copytree(TESTS.parent / "tools", fk / "tools")
     fit_json = """{
-  "settings": {"default_model": "Big"},
+  "settings": {
+    "default_model": "Big"
+  },
   "models": [
     {
       "id": "Big",
@@ -847,9 +854,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out = fit(16, "--ask", answers="\n")
     on = {m["id"]: m.get("enabled", True) for m in json.loads((fk / "kit.json").read_text())["models"]}
     added = [line for line in (fk / "kit.json").read_text().splitlines() if line not in fit_json.splitlines()]
-    check("kit fit --ask: just Return skips them, in kit.json, changing only that line",
+    check("kit fit --ask: just Return skips them, in kit.json, changing only the lines that say so",
           rc == 0 and "Download them anyway? [y/N]" in out and on == {"Big": False, "Mid": True, "Small": True}
-          and added == ['      "enabled": false,'], out)
+          and added == ['    "models_off_for_memory": ["Big"],', '      "enabled": false,'], out)
     rc, out = fit(16, "--ask")
     check("kit fit --ask: doesn't ask again about a skipped one", rc == 0 and "?" not in out and "Big" not in out, out)
     rc, out = fit(64, "--ask", answers="\n")
@@ -862,10 +869,35 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     report = json.loads(out)
     check("kit fit --json: on 8 GB nothing fits, so the smallest, and the rest are too big",
           rc == 0 and report["runs"] == "Small" and report["too_big"] == ["Big", "Mid"], out)
+    (fk / ".kit").mkdir(exist_ok=True)
     (fk / ".kit" / "state.json").write_text(json.dumps({"items": {"models/Big": {}}}))
     rc, out = fit(16, "--skip")
     check("kit fit --skip: leaves alone a model that's already downloaded", rc == 0 and "can't run" not in out
           and (fk / "kit.json").read_text() == fit_json, out)
+    (fk / ".kit" / "state.json").unlink()
+
+    # ./kit essentials on|off: just the essentials from now on, or everything again.
+    rc, out = kit("essentials", "on", root=fk)
+    check("kit essentials on: one line in kit.json's settings", rc == 0 and "Just the essentials" in out
+          and json.loads((fk / "kit.json").read_text())["settings"]["essentials_only"] is True
+          and len((fk / "kit.json").read_text().splitlines()) == len(fit_json.splitlines()) + 1, out)
+    rc, out = kit("essentials", "off", root=fk)
+    check("kit essentials off: kit.json as it was", rc == 0 and "Everything" in out and (fk / "kit.json").read_text() == fit_json, out)
+
+    # ./kit space: whether the kit, or just its essentials, fits on a disk and leaves 10% of the computer's (5% of a
+    # drive's) free. A made-up 1000 GB disk, a kit of 300 GB and essentials of 40 GB.
+    import types
+    saved = kp.estimate_gb, kp.on_this_computer, kp.shutil
+    kp.estimate_gb = lambda root, cfg, essentials=None: 40 if essentials else 300
+    for computer, free, full, ess in ((True, 500, "fits", "fits"), (True, 380, "tight", "fits"), (True, 320, "no", "fits"),
+                                      (True, 130, "no", "tight"), (True, 80, "no", "no"), (False, 340, "tight", "fits"),
+                                      (False, 360, "fits", "fits")):
+        kp.on_this_computer = lambda p, c=computer: c
+        kp.shutil = types.SimpleNamespace(disk_usage=lambda p, f=free: types.SimpleNamespace(total=1000 * 10**9, free=f * 10**9))
+        sp = kp.space_at(work / "nowhere" / "TinfoilKit", work, {"settings": {}})
+        check(f"kit space: {free} GB free of 1000 on {'this computer' if computer else 'a drive'}: kit {full}, essentials {ess}",
+              (sp["full"], sp["essentials"]) == (full, ess), json.dumps(sp))
+    kp.estimate_gb, kp.on_this_computer, kp.shutil = saved
 
     # The kit builder's No AI preset switches every model off: ./kit test doesn't ask for one
     noai = work / "noai"

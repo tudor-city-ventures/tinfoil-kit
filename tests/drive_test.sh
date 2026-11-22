@@ -4,11 +4,13 @@
 #   tests/drive_test.sh mac     erase a disk image as exFAT the way Disk Utility does, unzip the kit as
 #                               Download ZIP leaves it, run its SETUP against the mock internet and pick the
 #                               drive, double-click START-HERE, check the page in WebKit, eject. Leaves
-#                               tests/work/drive.vhd. Then set the kit up on this Mac (~/TinfoilKit), start it
-#                               and remove it with UNINSTALL.
+#                               tests/work/drive.vhd. Then set the kit up on this Mac (~/TinfoilKit) as a home
+#                               server (SETUP --home-server), check that the Mac started it and that it's shared
+#                               behind the access code, and remove it with UNINSTALL.
 #   tests/drive_test.sh linux   mount that drive the way a Linux desktop does, start the kit on this
 #                               machine (the newest Ubuntu in CI), then in Ubuntu 24.04 and 22.04, Debian 12
-#                               and Fedora. Then remove it from the drive with UNINSTALL.
+#                               and Fedora. Then make it a home server (./kit share on, ./kit autostart on) and
+#                               check it the same way, and remove it from the drive with UNINSTALL.
 # Windows: the workflow mounts drive.vhd and double-clicks START-HERE-Windows.bat.
 set -u
 TESTS="$(cd "$(dirname "$0")" && pwd)"
@@ -34,11 +36,24 @@ drive_number() { # KIT NAME
   "$1/kit" drives | awk -F'\t' -v n="$2" '$5 == n {print NR; exit}'
 }
 # SETUP with the mock internet, a stock Mac's PATH and bash, and these answers.
-setup() { # FOLDER LOG ANSWERS
-  (cd "$1" && . "$TESTS/env.sh" && printf '%b' "$3" | PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash SETUP.command) > "$L/$2" 2>&1
+setup() { # FOLDER LOG ANSWERS [SETUP'S OPTIONS]
+  local dir="$1" log="$2" answers="$3"; shift 3
+  (cd "$dir" && . "$TESTS/env.sh" && printf '%b' "$answers" | PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash SETUP.command "$@") \
+    > "$L/$log" 2>&1
   echo "exit $?"
-  grep -E "PASS|FAIL|All set|Moved|Problems|^  - |^  [0-9]  " "$L/$2" | tail -24
-  grep -q "All set" "$L/$2" || fail "SETUP didn't end with All set (logs/$2)"
+  grep -E "PASS|FAIL|All set|Moved|Problems|^  - |^  [0-9]  |home network|Access code|starts" "$L/$log" | tail -24
+  grep -q "All set" "$L/$log" || fail "SETUP didn't end with All set (logs/$log)"
+}
+# A home server's kit, checked the way a phone on the home network finds it: at the address and with the access
+# code that ./kit share shows. The servers behind the gate mustn't answer at that address themselves.
+share_check() { # KIT
+  local out addr code
+  out="$("$1/kit" share 2>&1)"
+  echo "$out"
+  addr="$(echo "$out" | sed -n 's/.*open \(http:[^ ]*\) on a phone.*/\1/p' | head -1)"
+  code="$(echo "$out" | sed -n 's/.*Access code: //p' | tr -d ' ' | head -1)"
+  [ -n "$addr" ] && [ -n "$code" ] || { fail "./kit share showed no address or access code"; return; }
+  python3 "$TESTS/drive.py" share "$addr" "$code" 8888 8080 || fail "the kit shared on the home network"
 }
 
 mac() {
@@ -85,27 +100,32 @@ mac() {
   hdiutil detach "$disk" || hdiutil detach -force "$disk" || fail "eject"
   python3 "$TESTS/drive.py" vhd "$img" && mv "$img" "$W/drive.vhd"    # a VHD, so Windows can mount it
 
-  step "SETUP.command in a new download: this Mac; it moves the kit to ~/TinfoilKit and sets it up"
-  kit="$HOME/TinfoilKit"
+  step "SETUP.command --home-server in a new download: this Mac; it moves the kit to ~/TinfoilKit, sets it up,"
+  echo "shares it on the home network and has the Mac start it"
+  kit="$HOME/TinfoilKit" agent="$HOME/Library/LaunchAgents/com.tinfoilkit.kit.plist"
   rm -rf "$kit"
   download_kit "$src"
-  # Answers: this Mac, yes even if the disk is short of room (SETUP asks then), download, don't open it, close.
+  # Answers: this Mac, yes even if the disk is short of room (SETUP asks then), download, close.
   room=""; [ "$(df -Pk "$HOME" | awk 'NR == 2 {print int($4 * 1024 / 1e9)}')" -lt 51 ] && room="y\n"
-  setup "$src" setup-mac.log "2\n${room}y\nn\n\n"
+  setup "$src" setup-mac.log "2\n${room}y\n\n" --home-server
   [ -d "$kit/models" ] || fail "the kit isn't set up in $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
   tmutil isexcluded "$kit" | grep -q Excluded || fail "Time Machine would back up $kit"
+  [ -f "$agent" ] || fail "no LaunchAgent, so the kit won't start with the Mac"
 
-  step "double-click START-HERE.command in ~/TinfoilKit"
-  open "$kit/START-HERE.command"
-  python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit on this Mac after a double-click"
-  stop_kit
+  step "the Mac started the kit by itself, shared on its network behind the access code"
+  python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit the Mac started"
+  share_check "$kit"
   cp -R "$kit/logs" "$L/mac-home-logs" 2> /dev/null
 
-  step "UNINSTALL.command: type delete, and the kit and its downloads are gone"
+  step "UNINSTALL.command: type delete, and the kit, its downloads and its LaunchAgent are gone"
   printf 'delete\n\n' | /bin/bash "$kit/UNINSTALL.command" > "$L/uninstall-mac.log" 2>&1
   tail -4 "$L/uninstall-mac.log"
   [ -e "$kit" ] && fail "$kit is still there after UNINSTALL"
+  [ -e "$agent" ] && fail "UNINSTALL left the LaunchAgent, which would start a kit that's gone"
+  sleep 2
+  curl -s -o /dev/null -m 3 http://127.0.0.1:8888/ && fail "the kit is still running after UNINSTALL"
+  stop_kit
   kill "$mock"
 }
 
@@ -128,13 +148,23 @@ linux() {
 
   run_linux "this machine ($(. /etc/os-release && echo "$PRETTY_NAME"))" ""
   for img in ubuntu:24.04 ubuntu:22.04 debian:12 fedora:latest; do run_linux "$img" "$img"; done
+
+  step "a home server, set up over SSH: ./kit share on, then ./kit autostart on (a systemd user service)"
+  { "$kit/kit" share on && "$kit/kit" autostart on; } > "$L/home-server.log" 2>&1 || fail "./kit share on, ./kit autostart on"
+  cat "$L/home-server.log"
+  loginctl show-user "$USER" --property=Linger | grep -q yes || fail "the kit won't start at boot: lingering is off"
+  python3 "$TESTS/drive.py" check 8888 8080 || fail "the kit systemd started"
+  share_check "$kit"
   cp -R "$kit/logs" "$L/linux-drive-logs" 2> /dev/null
 
-  step "UNINSTALL.command --yes: the kit goes, and nothing else on the drive"
+  step "UNINSTALL.command --yes: the kit and its systemd service go, and nothing else on the drive"
   echo mine > "$mnt/keep-me.txt"
   bash "$kit/UNINSTALL.command" --yes > "$L/uninstall-linux.log" 2>&1
   tail -4 "$L/uninstall-linux.log"
   [ -e "$kit" ] && fail "the kit is still on the drive after UNINSTALL"
+  [ -e "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/tinfoil-kit.service" ] && fail "UNINSTALL left the systemd service"
+  sleep 2
+  curl -s -o /dev/null -m 3 http://127.0.0.1:8000/ && fail "the kit is still running after UNINSTALL"
   [ -f "$mnt/keep-me.txt" ] || fail "UNINSTALL deleted something else on the drive"
   [ -e "$mnt/.metadata_never_index" ] && fail "UNINSTALL left Spotlight switched off for the drive"
   sudo umount "$mnt" && sudo losetup -d "$loop"
