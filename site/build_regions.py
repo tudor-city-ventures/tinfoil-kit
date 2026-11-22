@@ -415,6 +415,11 @@ def main():
             r["also"] = also
         if ph:
             r["photon"] = ph[0] + ph[1]
+            # Address search covers the whole country, or the region of the world where a country has none of its own.
+            where = (ph[0].split("/")[0].replace("-", " ").title() if ph[2] else
+                     "the United States" if cc == "us" else countries.get(cc, (name,))[0])
+            if fold(where) != fold(name):
+                r["addresses"] = where
         r["_pbf_bytes"] = size[ident]
         r["_polys"] = polys
         regions.append(r)
