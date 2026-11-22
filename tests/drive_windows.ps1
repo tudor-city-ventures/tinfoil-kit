@@ -35,10 +35,12 @@ function Get-Kit($dir) {
 }
 
 # cmd.exe running a script, and its exit code. Not Start-Process -Wait: that also waits for what the script
-# leaves running, like the File Explorer window SETUP opens at the end.
+# leaves running, like the File Explorer window SETUP opens at the end. What SETUP starts gets the answers file as
+# its input too and can hold it open a moment after SETUP ends, so each run has its own.
 function Invoke-Cmd($line, $log, $answers) {
-  $answers | Set-Content -Encoding ascii "$work\answers.txt"
-  $p = Start-Process cmd.exe -ArgumentList "/c `"$line`"" -PassThru -NoNewWindow -RedirectStandardInput "$work\answers.txt" `
+  $in = "$work\$log.answers.txt"
+  $answers | Set-Content -Encoding ascii $in
+  $p = Start-Process cmd.exe -ArgumentList "/c `"$line`"" -PassThru -NoNewWindow -RedirectStandardInput $in `
     -RedirectStandardOutput "$logs\$log" -RedirectStandardError "$logs\$log.err"
   $null = $p.Handle    # keeps the exit code readable after it exits
   if (-not $p.WaitForExit(1200000)) { Fail "$line was still running after 20 minutes"; Stop-Process -Id $p.Id -Force }
