@@ -1,7 +1,9 @@
 # The drive test's Windows setup: SETUP-Windows.bat from a fresh download, against the mock internet, the way
 # a person double-clicking it would answer. First onto this PC (~\TinfoilKit), then onto an exFAT drive. Each
-# time START-HERE-Windows.bat must serve the library and the AI, and UNINSTALL-Windows.bat must remove it all.
-# Last, ./kit sync builds a small real map with the real map programs, and START-HERE-Windows.bat must serve it.
+# time START-HERE-Windows.bat must serve the library and the AI, and UNINSTALL-Windows.bat must remove it all. On this
+# PC, SETUP-Windows.bat --home-server must share it on the home network, behind the access code, and set it to start
+# as you sign in. Last, ./kit sync builds a small real map with the real map programs, and START-HERE-Windows.bat
+# --share must serve it, on this PC's own Python.
 # With -Drive, it plugs in the drive the Mac made (tests\work\drive.vhd) instead, starts the kit on it with a
 # double-click and uses the page in Edge.
 # CI runs it (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive, in tests\work\remote.
@@ -50,8 +52,8 @@ function Invoke-Cmd($line, $log, $answers) {
 }
 
 # SETUP-Windows.bat with these answers, one per line, as if typed. Its own Python, not this one, runs the kit.
-function Invoke-Setup($dir, $log, $answers) {
-  Invoke-Cmd "`"$dir\SETUP-Windows.bat`"" $log $answers
+function Invoke-Setup($dir, $log, $answers, $flags = "") {
+  Invoke-Cmd "`"$dir\SETUP-Windows.bat`" $flags" $log $answers
   Get-Content "$logs\$log" | Select-String "PASS|FAIL|All set|Moved|Copied|Removed|Problems|^  - |^  [0-9]+  [A-Za-z]" |
     Select-Object -Last 30 | ForEach-Object { $_.Line }
   if (-not (Select-String -Quiet -Path "$logs\$log" -Pattern "All set")) {
@@ -68,16 +70,36 @@ function Get-RoomAnswer($dir, $place) {
   if ($room[0] -eq "tight") { "2" } elseif ($room[0] -ne "fits") { "1" }
 }
 
+# The kit's servers, its sharing gate, and the START-HERE windows that started them.
 function Stop-Kit($kit, $proc) {
   Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$kit\bin\", "OrdinalIgnoreCase") } | Stop-Process -Force
+  $mine = "$kit\tools\share.py", "$kit\START-HERE-Windows.bat"
+  Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and ($mine | Where-Object { $c.IndexOf($_, "OrdinalIgnoreCase") -ge 0 }) } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   if ($proc) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
   Start-Sleep 2
 }
 
-# Double-click START-HERE-Windows.bat, check the library and the AI, stop it.
-function Test-Kit($kit, $name) {
-  Step "double-click START-HERE-Windows.bat in $kit"
-  $p = Start-Process "$kit\START-HERE-Windows.bat" -WorkingDirectory $kit -PassThru
+# The kit shared on the home network: a phone there opens ADDRESS and types the access code.
+function Test-Share($kit, $address, $code) {
+  "The kit is shared at $address, access code $code"
+  python "$tests\drive.py" share $address $code 8888 8080
+  if ($LASTEXITCODE -ne 0) {
+    Fail "sharing on the home network ($kit)"
+    "--- share.log"; Get-Content "$kit\logs\share.log" -Tail 15 -ErrorAction SilentlyContinue
+  }
+}
+
+# Double-click START-HERE-Windows.bat, check the library and the AI, stop it. -Share: with --share, which needs Python
+# and gets this PC's own when SETUP's isn't there.
+function Test-Kit($kit, $name, [switch]$Share) {
+  if ($Share) {
+    Step "START-HERE-Windows.bat --share in $kit"
+    $p = Start-Process "$kit\START-HERE-Windows.bat" -ArgumentList "--share" -WorkingDirectory $kit -PassThru
+  } else {
+    Step "double-click START-HERE-Windows.bat in $kit"
+    $p = Start-Process "$kit\START-HERE-Windows.bat" -WorkingDirectory $kit -PassThru
+  }
   python "$tests\drive.py" check 8888 8080
   if ($LASTEXITCODE -ne 0) {
     Fail "the kit $name after a double-click"
@@ -85,6 +107,11 @@ function Test-Kit($kit, $name) {
     foreach ($f in "kiwix-serve.log", "llama-server.log") { "--- $f"; Get-Content "$kit\logs\$f" -Tail 15 -ErrorAction SilentlyContinue }
   }
   if (Test-Path "$kit\maps\routing") { Test-Map $kit }
+  if ($Share) {
+    for ($i = 0; $i -lt 60 -and -not (Test-Path "$kit\.kit\share.json"); $i++) { Start-Sleep 1 }    # the gate makes the code
+    $ip = python -c "import sys; sys.path.insert(0, sys.argv[1]); import share; print(share.lan_ips()[0])" "$kit\tools"
+    Test-Share $kit "http://${ip}:8000" (Get-Content "$kit\.kit\share.json" -ErrorAction SilentlyContinue | ConvertFrom-Json).code
+  }
   Stop-Kit $kit $p
   Copy-Item -Recurse "$kit\logs" "$logs\$($name -replace '\W', '-')-logs" -ErrorAction SilentlyContinue
 }
@@ -177,12 +204,30 @@ Invoke-Setup $kit "setup-windows-update.log" @("", "y", "n", "")
 foreach ($said in "TINFOIL KIT UPDATE", "To change that", "Step 3 of 3: start everything offline") {
   if (-not (Select-String -Quiet -SimpleMatch -Path "$logs\setup-windows-update.log" -Pattern $said)) { Fail "the update didn't say `"$said`"" }
 }
+Step "SETUP-Windows.bat --home-server: shared on the home network, and started now and whenever you sign in"
+$startup = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Tinfoil Kit.cmd"
+# Answers: keep where it's for, download, close.
+Invoke-Setup $kit "setup-windows-home-server.log" @("", "y", "") "--home-server"
+$said = Get-Content "$logs\setup-windows-home-server.log" -Raw
+$said -split "`n" | Select-String "Home server|home network|Access code|sign in" | ForEach-Object { $_.Line }
+$address = if ($said -match "open (http://[0-9.]+:[0-9]+) on a phone") { $Matches[1] }
+$code = if ($said -match "Access code: ([0-9 ]+)") { $Matches[1] -replace " ", "" }
+if (-not ($address -and $code)) { Fail "SETUP --home-server didn't show the address and the access code" }
+if (-not ((Get-Content $startup -Raw -ErrorAction SilentlyContinue) -like "*`"$kit\START-HERE-Windows.bat`" --no-browser*")) {
+  Fail "SETUP --home-server didn't set the kit to start as you sign in ($startup)"
+}
+Test-Share $kit $address $code    # the kit Windows started from the Startup folder, minimized
+$out = & "$kit\kit.cmd" autostart
+"kit.cmd autostart: $out"
+if ($LASTEXITCODE -ne 0 -or -not ("$out" -match "starts when you sign in")) { Fail "kit.cmd autostart doesn't say the kit starts as you sign in" }
+Stop-Kit $kit $null
 Step "./kit fit: Windows says how much memory this PC has"
 $fit = python "$kit\tools\kit.py" --root $kit fit
 $fit
 if (-not ($fit -match "has \d+ GB of memory")) { Fail "./kit fit can't tell this PC's memory" }
 Step "UNINSTALL-Windows.bat --yes: the kit, its downloads and the Python SETUP got are gone"
 Invoke-Uninstall $kit "uninstall-windows-pc.log"
+if (Test-Path $startup) { Fail "UNINSTALL left the kit starting as you sign in ($startup)" }
 
 Step "a 2 GB disk, formatted exFAT the way File Explorer does"
 $vhd = "$work\drive-windows.vhd"
@@ -225,7 +270,7 @@ Get-Content "$logs\sync-windows-map.log" | Select-String "map|road|GraphHopper|a
 foreach ($f in "maps\tiles\basemap.pmtiles", "maps\routing\graph-cache\properties", "maps\geocoder\photon_data") {
   if (-not (Test-Path "$dl\$f")) { Fail "sync didn't make $f (logs\sync-windows-map.log)" }
 }
-Test-Kit $dl "the map"
+Test-Kit $dl "the map" -Share
 Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
 
 Stop-Process -Id $mock.Id -Force -ErrorAction SilentlyContinue

@@ -38,12 +38,13 @@ Nothing here needs the internet, an account, or an install.
     bigger models don't fit.
   - `Gemma-4-E4B`: small. Use it to **save battery**. On an 8 GB laptop the kit starts with it.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
-- **Share with family** (Mac, Linux): start with `bash START-HERE.command --share`. It shows an address, an access code and a QR
-  code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. No internet
-  needed, only a Wi-Fi network: your router on a battery backup, a small battery-powered travel router, or a phone's
-  hotspot (an iPhone's may not turn on without cell service). Nobody without the code gets in. To share every time
-  the kit starts, run `./kit share on` once in the kit folder. If macOS asks whether to accept incoming connections,
-  click **Allow**.
+- **Share with family**: start with `bash START-HERE.command --share` (on Windows, `.\START-HERE-Windows.bat --share`
+  in a terminal in the kit folder). It shows an address, an access code and a QR code. Phones and laptops on the same
+  Wi-Fi open the address and type the code, or scan the QR code. No internet needed, only a Wi-Fi network: your
+  router on a battery backup, a small battery-powered travel router, or a phone's hotspot (an iPhone's may not turn on
+  without cell service). Nobody without the code gets in. To share every time the kit starts, run `./kit share on`
+  once in the kit folder (`.\kit.cmd share on` on Windows). If macOS asks whether to accept incoming connections,
+  click **Allow**. If Windows asks about Python, click **Allow access**.
 
 The AI can be wrong. Treat it like a well-read friend, not a doctor: check the sources, and get trained help whenever you can.
 
@@ -72,8 +73,9 @@ The kit's map is the backup, and it's handy for planning on a big screen and for
 
 There's no schedule. Double-click `SETUP.command` in the kit folder (`SETUP-Windows.bat` on Windows; on Linux,
 `bash SETUP.command`). It gets the newest version of the kit itself, with any models and books added since, then the
-newest editions of everything, checks every file, and starts it all once offline to make sure it works. Or, on a Mac
-or Linux, open a terminal in the kit folder (Mac: drag the `TinfoilKit` folder onto the Terminal icon) and run:
+newest editions of everything, checks every file, and starts it all once offline to make sure it works. Or open a
+terminal in the kit folder (Mac: drag the `TinfoilKit` folder onto the Terminal icon; Windows: right-click the folder,
+**Open in Terminal**) and run these (on Windows, `.\kit.cmd` in place of `./kit`):
 
 ```
 ./kit update    # gets the newest signed version of the kit itself, keeping your kit.json changes
@@ -165,7 +167,9 @@ and the Library tab (no AI) uses almost nothing.
   Security > Files and Folders**, turn on **Removable Volumes** under Terminal, and start again.
 - Logs are in the `logs` folder.
 - Phones can't open the shared address: they need the same Wi-Fi as the computer (a guest network often keeps
-  devices apart). `./kit share` shows the address and the access code again.
+  devices apart). `./kit share` shows the address and the access code again. On Windows, set the Wi-Fi as a private
+  network (**Settings > Network & internet**, then the Wi-Fi's properties), and if Python was refused, allow it in
+  **Windows Security > Firewall & network protection > Allow an app through firewall**, ticking **Private**.
 - If a model won't load or is very slow, quit other apps (big models need most of a 32 GB laptop's memory), or use `Gemma-4-E4B`.
   Starting with `bash START-HERE.command --no-maps` frees about 5 GB by not starting the map servers.
 - Map says address search or directions are "not running": they take up to a minute to start. If they never do,
@@ -184,20 +188,22 @@ have internet. If the window says another library is missing, install that too.
 
 ## A home server (advanced)
 
-A computer that stays on, like a Linux box or a Mac mini, can serve the kit to every phone and laptop at home. It
-needs no screen. Over SSH, in the unzipped download (or a `git clone`), run:
+A computer that stays on, like a Linux box, a Mac mini or a Windows PC, can serve the kit to every phone and laptop
+at home. On Linux or a Mac it needs no screen. Over SSH, in the unzipped download (or a `git clone`), run:
 
 ```
 bash SETUP.command --home-server
 ```
 
-and choose "This computer". It sets the kit up as usual, then shares it on the home network behind an access code
-and starts it whenever the computer starts. At the end it shows the address, the access code and a QR code;
-`./kit share` shows them again. Without the questions, in the kit folder: `./kit sync -y && ./kit test`, then
-`./kit share on` and `./kit autostart on`.
+(on Windows, `.\SETUP-Windows.bat --home-server` in a terminal there) and choose "This computer". It sets the kit up
+as usual, then shares it on the home network behind an access code and starts it whenever the computer starts. At
+the end it shows the address, the access code and a QR code; `./kit share` shows them again. Without the questions,
+in the kit folder: `./kit sync -y && ./kit test`, then `./kit share on` and `./kit autostart on` (`.\kit.cmd` on
+Windows).
 
 - On Linux the kit runs as a systemd user service, from boot. On a Mac it starts when you log in, so turn on
-  automatic login. Keep it on the computer's own disk.
+  automatic login. On Windows it starts, minimized, when you sign in: keep the PC signed in (locking it is fine) and
+  plugged in, and sign in again after a restart. Keep it on the computer's own disk.
 - `./kit share new-code` makes a new code (every phone types it again), `./kit share off` stops sharing, and
   `./kit autostart off` stops the kit starting by itself. UNINSTALL does both.
 - Another program already using port 8000: set `share_port` in `kit.json` to a free port.
@@ -211,7 +217,7 @@ and starts it whenever the computer starts. At the end it shows the address, the
 | `SETUP.command` | Sets the kit up, and updates it whenever you like (needs internet) |
 | `UNINSTALL.command` | Removes the kit and everything it downloaded |
 | `START-HERE-Windows.bat`, `SETUP-Windows.bat`, `UNINSTALL-Windows.bat` | The same three, for Windows |
-| `kit`, `kit.json` | Update tool and the list of what to keep |
+| `kit` (`kit.cmd` on Windows), `kit.json` | Update tool and the list of what to keep |
 | `INVENTORY.md` | What's in the kit right now, with versions |
 | `library/` | The books (`.zim` files) |
 | `models/` | The AI models (`.gguf` files) |

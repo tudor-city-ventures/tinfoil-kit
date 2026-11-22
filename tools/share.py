@@ -4,12 +4,12 @@
 The kit's servers only ever listen on 127.0.0.1. With sharing on, this gate listens on the network instead:
 it asks for the access code, then hands each request to a server by its path (/ai, /tiles, /geocoder and
 /routing; everything else is the library and the kit page). It also draws the QR code that opens the kit on a
-phone, and installs the service that starts the kit with the computer (Linux: systemd, Mac: launchd), for a
-home server. Standard library only, like kit.py.
+phone, and starts the kit with the computer, for a home server (Linux: a systemd service, Mac: a LaunchAgent,
+Windows: its Startup folder). Standard library only, like kit.py.
 
   python3 tools/share.py serve --root KIT --port 8000 --library 8888 --ai 8080 [--tiles N --geocoder N --routing N]
   python3 tools/share.py banner --root KIT --port 8000 [--qr]     the address, the access code and the QR code
-./kit share and ./kit autostart use the rest.
+./kit share and ./kit autostart (kit.cmd on Windows) use the rest.
 """
 from __future__ import annotations
 
@@ -35,6 +35,14 @@ import time
 import urllib.parse
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+WINDOWS, MAC = os.name == "nt", sys.platform == "darwin"
+
+
+def kit_cmd(args: str) -> str:
+    """A kit command as this computer runs it."""
+    return (".\\kit.cmd " if WINDOWS else "./kit ") + args
+
 
 # ----------------------------------------------------------------------------- QR code
 # Byte mode at error correction level M, following ISO/IEC 18004. An address needs version 3 or 4.
@@ -329,8 +337,14 @@ def lan_ips() -> List[str]:
                 add(s.getsockname()[0])
         except OSError:
             pass
-    cmds = ([["ipconfig", "getifaddr", i] for i in ("en0", "en1", "bridge100")] if sys.platform == "darwin"
-            else [["hostname", "-I"]])
+    if WINDOWS:    # the addresses of every network this PC is on
+        try:
+            for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
+                add(ip)
+        except OSError:
+            pass
+        return found
+    cmds = ([["ipconfig", "getifaddr", i] for i in ("en0", "en1", "bridge100")] if MAC else [["hostname", "-I"]])
     for cmd in cmds:
         try:
             out = subprocess.run(cmd, capture_output=True, text=True, timeout=5).stdout
@@ -342,8 +356,11 @@ def lan_ips() -> List[str]:
 
 
 def local_name() -> str:
-    """name.local, when other devices can find this computer by name (Bonjour on a Mac, Avahi on Linux)."""
-    if sys.platform == "darwin":
+    """name.local, when other devices can find this computer by name (Bonjour on a Mac, Avahi on Linux). Phones
+    can't find a Windows PC by name."""
+    if WINDOWS:
+        return ""
+    if MAC:
         try:
             name = subprocess.run(["scutil", "--get", "LocalHostName"], capture_output=True, text=True,
                                   timeout=5).stdout.strip()
@@ -414,15 +431,30 @@ def banner(root: Path, port: int, qr: bool) -> str:
     ips = lan_ips()
     if not ips:
         return (f"  Sharing is on (access code {pretty_code(code)}), but this computer isn't on a home network.\n"
-                "  Connect it to your Wi-Fi or router (no internet needed), then run ./kit share to see its address.")
+                f"  Connect it to your Wi-Fi or router (no internet needed), then run {kit_cmd('share')} to see its\n"
+                "  address.")
     lines = [f"  On your home network: open http://{ips[0]}:{port} on a phone or laptop",
              f"  Access code: {pretty_code(code)}"]
     name = local_name()
     if name:
         lines.append(f"  Laptops can also use http://{name}:{port}")
-    if qr:
+    if qr and colors_on():
         lines += ["  Or scan this with a phone's camera:", "", qr_text(qr_code(join_url(f"{ips[0]}:{port}", code))), ""]
     return "\n".join(lines)
+
+
+def colors_on() -> bool:
+    """Whether the terminal draws the QR code's colors. Windows' console does once a program asks it to."""
+    if not WINDOWS:
+        return True
+    try:
+        import ctypes
+        k = ctypes.windll.kernel32
+        out, mode = k.GetStdHandle(-11), ctypes.c_uint32()    # standard output
+        # 4: ENABLE_VIRTUAL_TERMINAL_PROCESSING, which draws colors
+        return bool(k.GetConsoleMode(out, ctypes.byref(mode)) and k.SetConsoleMode(out, mode.value | 4))
+    except (AttributeError, OSError):
+        return False
 
 
 # ----------------------------------------------------------------------------- the gate
@@ -485,6 +517,8 @@ button { width:100%; margin-top:.8rem; font:inherit; padding:.7rem; border:0; bo
 
 class Gate(http.server.ThreadingHTTPServer):
     daemon_threads = True
+    # On Windows it would let the gate share a port another program is listening on, instead of failing.
+    allow_reuse_address = not WINDOWS
 
     def __init__(self, root: Path, port: int, ports: Dict[str, int]):
         self.root, self.port, self.ports = root, port, ports
@@ -758,10 +792,22 @@ def serve(root: Path, port: int, ports: Dict[str, int]) -> None:
     except OSError as e:
         sys.exit(f"Can't share on port {port}: {e.strerror}")
     print(f"Sharing on port {port}: " + ", ".join(f"{k} {v}" for k, v in ports.items()), flush=True)
+    stay_awake()
     try:
         gate.serve_forever()
     except KeyboardInterrupt:
         pass
+
+
+def stay_awake() -> None:
+    """Windows goes to sleep after a while with nobody at the keyboard, and the kit with it. The launcher keeps a Mac
+    or Linux PC awake. On Windows the gate asks Windows not to sleep while it runs (the screen can still turn off)."""
+    if WINDOWS:
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000001)    # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+        except (AttributeError, OSError):
+            pass
 
 
 # ----------------------------------------------------------------------------- start with the computer
@@ -771,7 +817,7 @@ AGENT = "com.tinfoilkit.kit"
 
 
 def launcher(root: Path) -> Path:
-    return root / "tools" / "launch.sh"
+    return root / "START-HERE-Windows.bat" if WINDOWS else root / "tools" / "launch.sh"
 
 
 def systemd_unit(root: Path) -> str:
@@ -791,6 +837,25 @@ def unit_file() -> Path:
 
 def agent_file() -> Path:
     return Path.home() / "Library" / "LaunchAgents" / f"{AGENT}.plist"
+
+
+def startup_file() -> Path:
+    """Windows runs what's in this folder when you sign in."""
+    roaming = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+    return Path(roaming) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "Tinfoil Kit.cmd"
+
+
+def startup_script(root: Path) -> str:
+    """START-HERE-Windows.bat, minimized, if the kit is still there (a drive can be unplugged). In UTF-8 (chcp 65001)
+    for a folder named in any language, with % doubled since cmd reads it as its own."""
+    bat = str(launcher(root)).replace("%", "%%")
+    return ("@echo off\r\nchcp 65001 >nul\r\n"
+            f"rem Starts Tinfoil Kit when you sign in to Windows. {kit_cmd('autostart off')} removes this.\r\n"
+            f'if exist "{bat}" start "Tinfoil Kit" /min "{bat}" --no-browser\r\n')
+
+
+def autostart_file() -> Path:
+    return startup_file() if WINDOWS else agent_file() if MAC else unit_file()
 
 
 def _run(cmd: List[str], env: Optional[Dict[str, str]] = None) -> subprocess.CompletedProcess:
@@ -835,33 +900,36 @@ def _linger() -> bool:
 
 
 def ours(text: str, root: Path) -> bool:
+    if WINDOWS:    # where names are the same in any case
+        return str(launcher(root)).lower() in text.lower()
     return str(launcher(root)) in text
 
 
 def autostart_state(root: Path) -> str:
     """'on', 'off' or 'other' (set up for a different kit folder)."""
-    f = agent_file() if sys.platform == "darwin" else unit_file()
     try:
-        text = f.read_text(encoding="utf-8")
+        text = autostart_file().read_text(encoding="utf-8")
     except OSError:
         return "off"
-    if sys.platform != "darwin":
+    if WINDOWS:
+        text = text.replace("%%", "%")
+    elif not MAC:
         text = text.replace("%%", "%").replace("$$", "$").replace('\\"', '"').replace("\\\\", "\\")
     return "on" if ours(text, root) else "other"
 
 
 def autostart(root: Path, action: str) -> int:
     """./kit autostart on|off|status. Returns the exit code."""
-    mac = sys.platform == "darwin"
     if action == "status":
         state = autostart_state(root)
         if state == "on":
-            print("The kit starts when this computer starts" + (" (once you log in)." if mac else
-                  "." if _lingering() else ", once you log in (see ./kit autostart on to start it before)."))
+            print("The kit starts when you sign in to this PC." if WINDOWS else
+                  "The kit starts when this computer starts" + (" (once you log in)." if MAC else "." if _lingering()
+                  else f", once you log in (see {kit_cmd('autostart on')} to start it before)."))
         elif state == "other":
-            print(f"Another kit folder starts with this computer (see {agent_file() if mac else unit_file()}).")
+            print(f"Another kit folder starts with this computer (see {autostart_file()}).")
         else:
-            print("The kit doesn't start by itself. ./kit autostart on makes it start with this computer.")
+            print(f"The kit doesn't start by itself. {kit_cmd('autostart on')} makes it start with this computer.")
         return 0
     if action == "off":
         state = autostart_state(root)
@@ -871,7 +939,11 @@ def autostart(root: Path, action: str) -> int:
         if state == "off":
             print("The kit already doesn't start by itself.")
             return 0
-        if mac:
+        if WINDOWS:    # which window is the one it started can't be told
+            startup_file().unlink(missing_ok=True)
+            print("The kit no longer starts when you sign in. If it's running, close its window to stop it.")
+            return 0
+        if MAC:
             _run(["launchctl", "bootout", f"gui/{os.getuid()}/{AGENT}"])
             agent_file().unlink(missing_ok=True)
         else:
@@ -881,7 +953,9 @@ def autostart(root: Path, action: str) -> int:
         print("The kit no longer starts by itself, and the copy it started has stopped.")
         return 0
     (root / "logs").mkdir(exist_ok=True)
-    if mac:
+    if WINDOWS:
+        return _startup_on(root)
+    if MAC:
         return _launchd_on(root)
     return _systemd_on(root)
 
@@ -936,11 +1010,27 @@ def _launchd_on(root: Path) -> int:
     return 0
 
 
+def _startup_on(root: Path) -> int:
+    f = startup_file()
+    try:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(startup_script(root).encode("utf-8"))
+        os.startfile(str(f))    # start it now, the way it starts when you sign in
+    except OSError as e:
+        print(f"Couldn't set up starting the kit when you sign in: {e}")
+        return 1
+    print("The kit is starting now, in a minimized window, and will start whenever you sign in to this PC.\n"
+          "For a home server, keep this PC plugged in and signed in (locking it is fine), and sign in again after a\n"
+          "restart.")
+    return 0
+
+
 def restart_if_autostarted(root: Path) -> bool:
-    """Restart the kit when the computer started it, so a sharing change takes effect. True if it did."""
-    if autostart_state(root) != "on":
+    """Restart the kit when the computer started it, so a sharing change takes effect. True if it did. Not on
+    Windows, where the window it started can't be told from one you opened."""
+    if WINDOWS or autostart_state(root) != "on":
         return False
-    if sys.platform == "darwin":
+    if MAC:
         return _run(["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{AGENT}"]).returncode == 0
     return _systemctl("try-restart", SERVICE).returncode == 0
 

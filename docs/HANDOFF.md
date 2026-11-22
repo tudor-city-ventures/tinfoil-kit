@@ -31,7 +31,7 @@ Handoff from the Claude chat where the kit was built (2026-11-21). The code move
 
 - Videos of the drive test (Travis, 2026-11-22: "I would love if I could see a video of like how this works on a virtual Windows machine and Linux and Mac, so I can like QA it because I only have a Mac"): every drive test run films each machine's screen, and its run page links a captioned video of each. Section 4.
 
-- Home server (Travis, 2026-11-22: "ship it in this version"): sharing on the home network behind an access code, and starting with the computer, for a Linux box or a Mac that stays on. `SETUP.command --home-server` (or `./kit share on` and `./kit autostart on`) does it headless. Every server now listens on 127.0.0.1 only, `--share` included; `tools/share.py` is the one way in from the network. Kept out of the everyday flow: an advanced section in GUIDE, README and llms.txt, and the site FAQ. Design in section 3, "Sharing and home servers". The drive test checks it on the Mac (LaunchAgent) and Linux (systemd), e2e drives it in a browser.
+- Home server (Travis, 2026-11-22: "ship it in this version"; Windows too, "everything in v1"): sharing on the home network behind an access code, and starting with the computer, for a Linux box, a Mac or a Windows PC that stays on. `SETUP.command --home-server` (`SETUP-Windows.bat --home-server`, or `./kit share on` and `./kit autostart on`) does it headless. Every server now listens on 127.0.0.1 only, `--share` included; `tools/share.py` is the one way in from the network. Kept out of the everyday flow: an advanced section in GUIDE, README and llms.txt, and the site FAQ. Design in section 3, "Sharing and home servers". The drive test checks it on the Mac (LaunchAgent), Linux (systemd) and Windows (the Startup folder), e2e drives it in a browser. `kit.cmd` is `./kit` for Windows.
 
 - Setup fits the computer (Travis, 2026-11-22): SETUP says which AI model this computer runs and asks before getting ones too big for its memory (`./kit fit`: a model may use 60% of memory, as the launcher decides; skipped ones go in kit.json's `models_off_for_memory`, so SETUP offers them back on a bigger computer). Gemma 4 12B fills the gap for 16 to 24 GB laptops. SETUP shows how big the kit and its essentials are and what each place has free (`./kit space`), stops a place where even the essentials don't fit, and warns when a choice would leave less than 10% of the computer's disk or 5% of a drive free (Travis: "leave like 5 to 10% remaining"), offering just the essentials (`./kit essentials on`, kit.json's `essentials_only`: the programs, the maps, priority-1 books, the model this computer runs and the smallest one). A later SETUP offers the rest once it fits. The first run gets and tests the essentials before the rest. On a Mac without Apple's Command Line Tools, SETUP gets python-build-standalone's Python (about 25 MB; URL and SHA-256 pinned in SETUP.command) into `~/Library/Application Support/TinfoilKit` instead of the multi-GB tools install; `./kit`, the sharing gate and UNINSTALL know it. Changing PY_URL and PY_SHA256 brings Macs the new build at their next SETUP. `tests/build_fixtures.sh drive` serves the same file to the drive test, whose Mac run gets it.
 
@@ -189,7 +189,7 @@ Why a gate: kiwix-serve, pmtiles, Photon and GraphHopper have no passwords, and 
 - **Port:** `share_port`, 8000. If another program has it, the launcher takes the next free one for that run and says how to pin one; `./kit share` finds where the gate really is (`gate_port`, by its `Server: TinfoilKit` header).
 - **Starting with the computer:** Linux, a systemd user service (`Restart=always`) and `loginctl enable-linger` (tried without sudo, then with `sudo -n`) so it starts at boot; no root service, so it runs as the person. Mac: a LaunchAgent (`KeepAlive`), which starts at login, so a Mac server needs automatic login; macOS may refuse it for a kit on an external drive. `./kit share on|off` restarts the kit the computer started, unless nothing changed. UNINSTALL runs `./kit autostart off` first.
 - **SETUP --home-server** carries the flag in `KIT_HOME_SERVER`, since SETUP starts itself again after moving and updating the kit. At the end it runs `./kit share on`, `./kit autostart on` and `./kit share`, instead of asking to open the kit.
-- **Windows:** no sharing or autostart yet; `./kit share` says so. START-HERE-Windows.bat keeps every server on 127.0.0.1.
+- **Windows:** START-HERE-Windows.bat starts the gate (`--share`, or `share_on_network`) on the Python SETUP got, found by `%LOCALAPPDATA%\TinfoilKit\python-*`, else the PC's own 3.9+ (not the Store's stand-in). `.\kit.cmd` runs kit.py on the same Python. Autostart is `Tinfoil Kit.cmd` in the Startup folder (`%APPDATA%\...\Startup`): UTF-8 with `chcp 65001` for any folder name, `%` doubled, starting START-HERE minimized with `--no-browser` if the kit is still there, at sign-in. A Windows server stays signed in (locked is fine). `autostart on` also starts it now; `off` deletes the entry but can't tell which window it started, and `share on|off` don't restart the kit there. The gate keeps Windows awake while it runs (`SetThreadExecutionState`, the Mac's `caffeinate`), turns on the console's colors for the QR code, and doesn't set `SO_REUSEADDR` (on Windows it would share a port another program holds). Windows Firewall asks once whether Python may listen; START-HERE and `autostart on` say to allow it, and GUIDE covers a refused prompt and Public networks. SETUP's `stop_kit` and UNINSTALL also stop the gate (by its command line, `tools\share.py`), and UNINSTALL deletes the Startup entry if it's this kit's.
 - The launcher keeps a Linux computer awake with `systemd-inhibit` while it runs (`caffeinate` on a Mac).
 
 ### The browser page (`tools/portal.html`)
@@ -314,7 +314,7 @@ The scripts are in `tests/`; AGENTS.md says which to run when.
 
 ## 5. Agent-driven development setup (keep it slim)
 
-Inspired by the Do They Support It repo, but much smaller and written for people.
+Inspired by the DoTheySupportIt repo, but much smaller and written for people.
 
 - **`AGENTS.md`** is the one set of agent instructions; Codex and Cursor read it natively. **`CLAUDE.md`** contains a single line, `@AGENTS.md`, which Claude Code reads as an import. No symlinks, because people will copy this repo onto exFAT drives.
 - **Verification tiers** are in `AGENTS.md`: use the cheapest one that proves the change, and paste its output.
@@ -350,7 +350,7 @@ Inspired by the Do They Support It repo, but much smaller and written for people
   - Also available on 2026-11-21: tinfoilkit.org, tinfoilkit.dev, tinfoilkit.app, usetinfoil.com, tinfoilhq.com, tinfoil.computer, tinfoil.tools.
   - Taken: tinfoil.app, tinfoil.dev, tinfoil.org, gettinfoil.com.
 - **Hosting:** a new Vercel project in the tudor-city-ventures team. The site credits a company, and Vercel's free Hobby plan is for non-commercial use only. Don't touch other projects.
-- **Credit:** the footer says it's a side project from the team behind Do They Support It, with a link to dotheysupportit.com. Do They Support It is not the main brand.
+- **Credit:** the footer says it's a side project from the team behind DoTheySupportIt, with a link to dotheysupportit.com. DoTheySupportIt is not the main brand.
 - **Open source up front:** a very clear button to the GitHub repo, and the site talks prominently about being open source.
 - **Audience:** technical people and non-technical preppers.
 - **Platforms:** Apple Silicon Macs only for v1.
@@ -482,5 +482,5 @@ The policy and its reasons are in `.github/CONTRIBUTING.md`. In the repo's Setti
 4. He asked for maps "just like Google Maps" that work with the AI. That became v2: tiles, address search, directions, nearest places and map tools for the AI, tested with mocks and real MapLibre in headless Chrome.
 5. He asked what else he was missing; the result is a personal prep checklist, kept out of this repo.
 6. He decided to open-source it as Tinfoil Kit, with a marketing site on Vercel, and answered a round of questions to pin down the details (section 7).
-7. He wants agent-driven development like the Do They Support It repo, but slim and readable (section 5).
+7. He wants agent-driven development like the DoTheySupportIt repo, but slim and readable (section 5).
 8. He moved the work to a Claude Code project. This file is the handoff.

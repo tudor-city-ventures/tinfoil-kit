@@ -82,12 +82,14 @@ with sync_playwright() as p:
         before = page.evaluate(FRAME)
         page.wait_for_timeout(250)
         check(f"{name}: hero draws and moves", inked > 5000 and page.evaluate(FRAME) != before, f"{inked} inked pixels")
-        page.click(".viz-pause")
+        playing_clean = not page.is_visible(".viz-state")
+        page.click(".viz-toggle")
         page.evaluate("new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")   # let a queued redraw land
         before = page.evaluate(FRAME)
         page.wait_for_timeout(250)
-        check(f"{name}: Pause holds the hero still", page.evaluate(FRAME) == before and page.inner_text(".viz-pause") == "Play")
-        page.click(".viz-pause")
+        check(f"{name}: clicking the hero pauses it, and nothing but a paused hero shows a control", playing_clean
+              and page.evaluate(FRAME) == before and page.get_attribute(".viz-toggle", "aria-pressed") == "true" and page.is_visible(".viz-state"))
+        page.click(".viz-toggle")
         totals = {}
         for preset in ("essentials", "everything", "no-ai", "recommended"):
             page.click(f"[data-preset={preset}]")
@@ -135,12 +137,17 @@ with sync_playwright() as p:
             old.click("#copySetup")
             check("Copy works without the clipboard API", old.inner_text("#toast").startswith("Copied."), old.inner_text("#toast"))
             old.close()
-            with page.expect_download() as dl:
-                page.click("#downloadKit")
-            kit = json.loads(open(dl.value.path()).read())
-            off = [m["id"] for m in kit["models"] if not m["enabled"]]
-            check("downloaded kit.json reflects the picks", len(off) == 1 and kit["settings"]["default_model"] != off[0], str(off))
-            # Where you live: sets the map card and Wikipedia's language, and goes into kit.json and the setup prompt
+            stuck = b.new_page()    # nothing can copy: the prompt shows, selected, for Cmd-C
+            stuck.add_init_script("Object.defineProperty(Navigator.prototype, 'clipboard', {get: () => undefined});"
+                                  "Document.prototype.execCommand = () => false")
+            stuck.goto(URL)
+            stuck.wait_for_selector(".card")
+            stuck.click("#copySetup")
+            check("when nothing can copy, the setup prompt shows selected", stuck.is_visible("#setupText")
+                  and stuck.evaluate("getSelection().toString()").startswith("I want to set up Tinfoil Kit"), stuck.inner_text("#toast"))
+            stuck.close()
+            unticked = page.locator(".card strong").first.inner_text()
+            # Where you live: sets the map card and Wikipedia's language, and goes into the setup prompt
             wiki_titles = "[...document.querySelectorAll('.card strong')].map(e => e.textContent).filter(t => t.startsWith('Wikipedia'))"
             check("the builder starts at kit.json's place, with Wikipedia in English",
                   page.input_value("#place") == "us-northeast" and page.evaluate(wiki_titles) == ["Wikipedia, with images"]
@@ -162,18 +169,14 @@ with sync_playwright() as p:
             check("two languages: a Wikipedia card for each", page.evaluate(wiki_titles) == ["Wikipedia in German, with images",
                                                                                          "Wikipedia, with images"])
             page.select_option("#wikiLang", "de")
-            with page.expect_download() as dl:
-                page.click("#downloadKit")
-            kit = json.loads(open(dl.value.path()).read())
-            wiki = [z for z in kit["library"] if z["zim"].startswith("wikipedia_")]
-            check("downloaded kit.json has the place, and Wikipedia in its language with the same settings",
-                  kit["maps"]["region"] == "bayern" and "label" not in kit["maps"] and "detail_bbox" not in kit["maps"]
-                  and [z["zim"] for z in wiki] == ["wikipedia_de_all_maxi"] and wiki[0]["enabled"] and wiki[0]["refresh_days"] == 365,
-                  json.dumps(kit["maps"]))
             page.click("#copySetup")
             page.wait_for_selector("#toast:has-text('Copied')", timeout=5000)
-            check("the setup prompt says where you live, as a ./kit region command",
-                  "./kit region bayern --wikipedia de" in page.evaluate("navigator.clipboard.readText()"))
+            prompt = page.evaluate("navigator.clipboard.readText()")
+            ticked = page.evaluate("[...document.querySelectorAll('.card')].filter(c => c.querySelector('input').checked)"
+                                   ".map(c => c.querySelector('strong').textContent)")
+            check("the setup prompt lists the picks, and not what was unticked", "- Wikipedia in German, with images (" in prompt
+                  and all("- " + t + " (" in prompt for t in ticked) and "- " + unticked + " (" not in prompt, unticked)
+            check("the setup prompt says where you live, as a ./kit region command", "./kit region bayern --wikipedia de" in prompt)
             page.select_option("#place", "georgia")
             check("the builder: two places called Georgia, the country under Europe",
                   page.locator("#place optgroup[label=Europe] option[value=georgia]").count() == 1
@@ -222,7 +225,7 @@ with sync_playwright() as p:
     before = still.evaluate(FRAME)
     still.wait_for_timeout(300)
     check("reduced motion: the hero holds one still frame", still.evaluate(INKED) > 5000 and still.evaluate(FRAME) == before
-          and still.inner_text(".viz-pause") == "Play")
+          and still.get_attribute(".viz-toggle", "aria-pressed") == "true")
     still.close()
     nf = b.new_page()     # Vercel serves 404.html for any unknown address
     nf.goto(URL + "404.html")
