@@ -19,6 +19,11 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      not (or -). --json adds this computer's free space and what the kit needs.
   place DEST         Put the kit at DEST (a TinfoilKit folder at the top of a drive or in the home
                      folder), ready to set up there. Prints its folder. SETUP.command uses it.
+  share [on|off|new-code]
+                     Let phones and laptops on your home network use the kit, once they type its
+                     access code. Shows the address, the code and a QR code.
+  autostart [on|off] Start the kit whenever this computer starts, for a home server (Linux: a
+                     systemd user service; Mac: when you log in).
 
 Only needs python3 (3.9+) and curl, both standard on macOS. aria2c is used if installed
 (brew install aria2) for faster multi-connection downloads.
@@ -1805,7 +1810,7 @@ class Lock:
 # ./kit update never writes here, whatever a release holds: the downloads, the kit's state and logs, a git checkout.
 KEEP = {".git", ".kit", "bin", "installers", "library", "logs", "maps", "models", "INVENTORY.md"}
 NEEDED = ("kit", "kit.json", "SETUP.command", "START-HERE.command", "UNINSTALL.command", "tools/kit.py", "tools/launch.sh",
-          "tools/portal.html")
+          "tools/portal.html", "tools/share.py")
 MISSING = object()
 
 
@@ -2379,6 +2384,81 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
     sys.exit(1 if failed else 0)
 
 
+# ----------------------------------------------------------------------------- the home network
+
+def share_tools() -> Any:
+    """tools/share.py: the gate that shares the kit on the home network, its QR code, and starting with the computer."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import share
+    return share
+
+
+def set_setting(root: Path, key: str, value: Any) -> None:
+    """Change one setting in kit.json, and leave the rest of the file as it is."""
+    path = root / "kit.json"
+    text = path.read_text(encoding="utf-8")
+    val = json.dumps(value)
+    new, n = re.subn(rf'("{re.escape(key)}"\s*:\s*)(true|false|null|-?[\d.]+|"(?:[^"\\]|\\.)*")',
+                     lambda m: m.group(1) + val, text, count=1)
+    if not n:    # a kit.json from before this setting: it goes first in "settings"
+        new = re.sub(r'("settings"\s*:\s*\{)(\s*)', lambda m: f'{m.group(1)}{m.group(2)}"{key}": {val},{m.group(2)}',
+                     text, count=1)
+    try:
+        ok = json.loads(new).get("settings", {}).get(key) == value
+    except ValueError:
+        ok = False
+    if not ok:
+        cfg = json.loads(text)
+        cfg.setdefault("settings", {})[key] = value
+        new = json.dumps(cfg, indent=2) + "\n"
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(new, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def cmd_share(root: Path, args: argparse.Namespace) -> None:
+    share = share_tools()
+    s = load_config(root)["settings"]
+    port, on = int(s.get("share_port", 8000)), s.get("share_on_network") is True
+    if args.code is not None and not share.valid_code(args.code):
+        die("An access code needs 6 to 64 letters or digits.")
+    if args.action in ("on", "new-code"):
+        access = share.load_access(root)
+        if args.action == "new-code" or args.code:
+            access["code"] = share.clean_code(args.code) if args.code else share.new_code()
+            share.save_access(root, access)
+    if args.action == "off":
+        set_setting(root, "share_on_network", False)
+        log("Sharing is off: only this computer can open the kit.")
+        log("The kit restarted without it." if share.restart_if_autostarted(root) else
+            "If the kit is running, close its window and start it again.")
+        return
+    if args.action == "on":
+        set_setting(root, "share_on_network", True)
+        on = True
+        log("Sharing on your home network is on. Phones and laptops there need the access code to get in.")
+        log("The kit restarted with sharing on." if share.restart_if_autostarted(root) else
+            "Start the kit (START-HERE.command), or close its window and start it again if it's running.")
+    elif args.action == "new-code":
+        log("New access code. Phones and laptops that used the old one need this one now.")
+    if not on:
+        log("Sharing is off: only this computer can open the kit. ./kit share on lets phones and laptops on\n"
+            "your home network open it too, once they type an access code.")
+        return
+    log("")
+    log(share.banner(root, port, args.qr or sys.stdout.isatty()))
+    if not args.action:
+        log("")
+        share.autostart(root, "status")
+
+
+def cmd_autostart(root: Path, args: argparse.Namespace) -> None:
+    rc = share_tools().autostart(root, args.action or "status")
+    if rc == 0 and args.action == "on" and load_config(root)["settings"].get("share_on_network") is not True:
+        log("Sharing is off, so only this computer can use the kit. ./kit share on lets your phones and laptops in.")
+    sys.exit(rc)
+
+
 # ----------------------------------------------------------------------------- update command
 
 def kit_github(path: str, *keys: str) -> Optional[Dict[str, Any]]:
@@ -2481,13 +2561,19 @@ def main() -> None:
     p.add_argument("--json", action="store_true", help="with this computer's free space and what the kit needs")
     p = sub.add_parser("place", help="put the kit at DEST, a TinfoilKit folder on a drive or in the home folder")
     p.add_argument("dest")
+    p = sub.add_parser("share", help="let phones and laptops on your home network use the kit, with an access code")
+    p.add_argument("action", nargs="?", choices=("on", "off", "new-code"))
+    p.add_argument("--code", help="the access code to use (6 to 64 letters or digits) instead of a random one")
+    p.add_argument("--qr", action="store_true", help="draw the QR code even when not printing to a terminal")
+    p = sub.add_parser("autostart", help="start the kit whenever this computer starts, for a home server")
+    p.add_argument("action", nargs="?", choices=("on", "off"))
     args = ap.parse_args()
     root = (args.root or ROOT).resolve()
-    if not shutil.which("curl"):
+    if args.cmd not in ("share", "autostart") and not shutil.which("curl"):
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
-                "drives": cmd_drives, "place": cmd_place}
+                "drives": cmd_drives, "place": cmd_place, "share": cmd_share, "autostart": cmd_autostart}
     if args.cmd not in commands:
         ap.print_help()
         return
