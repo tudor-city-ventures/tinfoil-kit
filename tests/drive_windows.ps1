@@ -68,7 +68,7 @@ function Get-RoomAnswer($dir, $place) {
 function Stop-Kit($kit, $proc) {
   Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$kit\bin\", "OrdinalIgnoreCase") } | Stop-Process -Force
   $mine = "$kit\tools\share.py", "$kit\Open Tinfoil Kit for Windows.bat"
-  Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and ($mine | Where-Object { $c.IndexOf($_, "OrdinalIgnoreCase") -ge 0 }) } |
+  Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and ($mine | Where-Object { $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }) } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   if ($proc) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
   Start-Sleep 2
