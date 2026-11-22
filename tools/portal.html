@@ -1,1187 +1,2682 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tinfoil Kit</title>
-<link rel="icon" href="data:,">
-<style>
-  :root { --bg:#f6f5f2; --card:#fff; --ink:#1d1d1f; --mute:#6b6b70; --line:#e3e1dc; --accent:#1f5f8b; --on-accent:#fff; --ok:#2e7d32; --bad:#b3261e; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#161618; --card:#1f1f22; --ink:#ececef; --mute:#9a9aa2; --line:#2e2e33; --accent:#7fb4dc; --on-accent:#10202c; --ok:#81c784; --bad:#ef9a9a; } }
-  * { box-sizing: border-box; }
-  body { margin:0; font:16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background:var(--bg); color:var(--ink); }
-  header { display:flex; flex-wrap:wrap; gap:.5rem 1rem; align-items:center; padding:.9rem 1.2rem; border-bottom:1px solid var(--line); background:var(--card); }
-  header h1 { font-size:1.15rem; margin:0; letter-spacing:.01em; }
-  .pill { font-size:.8rem; padding:.15rem .6rem; border-radius:999px; border:1px solid var(--line); color:var(--mute); }
-  .pill.ok { color:var(--ok); border-color:var(--ok); } .pill.bad { color:var(--bad); border-color:var(--bad); }
-  a.pill { text-decoration:none; }
-  .stamp { font-size:.8rem; color:var(--mute); }
-  #shareQr { display:block; width:12rem; max-width:100%; height:auto; margin:.6rem 0; border-radius:8px; }
-  nav { display:flex; gap:.25rem; margin-left:auto; }
-  nav a { padding:.35rem .8rem; border-radius:8px; color:var(--ink); text-decoration:none; cursor:pointer; }
-  nav a.on { background:var(--accent); color:var(--on-accent); }
-  main { max-width:900px; margin:0 auto; padding:1.2rem; }
-  section { display:none; } section.on { display:block; }
-  textarea, input[type=search], select { width:100%; font:inherit; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.7rem .8rem; }
-  textarea { min-height:5.5rem; resize:vertical; }
-  .row { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.6rem; align-items:center; }
-  .row select { width:auto; flex:1 1 12rem; min-width:0; }
-  @media (max-width:600px) { #model { flex-basis:100%; } }
-  button { font:inherit; padding:.65rem 1.2rem; border-radius:10px; border:0; background:var(--accent); color:var(--on-accent); cursor:pointer; }
-  button.plain { background:none; color:inherit; padding:0; border-radius:0; text-align:left; }
-  li > button.plain { display:block; width:100%; }
-  button.plain.link { color:var(--accent); text-decoration:underline; }
-  button.secondary { background:transparent; color:var(--ink); border:1px solid var(--line); }
-  button:disabled { opacity:.5; cursor:default; }
-  #progress { color:var(--mute); font-size:.9rem; min-height:1.4rem; margin:.8rem 0 .2rem; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1rem 1.2rem; margin:.8rem 0; }
-  #answer:empty { display:none; }
-  #answer, #sources { overflow-wrap:anywhere; }   /* a long link or unbroken string wraps instead of widening the page */
-  #answer h4 { margin:1rem 0 .3rem; } #answer p { margin:.5rem 0; } #answer ul, #answer ol { padding-left:1.4rem; }
-  #answer a.cite { text-decoration:none; font-size:.8em; vertical-align:super; }
-  #sources li { margin:.5rem 0; } #sources .book { color:var(--mute); font-size:.85rem; }
-  #sources blockquote { margin:.3rem 0 0; padding-left:.7rem; border-left:3px solid var(--line); color:var(--mute); font-size:.9rem; }
-  details { margin:.6rem 0; color:var(--mute); } details pre { white-space:pre-wrap; font-size:.85rem; max-height:20rem; overflow:auto; }
-  .note { color:var(--mute); font-size:.85rem; }
-  .books { display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:.7rem; }
-  .book-card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.7rem .9rem; }
-  .book-card a { font-weight:600; color:var(--accent); text-decoration:none; }
-  .book-card p { margin:.3rem 0 0; font-size:.85rem; color:var(--mute); }
-  h2 { font-size:1rem; margin:1.4rem 0 .5rem; color:var(--mute); text-transform:uppercase; letter-spacing:.05em; }
-  a { color:var(--accent); }
-  .help li { margin:.4rem 0; }
-  kbd { border:1px solid var(--line); border-radius:4px; padding:0 .3rem; font-size:.85em; }
-  /* map tab */
-  [hidden] { display:none !important; }
-  main.wide { max-width:none; padding:0; }
-  main.wide #mapOff { margin:1.2rem; }
-  .map-wrap { display:flex; height:calc(100vh - 62px); }
-  .map-panel { width:360px; flex:none; overflow-y:auto; padding:1rem; border-right:1px solid var(--line); background:var(--bg); }
-  #mapCanvas { flex:1; min-height:300px; }
-  @media (max-width: 760px) { .map-wrap { flex-direction:column; height:auto; } .map-panel { width:auto; border-right:0; } #mapCanvas { height:65vh; } }
-  .map-panel input { width:100%; font:inherit; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.6rem .7rem; margin:.25rem 0; }
-  .results { background:var(--card); border:1px solid var(--line); border-radius:10px; margin:.2rem 0 .6rem; overflow:hidden; }
-  .results > * { display:block; width:100%; padding:.5rem .7rem; border-top:1px solid var(--line); font-size:.9rem; }
-  .results > :first-child { border-top:0; }
-  .results button { background:none; color:inherit; border-radius:0; text-align:left; } .results button:hover { background:var(--bg); }
-  .results button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }   /* the box clips outer outlines */
-  .results small, .place small { color:var(--mute); display:block; }
-  .chips { display:flex; flex-wrap:wrap; gap:.35rem; margin:.6rem 0; }
-  .chips button { padding:.35rem .7rem; font-size:.85rem; border-radius:999px; background:var(--card); color:var(--ink); border:1px solid var(--line); }
-  #dirSteps { padding-left:1.3rem; font-size:.9rem; } #dirSteps li { margin:.3rem 0; }
-  #dirSteps li small, #nearbyList small { color:var(--mute); }
-  #nearbyList { list-style:none; padding:0; margin:0; font-size:.9rem; } #nearbyList li { padding:.45rem 0; border-top:1px solid var(--line); }
-  #dirSummary { font-weight:600; margin:.5rem 0; }
-  .popup-btns button { padding:.3rem .6rem; font-size:.8rem; margin:.3rem .3rem 0 0; }
-  .maplibregl-popup-content { color:#1d1d1f; }
-</style>
-<!--KIT:MAPS-->
-</head>
-<body>
-<header>
-  <h1>Tinfoil Kit</h1>
-  <span id="libStatus" class="pill ok">Library: on</span>
-  <span id="aiStatus" class="pill">AI: checking</span>
-  <a id="sharePill" class="pill ok" href="#help" hidden>Shared on this network</a>
-  <span id="refreshed" class="stamp" title="When SETUP last brought every book, model and map up to date" hidden></span>
-  <nav>
-    <a href="#ask" data-tab="ask" class="on" aria-current="page">Ask</a>
-    <a href="#map" data-tab="map">Map</a>
-    <a href="#library" data-tab="library">Library</a>
-    <a id="chatLink" target="_blank" rel="noopener">AI chat</a>
-    <a href="#help" data-tab="help">Help</a>
-  </nav>
-</header>
-<main>
-  <section id="ask" class="on">
-    <form id="askForm">
-      <textarea id="q" aria-label="Your question" placeholder="Ask anything. e.g. How do I make water safe to drink without a filter?"></textarea>
-      <div class="row">
-        <select id="scope" title="Which books to search" aria-label="Which books to search"></select>
-        <select id="model" title="Which AI model answers" aria-label="Which AI model answers"></select>
-        <button id="askBtn" type="submit">Ask</button>
-        <button id="stopBtn" type="button" class="secondary" disabled>Stop</button>
-      </div>
-    </form>
-    <div id="progress" role="status"></div>
-    <div id="answer" class="card"></div>
-    <details id="thinking" hidden><summary>How the model reasoned</summary><pre></pre></details>
-    <div id="sourcesBox" hidden>
-      <h2>Sources from your library</h2>
-      <ol id="sources"></ol>
-    </div>
-    <p class="note">The answer comes from an AI on this computer reading your offline library. It can be wrong. Check the sources, and follow trained medical help whenever you can reach it.</p>
-  </section>
-
-  <section id="library">
-    <form id="libSearch" class="row">
-      <input type="search" id="libQ" aria-label="Search every book" placeholder="Search every book for a word or phrase" style="flex:1 1 20rem">
-      <select id="libLang" aria-label="Search the books in" hidden></select>
-      <button type="submit">Search</button>
-    </form>
-    <div id="bookList"></div>
-  </section>
-
-  <section id="map">
-    <div id="mapOff" class="card" hidden></div>
-    <div class="map-wrap" id="mapWrap">
-      <div class="map-panel">
-        <input type="search" id="placeQ" aria-label="Search an address or place" placeholder="Search an address or place" autocomplete="off">
-        <div id="placeResults" class="results" hidden></div>
-        <h2>Directions</h2>
-        <input id="dirFrom" aria-label="From (blank means home)" placeholder="From: blank means home" autocomplete="off">
-        <input id="dirTo" aria-label="To" placeholder="To: an address or place" autocomplete="off">
-        <div class="row" style="margin-top:.3rem"><select id="dirMode" aria-label="Travel by"></select><button id="dirGo" type="button">Go</button></div>
-        <div id="dirSummary"></div>
-        <ol id="dirSteps"></ol>
-        <h2>Nearest</h2>
-        <div class="chips" id="nearbyChips"></div>
-        <ul id="nearbyList"></ul>
-        <p class="note" id="mapStatus"></p>
-        <p class="note">Home: <span id="homeLabel"></span>. <button type="button" id="setHome" class="plain link">Set home to the map center</button></p>
-      </div>
-      <div id="mapCanvas"></div>
-    </div>
-  </section>
-
-  <section id="help" class="help">
-    <h2>Using the kit</h2>
-    <ul>
-      <li><b>Ask</b> searches your offline books, then the AI answers and cites them as [1], [2]. Click a source to read it in full.</li>
-      <li><b>Library</b> lets you browse or search every book yourself: Wikipedia, medical guides, repair manuals and more.</li>
-      <li><b>AI chat</b> is a plain chat with the AI. It doesn't search your books, so check anything important on Ask or in the Library. You can attach photos there, e.g. of a broken part or a label. Use a model that reads photos (Inkling, Qwen, Gemma).</li>
-      <li>Pick a different <b>model</b> for a second opinion. <b>Gemma-4-E4B</b> is the small one: use it to save battery.</li>
-      <li>The first answer after picking a model is slow while it loads into memory (up to a minute). After that it's quick.</li>
-    </ul>
-    <h2>Maps and directions</h2>
-    <ul>
-      <li><b>Map</b> works like a simple Google Maps: search an address or place, get driving or walking directions, or find the nearest hospital, pharmacy, gas station and more. Your computer has no GPS, so set <b>home</b> (bottom of the map panel) to where you are.</li>
-      <li>You can also ask in plain words on the Ask page, e.g. "How do I get to the nearest hospital?" or "Directions from home to 350 Fifth Avenue, New York". The answer appears there and the route on the Map tab.</li>
-      <li>For driving, a phone with an offline maps app (Organic Maps, or downloaded areas in Apple or Google Maps) is better: it has GPS and spoken turn-by-turn directions.</li>
-    </ul>
-    <h2 id="share">Sharing with family</h2>
-    <div id="shareOn" class="card" hidden>
-      <p>The kit is shared on this network. On another phone or laptop on the same <span style="white-space:nowrap">Wi-Fi</span>, open <b id="shareAddr"></b> and type the access code <b id="shareCode"></b>. Or scan this with the phone's camera:</p>
-      <img id="shareQr" alt="QR code that opens the kit, access code included">
-      <p class="note">No internet needed: a router with power, or a phone's hotspot, is enough.</p>
-    </div>
-    <ul id="shareOff">
-      <li>Phones and laptops on your Wi-Fi can use the kit too. In the kit's folder, run <kbd>./kit share on</kbd> in a terminal, then start the kit again. It shows an address, an access code and a QR code to scan. No internet needed: a router with power, or a phone's hotspot, is enough.</li>
-    </ul>
-    <h2>If something doesn't work</h2>
-    <ul>
-      <li>Close the kit's Terminal window and double-click <b>Open Tinfoil Kit.command</b> again.</li>
-      <li>Logs are in the <b>logs</b> folder, inside the kit's folder.</li>
-      <li>If the AI won't start, the library still works. The Kiwix app in <b>installers</b> also opens the library files directly.</li>
-      <li>Big models need most of the computer's memory: quit other apps. If a model still won't load, use Gemma-4-E4B.</li>
-    </ul>
-  </section>
-</main>
-
-<script>
-/* Core logic: no page access here, so it can be tested outside a browser. */
-var Kit = (function () {
-  "use strict";
-  var STOP = new Set(("a about above after again against all am an and any are aren't as at be because been before being below between both but by can can't cannot could " +
-    "did do does doing don't down during each few for from further get got had has have having he her here hers herself him himself his how i if in into is isn't it " +
-    "it's its itself just let's like me more most my myself need no nor not now of off on once only or other ought our ours ourselves out over own please same she " +
-    "should so some such than that the their theirs them themselves then there these they this those through to too under until up use using very want was we were " +
-    "what when where which while who whom why will with without would you your yours yourself what's how's i'm i've my best way tell know thing things make made " +
-    "someone something one ones much many also really").split(" "));
-  var MEDICAL = /(fever|pain|bleed|blood|wound|burn|infect|medic|dose|dosage|child|baby|infant|poison|injur|broken|fractur|allerg|breath|heart|cpr|diarrh|vomit|dehydrat|pregnan|sick|ill|rash|bite|sting|cut|sprain|shock|seizure|diabet|insulin|antibiot|tablet|pill|symptom|cough|cold|flu|faint|unconscious|hypotherm|heat ?stroke|frostbite|choking)/i;
-  var SURVIVAL = /(water|fire|shelter|food|storage|store|purif|filter|power|generator|solar|battery|radio|knot|repair|fix|tool|garden|grow|seed|cook|preserv|can(ning)?|heat|warm|cold weather|stove|fuel|wood|candle|light|sanitat|toilet|waste|hunt|fish|trap|navigat|compass|map)/i;
-
-  function stem(w) {
-    if (w.length > 5 && /ing$/.test(w)) return w.slice(0, -3);
-    if (w.length > 4 && /ies$/.test(w)) return w.slice(0, -3) + "y";
-    if (w.length > 4 && /(ed|es)$/.test(w)) return w.slice(0, -2);
-    if (w.length > 3 && /s$/.test(w) && !/ss$/.test(w)) return w.slice(0, -1);
-    return w;
-  }
-  function words(text) { return (String(text).toLowerCase().match(/[a-z0-9][a-z0-9'-]*/g) || []); }
-  function keywords(text) {
-    var seen = new Set(), out = [];
-    words(text).forEach(function (w) {
-      w = w.replace(/'s$/, "");
-      if (w.length < 3 || STOP.has(w)) return;
-      if (!seen.has(w)) { seen.add(w); out.push(w); }
-    });
-    return out;
-  }
-  function terms(text) { return new Set(keywords(text).map(stem)); }
-  function decode(s) {
-    var named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash: "-", mdash: "-", hellip: "...", deg: "°", times: "x", rsquo: "'", lsquo: "'", rdquo: '"', ldquo: '"' };
-    return String(s).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, function (m, e) {
-      if (e[0] === "#") { var n = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); try { return String.fromCodePoint(n); } catch (x) { return m; } }
-      var k = e.toLowerCase(); return Object.prototype.hasOwnProperty.call(named, k) ? named[k] : m;
-    });
-  }
-  function tag(block, name) {
-    var m = new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + name + ">", "i").exec(block);
-    return m ? decode(m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, "")).trim() : "";
-  }
-  function attr(el, name) { var m = new RegExp("\\s" + name + "=\"([^\"]*)\"").exec(el); return m ? decode(m[1]) : ""; }
-
-  function classify(id, title) {
-    var s = (id + " " + title).toLowerCase();
-    if (/(mdwiki|medicine|medical|_med\b|libretexts\.org_en_med|pathology|health|military-medicine)/.test(s)) return "Medical";
-    if (/(zimgit|ready\.gov|armypubs|appropedia|energypedia|ifixit|stackexchange|survivor|prepper|outdoors|diy|gardening|cooking|knots|water|disaster)/.test(s)) return "Survival & how-to";
-    if (/(wikipedia|wiktionary|wikibooks|wikivoyage|wikiversity|libretexts|gutenberg|khanacademy)/.test(s)) return "Reference & learning";
-    return "Other";
-  }
-
-  function parseCatalog(xml) {
-    var out = [], re = /<entry>([\s\S]*?)<\/entry>/g, m;
-    while ((m = re.exec(xml))) {
-      var e = m[1], links = e.match(/<link\b[^>]*>/g) || [], contentId = "";
-      links.forEach(function (l) {
-        if (attr(l, "type") === "text/html") { var h = attr(l, "href"); contentId = decodeURIComponent(h.split("/content/").pop().replace(/\/$/, "")); }
-      });
-      if (!contentId) continue;
-      var tags = tag(e, "tags"), title = tag(e, "title");
-      out.push({ id: contentId, title: title || contentId, summary: tag(e, "summary"), language: tag(e, "language"),
-        name: tag(e, "name"), tags: tags, group: classify(contentId, title) });
-    }
-    return out;
-  }
-
-  function parseSearch(xml) {
-    var out = [], re = /<item>([\s\S]*?)<\/item>/g, m;
-    while ((m = re.exec(xml))) {
-      var it = m[1], book = /<book>([\s\S]*?)<\/book>/.exec(it);
-      out.push({ title: tag(it, "title"), link: tag(it, "link"), snippet: tag(it, "description"), book: book ? tag(book[1], "title") : "" });
-    }
-    return out;
-  }
-
-  function htmlToText(html) {
-    var s = String(html);
-    var body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(s); if (body) s = body[1];
-    s = s.replace(/<(script|style|noscript|svg|nav|footer|header|figure|sup)\b[\s\S]*?<\/\1>/gi, " ")
-         .replace(/<!--[\s\S]*?-->/g, " ")
-         .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr|\/table|\/ul|\/ol|\/dd|\/dt|\/blockquote|\/section)\b[^>]*>/gi, "\n")
-         .replace(/<(li)\b[^>]*>/gi, "\n- ")
-         .replace(/<(td|th)\b[^>]*>/gi, " | ")
-         .replace(/<[^>]+>/g, " ");
-    s = decode(s).replace(/\[(\d+|edit|citation needed)\]/gi, "");
-    return s.split("\n").map(function (l) { return l.replace(/[ \t ]+/g, " ").trim(); })
-            .filter(function (l) { return l && l !== "-" && l !== "|"; }).join("\n");
-  }
-
-  function chunks(text, size) {
-    size = size || 900;
-    var paras = text.split("\n"), out = [], cur = "";
-    paras.forEach(function (p) {
-      if (cur && (cur.length + p.length) > size) { out.push(cur); cur = ""; }
-      if (p.length > size * 1.6) { for (var i = 0; i < p.length; i += size) out.push(p.slice(i, i + size)); }
-      else cur += (cur ? "\n" : "") + p;
-    });
-    if (cur) out.push(cur);
-    return out;
-  }
-
-  function overlap(text, tset) {
-    var hits = 0, uniq = new Set();
-    words(text).forEach(function (w) { var s = stem(w); if (tset.has(s)) { hits++; uniq.add(s); } });
-    return { uniq: uniq.size, hits: hits };
-  }
-
-  function scoreChunk(text, tset, position) {
-    var o = overlap(text, tset);
-    return o.uniq * 3 + Math.min(o.hits, 12) * 0.5 - position * 0.15;
-  }
-
-  function fallbackQueries(question) {
-    var kw = keywords(question);
-    var byLen = kw.slice().sort(function (a, b) { return b.length - a.length; });
-    var qs = [];
-    if (kw.length >= 2) qs.push(kw.slice(0, 3).join(" "));
-    if (byLen.length >= 2) qs.push(byLen.slice(0, 2).join(" "));
-    if (byLen.length) qs.push(byLen[0]);
-    if (byLen.length > 1) qs.push(byLen[1]);
-    return uniq(qs);
-  }
-  function uniq(list) { var s = new Set(), o = []; list.forEach(function (x) { x = (x || "").trim(); var k = x.toLowerCase(); if (x && !s.has(k)) { s.add(k); o.push(x); } }); return o; }
-
-  function cleanQueryLines(text) {
-    return uniq(String(text).split(/\n|;/).map(function (l) {
-      return l.replace(/^\s*(\d+[.)]|[-*•])\s*/, "").replace(/["'`]/g, "").replace(/^(query|search)\s*\d*\s*:\s*/i, "").trim();
-    }).filter(function (l) { return l && l.split(/\s+/).length <= 5 && l.length <= 60 && !/[:?]$/.test(l); })).slice(0, 3);
-  }
-
-  function withTimeout(ms, outer) {
-    var ctrl = new AbortController();
-    var t = setTimeout(function () { ctrl.abort(); }, ms);
-    if (outer) { if (outer.aborted) ctrl.abort(); else outer.addEventListener("abort", function () { ctrl.abort(); }); }
-    return { signal: ctrl.signal, done: function () { clearTimeout(t); } };
-  }
-
-  async function getText(url, signal) {
-    var r = await fetch(url, { signal: signal });
-    if (!r.ok) throw new Error("HTTP " + r.status + " for " + url);
-    return await r.text();
-  }
-
-  async function pool(items, limit, fn) {
-    var i = 0, out = new Array(items.length);
-    async function worker() { while (i < items.length) { var k = i++; try { out[k] = await fn(items[k], k); } catch (e) { out[k] = null; } } }
-    var ws = []; for (var n = 0; n < Math.min(limit, items.length); n++) ws.push(worker());
-    await Promise.all(ws);
-    return out;
-  }
-
-  async function listModels(aiBase, signal) {
-    var r = await fetch(aiBase + "/v1/models", { signal: signal });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    var j = await r.json();
-    return (j.data || []).map(function (m) { return m.id; }).filter(Boolean);
-  }
-
-  async function makeQueries(opts, question) {
-    var fb = fallbackQueries(question);
-    if (!opts.aiBase || !opts.model) return fb;
-    var t = withTimeout(opts.queryTimeoutMs || 25000, opts.signal);
-    try {
-      var r = await fetch(opts.aiBase + "/v1/chat/completions", { method: "POST", signal: t.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: opts.model, temperature: 0, max_tokens: 80, stream: false,
-          chat_template_kwargs: { enable_thinking: false },
-          messages: [
-            { role: "system", content: "You write search queries for an offline encyclopedia and medical library. Reply with exactly 3 short search queries of 1 to 3 words each, one per line. Use standard encyclopedia terms (for example: fever, dehydration, water purification). No numbering, no explanations." },
-            { role: "user", content: question } ] }) });
-      if (!r.ok) return fb;
-      var j = await r.json();
-      var msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
-      var qs = cleanQueryLines(msg.content || "");
-      return uniq(qs.concat(fb)).slice(0, 4);
-    } catch (e) {
-      return fb;
-    } finally { t.done(); }
-  }
-
-  /* Search the library and pick the passages most relevant to the question. */
-  async function gatherSources(question, books, opts) {
-    var base = opts.libraryBase || "", progress = opts.onProgress || function () {};
-    var queries = opts.queries || fallbackQueries(question);
-    var tset = terms(question + " " + queries.join(" "));
-    var medicalQ = MEDICAL.test(question), survivalQ = SURVIVAL.test(question);
-    var jobs = [];   // every book: the _ftindex tag isn't reliable, and books without an index just return nothing
-    books.forEach(function (b) { queries.forEach(function (q) { jobs.push({ book: b, q: q }); }); });
-    var started = Date.now(), done = 0, budget = opts.searchBudgetMs || 30000;
-    progress("Searching " + books.length + " books for: " + queries.join(" | "));
-    var results = await pool(jobs, 6, async function (job) {
-      if (Date.now() - started > budget || (opts.signal && opts.signal.aborted)) return [];
-      var url = base + opts.root + "/search?content=" + encodeURIComponent(job.book.id) + "&pattern=" + encodeURIComponent(job.q) + "&format=xml&pageLength=3";
-      var xml = await getText(url, opts.signal);
-      done++;
-      if (done % 10 === 0) progress("Searching books... " + done + "/" + jobs.length);
-      return parseSearch(xml).map(function (h, rank) { h.bookObj = job.book; h.rank = rank; h.q = job.q; return h; });
-    });
-    var byLink = new Map();
-    results.forEach(function (list) { (list || []).forEach(function (h) {
-      if (!h.link) return;
-      var t = overlap(h.title, tset), s = overlap(h.snippet, tset);
-      var score = t.uniq * 3 + s.uniq + 1 / (1 + h.rank);
-      if (medicalQ && h.bookObj.group === "Medical") score += 1.5;
-      if (survivalQ && h.bookObj.group === "Survival & how-to") score += 1.5;
-      var prev = byLink.get(h.link);
-      if (!prev || prev.score < score) { h.score = score; byLink.set(h.link, h); }
-    }); });
-    var perBook = {}, hits = Array.from(byLink.values()).sort(function (a, b) { return b.score - a.score; })
-      .filter(function (h) { var k = h.bookObj.id; perBook[k] = (perBook[k] || 0) + 1; return perBook[k] <= 2; })
-      .slice(0, opts.maxArticles || 6);
-    if (!hits.length) return [];
-    progress("Reading " + hits.length + " articles...");
-    var pages = await pool(hits, 4, function (h) { return getText(base + h.link, opts.signal); });
-    var passages = [];
-    hits.forEach(function (h, i) {
-      if (!pages[i]) return;
-      var text = htmlToText(pages[i]).slice(0, 80000);
-      chunks(text, 900).forEach(function (c, pos) { passages.push({ hit: h, text: c, score: scoreChunk(c, tset, pos) + h.score * 0.5 }); });
-    });
-    passages.sort(function (a, b) { return b.score - a.score; });
-    var budgetChars = opts.maxChars || 11000, used = 0, perHit = new Map(), chosen = [];
-    for (var k = 0; k < passages.length && chosen.length < (opts.maxPassages || 8); k++) {
-      var p = passages[k], n = perHit.get(p.hit.link) || 0;
-      if (n >= 2 || used + p.text.length > budgetChars) continue;
-      perHit.set(p.hit.link, n + 1); used += p.text.length; chosen.push(p);
-    }
-    var sources = [], index = new Map();
-    chosen.forEach(function (p) {
-      if (!index.has(p.hit.link)) { index.set(p.hit.link, sources.length); sources.push({ title: p.hit.title, book: p.hit.bookObj.title, link: p.hit.link, passages: [] }); }
-      sources[index.get(p.hit.link)].passages.push(p.text);
-    });
-    return sources;
-  }
-
-  var SYSTEM = "You are the assistant in an offline emergency kit. The internet is down, so the user cannot look anything up. " +
-    "Be calm, practical and concise: lead with what to do, use short numbered steps, and give concrete numbers (amounts, times, temperatures) when the excerpts provide them. " +
-    "For medical questions, first list the warning signs that mean urgent help is needed, keep any doses conservative, and never invent a dose. " +
-    "Never tell the user a wild plant or mushroom is safe to eat based on a description or photo.";
-
-  function buildMessages(question, sources) {
-    var ctx = sources.map(function (s, i) {
-      return "[" + (i + 1) + "] \"" + s.title + "\" (" + s.book + ")\n" + s.passages.join("\n...\n");
-    }).join("\n\n");
-    var user = (sources.length ? "Library excerpts:\n\n" + ctx + "\n\n" : "No library excerpts were found for this question.\n\n") +
-      "Question: " + question + "\n\n" +
-      (sources.length ? "Answer using the excerpts and cite them like [1] or [2]. If they don't cover something, say so, then answer from general knowledge and mark that part \"(not from the library)\"."
-                      : "Answer from general knowledge and say clearly that it is not from the library.");
-    return [{ role: "system", content: SYSTEM }, { role: "user", content: user }];
-  }
-
-  async function streamChat(opts, messages, onDelta) {
-    var r = await fetch(opts.aiBase + "/v1/chat/completions", { method: "POST", signal: opts.signal,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: opts.model, messages: messages, stream: true, temperature: 0.3, max_tokens: opts.maxTokens || 1500 }) });
-    if (!r.ok) { var t = ""; try { t = await r.text(); } catch (e) {} throw new Error("The AI returned HTTP " + r.status + " " + t.slice(0, 200)); }
-    var reader = r.body.getReader(), dec = new TextDecoder(), buf = "";
-    for (;;) {
-      var part = await reader.read();
-      if (part.done) break;
-      buf += dec.decode(part.value, { stream: true });
-      var nl;
-      while ((nl = buf.indexOf("\n")) >= 0) {
-        var line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
-        if (line.indexOf("data:") !== 0) continue;
-        var data = line.slice(5).trim();
-        if (data === "[DONE]") return;
-        var j; try { j = JSON.parse(data); } catch (e) { continue; }
-        if (j.error) throw new Error(j.error.message || "AI error");
-        var d = (j.choices && j.choices[0] && j.choices[0].delta) || {};
-        onDelta(d.content || "", d.reasoning_content || "");
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tinfoil Kit</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --bg: #f6f5f2;
+        --card: #fff;
+        --ink: #1d1d1f;
+        --mute: #6b6b70;
+        --line: #e3e1dc;
+        --accent: #1f5f8b;
+        --on-accent: #fff;
+        --ok: #2e7d32;
+        --bad: #b3261e;
       }
-    }
-  }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #161618;
+          --card: #1f1f22;
+          --ink: #ececef;
+          --mute: #9a9aa2;
+          --line: #2e2e33;
+          --accent: #7fb4dc;
+          --on-accent: #10202c;
+          --ok: #81c784;
+          --bad: #ef9a9a;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font:
+          16px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        align-items: center;
+        padding: 0.9rem 1.2rem;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+      }
+      header h1 {
+        font-size: 1.15rem;
+        margin: 0;
+        letter-spacing: 0.01em;
+      }
+      .pill {
+        font-size: 0.8rem;
+        padding: 0.15rem 0.6rem;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--mute);
+      }
+      .pill.ok {
+        color: var(--ok);
+        border-color: var(--ok);
+      }
+      .pill.bad {
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      a.pill {
+        text-decoration: none;
+      }
+      .stamp {
+        font-size: 0.8rem;
+        color: var(--mute);
+      }
+      #shareQr {
+        display: block;
+        width: 12rem;
+        max-width: 100%;
+        height: auto;
+        margin: 0.6rem 0;
+        border-radius: 8px;
+      }
+      nav {
+        display: flex;
+        gap: 0.25rem;
+        margin-left: auto;
+      }
+      nav a {
+        padding: 0.35rem 0.8rem;
+        border-radius: 8px;
+        color: var(--ink);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      nav a.on {
+        background: var(--accent);
+        color: var(--on-accent);
+      }
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 1.2rem;
+      }
+      section {
+        display: none;
+      }
+      section.on {
+        display: block;
+      }
+      textarea,
+      input[type="search"],
+      select {
+        width: 100%;
+        font: inherit;
+        color: var(--ink);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.7rem 0.8rem;
+      }
+      textarea {
+        min-height: 5.5rem;
+        resize: vertical;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.6rem;
+        align-items: center;
+      }
+      .row select {
+        width: auto;
+        flex: 1 1 12rem;
+        min-width: 0;
+      }
+      @media (max-width: 600px) {
+        #model {
+          flex-basis: 100%;
+        }
+      }
+      button {
+        font: inherit;
+        padding: 0.65rem 1.2rem;
+        border-radius: 10px;
+        border: 0;
+        background: var(--accent);
+        color: var(--on-accent);
+        cursor: pointer;
+      }
+      button.plain {
+        background: none;
+        color: inherit;
+        padding: 0;
+        border-radius: 0;
+        text-align: left;
+      }
+      li > button.plain {
+        display: block;
+        width: 100%;
+      }
+      button.plain.link {
+        color: var(--accent);
+        text-decoration: underline;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #progress {
+        color: var(--mute);
+        font-size: 0.9rem;
+        min-height: 1.4rem;
+        margin: 0.8rem 0 0.2rem;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1rem 1.2rem;
+        margin: 0.8rem 0;
+      }
+      #answer:empty {
+        display: none;
+      }
+      #answer,
+      #sources {
+        overflow-wrap: anywhere;
+      } /* a long link or unbroken string wraps instead of widening the page */
+      #answer h4 {
+        margin: 1rem 0 0.3rem;
+      }
+      #answer p {
+        margin: 0.5rem 0;
+      }
+      #answer ul,
+      #answer ol {
+        padding-left: 1.4rem;
+      }
+      #answer a.cite {
+        text-decoration: none;
+        font-size: 0.8em;
+        vertical-align: super;
+      }
+      #sources li {
+        margin: 0.5rem 0;
+      }
+      #sources .book {
+        color: var(--mute);
+        font-size: 0.85rem;
+      }
+      #sources blockquote {
+        margin: 0.3rem 0 0;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--line);
+        color: var(--mute);
+        font-size: 0.9rem;
+      }
+      details {
+        margin: 0.6rem 0;
+        color: var(--mute);
+      }
+      details pre {
+        white-space: pre-wrap;
+        font-size: 0.85rem;
+        max-height: 20rem;
+        overflow: auto;
+      }
+      .note {
+        color: var(--mute);
+        font-size: 0.85rem;
+      }
+      .books {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 0.7rem;
+      }
+      .book-card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.7rem 0.9rem;
+      }
+      .book-card a {
+        font-weight: 600;
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .book-card p {
+        margin: 0.3rem 0 0;
+        font-size: 0.85rem;
+        color: var(--mute);
+      }
+      h2 {
+        font-size: 1rem;
+        margin: 1.4rem 0 0.5rem;
+        color: var(--mute);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      a {
+        color: var(--accent);
+      }
+      .help li {
+        margin: 0.4rem 0;
+      }
+      kbd {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0 0.3rem;
+        font-size: 0.85em;
+      }
+      /* map tab */
+      [hidden] {
+        display: none !important;
+      }
+      main.wide {
+        max-width: none;
+        padding: 0;
+      }
+      main.wide #mapOff {
+        margin: 1.2rem;
+      }
+      .map-wrap {
+        display: flex;
+        height: calc(100vh - 62px);
+      }
+      .map-panel {
+        width: 360px;
+        flex: none;
+        overflow-y: auto;
+        padding: 1rem;
+        border-right: 1px solid var(--line);
+        background: var(--bg);
+      }
+      #mapCanvas {
+        flex: 1;
+        min-height: 300px;
+      }
+      @media (max-width: 760px) {
+        .map-wrap {
+          flex-direction: column;
+          height: auto;
+        }
+        .map-panel {
+          width: auto;
+          border-right: 0;
+        }
+        #mapCanvas {
+          height: 65vh;
+        }
+      }
+      .map-panel input {
+        width: 100%;
+        font: inherit;
+        color: var(--ink);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.6rem 0.7rem;
+        margin: 0.25rem 0;
+      }
+      .results {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        margin: 0.2rem 0 0.6rem;
+        overflow: hidden;
+      }
+      .results > * {
+        display: block;
+        width: 100%;
+        padding: 0.5rem 0.7rem;
+        border-top: 1px solid var(--line);
+        font-size: 0.9rem;
+      }
+      .results > :first-child {
+        border-top: 0;
+      }
+      .results button {
+        background: none;
+        color: inherit;
+        border-radius: 0;
+        text-align: left;
+      }
+      .results button:hover {
+        background: var(--bg);
+      }
+      .results button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+      } /* the box clips outer outlines */
+      .results small,
+      .place small {
+        color: var(--mute);
+        display: block;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin: 0.6rem 0;
+      }
+      .chips button {
+        padding: 0.35rem 0.7rem;
+        font-size: 0.85rem;
+        border-radius: 999px;
+        background: var(--card);
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+      #dirSteps {
+        padding-left: 1.3rem;
+        font-size: 0.9rem;
+      }
+      #dirSteps li {
+        margin: 0.3rem 0;
+      }
+      #dirSteps li small,
+      #nearbyList small {
+        color: var(--mute);
+      }
+      #nearbyList {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        font-size: 0.9rem;
+      }
+      #nearbyList li {
+        padding: 0.45rem 0;
+        border-top: 1px solid var(--line);
+      }
+      #dirSummary {
+        font-weight: 600;
+        margin: 0.5rem 0;
+      }
+      .popup-btns button {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.8rem;
+        margin: 0.3rem 0.3rem 0 0;
+      }
+      .maplibregl-popup-content {
+        color: #1d1d1f;
+      }
+    </style>
+    <!--KIT:MAPS-->
+  </head>
+  <body>
+    <header>
+      <h1>Tinfoil Kit</h1>
+      <span id="libStatus" class="pill ok">Library: on</span>
+      <span id="aiStatus" class="pill">AI: checking</span>
+      <a id="sharePill" class="pill ok" href="#help" hidden>Shared on this network</a>
+      <span
+        id="refreshed"
+        class="stamp"
+        title="When SETUP last brought every book, model and map up to date"
+        hidden
+      ></span>
+      <nav>
+        <a href="#ask" data-tab="ask" class="on" aria-current="page">Ask</a>
+        <a href="#map" data-tab="map">Map</a>
+        <a href="#library" data-tab="library">Library</a>
+        <a id="chatLink" target="_blank" rel="noopener">AI chat</a>
+        <a href="#help" data-tab="help">Help</a>
+      </nav>
+    </header>
+    <main>
+      <section id="ask" class="on">
+        <form id="askForm">
+          <textarea
+            id="q"
+            aria-label="Your question"
+            placeholder="Ask anything. e.g. How do I make water safe to drink without a filter?"
+          ></textarea>
+          <div class="row">
+            <select id="scope" title="Which books to search" aria-label="Which books to search"></select>
+            <select id="model" title="Which AI model answers" aria-label="Which AI model answers"></select>
+            <button id="askBtn" type="submit">Ask</button>
+            <button id="stopBtn" type="button" class="secondary" disabled>Stop</button>
+          </div>
+        </form>
+        <div id="progress" role="status"></div>
+        <div id="answer" class="card"></div>
+        <details id="thinking" hidden>
+          <summary>How the model reasoned</summary>
+          <pre></pre>
+        </details>
+        <div id="sourcesBox" hidden>
+          <h2>Sources from your library</h2>
+          <ol id="sources"></ol>
+        </div>
+        <p class="note">
+          The answer comes from an AI on this computer reading your offline library. It can be wrong. Check the sources,
+          and follow trained medical help whenever you can reach it.
+        </p>
+      </section>
 
-  function escapeHtml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+      <section id="library">
+        <form id="libSearch" class="row">
+          <input
+            type="search"
+            id="libQ"
+            aria-label="Search every book"
+            placeholder="Search every book for a word or phrase"
+            style="flex: 1 1 20rem"
+          />
+          <select id="libLang" aria-label="Search the books in" hidden></select>
+          <button type="submit">Search</button>
+        </form>
+        <div id="bookList"></div>
+      </section>
 
-  /* Tiny markdown renderer: headings, bold, italics, code, lists, paragraphs, [n] citations. */
-  function render(md, nSources) {
-    var lines = escapeHtml(md).split("\n"), html = [], list = null, para = [];
-    function inline(s) {
-      return s.replace(/`([^`]+)`/g, "<code>$1</code>")
+      <section id="map">
+        <div id="mapOff" class="card" hidden></div>
+        <div class="map-wrap" id="mapWrap">
+          <div class="map-panel">
+            <input
+              type="search"
+              id="placeQ"
+              aria-label="Search an address or place"
+              placeholder="Search an address or place"
+              autocomplete="off"
+            />
+            <div id="placeResults" class="results" hidden></div>
+            <h2>Directions</h2>
+            <input
+              id="dirFrom"
+              aria-label="From (blank means home)"
+              placeholder="From: blank means home"
+              autocomplete="off"
+            />
+            <input id="dirTo" aria-label="To" placeholder="To: an address or place" autocomplete="off" />
+            <div class="row" style="margin-top: 0.3rem">
+              <select id="dirMode" aria-label="Travel by"></select
+              ><button id="dirGo" type="button">Go</button>
+            </div>
+            <div id="dirSummary"></div>
+            <ol id="dirSteps"></ol>
+            <h2>Nearest</h2>
+            <div class="chips" id="nearbyChips"></div>
+            <ul id="nearbyList"></ul>
+            <p class="note" id="mapStatus"></p>
+            <p class="note">
+              Home: <span id="homeLabel"></span>.
+              <button type="button" id="setHome" class="plain link">Set home to the map center</button>
+            </p>
+          </div>
+          <div id="mapCanvas"></div>
+        </div>
+      </section>
+
+      <section id="help" class="help">
+        <h2>Using the kit</h2>
+        <ul>
+          <li>
+            <b>Ask</b> searches your offline books, then the AI answers and cites them as [1], [2]. Click a source to
+            read it in full.
+          </li>
+          <li>
+            <b>Library</b> lets you browse or search every book yourself: Wikipedia, medical guides, repair manuals and
+            more.
+          </li>
+          <li>
+            <b>AI chat</b> is a plain chat with the AI. It doesn't search your books, so check anything important on Ask
+            or in the Library. You can attach photos there, e.g. of a broken part or a label. Use a model that reads
+            photos (Inkling, Qwen, Gemma).
+          </li>
+          <li>
+            Pick a different <b>model</b> for a second opinion. <b>Gemma-4-E4B</b> is the small one: use it to save
+            battery.
+          </li>
+          <li>
+            The first answer after picking a model is slow while it loads into memory (up to a minute). After that it's
+            quick.
+          </li>
+        </ul>
+        <h2>Maps and directions</h2>
+        <ul>
+          <li>
+            <b>Map</b> works like a simple Google Maps: search an address or place, get driving or walking directions,
+            or find the nearest hospital, pharmacy, gas station and more. Your computer has no GPS, so set
+            <b>home</b> (bottom of the map panel) to where you are.
+          </li>
+          <li>
+            You can also ask in plain words on the Ask page, e.g. "How do I get to the nearest hospital?" or "Directions
+            from home to 350 Fifth Avenue, New York". The answer appears there and the route on the Map tab.
+          </li>
+          <li>
+            For driving, a phone with an offline maps app (Organic Maps, or downloaded areas in Apple or Google Maps) is
+            better: it has GPS and spoken turn-by-turn directions.
+          </li>
+        </ul>
+        <h2 id="share">Sharing with family</h2>
+        <div id="shareOn" class="card" hidden>
+          <p>
+            The kit is shared on this network. On another phone or laptop on the same
+            <span style="white-space: nowrap">Wi-Fi</span>, open <b id="shareAddr"></b> and type the access code
+            <b id="shareCode"></b>. Or scan this with the phone's camera:
+          </p>
+          <img id="shareQr" alt="QR code that opens the kit, access code included" />
+          <p class="note">No internet needed: a router with power, or a phone's hotspot, is enough.</p>
+        </div>
+        <ul id="shareOff">
+          <li>
+            Phones and laptops on your Wi-Fi can use the kit too. In the kit's folder, run <kbd>./kit share on</kbd> in
+            a terminal, then start the kit again. It shows an address, an access code and a QR code to scan. No internet
+            needed: a router with power, or a phone's hotspot, is enough.
+          </li>
+        </ul>
+        <h2>If something doesn't work</h2>
+        <ul>
+          <li>Close the kit's Terminal window and double-click <b>Open Tinfoil Kit.command</b> again.</li>
+          <li>Logs are in the <b>logs</b> folder, inside the kit's folder.</li>
+          <li>
+            If the AI won't start, the library still works. The Kiwix app in <b>installers</b> also opens the library
+            files directly.
+          </li>
+          <li>
+            Big models need most of the computer's memory: quit other apps. If a model still won't load, use
+            Gemma-4-E4B.
+          </li>
+        </ul>
+      </section>
+    </main>
+
+    <script>
+      /* Core logic: no page access here, so it can be tested outside a browser. */
+      var Kit = (function () {
+        "use strict";
+        var STOP = new Set(
+          (
+            "a about above after again against all am an and any are aren't as at be because been before being below between both but by can can't cannot could " +
+            "did do does doing don't down during each few for from further get got had has have having he her here hers herself him himself his how i if in into is isn't it " +
+            "it's its itself just let's like me more most my myself need no nor not now of off on once only or other ought our ours ourselves out over own please same she " +
+            "should so some such than that the their theirs them themselves then there these they this those through to too under until up use using very want was we were " +
+            "what when where which while who whom why will with without would you your yours yourself what's how's i'm i've my best way tell know thing things make made " +
+            "someone something one ones much many also really"
+          ).split(" "),
+        );
+        var MEDICAL =
+          /(fever|pain|bleed|blood|wound|burn|infect|medic|dose|dosage|child|baby|infant|poison|injur|broken|fractur|allerg|breath|heart|cpr|diarrh|vomit|dehydrat|pregnan|sick|ill|rash|bite|sting|cut|sprain|shock|seizure|diabet|insulin|antibiot|tablet|pill|symptom|cough|cold|flu|faint|unconscious|hypotherm|heat ?stroke|frostbite|choking)/i;
+        var SURVIVAL =
+          /(water|fire|shelter|food|storage|store|purif|filter|power|generator|solar|battery|radio|knot|repair|fix|tool|garden|grow|seed|cook|preserv|can(ning)?|heat|warm|cold weather|stove|fuel|wood|candle|light|sanitat|toilet|waste|hunt|fish|trap|navigat|compass|map)/i;
+
+        function stem(w) {
+          if (w.length > 5 && /ing$/.test(w)) return w.slice(0, -3);
+          if (w.length > 4 && /ies$/.test(w)) return w.slice(0, -3) + "y";
+          if (w.length > 4 && /(ed|es)$/.test(w)) return w.slice(0, -2);
+          if (w.length > 3 && /s$/.test(w) && !/ss$/.test(w)) return w.slice(0, -1);
+          return w;
+        }
+        function words(text) {
+          return (
+            String(text)
+              .toLowerCase()
+              .match(/[a-z0-9][a-z0-9'-]*/g) || []
+          );
+        }
+        function keywords(text) {
+          var seen = new Set(),
+            out = [];
+          words(text).forEach(function (w) {
+            w = w.replace(/'s$/, "");
+            if (w.length < 3 || STOP.has(w)) return;
+            if (!seen.has(w)) {
+              seen.add(w);
+              out.push(w);
+            }
+          });
+          return out;
+        }
+        function terms(text) {
+          return new Set(keywords(text).map(stem));
+        }
+        function decode(s) {
+          var named = {
+            amp: "&",
+            lt: "<",
+            gt: ">",
+            quot: '"',
+            apos: "'",
+            nbsp: " ",
+            ndash: "-",
+            mdash: "-",
+            hellip: "...",
+            deg: "°",
+            times: "x",
+            rsquo: "'",
+            lsquo: "'",
+            rdquo: '"',
+            ldquo: '"',
+          };
+          return String(s).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, function (m, e) {
+            if (e[0] === "#") {
+              var n = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+              try {
+                return String.fromCodePoint(n);
+              } catch (x) {
+                return m;
+              }
+            }
+            var k = e.toLowerCase();
+            return Object.prototype.hasOwnProperty.call(named, k) ? named[k] : m;
+          });
+        }
+        function tag(block, name) {
+          var m = new RegExp("<" + name + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + name + ">", "i").exec(block);
+          return m ? decode(m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/<[^>]+>/g, "")).trim() : "";
+        }
+        function attr(el, name) {
+          var m = new RegExp("\\s" + name + '="([^"]*)"').exec(el);
+          return m ? decode(m[1]) : "";
+        }
+
+        function classify(id, title) {
+          var s = (id + " " + title).toLowerCase();
+          if (/(mdwiki|medicine|medical|_med\b|libretexts\.org_en_med|pathology|health|military-medicine)/.test(s))
+            return "Medical";
+          if (
+            /(zimgit|ready\.gov|armypubs|appropedia|energypedia|ifixit|stackexchange|survivor|prepper|outdoors|diy|gardening|cooking|knots|water|disaster)/.test(
+              s,
+            )
+          )
+            return "Survival & how-to";
+          if (/(wikipedia|wiktionary|wikibooks|wikivoyage|wikiversity|libretexts|gutenberg|khanacademy)/.test(s))
+            return "Reference & learning";
+          return "Other";
+        }
+
+        function parseCatalog(xml) {
+          var out = [],
+            re = /<entry>([\s\S]*?)<\/entry>/g,
+            m;
+          while ((m = re.exec(xml))) {
+            var e = m[1],
+              links = e.match(/<link\b[^>]*>/g) || [],
+              contentId = "";
+            links.forEach(function (l) {
+              if (attr(l, "type") === "text/html") {
+                var h = attr(l, "href");
+                contentId = decodeURIComponent(h.split("/content/").pop().replace(/\/$/, ""));
+              }
+            });
+            if (!contentId) continue;
+            var tags = tag(e, "tags"),
+              title = tag(e, "title");
+            out.push({
+              id: contentId,
+              title: title || contentId,
+              summary: tag(e, "summary"),
+              language: tag(e, "language"),
+              name: tag(e, "name"),
+              tags: tags,
+              group: classify(contentId, title),
+            });
+          }
+          return out;
+        }
+
+        function parseSearch(xml) {
+          var out = [],
+            re = /<item>([\s\S]*?)<\/item>/g,
+            m;
+          while ((m = re.exec(xml))) {
+            var it = m[1],
+              book = /<book>([\s\S]*?)<\/book>/.exec(it);
+            out.push({
+              title: tag(it, "title"),
+              link: tag(it, "link"),
+              snippet: tag(it, "description"),
+              book: book ? tag(book[1], "title") : "",
+            });
+          }
+          return out;
+        }
+
+        function htmlToText(html) {
+          var s = String(html);
+          var body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(s);
+          if (body) s = body[1];
+          s = s
+            .replace(/<(script|style|noscript|svg|nav|footer|header|figure|sup)\b[\s\S]*?<\/\1>/gi, " ")
+            .replace(/<!--[\s\S]*?-->/g, " ")
+            .replace(
+              /<(br|\/p|\/div|\/li|\/h[1-6]|\/tr|\/table|\/ul|\/ol|\/dd|\/dt|\/blockquote|\/section)\b[^>]*>/gi,
+              "\n",
+            )
+            .replace(/<(li)\b[^>]*>/gi, "\n- ")
+            .replace(/<(td|th)\b[^>]*>/gi, " | ")
+            .replace(/<[^>]+>/g, " ");
+          s = decode(s).replace(/\[(\d+|edit|citation needed)\]/gi, "");
+          return s
+            .split("\n")
+            .map(function (l) {
+              return l.replace(/[ \t\u00a0]+/g, " ").trim();
+            })
+            .filter(function (l) {
+              return l && l !== "-" && l !== "|";
+            })
+            .join("\n");
+        }
+
+        function chunks(text, size) {
+          size = size || 900;
+          var paras = text.split("\n"),
+            out = [],
+            cur = "";
+          paras.forEach(function (p) {
+            if (cur && cur.length + p.length > size) {
+              out.push(cur);
+              cur = "";
+            }
+            if (p.length > size * 1.6) {
+              for (var i = 0; i < p.length; i += size) out.push(p.slice(i, i + size));
+            } else cur += (cur ? "\n" : "") + p;
+          });
+          if (cur) out.push(cur);
+          return out;
+        }
+
+        function overlap(text, tset) {
+          var hits = 0,
+            uniq = new Set();
+          words(text).forEach(function (w) {
+            var s = stem(w);
+            if (tset.has(s)) {
+              hits++;
+              uniq.add(s);
+            }
+          });
+          return { uniq: uniq.size, hits: hits };
+        }
+
+        function scoreChunk(text, tset, position) {
+          var o = overlap(text, tset);
+          return o.uniq * 3 + Math.min(o.hits, 12) * 0.5 - position * 0.15;
+        }
+
+        function fallbackQueries(question) {
+          var kw = keywords(question);
+          var byLen = kw.slice().sort(function (a, b) {
+            return b.length - a.length;
+          });
+          var qs = [];
+          if (kw.length >= 2) qs.push(kw.slice(0, 3).join(" "));
+          if (byLen.length >= 2) qs.push(byLen.slice(0, 2).join(" "));
+          if (byLen.length) qs.push(byLen[0]);
+          if (byLen.length > 1) qs.push(byLen[1]);
+          return uniq(qs);
+        }
+        function uniq(list) {
+          var s = new Set(),
+            o = [];
+          list.forEach(function (x) {
+            x = (x || "").trim();
+            var k = x.toLowerCase();
+            if (x && !s.has(k)) {
+              s.add(k);
+              o.push(x);
+            }
+          });
+          return o;
+        }
+
+        function cleanQueryLines(text) {
+          return uniq(
+            String(text)
+              .split(/\n|;/)
+              .map(function (l) {
+                return l
+                  .replace(/^\s*(\d+[.)]|[-*•])\s*/, "")
+                  .replace(/["'`]/g, "")
+                  .replace(/^(query|search)\s*\d*\s*:\s*/i, "")
+                  .trim();
+              })
+              .filter(function (l) {
+                return l && l.split(/\s+/).length <= 5 && l.length <= 60 && !/[:?]$/.test(l);
+              }),
+          ).slice(0, 3);
+        }
+
+        function withTimeout(ms, outer) {
+          var ctrl = new AbortController();
+          var t = setTimeout(function () {
+            ctrl.abort();
+          }, ms);
+          if (outer) {
+            if (outer.aborted) ctrl.abort();
+            else
+              outer.addEventListener("abort", function () {
+                ctrl.abort();
+              });
+          }
+          return {
+            signal: ctrl.signal,
+            done: function () {
+              clearTimeout(t);
+            },
+          };
+        }
+
+        async function getText(url, signal) {
+          var r = await fetch(url, { signal: signal });
+          if (!r.ok) throw new Error("HTTP " + r.status + " for " + url);
+          return await r.text();
+        }
+
+        async function pool(items, limit, fn) {
+          var i = 0,
+            out = new Array(items.length);
+          async function worker() {
+            while (i < items.length) {
+              var k = i++;
+              try {
+                out[k] = await fn(items[k], k);
+              } catch (e) {
+                out[k] = null;
+              }
+            }
+          }
+          var ws = [];
+          for (var n = 0; n < Math.min(limit, items.length); n++) ws.push(worker());
+          await Promise.all(ws);
+          return out;
+        }
+
+        async function listModels(aiBase, signal) {
+          var r = await fetch(aiBase + "/v1/models", { signal: signal });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          var j = await r.json();
+          return (j.data || [])
+            .map(function (m) {
+              return m.id;
+            })
+            .filter(Boolean);
+        }
+
+        async function makeQueries(opts, question) {
+          var fb = fallbackQueries(question);
+          if (!opts.aiBase || !opts.model) return fb;
+          var t = withTimeout(opts.queryTimeoutMs || 25000, opts.signal);
+          try {
+            var r = await fetch(opts.aiBase + "/v1/chat/completions", {
+              method: "POST",
+              signal: t.signal,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: opts.model,
+                temperature: 0,
+                max_tokens: 80,
+                stream: false,
+                chat_template_kwargs: { enable_thinking: false },
+                messages: [
+                  {
+                    role: "system",
+                    content:
+                      "You write search queries for an offline encyclopedia and medical library. Reply with exactly 3 short search queries of 1 to 3 words each, one per line. Use standard encyclopedia terms (for example: fever, dehydration, water purification). No numbering, no explanations.",
+                  },
+                  { role: "user", content: question },
+                ],
+              }),
+            });
+            if (!r.ok) return fb;
+            var j = await r.json();
+            var msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
+            var qs = cleanQueryLines(msg.content || "");
+            return uniq(qs.concat(fb)).slice(0, 4);
+          } catch (e) {
+            return fb;
+          } finally {
+            t.done();
+          }
+        }
+
+        /* Search the library and pick the passages most relevant to the question. */
+        async function gatherSources(question, books, opts) {
+          var base = opts.libraryBase || "",
+            progress = opts.onProgress || function () {};
+          var queries = opts.queries || fallbackQueries(question);
+          var tset = terms(question + " " + queries.join(" "));
+          var medicalQ = MEDICAL.test(question),
+            survivalQ = SURVIVAL.test(question);
+          var jobs = []; // every book: the _ftindex tag isn't reliable, and books without an index just return nothing
+          books.forEach(function (b) {
+            queries.forEach(function (q) {
+              jobs.push({ book: b, q: q });
+            });
+          });
+          var started = Date.now(),
+            done = 0,
+            budget = opts.searchBudgetMs || 30000;
+          progress("Searching " + books.length + " books for: " + queries.join(" | "));
+          var results = await pool(jobs, 6, async function (job) {
+            if (Date.now() - started > budget || (opts.signal && opts.signal.aborted)) return [];
+            var url =
+              base +
+              opts.root +
+              "/search?content=" +
+              encodeURIComponent(job.book.id) +
+              "&pattern=" +
+              encodeURIComponent(job.q) +
+              "&format=xml&pageLength=3";
+            var xml = await getText(url, opts.signal);
+            done++;
+            if (done % 10 === 0) progress("Searching books... " + done + "/" + jobs.length);
+            return parseSearch(xml).map(function (h, rank) {
+              h.bookObj = job.book;
+              h.rank = rank;
+              h.q = job.q;
+              return h;
+            });
+          });
+          var byLink = new Map();
+          results.forEach(function (list) {
+            (list || []).forEach(function (h) {
+              if (!h.link) return;
+              var t = overlap(h.title, tset),
+                s = overlap(h.snippet, tset);
+              var score = t.uniq * 3 + s.uniq + 1 / (1 + h.rank);
+              if (medicalQ && h.bookObj.group === "Medical") score += 1.5;
+              if (survivalQ && h.bookObj.group === "Survival & how-to") score += 1.5;
+              var prev = byLink.get(h.link);
+              if (!prev || prev.score < score) {
+                h.score = score;
+                byLink.set(h.link, h);
+              }
+            });
+          });
+          var perBook = {},
+            hits = Array.from(byLink.values())
+              .sort(function (a, b) {
+                return b.score - a.score;
+              })
+              .filter(function (h) {
+                var k = h.bookObj.id;
+                perBook[k] = (perBook[k] || 0) + 1;
+                return perBook[k] <= 2;
+              })
+              .slice(0, opts.maxArticles || 6);
+          if (!hits.length) return [];
+          progress("Reading " + hits.length + " articles...");
+          var pages = await pool(hits, 4, function (h) {
+            return getText(base + h.link, opts.signal);
+          });
+          var passages = [];
+          hits.forEach(function (h, i) {
+            if (!pages[i]) return;
+            var text = htmlToText(pages[i]).slice(0, 80000);
+            chunks(text, 900).forEach(function (c, pos) {
+              passages.push({ hit: h, text: c, score: scoreChunk(c, tset, pos) + h.score * 0.5 });
+            });
+          });
+          passages.sort(function (a, b) {
+            return b.score - a.score;
+          });
+          var budgetChars = opts.maxChars || 11000,
+            used = 0,
+            perHit = new Map(),
+            chosen = [];
+          for (var k = 0; k < passages.length && chosen.length < (opts.maxPassages || 8); k++) {
+            var p = passages[k],
+              n = perHit.get(p.hit.link) || 0;
+            if (n >= 2 || used + p.text.length > budgetChars) continue;
+            perHit.set(p.hit.link, n + 1);
+            used += p.text.length;
+            chosen.push(p);
+          }
+          var sources = [],
+            index = new Map();
+          chosen.forEach(function (p) {
+            if (!index.has(p.hit.link)) {
+              index.set(p.hit.link, sources.length);
+              sources.push({ title: p.hit.title, book: p.hit.bookObj.title, link: p.hit.link, passages: [] });
+            }
+            sources[index.get(p.hit.link)].passages.push(p.text);
+          });
+          return sources;
+        }
+
+        var SYSTEM =
+          "You are the assistant in an offline emergency kit. The internet is down, so the user cannot look anything up. " +
+          "Be calm, practical and concise: lead with what to do, use short numbered steps, and give concrete numbers (amounts, times, temperatures) when the excerpts provide them. " +
+          "For medical questions, first list the warning signs that mean urgent help is needed, keep any doses conservative, and never invent a dose. " +
+          "Never tell the user a wild plant or mushroom is safe to eat based on a description or photo.";
+
+        function buildMessages(question, sources) {
+          var ctx = sources
+            .map(function (s, i) {
+              return "[" + (i + 1) + '] "' + s.title + '" (' + s.book + ")\n" + s.passages.join("\n...\n");
+            })
+            .join("\n\n");
+          var user =
+            (sources.length
+              ? "Library excerpts:\n\n" + ctx + "\n\n"
+              : "No library excerpts were found for this question.\n\n") +
+            "Question: " +
+            question +
+            "\n\n" +
+            (sources.length
+              ? 'Answer using the excerpts and cite them like [1] or [2]. If they don\'t cover something, say so, then answer from general knowledge and mark that part "(not from the library)".'
+              : "Answer from general knowledge and say clearly that it is not from the library.");
+          return [
+            { role: "system", content: SYSTEM },
+            { role: "user", content: user },
+          ];
+        }
+
+        async function streamChat(opts, messages, onDelta) {
+          var r = await fetch(opts.aiBase + "/v1/chat/completions", {
+            method: "POST",
+            signal: opts.signal,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: opts.model,
+              messages: messages,
+              stream: true,
+              temperature: 0.3,
+              max_tokens: opts.maxTokens || 1500,
+            }),
+          });
+          if (!r.ok) {
+            var t = "";
+            try {
+              t = await r.text();
+            } catch (e) {}
+            throw new Error("The AI returned HTTP " + r.status + " " + t.slice(0, 200));
+          }
+          var reader = r.body.getReader(),
+            dec = new TextDecoder(),
+            buf = "";
+          for (;;) {
+            var part = await reader.read();
+            if (part.done) break;
+            buf += dec.decode(part.value, { stream: true });
+            var nl;
+            while ((nl = buf.indexOf("\n")) >= 0) {
+              var line = buf.slice(0, nl).trim();
+              buf = buf.slice(nl + 1);
+              if (line.indexOf("data:") !== 0) continue;
+              var data = line.slice(5).trim();
+              if (data === "[DONE]") return;
+              var j;
+              try {
+                j = JSON.parse(data);
+              } catch (e) {
+                continue;
+              }
+              if (j.error) throw new Error(j.error.message || "AI error");
+              var d = (j.choices && j.choices[0] && j.choices[0].delta) || {};
+              onDelta(d.content || "", d.reasoning_content || "");
+            }
+          }
+        }
+
+        function escapeHtml(s) {
+          return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+
+        /* Tiny markdown renderer: headings, bold, italics, code, lists, paragraphs, [n] citations. */
+        function render(md, nSources) {
+          var lines = escapeHtml(md).split("\n"),
+            html = [],
+            list = null,
+            para = [];
+          function inline(s) {
+            return s
+              .replace(/`([^`]+)`/g, "<code>$1</code>")
               .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
               .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
               .replace(/\[(\d+(?:\s*[,–-]\s*\d+)*)\]/g, function (m, inner) {
-                return inner.split(/\s*,\s*/).map(function (n) {
-                  var k = parseInt(n, 10);
-                  return k >= 1 && k <= nSources ? '<a class="cite" href="#src-' + k + '">[' + k + "]</a>" : "[" + n + "]";
-                }).join("");
+                return inner
+                  .split(/\s*,\s*/)
+                  .map(function (n) {
+                    var k = parseInt(n, 10);
+                    return k >= 1 && k <= nSources
+                      ? '<a class="cite" href="#src-' + k + '">[' + k + "]</a>"
+                      : "[" + n + "]";
+                  })
+                  .join("");
               });
-    }
-    function flushPara() { if (para.length) { html.push("<p>" + inline(para.join("<br>")) + "</p>"); para = []; } }
-    function closeList() { if (list) { html.push("</" + list + ">"); list = null; } }
-    lines.forEach(function (l) {
-      var h = /^\s*#{1,6}\s+(.*)$/.exec(l), ul = /^\s*[-*•]\s+(.*)$/.exec(l), ol = /^\s*\d+[.)]\s+(.*)$/.exec(l);
-      if (h) { flushPara(); closeList(); html.push("<h4>" + inline(h[1]) + "</h4>"); }
-      else if (ul || ol) { flushPara(); var want = ul ? "ul" : "ol"; if (list !== want) { closeList(); html.push("<" + want + ">"); list = want; } html.push("<li>" + inline((ul || ol)[1]) + "</li>"); }
-      else if (!l.trim()) { flushPara(); closeList(); }
-      else { closeList(); para.push(l); }
-    });
-    flushPara(); closeList();
-    return html.join("\n");
-  }
-
-  /* ------------------------------------------------------------- maps: search, nearest, directions */
-  var CATEGORIES = {
-    hospital: { label: "Hospital", include: "osm.amenity.hospital" },
-    urgent_care: { label: "Urgent care / clinic", include: "osm.amenity.clinic,osm.amenity.doctors,osm.healthcare.urgent_care" },
-    pharmacy: { label: "Pharmacy", include: "osm.amenity.pharmacy,osm.shop.chemist" },
-    police: { label: "Police", include: "osm.amenity.police" },
-    fire_station: { label: "Fire station", include: "osm.amenity.fire_station" },
-    shelter: { label: "Shelter", include: "osm.amenity.shelter,osm.emergency.assembly_point,osm.social_facility.shelter" },
-    gas: { label: "Gas station", include: "osm.amenity.fuel" },
-    grocery: { label: "Grocery", include: "osm.shop.supermarket,osm.shop.grocery,osm.shop.convenience" },
-    hardware: { label: "Hardware", include: "osm.shop.hardware,osm.shop.doityourself" },
-    drinking_water: { label: "Drinking water", include: "osm.amenity.drinking_water,osm.man_made.water_well" }
-  };
-  var CATEGORY_WORDS = [[/hospital|emergency room|\ber\b/, "hospital"], [/urgent|clinic|doctor/, "urgent_care"], [/pharmac|drug ?store|chemist/, "pharmacy"],
-    [/police/, "police"], [/fire (station|department|house)/, "fire_station"], [/shelter|evacuation/, "shelter"],
-    [/gas|fuel|petrol/, "gas"], [/grocer|supermarket|food store|convenience/, "grocery"], [/hardware|home depot|lowe/, "hardware"],
-    [/water (source|fountain|well)|drinking water|potable/, "drinking_water"]];
-  /* Map questions go to the map; everything else (including "how far should I stay from a power line") to the library. */
-  var MAP_STRONG = /\b(directions?|turn[- ]by[- ]turn|driving route|walking route|on the map|on a map)\b|\bhow (do|can|would|should) (i|we) (get|drive|walk|go) (to|from)\b|\b(drive|walk|get|go) (from \S.*? )?to \d/i;
-  var MAP_NEAR = /\b(nearest|closest|nearby|near (me|here|home|us))\b/i;
-  var MAP_WHERE = /\b(where is|where's|where are|address (of|for)|location of|how far (is|away))\b/i;
-  var PLACEISH = /\d|\b(hospitals?|er|emergency room|urgent care|clinics?|doctors?|pharmac(y|ies)|drug ?stores?|police|fire (station|department|house)|shelters?|gas|fuel|grocer(y|ies)|supermarkets?|stores?|markets?|shops?|hardware|schools?|church(es)?|library|parks?|station|airport|hotels?|motels?|banks?|restaurants?|street|st|avenue|ave|road|rd|lane|ln|boulevard|blvd|highway|hwy|parkway|pkwy|town|city|village|county|center|mall|bridge|exit)\b/i;
-  function isMapQuestion(q) {
-    q = String(q || "");
-    var named = /\b(is|of|for|to|from)\s+(the\s+)?[A-Z][a-z]/.test(q);   // "how far is Albany"
-    return MAP_STRONG.test(q) || (MAP_NEAR.test(q) && (categoryFor(q) !== null || PLACEISH.test(q))) ||
-      (MAP_WHERE.test(q) && (PLACEISH.test(q) || named));
-  }
-
-  function haversine(a, b) {
-    var R = 6371000, toRad = Math.PI / 180, dLat = (b.lat - a.lat) * toRad, dLon = (b.lon - a.lon) * toRad;
-    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return 2 * R * Math.asin(Math.sqrt(h));
-  }
-  function bearing(a, b) {
-    var toRad = Math.PI / 180, y = Math.sin((b.lon - a.lon) * toRad) * Math.cos(b.lat * toRad);
-    var x = Math.cos(a.lat * toRad) * Math.sin(b.lat * toRad) - Math.sin(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.cos((b.lon - a.lon) * toRad);
-    return ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"][Math.round(((Math.atan2(y, x) / toRad) + 360) % 360 / 45) % 8];
-  }
-  function fmtDist(m, units) {
-    if (units === "metric") return m < 950 ? Math.round(m / 10) * 10 + " m" : (m / 1000).toFixed(m < 9950 ? 1 : 0) + " km";
-    var mi = m / 1609.344;
-    return mi < 0.1 ? Math.round(m * 3.28084 / 10) * 10 + " ft" : mi.toFixed(mi < 9.95 ? 1 : 0) + " mi";
-  }
-  function fmtTime(ms) {
-    var min = Math.max(1, Math.round(ms / 60000));
-    return min < 60 ? min + " min" : Math.floor(min / 60) + " h " + (min % 60) + " min";
-  }
-  function placeFromFeature(f, origin) {
-    var p = f.properties || {}, c = (f.geometry && f.geometry.coordinates) || [0, 0];
-    var street = [p.housenumber, p.street].filter(Boolean).join(" ");
-    var town = p.city || p.town || p.locality || p.district || p.county || "";
-    var address = [street, town, p.state, p.postcode].filter(Boolean).join(", ");
-    var name = p.name || street || town || "Unnamed place";
-    var place = { name: name, address: address === name ? "" : address, lat: c[1], lon: c[0], kind: [p.osm_key, p.osm_value].filter(Boolean).join("=") };
-    if (origin) { place.distance_m = Math.round(haversine(origin, place)); place.direction = bearing(origin, place); }
-    return place;
-  }
-  function parseLatLon(text) {
-    var m = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(text || "");
-    return m ? { lat: parseFloat(m[1]), lon: parseFloat(m[2]), name: m[1] + ", " + m[2], address: "" } : null;
-  }
-  async function getJson(url, signal) {
-    var r = await fetch(url, { signal: signal });
-    var t = await r.text(), j = null;
-    try { j = JSON.parse(t); } catch (e) {}
-    if (!r.ok) throw new Error((j && (j.message || j.error)) || ("HTTP " + r.status));
-    return j;
-  }
-
-  /* opts: { geoBase, routeBase, home: {lat, lon, label}, units, lang, signal } */
-  // Photon's address databases carry names in these languages, and each place's own ("default").
-  function photonLang(lang) { lang = lang || "en"; return ["en", "de", "fr", "it"].indexOf(lang) >= 0 ? lang : "default"; }
-  async function searchPlaces(opts, query, limit) {
-    var ll = parseLatLon(query);
-    if (ll) return [ll];
-    var u = opts.geoBase + "/api?q=" + encodeURIComponent(query) + "&limit=" + (limit || 5) + "&lang=" + photonLang(opts.lang);
-    if (opts.home) u += "&lat=" + opts.home.lat + "&lon=" + opts.home.lon + "&zoom=10&location_bias_scale=0.3";
-    var j = await getJson(u, opts.signal);
-    return (j.features || []).map(function (f) { return placeFromFeature(f, opts.home); });
-  }
-  async function resolvePlace(opts, text) {
-    var t = String(text || "").trim();
-    if (!t || /^(home|my home|my house|here|me|my location|current location)$/i.test(t)) {
-      if (!opts.home) throw new Error("No home location set");
-      return { name: opts.home.label || "Home", address: "", lat: opts.home.lat, lon: opts.home.lon };
-    }
-    var hits = await searchPlaces(opts, t, 1);
-    if (!hits.length) throw new Error("Couldn't find \"" + t + "\" on the offline map");
-    return hits[0];
-  }
-  function categoryFor(text) {
-    var t = String(text || "").toLowerCase().replace(/[- ]+/g, "_");
-    if (CATEGORIES[t]) return t;
-    t = t.replace(/_/g, " ");
-    for (var i = 0; i < CATEGORY_WORDS.length; i++) if (CATEGORY_WORDS[i][0].test(t)) return CATEGORY_WORDS[i][1];
-    return null;
-  }
-  async function findNearby(opts, category, near, limit) {
-    var cat = categoryFor(category);
-    if (!cat) throw new Error("Unknown kind of place: " + category + ". Try: " + Object.keys(CATEGORIES).join(", "));
-    var origin = await resolvePlace(opts, near);
-    var base = opts.geoBase + "/reverse?lat=" + origin.lat + "&lon=" + origin.lon + "&radius=40&limit=" + (limit || 8) + "&lang=" + photonLang(opts.lang);
-    var j = null;
-    try { j = await getJson(base + "&include=" + encodeURIComponent(CATEGORIES[cat].include), opts.signal); }
-    catch (e) { if (e.name === "AbortError" || !/HTTP 400|parameter|include/i.test(e.message)) throw e; }
-    if (!j || !(j.features || []).length) {   // older address databases: filter by OSM tag instead of category
-      j = await getJson(base + CATEGORIES[cat].include.split(",").map(function (c) {
-        var p = c.split("."); return "&osm_tag=" + encodeURIComponent(p[1] + ":" + p[2]); }).join(""), opts.signal);
-    }
-    var places = (j.features || []).map(function (f) { return placeFromFeature(f, origin); })
-      .sort(function (a, b) { return a.distance_m - b.distance_m; });
-    return { category: cat, label: CATEGORIES[cat].label, origin: origin, places: places };
-  }
-  async function getDirections(opts, fromText, toText, mode) {
-    var from = typeof fromText === "object" && fromText ? fromText : await resolvePlace(opts, fromText);
-    var to = typeof toText === "object" && toText ? toText : await resolvePlace(opts, toText);
-    var profile = /walk|foot/i.test(mode || "") ? "foot" : "car";
-    var u = opts.routeBase + "/route?point=" + from.lat + "," + from.lon + "&point=" + to.lat + "," + to.lon +
-            "&profile=" + profile + "&locale=en&points_encoded=false&instructions=true";
-    var j = await getJson(u, opts.signal);
-    var path = j.paths && j.paths[0];
-    if (!path) throw new Error("No route found");
-    var coords = (path.points && path.points.coordinates) || [];
-    var steps = (path.instructions || []).map(function (ins) {
-      return { text: ins.text, street: ins.street_name || "", distance_m: Math.round(ins.distance), time_ms: ins.time,
-               at: coords[(ins.interval || [0])[0]] || null };
-    });
-    return { from: from, to: to, profile: profile, distance_m: Math.round(path.distance), time_ms: path.time,
-             coordinates: coords, steps: steps, bbox: path.bbox || null };
-  }
-
-  var MAP_TOOLS = [
-    { type: "function", "function": { name: "search_places",
-      description: "Find an address, business or named place on the offline map. Returns matches with coordinates and distance from home.",
-      parameters: { type: "object", properties: { query: { type: "string", description: "Address or place name, e.g. '350 Fifth Avenue, New York' or 'Bellevue Hospital'" } }, required: ["query"] } } },
-    { type: "function", "function": { name: "find_nearby",
-      description: "Find the nearest places of one kind, sorted by distance, near home or near a given place.",
-      parameters: { type: "object", properties: {
-        category: { type: "string", "enum": Object.keys(CATEGORIES) },
-        near: { type: "string", description: "Optional address or place to search around. Leave out to use the user's home." } }, required: ["category"] } } },
-    { type: "function", "function": { name: "get_directions",
-      description: "Turn-by-turn driving or walking directions between two places using offline road data. Use 'home' for the user's home.",
-      parameters: { type: "object", properties: {
-        from: { type: "string", description: "Start address or place; 'home' if not given" },
-        to: { type: "string", description: "Destination address or place" },
-        mode: { type: "string", "enum": ["car", "foot"] } }, required: ["to"] } } }
-  ];
-
-  function brief(place, units) {
-    var o = { name: place.name, address: place.address || undefined, lat: +place.lat.toFixed(5), lon: +place.lon.toFixed(5) };
-    if (place.distance_m != null) o.distance = fmtDist(place.distance_m, units) + " " + place.direction + " (straight line)";
-    return o;
-  }
-
-  async function runMapTool(opts, name, args) {
-    var u = opts.units;
-    if (name === "search_places") {
-      var places = await searchPlaces(opts, args.query, 5);
-      return { display: { type: "places", places: places, title: args.query },
-               model: places.length ? places.map(function (p) { return brief(p, u); }) : "No match found on the offline map." };
-    }
-    if (name === "find_nearby") {
-      var r = await findNearby(opts, args.category, args.near, 6);
-      return { display: { type: "places", places: r.places, title: "Nearest: " + r.label, origin: r.origin },
-               model: { searched_near: r.origin.name, results: r.places.map(function (p) { return brief(p, u); }) } };
-    }
-    if (name === "get_directions") {
-      var d = await getDirections(opts, args.from, args.to, args.mode);
-      var steps = d.steps.length > 30 ? d.steps.filter(function (s) { return s.distance_m > 150; }).slice(0, 30) : d.steps;
-      return { display: { type: "route", route: d },
-               model: { from: d.from.name, to: d.to.name + (d.to.address ? ", " + d.to.address : ""), mode: d.profile,
-                        distance: fmtDist(d.distance_m, u), time: fmtTime(d.time_ms),
-                        steps: steps.map(function (s) { return s.text + (s.distance_m ? " (" + fmtDist(s.distance_m, u) + ")" : ""); }) } };
-    }
-    throw new Error("unknown tool " + name);
-  }
-
-  function mapSystemPrompt(opts) {
-    var h = opts.home || {};
-    return "You are the map assistant in an offline emergency kit. The internet is down; you have offline maps, address search and directions" +
-      (opts.label ? " for " + opts.label : "") + ". The user's home is " + (h.label || "home") + " (" + h.lat + ", " + h.lon + "). " +
-      "Always use the tools to look up places, distances and routes; never guess an address or a route. " +
-      "Use " + (opts.units === "metric" ? "kilometres" : "miles") + ". After the tools answer, reply briefly: what you found, the distance and time, " +
-      "and the main turn-by-turn steps (summarize very long routes to the key turns). " +
-      "Mention that the route is also shown on the Map tab. If a tool reports an error, say so plainly.";
-  }
-
-  /* Let the model call the map tools, then answer. onTool(name, args, result|error) is called for each call. */
-  async function mapAgent(opts, question, onTool) {
-    var messages = [{ role: "system", content: mapSystemPrompt(opts) }, { role: "user", content: question }];
-    for (var round = 0; round < 5; round++) {
-      var r = await fetch(opts.aiBase + "/v1/chat/completions", { method: "POST", signal: opts.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: opts.model, messages: messages, tools: MAP_TOOLS, tool_choice: "auto",
-                               stream: false, temperature: 0.2, max_tokens: 1200 }) });
-      if (!r.ok) { var t = ""; try { t = await r.text(); } catch (e) {} var err = new Error("AI error " + r.status + ": " + t.slice(0, 200)); err.status = r.status; throw err; }
-      var j = await r.json();
-      var msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
-      var calls = msg.tool_calls || [];
-      if (!calls.length) return msg.content || "";
-      messages.push({ role: "assistant", content: msg.content || "", tool_calls: calls });
-      for (var i = 0; i < calls.length; i++) {
-        var c = calls[i], args = {}, content;
-        try { args = JSON.parse((c["function"] && c["function"].arguments) || "{}"); } catch (e) {}
-        try {
-          var res = await runMapTool(opts, c["function"].name, args);
-          if (onTool) onTool(c["function"].name, args, res, null);
-          content = JSON.stringify(res.model);
-        } catch (e) {
-          if (onTool) onTool(c["function"].name, args, null, e);
-          content = JSON.stringify({ error: e.message });
+          }
+          function flushPara() {
+            if (para.length) {
+              html.push("<p>" + inline(para.join("<br>")) + "</p>");
+              para = [];
+            }
+          }
+          function closeList() {
+            if (list) {
+              html.push("</" + list + ">");
+              list = null;
+            }
+          }
+          lines.forEach(function (l) {
+            var h = /^\s*#{1,6}\s+(.*)$/.exec(l),
+              ul = /^\s*[-*•]\s+(.*)$/.exec(l),
+              ol = /^\s*\d+[.)]\s+(.*)$/.exec(l);
+            if (h) {
+              flushPara();
+              closeList();
+              html.push("<h4>" + inline(h[1]) + "</h4>");
+            } else if (ul || ol) {
+              flushPara();
+              var want = ul ? "ul" : "ol";
+              if (list !== want) {
+                closeList();
+                html.push("<" + want + ">");
+                list = want;
+              }
+              html.push("<li>" + inline((ul || ol)[1]) + "</li>");
+            } else if (!l.trim()) {
+              flushPara();
+              closeList();
+            } else {
+              closeList();
+              para.push(l);
+            }
+          });
+          flushPara();
+          closeList();
+          return html.join("\n");
         }
-        messages.push({ role: "tool", tool_call_id: c.id, content: content });
+
+        /* ------------------------------------------------------------- maps: search, nearest, directions */
+        var CATEGORIES = {
+          hospital: { label: "Hospital", include: "osm.amenity.hospital" },
+          urgent_care: {
+            label: "Urgent care / clinic",
+            include: "osm.amenity.clinic,osm.amenity.doctors,osm.healthcare.urgent_care",
+          },
+          pharmacy: { label: "Pharmacy", include: "osm.amenity.pharmacy,osm.shop.chemist" },
+          police: { label: "Police", include: "osm.amenity.police" },
+          fire_station: { label: "Fire station", include: "osm.amenity.fire_station" },
+          shelter: {
+            label: "Shelter",
+            include: "osm.amenity.shelter,osm.emergency.assembly_point,osm.social_facility.shelter",
+          },
+          gas: { label: "Gas station", include: "osm.amenity.fuel" },
+          grocery: { label: "Grocery", include: "osm.shop.supermarket,osm.shop.grocery,osm.shop.convenience" },
+          hardware: { label: "Hardware", include: "osm.shop.hardware,osm.shop.doityourself" },
+          drinking_water: { label: "Drinking water", include: "osm.amenity.drinking_water,osm.man_made.water_well" },
+        };
+        var CATEGORY_WORDS = [
+          [/hospital|emergency room|\ber\b/, "hospital"],
+          [/urgent|clinic|doctor/, "urgent_care"],
+          [/pharmac|drug ?store|chemist/, "pharmacy"],
+          [/police/, "police"],
+          [/fire (station|department|house)/, "fire_station"],
+          [/shelter|evacuation/, "shelter"],
+          [/gas|fuel|petrol/, "gas"],
+          [/grocer|supermarket|food store|convenience/, "grocery"],
+          [/hardware|home depot|lowe/, "hardware"],
+          [/water (source|fountain|well)|drinking water|potable/, "drinking_water"],
+        ];
+        /* Map questions go to the map; everything else (including "how far should I stay from a power line") to the library. */
+        var MAP_STRONG =
+          /\b(directions?|turn[- ]by[- ]turn|driving route|walking route|on the map|on a map)\b|\bhow (do|can|would|should) (i|we) (get|drive|walk|go) (to|from)\b|\b(drive|walk|get|go) (from \S.*? )?to \d/i;
+        var MAP_NEAR = /\b(nearest|closest|nearby|near (me|here|home|us))\b/i;
+        var MAP_WHERE = /\b(where is|where's|where are|address (of|for)|location of|how far (is|away))\b/i;
+        var PLACEISH =
+          /\d|\b(hospitals?|er|emergency room|urgent care|clinics?|doctors?|pharmac(y|ies)|drug ?stores?|police|fire (station|department|house)|shelters?|gas|fuel|grocer(y|ies)|supermarkets?|stores?|markets?|shops?|hardware|schools?|church(es)?|library|parks?|station|airport|hotels?|motels?|banks?|restaurants?|street|st|avenue|ave|road|rd|lane|ln|boulevard|blvd|highway|hwy|parkway|pkwy|town|city|village|county|center|mall|bridge|exit)\b/i;
+        function isMapQuestion(q) {
+          q = String(q || "");
+          var named = /\b(is|of|for|to|from)\s+(the\s+)?[A-Z][a-z]/.test(q); // "how far is Albany"
+          return (
+            MAP_STRONG.test(q) ||
+            (MAP_NEAR.test(q) && (categoryFor(q) !== null || PLACEISH.test(q))) ||
+            (MAP_WHERE.test(q) && (PLACEISH.test(q) || named))
+          );
+        }
+
+        function haversine(a, b) {
+          var R = 6371000,
+            toRad = Math.PI / 180,
+            dLat = (b.lat - a.lat) * toRad,
+            dLon = (b.lon - a.lon) * toRad;
+          var h =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          return 2 * R * Math.asin(Math.sqrt(h));
+        }
+        function bearing(a, b) {
+          var toRad = Math.PI / 180,
+            y = Math.sin((b.lon - a.lon) * toRad) * Math.cos(b.lat * toRad);
+          var x =
+            Math.cos(a.lat * toRad) * Math.sin(b.lat * toRad) -
+            Math.sin(a.lat * toRad) * Math.cos(b.lat * toRad) * Math.cos((b.lon - a.lon) * toRad);
+          return ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"][
+            Math.round(((Math.atan2(y, x) / toRad + 360) % 360) / 45) % 8
+          ];
+        }
+        function fmtDist(m, units) {
+          if (units === "metric")
+            return m < 950 ? Math.round(m / 10) * 10 + " m" : (m / 1000).toFixed(m < 9950 ? 1 : 0) + " km";
+          var mi = m / 1609.344;
+          return mi < 0.1 ? Math.round((m * 3.28084) / 10) * 10 + " ft" : mi.toFixed(mi < 9.95 ? 1 : 0) + " mi";
+        }
+        function fmtTime(ms) {
+          var min = Math.max(1, Math.round(ms / 60000));
+          return min < 60 ? min + " min" : Math.floor(min / 60) + " h " + (min % 60) + " min";
+        }
+        function placeFromFeature(f, origin) {
+          var p = f.properties || {},
+            c = (f.geometry && f.geometry.coordinates) || [0, 0];
+          var street = [p.housenumber, p.street].filter(Boolean).join(" ");
+          var town = p.city || p.town || p.locality || p.district || p.county || "";
+          var address = [street, town, p.state, p.postcode].filter(Boolean).join(", ");
+          var name = p.name || street || town || "Unnamed place";
+          var place = {
+            name: name,
+            address: address === name ? "" : address,
+            lat: c[1],
+            lon: c[0],
+            kind: [p.osm_key, p.osm_value].filter(Boolean).join("="),
+          };
+          if (origin) {
+            place.distance_m = Math.round(haversine(origin, place));
+            place.direction = bearing(origin, place);
+          }
+          return place;
+        }
+        function parseLatLon(text) {
+          var m = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(text || "");
+          return m ? { lat: parseFloat(m[1]), lon: parseFloat(m[2]), name: m[1] + ", " + m[2], address: "" } : null;
+        }
+        async function getJson(url, signal) {
+          var r = await fetch(url, { signal: signal });
+          var t = await r.text(),
+            j = null;
+          try {
+            j = JSON.parse(t);
+          } catch (e) {}
+          if (!r.ok) throw new Error((j && (j.message || j.error)) || "HTTP " + r.status);
+          return j;
+        }
+
+        /* opts: { geoBase, routeBase, home: {lat, lon, label}, units, lang, signal } */
+        // Photon's address databases carry names in these languages, and each place's own ("default").
+        function photonLang(lang) {
+          lang = lang || "en";
+          return ["en", "de", "fr", "it"].indexOf(lang) >= 0 ? lang : "default";
+        }
+        async function searchPlaces(opts, query, limit) {
+          var ll = parseLatLon(query);
+          if (ll) return [ll];
+          var u =
+            opts.geoBase +
+            "/api?q=" +
+            encodeURIComponent(query) +
+            "&limit=" +
+            (limit || 5) +
+            "&lang=" +
+            photonLang(opts.lang);
+          if (opts.home) u += "&lat=" + opts.home.lat + "&lon=" + opts.home.lon + "&zoom=10&location_bias_scale=0.3";
+          var j = await getJson(u, opts.signal);
+          return (j.features || []).map(function (f) {
+            return placeFromFeature(f, opts.home);
+          });
+        }
+        async function resolvePlace(opts, text) {
+          var t = String(text || "").trim();
+          if (!t || /^(home|my home|my house|here|me|my location|current location)$/i.test(t)) {
+            if (!opts.home) throw new Error("No home location set");
+            return { name: opts.home.label || "Home", address: "", lat: opts.home.lat, lon: opts.home.lon };
+          }
+          var hits = await searchPlaces(opts, t, 1);
+          if (!hits.length) throw new Error("Couldn't find \"" + t + '" on the offline map');
+          return hits[0];
+        }
+        function categoryFor(text) {
+          var t = String(text || "")
+            .toLowerCase()
+            .replace(/[- ]+/g, "_");
+          if (CATEGORIES[t]) return t;
+          t = t.replace(/_/g, " ");
+          for (var i = 0; i < CATEGORY_WORDS.length; i++) if (CATEGORY_WORDS[i][0].test(t)) return CATEGORY_WORDS[i][1];
+          return null;
+        }
+        async function findNearby(opts, category, near, limit) {
+          var cat = categoryFor(category);
+          if (!cat)
+            throw new Error("Unknown kind of place: " + category + ". Try: " + Object.keys(CATEGORIES).join(", "));
+          var origin = await resolvePlace(opts, near);
+          var base =
+            opts.geoBase +
+            "/reverse?lat=" +
+            origin.lat +
+            "&lon=" +
+            origin.lon +
+            "&radius=40&limit=" +
+            (limit || 8) +
+            "&lang=" +
+            photonLang(opts.lang);
+          var j = null;
+          try {
+            j = await getJson(base + "&include=" + encodeURIComponent(CATEGORIES[cat].include), opts.signal);
+          } catch (e) {
+            if (e.name === "AbortError" || !/HTTP 400|parameter|include/i.test(e.message)) throw e;
+          }
+          if (!j || !(j.features || []).length) {
+            // older address databases: filter by OSM tag instead of category
+            j = await getJson(
+              base +
+                CATEGORIES[cat].include
+                  .split(",")
+                  .map(function (c) {
+                    var p = c.split(".");
+                    return "&osm_tag=" + encodeURIComponent(p[1] + ":" + p[2]);
+                  })
+                  .join(""),
+              opts.signal,
+            );
+          }
+          var places = (j.features || [])
+            .map(function (f) {
+              return placeFromFeature(f, origin);
+            })
+            .sort(function (a, b) {
+              return a.distance_m - b.distance_m;
+            });
+          return { category: cat, label: CATEGORIES[cat].label, origin: origin, places: places };
+        }
+        async function getDirections(opts, fromText, toText, mode) {
+          var from = typeof fromText === "object" && fromText ? fromText : await resolvePlace(opts, fromText);
+          var to = typeof toText === "object" && toText ? toText : await resolvePlace(opts, toText);
+          var profile = /walk|foot/i.test(mode || "") ? "foot" : "car";
+          var u =
+            opts.routeBase +
+            "/route?point=" +
+            from.lat +
+            "," +
+            from.lon +
+            "&point=" +
+            to.lat +
+            "," +
+            to.lon +
+            "&profile=" +
+            profile +
+            "&locale=en&points_encoded=false&instructions=true";
+          var j = await getJson(u, opts.signal);
+          var path = j.paths && j.paths[0];
+          if (!path) throw new Error("No route found");
+          var coords = (path.points && path.points.coordinates) || [];
+          var steps = (path.instructions || []).map(function (ins) {
+            return {
+              text: ins.text,
+              street: ins.street_name || "",
+              distance_m: Math.round(ins.distance),
+              time_ms: ins.time,
+              at: coords[(ins.interval || [0])[0]] || null,
+            };
+          });
+          return {
+            from: from,
+            to: to,
+            profile: profile,
+            distance_m: Math.round(path.distance),
+            time_ms: path.time,
+            coordinates: coords,
+            steps: steps,
+            bbox: path.bbox || null,
+          };
+        }
+
+        var MAP_TOOLS = [
+          {
+            type: "function",
+            function: {
+              name: "search_places",
+              description:
+                "Find an address, business or named place on the offline map. Returns matches with coordinates and distance from home.",
+              parameters: {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "Address or place name, e.g. '350 Fifth Avenue, New York' or 'Bellevue Hospital'",
+                  },
+                },
+                required: ["query"],
+              },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "find_nearby",
+              description: "Find the nearest places of one kind, sorted by distance, near home or near a given place.",
+              parameters: {
+                type: "object",
+                properties: {
+                  category: { type: "string", enum: Object.keys(CATEGORIES) },
+                  near: {
+                    type: "string",
+                    description: "Optional address or place to search around. Leave out to use the user's home.",
+                  },
+                },
+                required: ["category"],
+              },
+            },
+          },
+          {
+            type: "function",
+            function: {
+              name: "get_directions",
+              description:
+                "Turn-by-turn driving or walking directions between two places using offline road data. Use 'home' for the user's home.",
+              parameters: {
+                type: "object",
+                properties: {
+                  from: { type: "string", description: "Start address or place; 'home' if not given" },
+                  to: { type: "string", description: "Destination address or place" },
+                  mode: { type: "string", enum: ["car", "foot"] },
+                },
+                required: ["to"],
+              },
+            },
+          },
+        ];
+
+        function brief(place, units) {
+          var o = {
+            name: place.name,
+            address: place.address || undefined,
+            lat: +place.lat.toFixed(5),
+            lon: +place.lon.toFixed(5),
+          };
+          if (place.distance_m != null)
+            o.distance = fmtDist(place.distance_m, units) + " " + place.direction + " (straight line)";
+          return o;
+        }
+
+        async function runMapTool(opts, name, args) {
+          var u = opts.units;
+          if (name === "search_places") {
+            var places = await searchPlaces(opts, args.query, 5);
+            return {
+              display: { type: "places", places: places, title: args.query },
+              model: places.length
+                ? places.map(function (p) {
+                    return brief(p, u);
+                  })
+                : "No match found on the offline map.",
+            };
+          }
+          if (name === "find_nearby") {
+            var r = await findNearby(opts, args.category, args.near, 6);
+            return {
+              display: { type: "places", places: r.places, title: "Nearest: " + r.label, origin: r.origin },
+              model: {
+                searched_near: r.origin.name,
+                results: r.places.map(function (p) {
+                  return brief(p, u);
+                }),
+              },
+            };
+          }
+          if (name === "get_directions") {
+            var d = await getDirections(opts, args.from, args.to, args.mode);
+            var steps =
+              d.steps.length > 30
+                ? d.steps
+                    .filter(function (s) {
+                      return s.distance_m > 150;
+                    })
+                    .slice(0, 30)
+                : d.steps;
+            return {
+              display: { type: "route", route: d },
+              model: {
+                from: d.from.name,
+                to: d.to.name + (d.to.address ? ", " + d.to.address : ""),
+                mode: d.profile,
+                distance: fmtDist(d.distance_m, u),
+                time: fmtTime(d.time_ms),
+                steps: steps.map(function (s) {
+                  return s.text + (s.distance_m ? " (" + fmtDist(s.distance_m, u) + ")" : "");
+                }),
+              },
+            };
+          }
+          throw new Error("unknown tool " + name);
+        }
+
+        function mapSystemPrompt(opts) {
+          var h = opts.home || {};
+          return (
+            "You are the map assistant in an offline emergency kit. The internet is down; you have offline maps, address search and directions" +
+            (opts.label ? " for " + opts.label : "") +
+            ". The user's home is " +
+            (h.label || "home") +
+            " (" +
+            h.lat +
+            ", " +
+            h.lon +
+            "). " +
+            "Always use the tools to look up places, distances and routes; never guess an address or a route. " +
+            "Use " +
+            (opts.units === "metric" ? "kilometres" : "miles") +
+            ". After the tools answer, reply briefly: what you found, the distance and time, " +
+            "and the main turn-by-turn steps (summarize very long routes to the key turns). " +
+            "Mention that the route is also shown on the Map tab. If a tool reports an error, say so plainly."
+          );
+        }
+
+        /* Let the model call the map tools, then answer. onTool(name, args, result|error) is called for each call. */
+        async function mapAgent(opts, question, onTool) {
+          var messages = [
+            { role: "system", content: mapSystemPrompt(opts) },
+            { role: "user", content: question },
+          ];
+          for (var round = 0; round < 5; round++) {
+            var r = await fetch(opts.aiBase + "/v1/chat/completions", {
+              method: "POST",
+              signal: opts.signal,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: opts.model,
+                messages: messages,
+                tools: MAP_TOOLS,
+                tool_choice: "auto",
+                stream: false,
+                temperature: 0.2,
+                max_tokens: 1200,
+              }),
+            });
+            if (!r.ok) {
+              var t = "";
+              try {
+                t = await r.text();
+              } catch (e) {}
+              var err = new Error("AI error " + r.status + ": " + t.slice(0, 200));
+              err.status = r.status;
+              throw err;
+            }
+            var j = await r.json();
+            var msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
+            var calls = msg.tool_calls || [];
+            if (!calls.length) return msg.content || "";
+            messages.push({ role: "assistant", content: msg.content || "", tool_calls: calls });
+            for (var i = 0; i < calls.length; i++) {
+              var c = calls[i],
+                args = {},
+                content;
+              try {
+                args = JSON.parse((c["function"] && c["function"].arguments) || "{}");
+              } catch (e) {}
+              try {
+                var res = await runMapTool(opts, c["function"].name, args);
+                if (onTool) onTool(c["function"].name, args, res, null);
+                content = JSON.stringify(res.model);
+              } catch (e) {
+                if (onTool) onTool(c["function"].name, args, null, e);
+                content = JSON.stringify({ error: e.message });
+              }
+              messages.push({ role: "tool", tool_call_id: c.id, content: content });
+            }
+          }
+          return "I couldn't finish within a few steps. Try the Map tab directly.";
+        }
+
+        /* Without a tool-capable model: guess what was asked from the wording. */
+        function guessMapIntent(question) {
+          var q = question.trim();
+          var m =
+            /(?:directions?|route|get|drive|driving|walk|walking|go)\s+(?:from\s+(.+?)\s+)?to\s+(.+?)[?.!]*$/i.exec(q);
+          if (m)
+            return {
+              tool: "get_directions",
+              args: { from: m[1] || "home", to: m[2].replace(/^the\s+/i, ""), mode: /walk/i.test(q) ? "foot" : "car" },
+            };
+          m = /(?:nearest|closest|nearby|near me|near here)\s*(.*)$/i.exec(q);
+          if (m) {
+            var cat = categoryFor(m[1] || q);
+            if (cat) return { tool: "find_nearby", args: { category: cat } };
+          }
+          var cat2 = categoryFor(q);
+          if (cat2 && /nearest|closest|near/i.test(q)) return { tool: "find_nearby", args: { category: cat2 } };
+          m = /(?:where is|where's|address (?:of|for)|find)\s+(.+?)[?.!]*$/i.exec(q);
+          return { tool: "search_places", args: { query: m ? m[1] : q } };
+        }
+
+        // kiwix-serve searches one language at a time: the library's Wikipedia's first, then the rest by number of books.
+        function libraryLanguages(books) {
+          var count = {},
+            wiki = books.filter(function (b) {
+              return /^wikipedia_/.test(b.name || b.id);
+            })[0];
+          books.forEach(function (b) {
+            (b.language || "eng").split(",").forEach(function (l) {
+              count[l] = (count[l] || 0) + 1;
+            });
+          });
+          var main = wiki ? (wiki.language || "eng").split(",")[0] : "";
+          return Object.keys(count).sort(function (a, b) {
+            return (b === main) - (a === main) || count[b] - count[a] || (a < b ? -1 : 1);
+          });
+        }
+
+        return {
+          keywords: keywords,
+          terms: terms,
+          decode: decode,
+          parseCatalog: parseCatalog,
+          parseSearch: parseSearch,
+          libraryLanguages: libraryLanguages,
+          photonLang: photonLang,
+          htmlToText: htmlToText,
+          chunks: chunks,
+          fallbackQueries: fallbackQueries,
+          cleanQueryLines: cleanQueryLines,
+          listModels: listModels,
+          makeQueries: makeQueries,
+          gatherSources: gatherSources,
+          buildMessages: buildMessages,
+          streamChat: streamChat,
+          render: render,
+          escapeHtml: escapeHtml,
+          classify: classify,
+          MEDICAL: MEDICAL,
+          CATEGORIES: CATEGORIES,
+          isMapQuestion: isMapQuestion,
+          MAP_TOOLS: MAP_TOOLS,
+          haversine: haversine,
+          fmtDist: fmtDist,
+          fmtTime: fmtTime,
+          placeFromFeature: placeFromFeature,
+          parseLatLon: parseLatLon,
+          searchPlaces: searchPlaces,
+          resolvePlace: resolvePlace,
+          categoryFor: categoryFor,
+          findNearby: findNearby,
+          getDirections: getDirections,
+          runMapTool: runMapTool,
+          mapAgent: mapAgent,
+          guessMapIntent: guessMapIntent,
+        };
+      })();
+      if (typeof module !== "undefined" && module.exports) {
+        module.exports = Kit;
       }
-    }
-    return "I couldn't finish within a few steps. Try the Map tab directly.";
-  }
 
-  /* Without a tool-capable model: guess what was asked from the wording. */
-  function guessMapIntent(question) {
-    var q = question.trim();
-    var m = /(?:directions?|route|get|drive|driving|walk|walking|go)\s+(?:from\s+(.+?)\s+)?to\s+(.+?)[?.!]*$/i.exec(q);
-    if (m) return { tool: "get_directions", args: { from: m[1] || "home", to: m[2].replace(/^the\s+/i, ""), mode: /walk/i.test(q) ? "foot" : "car" } };
-    m = /(?:nearest|closest|nearby|near me|near here)\s*(.*)$/i.exec(q);
-    if (m) { var cat = categoryFor(m[1] || q); if (cat) return { tool: "find_nearby", args: { category: cat } }; }
-    var cat2 = categoryFor(q);
-    if (cat2 && /nearest|closest|near/i.test(q)) return { tool: "find_nearby", args: { category: cat2 } };
-    m = /(?:where is|where's|address (?:of|for)|find)\s+(.+?)[?.!]*$/i.exec(q);
-    return { tool: "search_places", args: { query: m ? m[1] : q } };
-  }
+      /* ---------------------------------------------------------------- page */
+      if (typeof document !== "undefined")
+        (function () {
+          "use strict";
+          // Set by tools/share.py when the page comes through the gate that shares the kit on the home network. Then
+          // the AI and the map servers are paths on this same address, behind the access code.
+          var GATE = window.KIT_GATE || null;
+          if (!GATE && location.hostname === "localhost") {
+            // the AI only accepts requests from 127.0.0.1
+            location.replace(location.href.replace("//localhost", "//127.0.0.1"));
+            return;
+          }
+          var ROOT = "{{root}}";
+          if (ROOT.indexOf("root") >= 0) ROOT = ""; // page opened outside kiwix-serve
+          var params = new URLSearchParams(location.search);
+          function stored(k) {
+            try {
+              return localStorage.getItem("kit." + k);
+            } catch (e) {
+              return null;
+            }
+          }
+          function store(k, v) {
+            try {
+              localStorage.setItem("kit." + k, v);
+            } catch (e) {}
+          }
+          var aiPort = params.get("ai") || stored("ai") || "8080";
+          var AI = GATE ? location.origin + "/ai" : location.protocol + "//" + location.hostname + ":" + aiPort;
+          var preferredModel = params.get("model") || stored("model") || "";
+          store("ai", aiPort);
+          if (params.get("model")) store("model", params.get("model"));
+          var $ = function (id) {
+            return document.getElementById(id);
+          };
+          var books = [],
+            aiUp = false,
+            running = null;
 
-  // kiwix-serve searches one language at a time: the library's Wikipedia's first, then the rest by number of books.
-  function libraryLanguages(books) {
-    var count = {}, wiki = books.filter(function (b) { return /^wikipedia_/.test(b.name || b.id); })[0];
-    books.forEach(function (b) { (b.language || "eng").split(",").forEach(function (l) { count[l] = (count[l] || 0) + 1; }); });
-    var main = wiki ? (wiki.language || "eng").split(",")[0] : "";
-    return Object.keys(count).sort(function (a, b) { return (b === main) - (a === main) || count[b] - count[a] || (a < b ? -1 : 1); });
-  }
+          $("chatLink").href = AI + "/";
+          if (window.KIT_REFRESHED) {
+            // the last complete ./kit sync, written into the page by the kit
+            $("refreshed").textContent =
+              "Refreshed " +
+              new Date(window.KIT_REFRESHED.slice(0, 10) + "T12:00:00").toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              });
+            $("refreshed").hidden = false;
+          }
+          if (GATE) {
+            $("sharePill").hidden = false;
+            $("shareOn").hidden = false;
+            $("shareOff").hidden = true;
+            $("shareAddr").textContent = GATE.address;
+            $("shareCode").textContent = GATE.code;
+            $("shareQr").src = "/_kit/qr.svg";
+          }
+          function showTab(name) {
+            document.querySelectorAll("nav a[data-tab]").forEach(function (x) {
+              x.classList.toggle("on", x.dataset.tab === name);
+              if (x.dataset.tab === name) x.setAttribute("aria-current", "page");
+              else x.removeAttribute("aria-current");
+            });
+            document.querySelectorAll("main section").forEach(function (s) {
+              s.classList.toggle("on", s.id === name);
+            });
+            document.querySelector("main").classList.toggle("wide", name === "map");
+            if (name === "map") {
+              initMap();
+              if (map)
+                setTimeout(function () {
+                  map.resize();
+                }, 0);
+            }
+          }
+          document.querySelectorAll("nav a[data-tab]").forEach(function (a) {
+            a.addEventListener("click", function (ev) {
+              ev.preventDefault();
+              showTab(a.dataset.tab);
+              history.replaceState(null, "", "#" + a.dataset.tab);
+            });
+          });
+          function tabInAddress() {
+            var t = location.hash.slice(1);
+            return ["ask", "map", "library", "help"].indexOf(t) >= 0 ? t : "";
+          }
+          window.addEventListener("hashchange", function () {
+            if (tabInAddress()) showTab(tabInAddress());
+          });
 
-  return { keywords: keywords, terms: terms, decode: decode, parseCatalog: parseCatalog, parseSearch: parseSearch,
-    libraryLanguages: libraryLanguages, photonLang: photonLang,
-    htmlToText: htmlToText, chunks: chunks, fallbackQueries: fallbackQueries, cleanQueryLines: cleanQueryLines,
-    listModels: listModels, makeQueries: makeQueries, gatherSources: gatherSources, buildMessages: buildMessages,
-    streamChat: streamChat, render: render, escapeHtml: escapeHtml, classify: classify, MEDICAL: MEDICAL,
-    CATEGORIES: CATEGORIES, isMapQuestion: isMapQuestion, MAP_TOOLS: MAP_TOOLS, haversine: haversine, fmtDist: fmtDist, fmtTime: fmtTime,
-    placeFromFeature: placeFromFeature, parseLatLon: parseLatLon, searchPlaces: searchPlaces, resolvePlace: resolvePlace,
-    categoryFor: categoryFor, findNearby: findNearby, getDirections: getDirections, runMapTool: runMapTool,
-    mapAgent: mapAgent, guessMapIntent: guessMapIntent };
-})();
-if (typeof module !== "undefined" && module.exports) { module.exports = Kit; }
+          function setPill(el, text, ok) {
+            el.textContent = text;
+            el.className = "pill " + (ok ? "ok" : "bad");
+          }
 
-/* ---------------------------------------------------------------- page */
-if (typeof document !== "undefined") (function () {
-  "use strict";
-  // Set by tools/share.py when the page comes through the gate that shares the kit on the home network. Then
-  // the AI and the map servers are paths on this same address, behind the access code.
-  var GATE = window.KIT_GATE || null;
-  if (!GATE && location.hostname === "localhost") {   // the AI only accepts requests from 127.0.0.1
-    location.replace(location.href.replace("//localhost", "//127.0.0.1"));
-    return;
-  }
-  var ROOT = "{{root}}";
-  if (ROOT.indexOf("root") >= 0) ROOT = "";       // page opened outside kiwix-serve
-  var params = new URLSearchParams(location.search);
-  function stored(k) { try { return localStorage.getItem("kit." + k); } catch (e) { return null; } }
-  function store(k, v) { try { localStorage.setItem("kit." + k, v); } catch (e) {} }
-  var aiPort = params.get("ai") || stored("ai") || "8080";
-  var AI = GATE ? location.origin + "/ai" : location.protocol + "//" + location.hostname + ":" + aiPort;
-  var preferredModel = params.get("model") || stored("model") || "";
-  store("ai", aiPort); if (params.get("model")) store("model", params.get("model"));
-  var $ = function (id) { return document.getElementById(id); };
-  var books = [], aiUp = false, running = null;
+          async function loadBooks() {
+            var xml = await (await fetch(ROOT + "/catalog/v2/entries?count=-1")).text();
+            books = Kit.parseCatalog(xml);
+            var groups = {},
+              order = ["Medical", "Survival & how-to", "Reference & learning", "Other"];
+            books.forEach(function (b) {
+              (groups[b.group] = groups[b.group] || []).push(b);
+            });
+            var scope = $("scope");
+            scope.innerHTML = "";
+            [["all", "Search all books (" + books.length + ")"]]
+              .concat(
+                order
+                  .filter(function (g) {
+                    return groups[g];
+                  })
+                  .map(function (g) {
+                    return ["group:" + g, g + " only"];
+                  }),
+              )
+              .concat(
+                books.map(function (b) {
+                  return ["book:" + b.id, "Only: " + b.title];
+                }),
+              )
+              .forEach(function (o) {
+                var opt = document.createElement("option");
+                opt.value = o[0];
+                opt.textContent = o[1];
+                scope.appendChild(opt);
+              });
+            var html = "";
+            order.forEach(function (g) {
+              if (!groups[g]) return;
+              html += "<h2>" + Kit.escapeHtml(g) + '</h2><div class="books">';
+              groups[g]
+                .sort(function (a, b) {
+                  return a.title.localeCompare(b.title);
+                })
+                .forEach(function (b) {
+                  html +=
+                    '<div class="book-card"><a href="' +
+                    ROOT +
+                    "/viewer#" +
+                    encodeURIComponent(b.id) +
+                    '">' +
+                    Kit.escapeHtml(b.title) +
+                    "</a>" +
+                    "<p>" +
+                    Kit.escapeHtml(b.summary || "") +
+                    "</p></div>";
+                });
+              html += "</div>";
+            });
+            $("bookList").innerHTML = html || "<p>No books found.</p>";
+            var langs = Kit.libraryLanguages(books),
+              names = null;
+            try {
+              names = new Intl.DisplayNames(["en"], { type: "language" });
+            } catch (e) {}
+            $("libLang").innerHTML = langs
+              .map(function (l) {
+                var n = l;
+                try {
+                  n = names ? names.of(l) : l;
+                } catch (e) {}
+                return '<option value="' + Kit.escapeHtml(l) + '">' + Kit.escapeHtml("Books in " + n) + "</option>";
+              })
+              .join("");
+            $("libLang").hidden = langs.length < 2;
+          }
 
-  $("chatLink").href = AI + "/";
-  if (window.KIT_REFRESHED) {    // the last complete ./kit sync, written into the page by the kit
-    $("refreshed").textContent = "Refreshed " + new Date(window.KIT_REFRESHED.slice(0, 10) + "T12:00:00")
-      .toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-    $("refreshed").hidden = false;
-  }
-  if (GATE) {
-    $("sharePill").hidden = false; $("shareOn").hidden = false; $("shareOff").hidden = true;
-    $("shareAddr").textContent = GATE.address; $("shareCode").textContent = GATE.code;
-    $("shareQr").src = "/_kit/qr.svg";
-  }
-  function showTab(name) {
-    document.querySelectorAll("nav a[data-tab]").forEach(function (x) {
-      x.classList.toggle("on", x.dataset.tab === name);
-      if (x.dataset.tab === name) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current");
-    });
-    document.querySelectorAll("main section").forEach(function (s) { s.classList.toggle("on", s.id === name); });
-    document.querySelector("main").classList.toggle("wide", name === "map");
-    if (name === "map") { initMap(); if (map) setTimeout(function () { map.resize(); }, 0); }
-  }
-  document.querySelectorAll("nav a[data-tab]").forEach(function (a) {
-    a.addEventListener("click", function (ev) { ev.preventDefault(); showTab(a.dataset.tab); history.replaceState(null, "", "#" + a.dataset.tab); });
-  });
-  function tabInAddress() { var t = location.hash.slice(1); return ["ask", "map", "library", "help"].indexOf(t) >= 0 ? t : ""; }
-  window.addEventListener("hashchange", function () { if (tabInAddress()) showTab(tabInAddress()); });
+          async function checkAI() {
+            try {
+              var models = await Kit.listModels(AI);
+              aiUp = models.length > 0;
+              var sel = $("model"),
+                keep = sel.value || preferredModel;
+              if (
+                Array.prototype.map
+                  .call(sel.options, function (o) {
+                    return o.value;
+                  })
+                  .join("\n") !== models.join("\n")
+              ) {
+                sel.innerHTML = "";
+                models.forEach(function (m) {
+                  var o = document.createElement("option");
+                  o.value = m;
+                  o.textContent = "Model: " + m;
+                  sel.appendChild(o);
+                });
+                if (keep && models.indexOf(keep) >= 0) sel.value = keep;
+              }
+              setPill($("aiStatus"), "AI: ready", true);
+            } catch (e) {
+              aiUp = false;
+              if ($("model").value || $("model").options.length !== 1)
+                $("model").innerHTML = '<option value="">AI off: book passages only</option>';
+              setPill($("aiStatus"), "AI: off", false);
+            }
+          }
 
-  function setPill(el, text, ok) { el.textContent = text; el.className = "pill " + (ok ? "ok" : "bad"); }
+          function selectedBooks() {
+            var v = $("scope").value || "all";
+            if (v.indexOf("group:") === 0) {
+              var g = v.slice(6);
+              return books.filter(function (b) {
+                return b.group === g;
+              });
+            }
+            if (v.indexOf("book:") === 0) {
+              var id = v.slice(5);
+              return books.filter(function (b) {
+                return b.id === id;
+              });
+            }
+            return books;
+          }
 
-  async function loadBooks() {
-    var xml = await (await fetch(ROOT + "/catalog/v2/entries?count=-1")).text();
-    books = Kit.parseCatalog(xml);
-    var groups = {}, order = ["Medical", "Survival & how-to", "Reference & learning", "Other"];
-    books.forEach(function (b) { (groups[b.group] = groups[b.group] || []).push(b); });
-    var scope = $("scope");
-    scope.innerHTML = "";
-    [["all", "Search all books (" + books.length + ")"]].concat(order.filter(function (g) { return groups[g]; }).map(function (g) { return ["group:" + g, g + " only"]; }))
-      .concat(books.map(function (b) { return ["book:" + b.id, "Only: " + b.title]; }))
-      .forEach(function (o) { var opt = document.createElement("option"); opt.value = o[0]; opt.textContent = o[1]; scope.appendChild(opt); });
-    var html = "";
-    order.forEach(function (g) {
-      if (!groups[g]) return;
-      html += "<h2>" + Kit.escapeHtml(g) + "</h2><div class=\"books\">";
-      groups[g].sort(function (a, b) { return a.title.localeCompare(b.title); }).forEach(function (b) {
-        html += "<div class=\"book-card\"><a href=\"" + ROOT + "/viewer#" + encodeURIComponent(b.id) + "\">" + Kit.escapeHtml(b.title) + "</a>" +
-                "<p>" + Kit.escapeHtml(b.summary || "") + "</p></div>";
-      });
-      html += "</div>";
-    });
-    $("bookList").innerHTML = html || "<p>No books found.</p>";
-    var langs = Kit.libraryLanguages(books), names = null;
-    try { names = new Intl.DisplayNames(["en"], { type: "language" }); } catch (e) {}
-    $("libLang").innerHTML = langs.map(function (l) {
-      var n = l; try { n = names ? names.of(l) : l; } catch (e) {}
-      return "<option value=\"" + Kit.escapeHtml(l) + "\">" + Kit.escapeHtml("Books in " + n) + "</option>"; }).join("");
-    $("libLang").hidden = langs.length < 2;
-  }
+          function showSources(sources) {
+            $("sourcesBox").hidden = !sources.length;
+            $("sources").innerHTML = sources
+              .map(function (s, i) {
+                var quote = s.passages[0].slice(0, 280);
+                return (
+                  '<li id="src-' +
+                  (i + 1) +
+                  '"><a href="' +
+                  Kit.escapeHtml(s.link) +
+                  '" target="_blank" rel="noopener">' +
+                  Kit.escapeHtml(s.title) +
+                  '</a> <span class="book">' +
+                  Kit.escapeHtml(s.book) +
+                  "</span><blockquote>" +
+                  Kit.escapeHtml(quote) +
+                  (s.passages[0].length > 280 ? "..." : "") +
+                  "</blockquote></li>"
+                );
+              })
+              .join("");
+          }
 
-  async function checkAI() {
-    try {
-      var models = await Kit.listModels(AI);
-      aiUp = models.length > 0;
-      var sel = $("model"), keep = sel.value || preferredModel;
-      if (Array.prototype.map.call(sel.options, function (o) { return o.value; }).join("\n") !== models.join("\n")) {
-        sel.innerHTML = "";
-        models.forEach(function (m) { var o = document.createElement("option"); o.value = m; o.textContent = "Model: " + m; sel.appendChild(o); });
-        if (keep && models.indexOf(keep) >= 0) sel.value = keep;
-      }
-      setPill($("aiStatus"), "AI: ready", true);
-    } catch (e) {
-      aiUp = false;
-      if ($("model").value || $("model").options.length !== 1)
-        $("model").innerHTML = "<option value=\"\">AI off: book passages only</option>";
-      setPill($("aiStatus"), "AI: off", false);
-    }
-  }
+          async function ask(question) {
+            var ctrl = new AbortController();
+            running = ctrl;
+            $("askBtn").disabled = true;
+            $("stopBtn").disabled = false;
+            $("answer").innerHTML = "";
+            $("sources").innerHTML = "";
+            $("sourcesBox").hidden = true;
+            $("thinking").hidden = true;
+            $("thinking").querySelector("pre").textContent = "";
+            var progress = function (t) {
+              $("progress").textContent = t;
+            };
+            var model = $("model").value,
+              slowTimer = null;
+            store("model", model || "");
+            try {
+              if (!aiUp) await checkAI();
+              if (mapsUsable() && Kit.isMapQuestion(question) && (await askMap(question, ctrl, progress, model)))
+                return;
+              if (!books.length) await loadBooks();
+              var opts = {
+                aiBase: aiUp ? AI : "",
+                model: aiUp ? model : "",
+                signal: ctrl.signal,
+                root: ROOT,
+                onProgress: progress,
+              };
+              progress(aiUp ? "Working out what to search for..." : "Searching the library (AI is off)...");
+              opts.queries = await Kit.makeQueries(opts, question);
+              var sources = await Kit.gatherSources(question, selectedBooks(), opts);
+              showSources(sources);
+              if (!aiUp) {
+                progress(
+                  sources.length
+                    ? "AI is not running, so here are the most relevant passages."
+                    : "Nothing found. Try other words.",
+                );
+                $("answer").innerHTML = sources
+                  .map(function (s, i) {
+                    return (
+                      "<p><b>[" +
+                      (i + 1) +
+                      "] " +
+                      Kit.escapeHtml(s.title) +
+                      "</b><br>" +
+                      Kit.escapeHtml(s.passages.join(" ... ")).replace(/\n/g, "<br>") +
+                      "</p>"
+                    );
+                  })
+                  .join("");
+                return;
+              }
+              progress(
+                sources.length
+                  ? "Found " + sources.length + " sources. Asking " + model + "..."
+                  : "No matching passages found. Asking " + model + " anyway...",
+              );
+              var answer = "",
+                reasoning = "",
+                t0 = Date.now();
+              slowTimer = setTimeout(function () {
+                if (!answer && !reasoning)
+                  progress("Loading " + model + " into memory. The first answer can take up to a minute...");
+              }, 6000);
+              await Kit.streamChat(opts, Kit.buildMessages(question, sources), function (c, r) {
+                if (r) {
+                  reasoning += r;
+                  $("thinking").hidden = false;
+                  $("thinking").querySelector("pre").textContent = reasoning;
+                  if (!answer) progress("Thinking... (" + Math.round((Date.now() - t0) / 1000) + "s)");
+                }
+                if (c) {
+                  answer += c;
+                  $("answer").innerHTML = Kit.render(answer, sources.length);
+                  progress("Answering...");
+                }
+              });
+              progress(
+                "Done in " +
+                  Math.round((Date.now() - t0) / 1000) +
+                  "s. " +
+                  (sources.length ? "Sources are listed below." : ""),
+              );
+            } catch (e) {
+              progress(e.name === "AbortError" ? "Stopped." : "Problem: " + e.message);
+            } finally {
+              clearTimeout(slowTimer); // or it would write over "Stopped." or the problem a few seconds later
+              running = null;
+              $("askBtn").disabled = false;
+              $("stopBtn").disabled = true;
+            }
+          }
 
-  function selectedBooks() {
-    var v = $("scope").value || "all";
-    if (v.indexOf("group:") === 0) { var g = v.slice(6); return books.filter(function (b) { return b.group === g; }); }
-    if (v.indexOf("book:") === 0) { var id = v.slice(5); return books.filter(function (b) { return b.id === id; }); }
-    return books;
-  }
+          $("askForm").addEventListener("submit", function (ev) {
+            ev.preventDefault();
+            var q = $("q").value.trim();
+            if (q && !running) ask(q);
+          });
+          $("q").addEventListener("keydown", function (ev) {
+            if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
+              ev.preventDefault();
+              $("askForm").requestSubmit();
+            }
+          });
+          $("stopBtn").addEventListener("click", function () {
+            if (running) running.abort();
+          });
+          $("libSearch").addEventListener("submit", function (ev) {
+            ev.preventDefault();
+            var q = $("libQ").value.trim();
+            if (!q) return;
+            var lang = $("libLang").value || Kit.libraryLanguages(books)[0] || "eng";
+            location.href =
+              ROOT + "/search?books.filter.lang=" + encodeURIComponent(lang) + "&pattern=" + encodeURIComponent(q);
+          });
 
-  function showSources(sources) {
-    $("sourcesBox").hidden = !sources.length;
-    $("sources").innerHTML = sources.map(function (s, i) {
-      var quote = s.passages[0].slice(0, 280);
-      return "<li id=\"src-" + (i + 1) + "\"><a href=\"" + Kit.escapeHtml(s.link) + "\" target=\"_blank\" rel=\"noopener\">" +
-        Kit.escapeHtml(s.title) + "</a> <span class=\"book\">" + Kit.escapeHtml(s.book) + "</span><blockquote>" +
-        Kit.escapeHtml(quote) + (s.passages[0].length > 280 ? "..." : "") + "</blockquote></li>";
-    }).join("");
-  }
+          /* ---------------------------------------------------------------- map tab */
+          var KM = window.KIT_MAPS || {
+            available: false,
+            reason:
+              "the map isn't set up here. It's added by ./kit sync (while online) and starts when you open Tinfoil Kit.",
+          };
+          function server(name) {
+            return GATE
+              ? location.origin + "/" + name
+              : location.protocol + "//" + location.hostname + ":" + KM.ports[name];
+          }
+          var GEO = KM.ports ? server("geocoder") : "",
+            ROUTE = KM.ports ? server("routing") : "";
+          var map = null,
+            mapReady = false,
+            pending = null,
+            markers = [],
+            homeMk = null,
+            toPick = null;
+          var svc = { geocoder: false, routing: false };
+          var esc = Kit.escapeHtml;
+          function units() {
+            return KM.units || "imperial";
+          }
+          function dist(m) {
+            return Kit.fmtDist(m, units());
+          }
+          function getHome() {
+            try {
+              var h = JSON.parse(stored("home") || "null");
+              if (h && isFinite(h.lat) && isFinite(h.lon)) return h;
+            } catch (e) {}
+            return KM.home || { lat: 40.75, lon: -73.99, zoom: 10, label: "Home" };
+          }
+          function mapOpts(signal) {
+            return {
+              geoBase: GEO,
+              routeBase: ROUTE,
+              home: getHome(),
+              units: units(),
+              lang: KM.lang,
+              signal: signal,
+              label: KM.label,
+            };
+          }
+          function mapsUsable() {
+            return !!KM.available && (svc.geocoder || svc.routing);
+          }
+          function emptyFC() {
+            return { type: "FeatureCollection", features: [] };
+          }
+          function b64buf(b64) {
+            var bin = atob(b64),
+              u = new Uint8Array(bin.length);
+            for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+            return u.buffer;
+          }
 
-  async function ask(question) {
-    var ctrl = new AbortController(); running = ctrl;
-    $("askBtn").disabled = true; $("stopBtn").disabled = false;
-    $("answer").innerHTML = ""; $("sources").innerHTML = ""; $("sourcesBox").hidden = true;
-    $("thinking").hidden = true; $("thinking").querySelector("pre").textContent = "";
-    var progress = function (t) { $("progress").textContent = t; };
-    var model = $("model").value, slowTimer = null;
-    store("model", model || "");
-    try {
-      if (!aiUp) await checkAI();
-      if (mapsUsable() && Kit.isMapQuestion(question) && await askMap(question, ctrl, progress, model)) return;
-      if (!books.length) await loadBooks();
-      var opts = { aiBase: aiUp ? AI : "", model: aiUp ? model : "", signal: ctrl.signal, root: ROOT, onProgress: progress };
-      progress(aiUp ? "Working out what to search for..." : "Searching the library (AI is off)...");
-      opts.queries = await Kit.makeQueries(opts, question);
-      var sources = await Kit.gatherSources(question, selectedBooks(), opts);
-      showSources(sources);
-      if (!aiUp) {
-        progress(sources.length ? "AI is not running, so here are the most relevant passages." : "Nothing found. Try other words.");
-        $("answer").innerHTML = sources.map(function (s, i) { return "<p><b>[" + (i + 1) + "] " + Kit.escapeHtml(s.title) + "</b><br>" +
-          Kit.escapeHtml(s.passages.join(" ... ")).replace(/\n/g, "<br>") + "</p>"; }).join("");
-        return;
-      }
-      progress(sources.length ? "Found " + sources.length + " sources. Asking " + model + "..." : "No matching passages found. Asking " + model + " anyway...");
-      var answer = "", reasoning = "", t0 = Date.now();
-      slowTimer = setTimeout(function () {
-        if (!answer && !reasoning) progress("Loading " + model + " into memory. The first answer can take up to a minute...");
-      }, 6000);
-      await Kit.streamChat(opts, Kit.buildMessages(question, sources), function (c, r) {
-        if (r) { reasoning += r; $("thinking").hidden = false; $("thinking").querySelector("pre").textContent = reasoning;
-                 if (!answer) progress("Thinking... (" + Math.round((Date.now() - t0) / 1000) + "s)"); }
-        if (c) { answer += c; $("answer").innerHTML = Kit.render(answer, sources.length); progress("Answering..."); }
-      });
-      progress("Done in " + Math.round((Date.now() - t0) / 1000) + "s. " + (sources.length ? "Sources are listed below." : ""));
-    } catch (e) {
-      progress(e.name === "AbortError" ? "Stopped." : "Problem: " + e.message);
-    } finally {
-      clearTimeout(slowTimer);    // or it would write over "Stopped." or the problem a few seconds later
-      running = null; $("askBtn").disabled = false; $("stopBtn").disabled = true;
-    }
-  }
+          async function ping(url) {
+            var c = new AbortController(),
+              t = setTimeout(function () {
+                c.abort();
+              }, 3000);
+            try {
+              var r = await fetch(url, { signal: c.signal });
+              return r.ok;
+            } catch (e) {
+              return false;
+            } finally {
+              clearTimeout(t);
+            }
+          }
+          async function checkMapServices() {
+            if (!KM.available) return;
+            svc.geocoder = await ping(GEO + "/status");
+            svc.routing = await ping(ROUTE + "/health");
+            $("mapStatus").textContent =
+              "Address search: " +
+              (svc.geocoder ? "ready" : "not running") +
+              ". Directions: " +
+              (svc.routing ? "ready" : "not running") +
+              "." +
+              (svc.geocoder && svc.routing ? "" : " (They take up to a minute to start.)");
+          }
 
-  $("askForm").addEventListener("submit", function (ev) { ev.preventDefault(); var q = $("q").value.trim(); if (q && !running) ask(q); });
-  $("q").addEventListener("keydown", function (ev) { if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); $("askForm").requestSubmit(); } });
-  $("stopBtn").addEventListener("click", function () { if (running) running.abort(); });
-  $("libSearch").addEventListener("submit", function (ev) {
-    ev.preventDefault();
-    var q = $("libQ").value.trim(); if (!q) return;
-    var lang = $("libLang").value || Kit.libraryLanguages(books)[0] || "eng";
-    location.href = ROOT + "/search?books.filter.lang=" + encodeURIComponent(lang) + "&pattern=" + encodeURIComponent(q);
-  });
+          function initMap() {
+            if (map || !KM.available || typeof maplibregl === "undefined" || typeof basemaps === "undefined") return;
+            window.__kitHits = { glyph: 0, sprite: 0 };
+            maplibregl.addProtocol("kitglyph", function (p) {
+              window.__kitHits.glyph++;
+              var m = /^kitglyph:\/\/(.+)\/(\d+-\d+)(?:\.pbf)?$/.exec(p.url),
+                data = new ArrayBuffer(0);
+              if (m) {
+                var fonts = decodeURIComponent(m[1]).split(",");
+                for (var i = 0; i < fonts.length; i++) {
+                  var b = KM.glyphs[fonts[i].trim() + "/" + m[2]];
+                  if (b) {
+                    data = b64buf(b);
+                    break;
+                  }
+                }
+              }
+              return Promise.resolve({ data: data });
+            });
+            maplibregl.addProtocol("kitsprite", function (p) {
+              window.__kitHits.sprite++;
+              var name = p.url.split("?")[0].split("/").pop(),
+                v = KM.sprites[name]; // kitsprite://sprites/light@2x.png
+              if (v == null) return Promise.reject(new Error("missing map icon file " + name));
+              return Promise.resolve({
+                data: /\.json$/.test(name) ? (p.type === "string" ? JSON.stringify(v) : v) : b64buf(v),
+              });
+            });
+            var h = getHome(),
+              layers;
+            try {
+              layers = basemaps.layers("protomaps", basemaps.namedFlavor("light"), { lang: KM.lang || "en" });
+            } catch (e) {
+              layers = basemaps.layers("protomaps", basemaps.namedFlavor("light"), { lang: "en" });
+            } // a language it lacks
+            map = new maplibregl.Map({
+              container: "mapCanvas",
+              center: [h.lon, h.lat],
+              zoom: h.zoom || 11,
+              attributionControl: { compact: true },
+              style: {
+                version: 8,
+                glyphs: "kitglyph://{fontstack}/{range}",
+                sprite: "kitsprite://sprites/light",
+                sources: {
+                  protomaps: {
+                    type: "vector",
+                    tiles: [server("tiles") + "/" + KM.tileset + "/{z}/{x}/{y}.mvt"],
+                    maxzoom: KM.detailMaxzoom,
+                    attribution: "&copy; OpenStreetMap contributors, Protomaps",
+                  },
+                },
+                layers: layers,
+              },
+            });
+            window.__kitMap = map; // for the UI tests, and handy in the browser console
+            map.addControl(new maplibregl.NavigationControl(), "top-right");
+            map.addControl(
+              new maplibregl.ScaleControl({ unit: units() === "metric" ? "metric" : "imperial" }),
+              "bottom-left",
+            );
+            map.on("error", function (e) {
+              if (e && e.error) console.warn("map: " + e.error.message);
+            });
+            map.on("load", function () {
+              map.addSource("route", { type: "geojson", data: emptyFC() });
+              map.addLayer({
+                id: "route-casing",
+                type: "line",
+                source: "route",
+                layout: { "line-join": "round", "line-cap": "round" },
+                paint: { "line-color": "#ffffff", "line-width": 9 },
+              });
+              map.addLayer({
+                id: "route-line",
+                type: "line",
+                source: "route",
+                layout: { "line-join": "round", "line-cap": "round" },
+                paint: { "line-color": "#1f5f8b", "line-width": 5 },
+              });
+              map.addSource("labels", { type: "geojson", data: emptyFC() });
+              map.addLayer({
+                id: "result-labels",
+                type: "symbol",
+                source: "labels",
+                layout: {
+                  "text-field": ["get", "label"],
+                  "text-font": ["Noto Sans Medium"],
+                  "text-size": 13,
+                  "text-offset": [0, 0.8],
+                  "text-anchor": "top",
+                  "text-optional": true,
+                },
+                paint: { "text-color": "#1d1d1f", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+              });
+              mapReady = true;
+              drawHome();
+              if (pending) {
+                var d = pending;
+                pending = null;
+                show(d);
+              }
+            });
+          }
 
-  /* ---------------------------------------------------------------- map tab */
-  var KM = window.KIT_MAPS || { available: false, reason: "the map isn't set up here. It's added by ./kit sync (while online) and starts when you open Tinfoil Kit." };
-  function server(name) { return GATE ? location.origin + "/" + name : location.protocol + "//" + location.hostname + ":" + KM.ports[name]; }
-  var GEO = KM.ports ? server("geocoder") : "", ROUTE = KM.ports ? server("routing") : "";
-  var map = null, mapReady = false, pending = null, markers = [], homeMk = null, toPick = null;
-  var svc = { geocoder: false, routing: false };
-  var esc = Kit.escapeHtml;
-  function units() { return KM.units || "imperial"; }
-  function dist(m) { return Kit.fmtDist(m, units()); }
-  function getHome() {
-    try { var h = JSON.parse(stored("home") || "null"); if (h && isFinite(h.lat) && isFinite(h.lon)) return h; } catch (e) {}
-    return KM.home || { lat: 40.75, lon: -73.99, zoom: 10, label: "Home" };
-  }
-  function mapOpts(signal) { return { geoBase: GEO, routeBase: ROUTE, home: getHome(), units: units(), lang: KM.lang, signal: signal, label: KM.label }; }
-  function mapsUsable() { return !!KM.available && (svc.geocoder || svc.routing); }
-  function emptyFC() { return { type: "FeatureCollection", features: [] }; }
-  function b64buf(b64) { var bin = atob(b64), u = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; }
+          function drawHome() {
+            if (!mapReady) return;
+            var h = getHome();
+            if (homeMk) homeMk.remove();
+            var el = document.createElement("div");
+            el.style.cssText =
+              "width:16px;height:16px;border-radius:50%;background:#1f5f8b;border:3px solid #fff;box-shadow:0 0 0 1px #1f5f8b";
+            el.title = "Home: " + (h.label || "");
+            homeMk = new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map);
+          }
+          function updateHomeLabel() {
+            $("homeLabel").textContent = getHome().label || "not set";
+          }
+          function setHome(p) {
+            store(
+              "home",
+              JSON.stringify({ lat: p.lat, lon: p.lon, label: p.name, zoom: map ? Math.round(map.getZoom()) : 12 }),
+            );
+            updateHomeLabel();
+            drawHome();
+          }
+          function placeHtml(p) {
+            return (
+              "<b>" +
+              esc(p.name) +
+              "</b>" +
+              (p.address ? "<br>" + esc(p.address) : "") +
+              (p.distance_m != null
+                ? "<br><small>" + dist(p.distance_m) + " " + p.direction + " (straight line)</small>"
+                : "")
+            );
+          }
+          function addMarker(p, color, withButtons) {
+            var pop = new maplibregl.Popup({ offset: 30 }).setHTML(
+              placeHtml(p) +
+                (withButtons
+                  ? '<div class="popup-btns"><button data-act="to">Directions here</button><button data-act="home">Set as home</button></div>'
+                  : ""),
+            );
+            pop.on("open", function () {
+              pop
+                .getElement()
+                .querySelectorAll("button[data-act]")
+                .forEach(function (b) {
+                  b.addEventListener("click", function () {
+                    if (b.dataset.act === "home") setHome(p);
+                    else {
+                      toPick = p;
+                      $("dirTo").value = p.name;
+                      runDirections();
+                    }
+                    pop.remove();
+                  });
+                });
+            });
+            var mk = new maplibregl.Marker({ color: color || "#b3261e" })
+              .setLngLat([p.lon, p.lat])
+              .setPopup(pop)
+              .addTo(map);
+            markers.push(mk);
+            return mk;
+          }
+          function fitTo(points) {
+            if (!points.length) return;
+            if (points.length === 1) {
+              map.flyTo({ center: [points[0].lon, points[0].lat], zoom: 15 });
+              return;
+            }
+            var b = new maplibregl.LngLatBounds();
+            points.forEach(function (p) {
+              b.extend([p.lon, p.lat]);
+            });
+            map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 800 });
+          }
+          function show(d) {
+            if (!mapReady) {
+              pending = d;
+              return;
+            }
+            markers.forEach(function (m) {
+              m.remove();
+            });
+            markers = [];
+            map.getSource("route").setData(emptyFC());
+            map.getSource("labels").setData(emptyFC());
+            if (d.type === "places") {
+              var pts = d.places.slice();
+              d.places.forEach(function (p) {
+                addMarker(p, "#b3261e", true);
+              });
+              map.getSource("labels").setData({
+                type: "FeatureCollection",
+                features: d.places.map(function (p) {
+                  return {
+                    type: "Feature",
+                    geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+                    properties: { label: p.name },
+                  };
+                }),
+              });
+              if (d.origin) pts.push(d.origin);
+              fitTo(pts);
+              if (d.places.length === 1) markers[0].togglePopup();
+            } else if (d.type === "route") {
+              var r = d.route;
+              map.getSource("route").setData({
+                type: "Feature",
+                properties: {},
+                geometry: { type: "LineString", coordinates: r.coordinates },
+              });
+              addMarker(r.from, "#2e7d32", false);
+              addMarker(r.to, "#b3261e", false);
+              fitTo(
+                r.coordinates.length > 1
+                  ? [r.from, r.to].concat(
+                      r.coordinates
+                        .filter(function (c, i) {
+                          return i % 25 === 0;
+                        })
+                        .map(function (c) {
+                          return { lon: c[0], lat: c[1] };
+                        }),
+                    )
+                  : [r.from, r.to],
+              );
+            }
+          }
 
-  async function ping(url) {
-    var c = new AbortController(), t = setTimeout(function () { c.abort(); }, 3000);
-    try { var r = await fetch(url, { signal: c.signal }); return r.ok; } catch (e) { return false; } finally { clearTimeout(t); }
-  }
-  async function checkMapServices() {
-    if (!KM.available) return;
-    svc.geocoder = await ping(GEO + "/status");
-    svc.routing = await ping(ROUTE + "/health");
-    $("mapStatus").textContent = "Address search: " + (svc.geocoder ? "ready" : "not running") + ". Directions: " +
-      (svc.routing ? "ready" : "not running") + "." + (svc.geocoder && svc.routing ? "" : " (They take up to a minute to start.)");
-  }
+          function renderRoute(r) {
+            $("dirSummary").textContent =
+              dist(r.distance_m) +
+              ", " +
+              Kit.fmtTime(r.time_ms) +
+              " " +
+              (r.profile === "foot" ? "walking" : "driving") +
+              " from " +
+              r.from.name +
+              " to " +
+              r.to.name +
+              (r.to.address ? " (" + r.to.address + ")" : "");
+            $("dirSteps").innerHTML = r.steps
+              .map(function (st, i) {
+                return (
+                  '<li data-i="' +
+                  i +
+                  '"><button type="button" class="plain">' +
+                  esc(st.text) +
+                  (st.distance_m ? " <small>" + dist(st.distance_m) + "</small>" : "") +
+                  "</button></li>"
+                );
+              })
+              .join("");
+            $("dirSteps")
+              .querySelectorAll("li[data-i] button")
+              .forEach(function (b) {
+                b.addEventListener("click", function () {
+                  var at = r.steps[+b.parentNode.dataset.i].at;
+                  if (at && map) map.flyTo({ center: at, zoom: 17 });
+                });
+              });
+          }
+          async function runDirections() {
+            $("dirSummary").textContent = "Finding the route...";
+            $("dirSteps").innerHTML = "";
+            try {
+              var r = await Kit.getDirections(
+                mapOpts(),
+                $("dirFrom").value,
+                toPick || $("dirTo").value,
+                $("dirMode").value,
+              );
+              renderRoute(r);
+              show({ type: "route", route: r });
+            } catch (e) {
+              $("dirSummary").textContent =
+                "No directions: " + e.message + (svc.routing ? "" : " (the directions server isn't running)");
+            }
+          }
+          var searchTimer = null,
+            searchSeq = 0;
+          async function doSearch(pickFirst) {
+            var q = $("placeQ").value.trim(),
+              box = $("placeResults"),
+              seq = ++searchSeq;
+            if (q.length < 3) {
+              box.hidden = true;
+              return;
+            }
+            try {
+              var places = await Kit.searchPlaces(mapOpts(), q, 6);
+              if (seq !== searchSeq) return;
+              if (pickFirst && places[0]) {
+                box.hidden = true;
+                show({ type: "places", places: [places[0]] });
+                return;
+              }
+              box.innerHTML = places.length
+                ? places
+                    .map(function (p, i) {
+                      return (
+                        '<button type="button" data-i="' +
+                        i +
+                        '">' +
+                        esc(p.name) +
+                        "<small>" +
+                        esc(p.address || "") +
+                        (p.distance_m != null ? " &middot; " + dist(p.distance_m) : "") +
+                        "</small></button>"
+                      );
+                    })
+                    .join("")
+                : "<div>No match on the offline map</div>";
+              box.hidden = false;
+              box.querySelectorAll("button[data-i]").forEach(function (el) {
+                el.addEventListener("click", function () {
+                  box.hidden = true;
+                  show({ type: "places", places: [places[+el.dataset.i]] });
+                });
+              });
+            } catch (e) {
+              box.innerHTML =
+                "<div>" +
+                esc("Search failed: " + e.message + (svc.geocoder ? "" : " (address search isn't running)")) +
+                "</div>";
+              box.hidden = false;
+            }
+          }
+          async function runNearby(cat) {
+            var list = $("nearbyList");
+            list.innerHTML = "<li>Searching...</li>";
+            try {
+              var r = await Kit.findNearby(mapOpts(), cat, $("dirFrom").value || "home", 8);
+              list.innerHTML = r.places.length
+                ? r.places
+                    .map(function (p, i) {
+                      return (
+                        '<li data-i="' +
+                        i +
+                        '"><button type="button" class="plain">' +
+                        esc(p.name) +
+                        " <small>" +
+                        dist(p.distance_m) +
+                        " " +
+                        p.direction +
+                        (p.address ? " &middot; " + esc(p.address) : "") +
+                        "</small></button></li>"
+                      );
+                    })
+                    .join("")
+                : "<li>None found within 40 km (25 mi).</li>";
+              list.querySelectorAll("li[data-i] button").forEach(function (b) {
+                b.addEventListener("click", function () {
+                  show({ type: "places", places: [r.places[+b.parentNode.dataset.i]] });
+                });
+              });
+              show({ type: "places", places: r.places, origin: r.origin });
+            } catch (e) {
+              list.innerHTML = "<li>" + esc("Search failed: " + e.message) + "</li>";
+            }
+          }
 
-  function initMap() {
-    if (map || !KM.available || typeof maplibregl === "undefined" || typeof basemaps === "undefined") return;
-    window.__kitHits = { glyph: 0, sprite: 0 };
-    maplibregl.addProtocol("kitglyph", function (p) {
-      window.__kitHits.glyph++;
-      var m = /^kitglyph:\/\/(.+)\/(\d+-\d+)(?:\.pbf)?$/.exec(p.url), data = new ArrayBuffer(0);
-      if (m) {
-        var fonts = decodeURIComponent(m[1]).split(",");
-        for (var i = 0; i < fonts.length; i++) { var b = KM.glyphs[fonts[i].trim() + "/" + m[2]]; if (b) { data = b64buf(b); break; } }
-      }
-      return Promise.resolve({ data: data });
-    });
-    maplibregl.addProtocol("kitsprite", function (p) {
-      window.__kitHits.sprite++;
-      var name = p.url.split("?")[0].split("/").pop(), v = KM.sprites[name];   // kitsprite://sprites/light@2x.png
-      if (v == null) return Promise.reject(new Error("missing map icon file " + name));
-      return Promise.resolve({ data: /\.json$/.test(name) ? (p.type === "string" ? JSON.stringify(v) : v) : b64buf(v) });
-    });
-    var h = getHome(), layers;
-    try { layers = basemaps.layers("protomaps", basemaps.namedFlavor("light"), { lang: KM.lang || "en" }); }
-    catch (e) { layers = basemaps.layers("protomaps", basemaps.namedFlavor("light"), { lang: "en" }); }   // a language it lacks
-    map = new maplibregl.Map({
-      container: "mapCanvas", center: [h.lon, h.lat], zoom: h.zoom || 11, attributionControl: { compact: true },
-      style: { version: 8, glyphs: "kitglyph://{fontstack}/{range}", sprite: "kitsprite://sprites/light",
-        sources: { protomaps: { type: "vector", tiles: [server("tiles") + "/" + KM.tileset + "/{z}/{x}/{y}.mvt"],
-          maxzoom: KM.detailMaxzoom, attribution: "&copy; OpenStreetMap contributors, Protomaps" } },
-        layers: layers }
-    });
-    window.__kitMap = map;   // for the UI tests, and handy in the browser console
-    map.addControl(new maplibregl.NavigationControl(), "top-right");
-    map.addControl(new maplibregl.ScaleControl({ unit: units() === "metric" ? "metric" : "imperial" }), "bottom-left");
-    map.on("error", function (e) { if (e && e.error) console.warn("map: " + e.error.message); });
-    map.on("load", function () {
-      map.addSource("route", { type: "geojson", data: emptyFC() });
-      map.addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-join": "round", "line-cap": "round" },
-                     paint: { "line-color": "#ffffff", "line-width": 9 } });
-      map.addLayer({ id: "route-line", type: "line", source: "route", layout: { "line-join": "round", "line-cap": "round" },
-                     paint: { "line-color": "#1f5f8b", "line-width": 5 } });
-      map.addSource("labels", { type: "geojson", data: emptyFC() });
-      map.addLayer({ id: "result-labels", type: "symbol", source: "labels",
-                     layout: { "text-field": ["get", "label"], "text-font": ["Noto Sans Medium"], "text-size": 13,
-                               "text-offset": [0, 0.8], "text-anchor": "top", "text-optional": true },
-                     paint: { "text-color": "#1d1d1f", "text-halo-color": "#ffffff", "text-halo-width": 1.5 } });
-      mapReady = true;
-      drawHome();
-      if (pending) { var d = pending; pending = null; show(d); }
-    });
-  }
+          function describe(res) {
+            var d = res.display;
+            if (d.type === "route") {
+              var r = d.route;
+              return (
+                "**" +
+                (r.profile === "foot" ? "Walking" : "Driving") +
+                " to " +
+                r.to.name +
+                ":** " +
+                dist(r.distance_m) +
+                ", about " +
+                Kit.fmtTime(r.time_ms) +
+                ".\n\n" +
+                r.steps
+                  .map(function (s, i) {
+                    return i + 1 + ". " + s.text + (s.distance_m ? " (" + dist(s.distance_m) + ")" : "");
+                  })
+                  .join("\n")
+              );
+            }
+            if (!d.places.length) return "Nothing found on the offline map.";
+            return (
+              "**" +
+              (d.title || "Places") +
+              "**\n\n" +
+              d.places
+                .map(function (p) {
+                  return (
+                    "- " +
+                    p.name +
+                    (p.address ? ", " + p.address : "") +
+                    (p.distance_m != null ? " (" + dist(p.distance_m) + " " + p.direction + ")" : "")
+                  );
+                })
+                .join("\n")
+            );
+          }
 
-  function drawHome() {
-    if (!mapReady) return;
-    var h = getHome();
-    if (homeMk) homeMk.remove();
-    var el = document.createElement("div");
-    el.style.cssText = "width:16px;height:16px;border-radius:50%;background:#1f5f8b;border:3px solid #fff;box-shadow:0 0 0 1px #1f5f8b";
-    el.title = "Home: " + (h.label || "");
-    homeMk = new maplibregl.Marker({ element: el }).setLngLat([h.lon, h.lat]).addTo(map);
-  }
-  function updateHomeLabel() { $("homeLabel").textContent = getHome().label || "not set"; }
-  function setHome(p) {
-    store("home", JSON.stringify({ lat: p.lat, lon: p.lon, label: p.name, zoom: map ? Math.round(map.getZoom()) : 12 }));
-    updateHomeLabel(); drawHome();
-  }
-  function placeHtml(p) {
-    return "<b>" + esc(p.name) + "</b>" + (p.address ? "<br>" + esc(p.address) : "") +
-      (p.distance_m != null ? "<br><small>" + dist(p.distance_m) + " " + p.direction + " (straight line)</small>" : "");
-  }
-  function addMarker(p, color, withButtons) {
-    var pop = new maplibregl.Popup({ offset: 30 }).setHTML(placeHtml(p) +
-      (withButtons ? "<div class=\"popup-btns\"><button data-act=\"to\">Directions here</button><button data-act=\"home\">Set as home</button></div>" : ""));
-    pop.on("open", function () {
-      pop.getElement().querySelectorAll("button[data-act]").forEach(function (b) {
-        b.addEventListener("click", function () {
-          if (b.dataset.act === "home") setHome(p);
-          else { toPick = p; $("dirTo").value = p.name; runDirections(); }
-          pop.remove();
-        });
-      });
-    });
-    var mk = new maplibregl.Marker({ color: color || "#b3261e" }).setLngLat([p.lon, p.lat]).setPopup(pop).addTo(map);
-    markers.push(mk);
-    return mk;
-  }
-  function fitTo(points) {
-    if (!points.length) return;
-    if (points.length === 1) { map.flyTo({ center: [points[0].lon, points[0].lat], zoom: 15 }); return; }
-    var b = new maplibregl.LngLatBounds();
-    points.forEach(function (p) { b.extend([p.lon, p.lat]); });
-    map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 800 });
-  }
-  function show(d) {
-    if (!mapReady) { pending = d; return; }
-    markers.forEach(function (m) { m.remove(); }); markers = [];
-    map.getSource("route").setData(emptyFC());
-    map.getSource("labels").setData(emptyFC());
-    if (d.type === "places") {
-      var pts = d.places.slice();
-      d.places.forEach(function (p) { addMarker(p, "#b3261e", true); });
-      map.getSource("labels").setData({ type: "FeatureCollection", features: d.places.map(function (p) {
-        return { type: "Feature", geometry: { type: "Point", coordinates: [p.lon, p.lat] }, properties: { label: p.name } }; }) });
-      if (d.origin) pts.push(d.origin);
-      fitTo(pts);
-      if (d.places.length === 1) markers[0].togglePopup();
-    } else if (d.type === "route") {
-      var r = d.route;
-      map.getSource("route").setData({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: r.coordinates } });
-      addMarker(r.from, "#2e7d32", false); addMarker(r.to, "#b3261e", false);
-      fitTo(r.coordinates.length > 1 ? [r.from, r.to].concat(r.coordinates.filter(function (c, i) { return i % 25 === 0; })
-                                         .map(function (c) { return { lon: c[0], lat: c[1] }; })) : [r.from, r.to]);
-    }
-  }
+          /* Answer a map question. Returns false when it turns out not to be one, so the library answers instead. */
+          async function askMap(question, ctrl, progress, model) {
+            var opts = mapOpts(ctrl.signal),
+              shown = false,
+              answer = null,
+              used = 0;
+            opts.aiBase = AI;
+            opts.model = model;
+            var onTool = function (name, args, res, err) {
+              used++;
+              progress(err ? "Map lookup failed: " + err.message : "Looked up " + name.replace(/_/g, " ") + "...");
+              if (res && res.display) {
+                show(res.display);
+                shown = true;
+                if (res.display.type === "route") renderRoute(res.display.route);
+              }
+            };
+            if (aiUp && model) {
+              try {
+                progress("Looking it up on the offline map...");
+                answer = await Kit.mapAgent(opts, question, onTool);
+              } catch (e) {
+                if (e.name === "AbortError") throw e;
+                answer = null;
+              }
+              if (answer !== null && !used) return false; // the AI didn't need the map: let the library answer
+            }
+            if (answer === null || answer === "") {
+              var g = Kit.guessMapIntent(question);
+              progress("Looking it up on the offline map...");
+              try {
+                var res = await Kit.runMapTool(opts, g.tool, g.args);
+                if (res.display.type === "places" && !res.display.places.length && g.tool === "search_places")
+                  return false;
+                onTool(g.tool, g.args, res, null);
+                answer = describe(res);
+              } catch (e) {
+                if (e.name === "AbortError") throw e;
+                answer = "Couldn't do that on the offline map: " + e.message + ". Try the Map tab.";
+              }
+            }
+            $("answer").innerHTML =
+              Kit.render(answer, 0) +
+              (shown ? '<p><button type="button" class="secondary" id="openMap">Show on the map</button></p>' : "");
+            if (shown)
+              $("openMap").addEventListener("click", function () {
+                showTab("map");
+              });
+            progress("Done. Map results come from your offline map data (OpenStreetMap).");
+            return true;
+          }
 
-  function renderRoute(r) {
-    $("dirSummary").textContent = dist(r.distance_m) + ", " + Kit.fmtTime(r.time_ms) + " " +
-      (r.profile === "foot" ? "walking" : "driving") + " from " + r.from.name + " to " + r.to.name + (r.to.address ? " (" + r.to.address + ")" : "");
-    $("dirSteps").innerHTML = r.steps.map(function (st, i) {
-      return "<li data-i=\"" + i + "\"><button type=\"button\" class=\"plain\">" + esc(st.text) +
-        (st.distance_m ? " <small>" + dist(st.distance_m) + "</small>" : "") + "</button></li>";
-    }).join("");
-    $("dirSteps").querySelectorAll("li[data-i] button").forEach(function (b) {
-      b.addEventListener("click", function () { var at = r.steps[+b.parentNode.dataset.i].at; if (at && map) map.flyTo({ center: at, zoom: 17 }); });
-    });
-  }
-  async function runDirections() {
-    $("dirSummary").textContent = "Finding the route..."; $("dirSteps").innerHTML = "";
-    try {
-      var r = await Kit.getDirections(mapOpts(), $("dirFrom").value, toPick || $("dirTo").value, $("dirMode").value);
-      renderRoute(r); show({ type: "route", route: r });
-    } catch (e) {
-      $("dirSummary").textContent = "No directions: " + e.message + (svc.routing ? "" : " (the directions server isn't running)");
-    }
-  }
-  var searchTimer = null, searchSeq = 0;
-  async function doSearch(pickFirst) {
-    var q = $("placeQ").value.trim(), box = $("placeResults"), seq = ++searchSeq;
-    if (q.length < 3) { box.hidden = true; return; }
-    try {
-      var places = await Kit.searchPlaces(mapOpts(), q, 6);
-      if (seq !== searchSeq) return;
-      if (pickFirst && places[0]) { box.hidden = true; show({ type: "places", places: [places[0]] }); return; }
-      box.innerHTML = places.length ? places.map(function (p, i) {
-        return "<button type=\"button\" data-i=\"" + i + "\">" + esc(p.name) + "<small>" + esc(p.address || "") +
-          (p.distance_m != null ? " &middot; " + dist(p.distance_m) : "") + "</small></button>"; }).join("") : "<div>No match on the offline map</div>";
-      box.hidden = false;
-      box.querySelectorAll("button[data-i]").forEach(function (el) {
-        el.addEventListener("click", function () { box.hidden = true; show({ type: "places", places: [places[+el.dataset.i]] }); });
-      });
-    } catch (e) {
-      box.innerHTML = "<div>" + esc("Search failed: " + e.message + (svc.geocoder ? "" : " (address search isn't running)")) + "</div>";
-      box.hidden = false;
-    }
-  }
-  async function runNearby(cat) {
-    var list = $("nearbyList");
-    list.innerHTML = "<li>Searching...</li>";
-    try {
-      var r = await Kit.findNearby(mapOpts(), cat, $("dirFrom").value || "home", 8);
-      list.innerHTML = r.places.length ? r.places.map(function (p, i) {
-        return "<li data-i=\"" + i + "\"><button type=\"button\" class=\"plain\">" + esc(p.name) + " <small>" + dist(p.distance_m) + " " +
-          p.direction + (p.address ? " &middot; " + esc(p.address) : "") + "</small></button></li>"; }).join("") : "<li>None found within 40 km (25 mi).</li>";
-      list.querySelectorAll("li[data-i] button").forEach(function (b) {
-        b.addEventListener("click", function () { show({ type: "places", places: [r.places[+b.parentNode.dataset.i]] }); });
-      });
-      show({ type: "places", places: r.places, origin: r.origin });
-    } catch (e) { list.innerHTML = "<li>" + esc("Search failed: " + e.message) + "</li>"; }
-  }
+          if (!KM.available) {
+            $("mapOff").hidden = false;
+            $("mapWrap").hidden = true;
+            $("mapOff").textContent = "Maps aren't available: " + (KM.reason || "");
+          } else {
+            (KM.profiles && KM.profiles.length ? KM.profiles : ["car"]).forEach(function (p) {
+              var o = document.createElement("option");
+              o.value = p;
+              o.textContent = p === "foot" ? "Walk" : p === "bike" ? "Bike" : "Drive";
+              $("dirMode").appendChild(o);
+            });
+            Object.keys(Kit.CATEGORIES).forEach(function (k) {
+              var b = document.createElement("button");
+              b.type = "button";
+              b.textContent = Kit.CATEGORIES[k].label;
+              b.addEventListener("click", function () {
+                runNearby(k);
+              });
+              $("nearbyChips").appendChild(b);
+            });
+            $("placeQ").addEventListener("input", function () {
+              clearTimeout(searchTimer);
+              searchTimer = setTimeout(function () {
+                doSearch(false);
+              }, 250);
+            });
+            $("placeQ").addEventListener("keydown", function (ev) {
+              if (ev.key === "Enter") {
+                ev.preventDefault();
+                clearTimeout(searchTimer);
+                doSearch(true);
+              }
+              if (ev.key === "Escape") $("placeResults").hidden = true;
+            });
+            $("dirTo").addEventListener("input", function () {
+              toPick = null;
+            });
+            $("dirTo").addEventListener("keydown", function (ev) {
+              if (ev.key === "Enter") runDirections();
+            });
+            $("dirGo").addEventListener("click", runDirections);
+            $("setHome").addEventListener("click", function (ev) {
+              ev.preventDefault();
+              if (!map) return;
+              var c = map.getCenter();
+              setHome({ lat: c.lat, lon: c.lng, name: "Map point " + c.lat.toFixed(4) + ", " + c.lng.toFixed(4) });
+            });
+            updateHomeLabel();
+            checkMapServices();
+            setInterval(checkMapServices, 30000);
+          }
 
-  function describe(res) {
-    var d = res.display;
-    if (d.type === "route") {
-      var r = d.route;
-      return "**" + (r.profile === "foot" ? "Walking" : "Driving") + " to " + r.to.name + ":** " + dist(r.distance_m) + ", about " +
-        Kit.fmtTime(r.time_ms) + ".\n\n" + r.steps.map(function (s, i) { return (i + 1) + ". " + s.text + (s.distance_m ? " (" + dist(s.distance_m) + ")" : ""); }).join("\n");
-    }
-    if (!d.places.length) return "Nothing found on the offline map.";
-    return "**" + (d.title || "Places") + "**\n\n" + d.places.map(function (p) {
-      return "- " + p.name + (p.address ? ", " + p.address : "") + (p.distance_m != null ? " (" + dist(p.distance_m) + " " + p.direction + ")" : ""); }).join("\n");
-  }
-
-  /* Answer a map question. Returns false when it turns out not to be one, so the library answers instead. */
-  async function askMap(question, ctrl, progress, model) {
-    var opts = mapOpts(ctrl.signal), shown = false, answer = null, used = 0;
-    opts.aiBase = AI; opts.model = model;
-    var onTool = function (name, args, res, err) {
-      used++;
-      progress(err ? "Map lookup failed: " + err.message : "Looked up " + name.replace(/_/g, " ") + "...");
-      if (res && res.display) {
-        show(res.display); shown = true;
-        if (res.display.type === "route") renderRoute(res.display.route);
-      }
-    };
-    if (aiUp && model) {
-      try { progress("Looking it up on the offline map..."); answer = await Kit.mapAgent(opts, question, onTool); }
-      catch (e) { if (e.name === "AbortError") throw e; answer = null; }
-      if (answer !== null && !used) return false;      // the AI didn't need the map: let the library answer
-    }
-    if (answer === null || answer === "") {
-      var g = Kit.guessMapIntent(question);
-      progress("Looking it up on the offline map...");
-      try {
-        var res = await Kit.runMapTool(opts, g.tool, g.args);
-        if (res.display.type === "places" && !res.display.places.length && g.tool === "search_places") return false;
-        onTool(g.tool, g.args, res, null);
-        answer = describe(res);
-      } catch (e) {
-        if (e.name === "AbortError") throw e;
-        answer = "Couldn't do that on the offline map: " + e.message + ". Try the Map tab.";
-      }
-    }
-    $("answer").innerHTML = Kit.render(answer, 0) + (shown ? "<p><button type=\"button\" class=\"secondary\" id=\"openMap\">Show on the map</button></p>" : "");
-    if (shown) $("openMap").addEventListener("click", function () { showTab("map"); });
-    progress("Done. Map results come from your offline map data (OpenStreetMap).");
-    return true;
-  }
-
-  if (!KM.available) {
-    $("mapOff").hidden = false; $("mapWrap").hidden = true;
-    $("mapOff").textContent = "Maps aren't available: " + (KM.reason || "");
-  } else {
-    (KM.profiles && KM.profiles.length ? KM.profiles : ["car"]).forEach(function (p) {
-      var o = document.createElement("option"); o.value = p; o.textContent = p === "foot" ? "Walk" : p === "bike" ? "Bike" : "Drive"; $("dirMode").appendChild(o);
-    });
-    Object.keys(Kit.CATEGORIES).forEach(function (k) {
-      var b = document.createElement("button"); b.type = "button"; b.textContent = Kit.CATEGORIES[k].label;
-      b.addEventListener("click", function () { runNearby(k); }); $("nearbyChips").appendChild(b);
-    });
-    $("placeQ").addEventListener("input", function () { clearTimeout(searchTimer); searchTimer = setTimeout(function () { doSearch(false); }, 250); });
-    $("placeQ").addEventListener("keydown", function (ev) {
-      if (ev.key === "Enter") { ev.preventDefault(); clearTimeout(searchTimer); doSearch(true); }
-      if (ev.key === "Escape") $("placeResults").hidden = true;
-    });
-    $("dirTo").addEventListener("input", function () { toPick = null; });
-    $("dirTo").addEventListener("keydown", function (ev) { if (ev.key === "Enter") runDirections(); });
-    $("dirGo").addEventListener("click", runDirections);
-    $("setHome").addEventListener("click", function (ev) {
-      ev.preventDefault();
-      if (!map) return;
-      var c = map.getCenter();
-      setHome({ lat: c.lat, lon: c.lng, name: "Map point " + c.lat.toFixed(4) + ", " + c.lng.toFixed(4) });
-    });
-    updateHomeLabel();
-    checkMapServices();
-    setInterval(checkMapServices, 30000);
-  }
-
-  if (tabInAddress()) showTab(tabInAddress());
-  loadBooks().catch(function (e) { $("bookList").textContent = "Could not load the book list: " + e.message; setPill($("libStatus"), "Library: error", false); });
-  checkAI();
-  setInterval(function () { if (!running) checkAI(); }, 15000);
-})();
-</script>
-</body>
+          if (tabInAddress()) showTab(tabInAddress());
+          loadBooks().catch(function (e) {
+            $("bookList").textContent = "Could not load the book list: " + e.message;
+            setPill($("libStatus"), "Library: error", false);
+          });
+          checkAI();
+          setInterval(function () {
+            if (!running) checkAI();
+          }, 15000);
+        })();
+    </script>
+  </body>
 </html>

@@ -2085,9 +2085,16 @@ def where_is(folder: Path) -> str:
     return f"the drive {drive_name(folder)}"
 
 
+# npm's packages (the website's, and the dev tools in package.json) and the website's build
+DEV_BUILDS = {"node_modules", ".next"}
+
+
 def copy_code(src: Path, dst: Path) -> None:
     """Copy files and folders with their contents and permissions, never extended attributes (no ._ files on exFAT,
-    no "from the internet" marks) or timestamps, which some drive formats refuse."""
+    no "from the internet" marks) or timestamps, which some drive formats refuse. A developer's installed tools and
+    builds (DEV_BUILDS) stay behind: nothing on a drive uses them."""
+    if src.name in DEV_BUILDS:
+        return
     if src.is_dir():
         dst.mkdir()
         for c in sorted(src.iterdir()):
