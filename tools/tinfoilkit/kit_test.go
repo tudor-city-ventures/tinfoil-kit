@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -292,5 +294,40 @@ func TestForward(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	if taken(port) {
 		t.Error("the go-between stops with the library")
+	}
+}
+
+// A Mac program and the same one signed again (as the Mac app's signing does) compare the same apart from the
+// signature; a change anywhere before the signature doesn't.
+func TestCompareSigned(t *testing.T) {
+	le := binary.LittleEndian
+	program := func(sig []byte, code byte) []byte {
+		b := make([]byte, 4096)
+		le.PutUint32(b, 0xfeedfacf)
+		le.PutUint32(b[16:], 2)      // two load commands
+		le.PutUint32(b[32:], 0x19)   // LC_SEGMENT_64
+		le.PutUint32(b[36:], 72)     // its size
+		copy(b[40:], "__LINKEDIT")   // its name
+		le.PutUint64(b[64:], 0x4000) // vmsize
+		le.PutUint64(b[72:], 2048)   // fileoff
+		le.PutUint64(b[80:], uint64(2048+len(sig)))
+		le.PutUint32(b[104:], 0x1d) // LC_CODE_SIGNATURE
+		le.PutUint32(b[108:], 16)   // its size
+		le.PutUint32(b[112:], 4096) // where the signature starts
+		le.PutUint32(b[116:], uint32(len(sig)))
+		b[3000] = code
+		return append(b, sig...)
+	}
+	built := program(bytes.Repeat([]byte{1}, 100), 7)
+	resigned := program(bytes.Repeat([]byte{2}, 900), 7)
+	le.PutUint64(resigned[64:], 0x8000)
+	if !sameUnsigned(built, resigned) {
+		t.Error("signed again: the same apart from the signature")
+	}
+	if sameUnsigned(built, program(bytes.Repeat([]byte{1}, 100), 8)) {
+		t.Error("a changed byte before the signature is a different program")
+	}
+	if sameUnsigned([]byte("MZ not a Mac program"), []byte("MZ not a Mac program")) {
+		t.Error("only Mac programs have a signature to set aside")
 	}
 }

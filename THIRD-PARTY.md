@@ -51,6 +51,38 @@ The files come from ggml-org's and Unsloth's Hugging Face repos, which repackage
 - The website is built with Next.js, React, Radix UI, Tailwind CSS, clsx and tailwind-merge (MIT), Lucide's icons (ISC), and two of shadcn/ui's components (MIT), copied into `site/components/ui/`. `site/package-lock.json` pins every package. None of it goes in the kit.
 - `package.json` at the repo root lists developer tools: Prettier, ESLint and globals (MIT), eslint-plugin-html (ISC) and axe-core (MPL-2.0). `package-lock.json` pins every package. They format and check the kit page and the tests; none of it goes in the kit.
 - `site/skills.py` installs guides for AI coding agents working on the website, all MIT, straight from their publishers' repos at pinned commits: `vercel-react-best-practices` and `web-design-guidelines` from vercel-labs/agent-skills, `shadcn` from shadcn-ui/ui, and `ai-seo` and `schema` from coreyhaines31/marketingskills. They aren't in this repo, and the installed copies never run a command when they load.
+- `tools/tinfoilkit-*`, the kit's own program, which releases carry, is built from `tools/tinfoilkit/` with Go. Go's runtime and standard library are compiled into it, under Go's license:
+
+```text
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 - `tools/regions.json`, the places SETUP offers for "Where do you live?": their outlines, names and download addresses come from Geofabrik's index of OpenStreetMap extracts (© OpenStreetMap contributors, Open Database License), and the towns that set each place's home and search names from [GeoNames](https://www.geonames.org/) (CC BY 4.0).
 
 ## Sharing or selling a filled drive

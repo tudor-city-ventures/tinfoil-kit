@@ -6,7 +6,7 @@
 #   .github/release.sh v1.2.0 NOTES.txt    sign and publish main as v1.2.0, with NOTES.txt as what's new
 #   .github/release.sh mac                 set up and try the Mac app's signing (once): it builds the app, Apple
 #                                          notarizes it, and a copy lands on the Desktop as if downloaded
-# Needs git, ssh-keygen and GitHub's gh, signed in (brew install gh && gh auth login). And for the Mac download, the
+# Needs git, ssh-keygen, Go (brew install go) and GitHub's gh, signed in (brew install gh && gh auth login). And for the Mac download, the
 # Tinfoil Kit app: a Mac with Apple's command line tools, a Developer ID Application certificate in its keychain and
 # notarytool's password for it (docs/HANDOFF.md, "The Mac app").
 set -eu
@@ -57,6 +57,7 @@ TAG="${1:-}" NOTES="${2:-}"
 echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || die "usage: .github/release.sh vX.Y.Z NOTES.txt   (or: .github/release.sh key, or mac)"
 [ -s "$NOTES" ] || die "write what's new in a file and pass it after the version"
 command -v gh > /dev/null || die "needs GitHub's gh: brew install gh && gh auth login"
+command -v go > /dev/null || die "needs Go to build the kit's own program: brew install go"
 [ -e "$KEY" ] || die "no signing key at $KEY. Make one with: .github/release.sh key (or set KIT_RELEASE_KEY)"
 id="${KIT_MAC_SIGN:-$(mac_identity)}"
 [ -n "$id" ] && mac_notary ||
@@ -67,6 +68,7 @@ sha=$(git rev-parse HEAD)
 [ "$sha" = "$(git rev-parse origin/main)" ] || die "check out main as it is on GitHub first: git checkout main && git pull"
 ! git rev-parse -q --verify "refs/tags/$TAG" > /dev/null || die "$TAG already exists"
 ci=$(gh run list --commit "$sha" --workflow check.yml --json conclusion --jq '.[0].conclusion')
+run=$(gh run list --commit "$sha" --workflow check.yml --json databaseId --jq '.[0].databaseId')
 [ "$ci" = success ] || die "the quick gate (check.yml) hasn't passed on this commit (${ci:-no run yet}). A commit a workflow made starts no checks: run check on main (Actions > check > Run workflow), then try again"
 python3 -c 'import json, sys; sys.exit(len(json.load(open("tools/pins.json"))) < 2)' ||
   die "tools/pins.json pins no programs: run the pin program builds workflow, then a real-Mac sync and test"
@@ -74,17 +76,35 @@ prev=$(git describe --tags --abbrev=0 2> /dev/null || true)
 
 out=$(mktemp -d)
 asset="$out/tinfoilkit-$TAG.tar.gz"
+# The kit's own program for each computer (tools/tinfoilkit), built from this commit. The same source gives the same
+# bytes on any computer, and CI built it too and printed its SHA-256s: they must match, or something on one of the two
+# computers changed it.
+tools/tinfoilkit/build.sh "$out/programs"
+(cd "$out/programs" && shasum -a 256 tinfoilkit-*) | sort > "$out/programs.sha256"
+gh run view "$run" --log 2> /dev/null | grep -Eo '[0-9a-f]{64}  tinfoilkit-[a-z0-9.-]+$' | sort -u > "$out/ci.sha256"
+[ -s "$out/ci.sha256" ] ||
+  die "CI's log for this commit doesn't have the kit's own program's SHA-256s (check.yml prints them): run check on main, then try again"
+cmp -s "$out/programs.sha256" "$out/ci.sha256" ||
+  die "the kit's own program built here isn't the same as CI's build of this commit (see $out/programs.sha256 and $out/ci.sha256). Don't publish until you know why"
 git tag "$TAG"
 trap '[ -n "${pushed:-}" ] || git tag -d "$TAG" > /dev/null' EXIT
-# git archive is reproducible: anyone can rebuild the tar from the tag and compare (gzip output can vary by version).
-git archive --format=tar --prefix="tinfoilkit-$TAG/" "$TAG" | gzip -n -9 > "$asset"
+# The archives are reproducible: git archive of the tag, with the programs built from it in tools/ (build.sh archive),
+# so anyone can rebuild them and compare (gzip output can vary by version, so compare the tar).
+tools/tinfoilkit/build.sh archive tar "tinfoilkit-$TAG" "$TAG" > "$out/update.tar"
+mkdir "$out/inside"
+tar -xf "$out/update.tar" -C "$out/inside"
+for f in "$out/programs"/tinfoilkit-*; do
+  cmp -s "$f" "$out/inside/tinfoilkit-$TAG/tools/$(basename "$f")" || die "the archive's $(basename "$f") isn't the one just built"
+done
+gzip -n -9 < "$out/update.tar" > "$asset"
 ssh-keygen -Y sign -f "$KEY" -n "$NS" "$asset"
 # What the website's download buttons and llms.txt fetch (releases/latest/download/NAME): the same kit files from the
 # same tag, as the app folder of a folder called TinfoilKit (on a Mac, inside the app); the tar.gz is for Linux and the
 # command line. Not signed with the release key, since they're only a first install: ./kit update takes the signed
-# archive, which holds just the app folder's files.
-git archive --format=zip --prefix=TinfoilKit/app/ "$TAG" > "$out/TinfoilKit-Windows.zip"
-git archive --format=tar --prefix=TinfoilKit/app/ "$TAG" | gzip -n -9 > "$out/TinfoilKit.tar.gz"
+# archive, which holds just the app folder's files. SHA256SUMS, which is signed, lists them all.
+tools/tinfoilkit/build.sh archive zip TinfoilKit/app "$TAG" > "$out/TinfoilKit-Windows.zip"
+tools/tinfoilkit/build.sh archive tar TinfoilKit/app "$TAG" > "$out/TinfoilKit.tar"
+gzip -n -9 < "$out/TinfoilKit.tar" > "$out/TinfoilKit.tar.gz"
 downloads=("$out/TinfoilKit-Mac.zip" "$out/TinfoilKit-Windows.zip" "$out/TinfoilKit.tar.gz")
 # Drives on the last release check this one with that release's keys, so a key change needs both to accept it.
 for ref in "$TAG" $prev; do
@@ -96,12 +116,22 @@ done
 # System Settings first, which people miss.
 KIT_MAC_SIGN="$id" KIT_MAC_NOTARY="$NOTARY" mac/build.sh "$asset" "$out/mac" "${TAG#v}" || die "the Mac app didn't build (above is why)"
 mv "$out/mac/TinfoilKit-Mac.zip" "$out/TinfoilKit-Mac.zip"
+# The app's copy of the program carries Apple's signature as well. build.sh verify tells people it's the same program
+# apart from that: make sure it is.
+same=$("$out/programs/tinfoilkit-macos-arm64" compare "$out/programs/tinfoilkit-macos-arm64" \
+  "$out/mac/Tinfoil Kit.app/Contents/Resources/kit/tools/tinfoilkit-macos-arm64")
+[ "$same" = "the same apart from the code signature" ] || die "the Mac app's copy of the kit's own program: $same"
+# The SHA-256 of every file this release publishes, and of the programs as built, signed like the update.
+(cd "$out/programs" && shasum -a 256 tinfoilkit-*) > "$out/SHA256SUMS"
+(cd "$out" && shasum -a 256 "$(basename "$asset")" TinfoilKit-Mac.zip TinfoilKit-Windows.zip TinfoilKit.tar.gz) >> "$out/SHA256SUMS"
+ssh-keygen -Y sign -f "$KEY" -n "$NS" "$out/SHA256SUMS"
 
 echo
 echo "Ready: $TAG, $(git log -1 --format='%h %s' "$sha")"
 echo "  $asset and .sig"
-echo "  tar SHA-256 $(gunzip -c "$asset" | shasum -a 256 | cut -d' ' -f1)"
-echo "  (rebuild it: git archive --format=tar --prefix=tinfoilkit-$TAG/ $TAG | shasum -a 256)"
+echo "  tar SHA-256 $(shasum -a 256 < "$out/update.tar" | cut -d' ' -f1)"
+echo "  (rebuild it: tools/tinfoilkit/build.sh archive tar tinfoilkit-$TAG $TAG | shasum -a 256)"
+echo "  SHA256SUMS and .sig: the programs and every download"
 echo "  downloads for the website: TinfoilKit-Mac.zip (the app, signed by $id and notarized), TinfoilKit-Windows.zip,"
 echo "  TinfoilKit.tar.gz"
 echo "What's new:"
@@ -115,5 +145,6 @@ read -r answer
 git push -q origin "$TAG"
 pushed=1
 gh release create "$TAG" --verify-tag --title "Tinfoil Kit $TAG" --notes-file "$NOTES" "$asset" "$asset.sig" "${downloads[@]}" \
-  || die "the tag is on GitHub but the release isn't. Finish with: gh release create $TAG --verify-tag --notes-file $NOTES $asset $asset.sig ${downloads[*]}"
+  "$out/SHA256SUMS" "$out/SHA256SUMS.sig" \
+  || die "the tag is on GitHub but the release isn't. Finish with: gh release create $TAG --verify-tag --notes-file $NOTES $asset $asset.sig ${downloads[*]} $out/SHA256SUMS $out/SHA256SUMS.sig"
 echo "Published $TAG."

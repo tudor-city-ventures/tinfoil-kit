@@ -50,6 +50,10 @@ plutil -lint -s "$app/Contents/Info.plist" || die "Info.plist doesn't parse"
 # codesign refuses files carrying Finder info or resource forks, which a copied download can have.
 xattr -cr "$app"
 if [ -n "${KIT_MAC_SIGN:-}" ]; then
+  # The kit's own program for a Mac is code too, which Apple checks: it's signed first, and the app seals it in. Its
+  # signature is all that changes (tinfoilkit compare checks the rest). Unsigned by us, it keeps Go's ad hoc one.
+  prog="$res/kit/tools/tinfoilkit-macos-arm64"
+  [ ! -f "$prog" ] || codesign --force --options runtime --timestamp --sign "$KIT_MAC_SIGN" "$prog"
   codesign --force --options runtime --timestamp --sign "$KIT_MAC_SIGN" "$app"
 else
   codesign --force --sign - "$app"

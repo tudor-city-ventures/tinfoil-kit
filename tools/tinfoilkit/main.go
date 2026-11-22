@@ -5,10 +5,13 @@
 //	tinfoilkit open [--share] [--model=NAME] [--no-browser] [--no-maps] [--root KIT]
 //	tinfoilkit gate --root KIT --port 8000 --library 8888 --ai 8080 [--tiles N --geocoder N --routing N]
 //	tinfoilkit banner --root KIT --port 8000 [--qr]
+//	tinfoilkit compare A B     whether two copies of the program are the same (build.sh verify asks)
 //	tinfoilkit version
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"os"
@@ -36,10 +39,12 @@ func main() {
 		os.Exit(runGate(args))
 	case "banner":
 		os.Exit(runBanner(args))
+	case "compare":
+		os.Exit(runCompare(args))
 	case "version":
 		fmt.Printf("Tinfoil Kit's program for %s (%s)\n", plat(), runtime.Version())
 	default:
-		fmt.Fprintln(os.Stderr, "usage: tinfoilkit open | gate | banner | version (tools/tinfoilkit/main.go says more)")
+		fmt.Fprintln(os.Stderr, "usage: tinfoilkit open | gate | banner | compare | version (tools/tinfoilkit/main.go says more)")
 		os.Exit(2)
 	}
 }
@@ -149,4 +154,75 @@ func newFlags(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	return fs
+}
+
+// runCompare says whether two copies of the program are the same: byte for byte, or for a Mac's, apart from its code
+// signature, which the Mac app's signing for Apple replaces. The signature covers everything before it, so that
+// must match.
+func runCompare(args []string) int {
+	if len(args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: tinfoilkit compare A B")
+		return 2
+	}
+	a, err := os.ReadFile(args[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	b, err := os.ReadFile(args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	switch {
+	case bytes.Equal(a, b):
+		fmt.Println("the same")
+	case sameUnsigned(a, b):
+		fmt.Println("the same apart from the code signature")
+	default:
+		fmt.Println("different")
+		return 1
+	}
+	return 0
+}
+
+func sameUnsigned(a, b []byte) bool {
+	ua, okA := unsigned(a)
+	ub, okB := unsigned(b)
+	return okA && okB && bytes.Equal(ua, ub)
+}
+
+// unsigned is a Mac program up to its code signature, with the numbers signing changes set to 0: the signature's size,
+// and the size of the segment it ends (__LINKEDIT), in the file and in memory.
+func unsigned(data []byte) ([]byte, bool) {
+	le := binary.LittleEndian
+	if len(data) < 32 || le.Uint32(data) != 0xfeedfacf { // a 64-bit Mach-O
+		return nil, false
+	}
+	out := append([]byte(nil), data...)
+	sig, linkedit := -1, -1
+	off := 32
+	for i := uint32(0); i < le.Uint32(data[16:]); i++ {
+		if off+8 > len(data) {
+			return nil, false
+		}
+		cmd, size := le.Uint32(data[off:]), int(le.Uint32(data[off+4:]))
+		if size < 8 || off+size > len(data) {
+			return nil, false
+		}
+		switch {
+		case cmd == 0x19 && size >= 72 && string(bytes.TrimRight(data[off+8:off+24], "\x00")) == "__LINKEDIT": // LC_SEGMENT_64
+			linkedit = off
+		case cmd == 0x1d && size >= 16: // LC_CODE_SIGNATURE
+			sig = int(le.Uint32(data[off+8:]))
+			le.PutUint32(out[off+12:], 0)
+		}
+		off += size
+	}
+	if sig < off || sig > len(data) || linkedit < 0 {
+		return nil, false
+	}
+	le.PutUint64(out[linkedit+32:], 0)
+	le.PutUint64(out[linkedit+48:], 0)
+	return out[:sig], true
 }

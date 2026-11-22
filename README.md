@@ -157,19 +157,22 @@ The kit downloads programs and runs them on your computer, so here is what prote
 - **No administrator password.** The kit runs as you, and starts only when you start it unless you set up a home server. UNINSTALL undoes everything setup did. The site's "What does setup change on my computer?" lists every change outside the kit folder.
 - **Servers on 127.0.0.1.** The AI, library and maps answer only this computer. A website open while the kit runs can still reach them, as browsers allow: it could read the books and maps and use the AI as the kit page does (the directions server answers any page, and DNS rebinding opens the rest). Chrome asks your permission before a website reaches your computer's own servers; other browsers may not.
 - **Sharing is off until you turn it on.** Then one gate, on port 8000 by default, stands in front of everything: it asks for an 8-digit code, stops answering a device after 10 wrong tries in 10 minutes, and refuses addresses and names outside a home network, so other websites can't reach it. It's plain HTTP, so share on your own Wi-Fi or hotspot: anyone on a public network who watches the traffic could read the code.
-- **Readable code.** Python's standard library, shell scripts and one HTML page, with no packages to install and no build step. It's written with AI coding tools; the tests in `tests/` run it against mocks of every download source and server on every change.
+- **Readable code.** Python's and Go's standard libraries, shell scripts and one HTML page, with no packages to install. The one built file is the kit's own program (`tools/tinfoilkit-*`, from the Go source in `tools/tinfoilkit/`), and the same source builds the same bytes on any computer, so you can check that it's the code you read (below). It's written with AI coding tools; the tests in `tests/` run it against mocks of every download source and server on every change.
 - **The repo.** Every GitHub Action is pinned to a commit and runs with a read-only token, except a few jobs that never run code from a pull request or a download. An outside pull request that touches the workflows, CODEOWNERS, the release key or the program pins fails a check that only the maintainer can merge past.
 - **What it can't protect against:** a bad file from a hacked publisher, if it's a book, model or map (its checksum comes from the same place as the file) or a program that was already bad when a release pinned it; someone with your unlocked computer or drive, since the kit isn't encrypted (use FileVault, BitLocker or an encrypted drive for that); and an AI answer that's wrong, so check its sources.
 
-To check a release before running it, download its `tinfoilkit-TAG.tar.gz` and `.sig` (the downloads the website links to are protected by HTTPS alone) and run:
+To check a release before running it, download its `tinfoilkit-TAG.tar.gz` and `.sig` (the downloads the website links to are protected by HTTPS alone; the release's `SHA256SUMS`, signed the same way, lists them all) and run:
 
 ```sh
 ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release \
   -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz
-# and that it's exactly the tagged code, from a clone of this repo:
-git archive --format=tar --prefix=tinfoilkit-TAG/ TAG | shasum -a 256
+# and that it's exactly the tagged code, with the kit's own program built from it, from a clone of this repo
+# (it needs Go: brew install go, or go.dev/dl):
+tools/tinfoilkit/build.sh archive tar tinfoilkit-TAG TAG | shasum -a 256
 gunzip -c tinfoilkit-TAG.tar.gz | shasum -a 256
 ```
+
+To check the program in a kit you already have, run `tools/tinfoilkit/build.sh verify` in its app folder, with Go installed. It builds the program again from the source beside it and compares the result with the copies in `tools/`. The Mac app's copy also carries Apple's signature, which macOS needs to open it, so for that one it compares everything but the signature. Add the release's `SHA256SUMS` (`build.sh verify SHA256SUMS`) to compare with that list too. Releases are built the same way: CI builds the program from the commit, the maintainer's Mac builds it again, and the release is published only if the two builds match.
 
 ## Customize
 

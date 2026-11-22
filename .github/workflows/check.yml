@@ -19,6 +19,9 @@ jobs:
       # the developer tools in package.json, for the kit page's formatting and lint, with no install scripts
       - run: npm ci --ignore-scripts
       - run: tests/check.sh
+      # The SHA-256 of the kit's own program as check.sh built it from this commit. .github/release.sh builds it
+      # again on the maintainer's Mac and publishes only if they match.
+      - run: cd tools && sha256sum tinfoilkit-*
   oldest-python:
     runs-on: ubuntu-latest
     steps:

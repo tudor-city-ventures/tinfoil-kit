@@ -18,6 +18,17 @@ Tinfoil Kit is a free project with one maintainer, so there's no promised reply 
 
 Not in scope: bugs in llama.cpp, Kiwix, Photon, GraphHopper or the other programs the kit downloads (report those to their projects), and someone on a network you share reading the sharing gate's traffic, which is plain HTTP (the README says to share on networks you trust).
 
+## Check what you run
+
+The kit's code is plain text you can read, except for one built file: the kit's own program, `tools/tinfoilkit-*`, built from the Go source in `tools/tinfoilkit/`. The same source always builds the same bytes, so you can rebuild it and compare. With Go installed (`brew install go`, or [go.dev/dl](https://go.dev/dl/)), run this in a kit's app folder or a clone of this repo:
+
+```sh
+tools/tinfoilkit/build.sh verify               # compares with the program in tools/
+tools/tinfoilkit/build.sh verify SHA256SUMS    # and with a release's list of checksums
+```
+
+The README's [Security section](../README.md#security) shows how to check a release's signature, and how to rebuild a whole release from its tag and compare.
+
 ## Versions
 
 Fixes go into new releases only, so run SETUP to get them.
