@@ -638,6 +638,70 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         check(f"launcher: {mem_gb} GB of memory starts {want}", got == want and (want == "Big" or f"{mem_gb} GB of memory" in out), out)
     got, out = launch(16, "--model=Big")
     check("launcher: --model wins over memory", got == "Big", out)
+    (lk / "kit.json").write_text(json.dumps({"settings": {"default_model": "Gone", "library_port": rport, "ai_port": rport}}))
+    got, out = launch(24)
+    check("launcher: without the default model, the biggest that fits", got == "Mid" and "too little" not in out, out)
+
+    # ./kit fit: which model this computer runs, and asking before downloading the ones too big for it.
+    fk = work / "fit"
+    shutil.copytree(TESTS.parent / "tools", fk / "tools")
+    fit_json = """{
+  "settings": {"default_model": "Big"},
+  "models": [
+    {
+      "id": "Big",
+      "type": "hf",
+      "note": "Default. ~18 GB"
+    },
+    {
+      "id": "Mid",
+      "type": "hf",
+      "note": "Mid-size. ~7.2 GB"
+    },
+    {
+      "id": "Small",
+      "type": "hf",
+      "note": "Small. ~5.3 GB"
+    }
+  ]
+}
+"""
+    (fk / "kit.json").write_text(fit_json)
+
+    def fit(mem_gb, *args, answers=""):
+        p = subprocess.run([sys.executable, str(fk / "tools" / "kit.py"), "--root", str(fk), "fit", *args], input=answers,
+                           capture_output=True, text=True, timeout=60, env={**os.environ, "KIT_MEMORY_MB": str(mem_gb * 1024)})
+        return p.returncode, p.stdout + p.stderr
+
+    rc, out = fit(32)
+    check("kit fit: enough memory for the default model", rc == 0 and "32 GB of memory, so its AI will be Big" in out
+          and "can't run" not in out, out)
+    rc, out = fit(16)
+    check("kit fit: too little for the default: the biggest that fits, and which ones it can't run (changes nothing)",
+          rc == 0 and "its AI will be Mid" in out and "It can't run Big: it needs 32 GB of memory or more" in out
+          and "./kit fit --skip" in out and (fk / "kit.json").read_text() == fit_json, out)
+    rc, out = fit(16, "--ask", answers="\n")
+    on = {m["id"]: m.get("enabled", True) for m in json.loads((fk / "kit.json").read_text())["models"]}
+    added = [line for line in (fk / "kit.json").read_text().splitlines() if line not in fit_json.splitlines()]
+    check("kit fit --ask: just Return skips them, in kit.json, changing only that line",
+          rc == 0 and "Download them anyway? [y/N]" in out and on == {"Big": False, "Mid": True, "Small": True}
+          and added == ['      "enabled": false,'], out)
+    rc, out = fit(16, "--ask")
+    check("kit fit --ask: doesn't ask again about a skipped one", rc == 0 and "?" not in out and "Big" not in out, out)
+    rc, out = fit(64, "--ask", answers="\n")
+    check("kit fit --ask: a computer with more memory offers them back, and kit.json is as it was",
+          rc == 0 and "skipped before on a computer with less memory" in out and "Its AI will be Big." in out
+          and (fk / "kit.json").read_text() == fit_json, out)
+    rc, out = fit(16, "--ask", answers="y\n")
+    check("kit fit --ask: yes keeps them", rc == 0 and (fk / "kit.json").read_text() == fit_json, out)
+    rc, out = fit(8, "--json")
+    report = json.loads(out)
+    check("kit fit --json: on 8 GB nothing fits, so the smallest, and the rest are too big",
+          rc == 0 and report["runs"] == "Small" and report["too_big"] == ["Big", "Mid"], out)
+    (fk / ".kit" / "state.json").write_text(json.dumps({"items": {"models/Big": {}}}))
+    rc, out = fit(16, "--skip")
+    check("kit fit --skip: leaves alone a model that's already downloaded", rc == 0 and "can't run" not in out
+          and (fk / "kit.json").read_text() == fit_json, out)
 
     # Another program on the library's port (the mock internet, here): the library starts on the next one.
     fake = work / "fake-kiwix-serve"

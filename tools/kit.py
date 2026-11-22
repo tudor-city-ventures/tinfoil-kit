@@ -19,6 +19,9 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      not (or -). --json adds this computer's free space and what the kit needs.
   place DEST         Put the kit at DEST (a TinfoilKit folder at the top of a drive or in the home
                      folder), ready to set up there. Prints its folder. SETUP.command uses it.
+  fit [--ask]        Which AI model this computer runs, given its memory, and the switched-on ones
+                     too big for it. --ask (SETUP.command) asks whether to download those anyway;
+                     --skip switches them off, --restore back on. --json for scripts and agents.
   share [on|off|new-code]
                      Let phones and laptops on your home network use the kit, once they type its
                      access code. Shows the address, the code and a QR code.
@@ -2123,6 +2126,172 @@ def cmd_estimate(root: Path, args: argparse.Namespace) -> None:
     print(estimate_gb(root, load_config(root)))
 
 
+# ----------------------------------------------------------------------------- the AI models this computer can run
+
+def memory_bytes() -> int:
+    """This computer's memory, or 0 if it can't tell. KIT_MEMORY_MB stands in for it, as in tools/launch.sh."""
+    if os.environ.get("KIT_MEMORY_MB", "").isdigit():
+        return int(os.environ["KIT_MEMORY_MB"]) * 1048576
+    try:
+        if sys.platform == "darwin":
+            return int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout)
+        if sys.platform == "win32":
+            import ctypes
+
+            class Status(ctypes.Structure):
+                _fields_ = [("size", ctypes.c_ulong), ("load", ctypes.c_ulong)] + [(n, ctypes.c_ulonglong) for n in
+                            ("total", "avail", "page", "page_avail", "virtual", "virtual_avail", "extended")]
+            s = Status()
+            s.size = ctypes.sizeof(Status)
+            return s.total if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(s)) else 0
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (OSError, ValueError, AttributeError):
+        return 0
+
+
+def model_sizes(root: Path, cfg: Dict[str, Any]) -> Dict[str, int]:
+    """Each model's download size, from the kit builder's list (site/sources.json), else the "~N GB" in its note."""
+    try:
+        listed = {s["id"]: int(s.get("bytes") or 0)
+                  for s in json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        listed = {}
+    sizes = {}
+    for m in cfg.get("models", []):
+        noted = re.search(r"~(\d+(?:\.\d+)?) ?GB", m.get("note", ""))
+        sizes[m["id"]] = listed.get(m["id"]) or (int(float(noted.group(1)) * GB) if noted else 0)
+    return sizes
+
+
+def fits(size: int, memory: int) -> bool:
+    """A model may take 60% of the memory, leaving the rest for everything else (tools/launch.sh's rule too)."""
+    return not memory or not size or size <= memory * 0.6
+
+
+def memory_for(size: int) -> int:
+    """The smallest usual amount of memory, in GB, that runs a model of this size."""
+    need = size / 0.6 / 2**30
+    return next((g for g in (8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 512) if g >= need), math.ceil(need))
+
+
+def fit_report(root: Path, cfg: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+    """Which model the AI starts with on this computer (tools/launch.sh picks the same way: the default model if it
+    fits, else the biggest that does, else the smallest), the switched-on models it can't run that aren't downloaded
+    yet, and the ones switched off for that on a computer with less memory that this one runs."""
+    memory, sizes = memory_bytes(), model_sizes(root, cfg)
+    default = cfg["settings"].get("default_model")
+    models = [{"id": m["id"], "bytes": sizes[m["id"]], "fits": fits(sizes[m["id"]], memory),
+               "needs_memory_gb": memory_for(sizes[m["id"]]) if sizes[m["id"]] else None,
+               "enabled": m.get("enabled", True)} for m in cfg.get("models", [])]
+    on = [m for m in models if m["enabled"]]
+    smallest = min(on, key=lambda m: m["bytes"] or math.inf, default=None)
+    runs = (next((m for m in on if m["id"] == default and m["fits"]), None)
+            or max((m for m in on if m["fits"]), key=lambda m: m["bytes"], default=None) or smallest)
+    return {"memory_bytes": memory, "runs": runs and runs["id"], "smallest": smallest and smallest["id"],
+            "models": models,
+            "too_big": [m["id"] for m in on if not m["fits"] and m is not runs and f"models/{m['id']}" not in state["items"]],
+            "fits_now": [m["id"] for m in models if not m["enabled"] and m["fits"]
+                         and m["id"] in state.get("models_off_for_memory", [])]}
+
+
+def switch_models(root: Path, ids: List[str], on: bool) -> None:
+    """Switch models on or off in kit.json, changing only their "enabled" so the file keeps its layout."""
+    path = root / "kit.json"
+    text = path.read_text(encoding="utf-8")
+    cfg = json.loads(text)
+    for m in cfg["models"]:
+        if m.get("id") in ids and on:
+            m.pop("enabled", None)
+        elif m.get("id") in ids:
+            m["enabled"] = False
+    start = re.search(r'"models"\s*:\s*\[', text)
+    for ident in ids:
+        hit = re.compile(r'\{[^{}]*"id"\s*:\s*' + re.escape(json.dumps(ident)) + r'[^{}]*\}').search(text, start.end()) \
+            if start else None
+        if not hit:
+            continue
+        obj = new = hit.group(0)
+        if on:
+            new = re.sub(r',\s*"enabled"\s*:\s*false\b|"enabled"\s*:\s*false\s*,\s*', "", obj, count=1)
+        elif re.search(r'"enabled"\s*:\s*true\b', obj):
+            new = re.sub(r'"enabled"\s*:\s*true\b', '"enabled": false', obj, count=1)
+        else:
+            sep = re.search(r',(\s*)"', obj)
+            gap = sep.group(1) if sep else " "
+            note = re.search(r'"note"\s*:', obj)
+            if note:
+                new = f'{obj[:note.start()]}"enabled": false,{gap}{obj[note.start():]}'
+            else:
+                body = obj[:-1].rstrip()
+                new = f'{body},{gap}"enabled": false{obj[len(body):]}'
+        text = text[:hit.start()] + new + text[hit.end():]
+    if json.loads(text) != cfg:    # a layout this doesn't know: write it plainly
+        text = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
+    tmp = path.with_name("kit.json.partial")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def names(ids: List[str]) -> str:
+    return ids[0] if len(ids) == 1 else ", ".join(ids[:-1]) + " and " + ids[-1]
+
+
+def cmd_fit(root: Path, args: argparse.Namespace) -> None:
+    """--ask reads the answers from stdin even when it isn't a terminal, so SETUP's tests can answer."""
+    cfg, state = load_config(root), load_state(root)
+    fit = fit_report(root, cfg, state)
+    if args.json:
+        print(json.dumps(fit, indent=2))
+        return
+    if not fit["runs"]:
+        log("No AI model is switched on in kit.json.")
+        return
+    memory, this = fit["memory_bytes"], THIS[0].upper() + THIS[1:]
+    if not memory:
+        log(f"\nThe kit can't tell how much memory {THIS} has. Its AI will be {fit['runs']} if that fits.")
+        return
+
+    def answer(question: str, default: bool) -> bool:
+        print(f"\n{question} {'[Y/n]' if default else '[y/N]'} ", end="", flush=True)
+        said = sys.stdin.readline().strip().lower()
+        return default if not said else said in ("y", "yes")
+
+    def downloads(ids: List[str]) -> str:
+        return fmt_size(sum(m["bytes"] for m in fit["models"] if m["id"] in ids)) + " of downloads"
+
+    gb = f"{this} has {round(memory / 2**30)} GB of memory"
+    back = fit["fits_now"]
+    if back:
+        log(f"\n{gb}. It can run {names(back)}, skipped before on a computer with less memory ({downloads(back)}).")
+        if args.restore or (args.ask and answer("Download them now?", True)):
+            switch_models(root, back, on=True)
+            state["models_off_for_memory"] = sorted(set(state.get("models_off_for_memory", [])) - set(back))
+            save_state(root, state)
+            log("Switched them back on.")
+            fit = fit_report(root, load_config(root), state)
+        elif not args.ask:
+            log("To get them: ./kit fit --restore")
+        log(f"Its AI will be {fit['runs']}.")
+    else:
+        log(f"\n{gb}, so its AI will be {fit['runs']}.")
+    if not next(m for m in fit["models"] if m["id"] == fit["runs"])["fits"]:
+        log("That's the smallest, and it still needs most of the memory: close other apps before asking it something.")
+    big = fit["too_big"]
+    if not big:
+        return
+    log(f"It can't run {names(big)}: {'it needs' if len(big) == 1 else 'they need'} "
+        f"{min(m['needs_memory_gb'] for m in fit['models'] if m['id'] in big)} GB of memory or more ({downloads(big)}).")
+    if not on_this_computer(root):
+        log("A computer with more memory could, with this drive plugged in.")
+    if args.skip or (args.ask and not answer("Download them anyway?", False)):
+        switch_models(root, big, on=False)
+        state["models_off_for_memory"] = sorted(set(state.get("models_off_for_memory", [])) | set(big))
+        save_state(root, state)
+        log("Skipped them. On a computer with more memory, SETUP offers them again.")
+    elif not args.ask:
+        log("To skip them: ./kit fit --skip")
+
+
 def cmd_drives(root: Path, args: argparse.Namespace) -> None:
     drives = list_drives()
     if not args.json:
@@ -2561,6 +2730,11 @@ def main() -> None:
     p.add_argument("--json", action="store_true", help="with this computer's free space and what the kit needs")
     p = sub.add_parser("place", help="put the kit at DEST, a TinfoilKit folder on a drive or in the home folder")
     p.add_argument("dest")
+    p = sub.add_parser("fit", help="which AI model this computer runs, and the ones too big for its memory")
+    p.add_argument("--ask", action="store_true", help="ask whether to download the models it can't run (SETUP)")
+    p.add_argument("--skip", action="store_true", help="switch off the models it can't run, in kit.json")
+    p.add_argument("--restore", action="store_true", help="switch back on the ones skipped for a smaller computer")
+    p.add_argument("--json", action="store_true", help="print it all as JSON")
     p = sub.add_parser("share", help="let phones and laptops on your home network use the kit, with an access code")
     p.add_argument("action", nargs="?", choices=("on", "off", "new-code"))
     p.add_argument("--code", help="the access code to use (6 to 64 letters or digits) instead of a random one")
@@ -2573,7 +2747,8 @@ def main() -> None:
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
-                "drives": cmd_drives, "place": cmd_place, "share": cmd_share, "autostart": cmd_autostart}
+                "drives": cmd_drives, "place": cmd_place, "fit": cmd_fit, "share": cmd_share,
+                "autostart": cmd_autostart}
     if args.cmd not in commands:
         ap.print_help()
         return

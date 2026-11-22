@@ -39,10 +39,22 @@
    ]
   },
   {
+   "id": "Gemma-4-12B",
+   "group": "AI models",
+   "title": "Gemma 4 12B",
+   "why": "Mid-size, from Google. The AI for 16 to 24 GB laptops. Reads photos.",
+   "bytes": 7200000000,
+   "estimated": true,
+   "presets": [
+    "recommended",
+    "everything"
+   ]
+  },
+  {
    "id": "Gemma-4-E4B",
    "group": "AI models",
    "title": "Gemma 4 E4B",
-   "why": "Small and light. Runs on an 8 to 16 GB laptop or on battery.",
+   "why": "Small and light. The AI for 8 GB laptops, or to save battery.",
    "bytes": 5265746464,
    "estimated": false,
    "presets": [
