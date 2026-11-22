@@ -75,7 +75,7 @@ function Test-Kit($kit, $name) {
   Copy-Item -Recurse "$kit\logs" "$logs\$($name -replace '\W', '-')-logs" -ErrorAction SilentlyContinue
 }
 
-# The map servers START-HERE-Windows.bat started: street-level tiles, and directions across Monaco. There's no
+# The map servers START-HERE-Windows.bat started: street-level tiles, and directions across Andorra. There's no
 # small real address database to test Photon with, so the test kit's Photon is a stand-in that Java must have tried.
 function Test-Map($kit) {
   try {
@@ -85,11 +85,11 @@ function Test-Map($kit) {
   } catch { Fail "map tiles: $_"; Get-Content "$kit\logs\tiles.log" -Tail 15 -ErrorAction SilentlyContinue }
   $route = $null
   for ($i = 0; $i -lt 60 -and -not $route; $i++) {
-    try { $route = Invoke-RestMethod "http://127.0.0.1:8989/route?point=43.7280,7.4150&point=43.7396,7.4277&profile=car&points_encoded=false" -TimeoutSec 10 }
+    try { $route = Invoke-RestMethod "http://127.0.0.1:8989/route?point=42.5063,1.5218&point=42.5345,1.5803&profile=car&points_encoded=false" -TimeoutSec 10 }
     catch { Start-Sleep 2 }
   }
   if ($route -and $route.paths[0].distance -gt 0) {
-    "PASS  directions across Monaco: $([math]::Round($route.paths[0].distance)) m in $($route.paths[0].instructions.Count) steps"
+    "PASS  directions across Andorra: $([math]::Round($route.paths[0].distance)) m in $($route.paths[0].instructions.Count) steps"
   } else { Fail "directions didn't answer"; Get-Content "$kit\logs\routing.log" -Tail 20 -ErrorAction SilentlyContinue }
   if (Select-String -Quiet -Path "$kit\logs\geocoder.log" -Pattern "jarfile") { "PASS  address search: Java ran Photon's jar" }
   else { Fail "START-HERE didn't start Photon"; Get-Content "$kit\logs\geocoder.log" -Tail 10 -ErrorAction SilentlyContinue }
@@ -157,7 +157,7 @@ Invoke-Uninstall $kit "uninstall-windows-drive.log"
 if (-not (Test-Path "${letter}:\keep-me.txt")) { Fail "UNINSTALL deleted something else on the drive" }
 Dismount-DiskImage -ImagePath $vhd | Out-Null
 
-Step "the map: ./kit sync builds Monaco's with the real pmtiles, Java and GraphHopper for Windows"
+Step "the map: ./kit sync builds Andorra's with the real pmtiles, Java and GraphHopper for Windows"
 Get-Kit $dl
 python "$tests\drive.py" kitjson "$dl\kit.json" maps
 Get-ChildItem -Recurse -File $dl | Unblock-File    # no SETUP here to do it, and START-HERE starts with a double-click

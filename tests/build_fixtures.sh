@@ -136,7 +136,7 @@ print("kiwix-tools_%s-%s.%s" % (plat, newest, ext))' "$TMP/kiwix.html" "$plat")
   python3 -c 'import hashlib, sys; sys.exit(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest() != sys.argv[2])' \
     "$R/nuget/python.nupkg" "$pysha" || { echo "python.$pyv.nupkg doesn't match the checksum in SETUP-Windows.bat"; exit 1; }
 
-  echo "== drive test: the real map programs for Windows, Monaco's roads, and a map build with tiles at zoom 0-5"
+  echo "== drive test: the real map programs for Windows, Andorra's roads, and a map build with tiles at zoom 0-5"
   # They replace the e2e's stand-ins: pmtiles and Java for Windows, GraphHopper (the e2e's fake jar)
   url=$(curl -fsSL "${GH_AUTH[@]}" https://api.github.com/repos/protomaps/go-pmtiles/releases/latest |
         python3 -c 'import json, sys; print(next(a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if a["name"].endswith("_Windows_x86_64.zip")))')
@@ -154,8 +154,8 @@ print(max((v for v in re.findall(r"<version>([0-9.]+)</version>", sys.stdin.read
   G="$R/maven/com/graphhopper/graphhopper-web/11.1"
   cp "$DL/graphhopper-web-$ghv.jar" "$G/graphhopper-web-11.1.jar"
   sha1sum "$G/graphhopper-web-11.1.jar" | cut -d' ' -f1 > "$G/graphhopper-web-11.1.jar.sha1"
-  get https://download.geofabrik.de/europe/monaco-latest.osm.pbf "$DL/monaco-latest.osm.pbf"
-  cp "$DL/monaco-latest.osm.pbf" "$R/geofabrik/" && md5 "$R/geofabrik/monaco-latest.osm.pbf"
+  get https://download.geofabrik.de/europe/andorra-latest.osm.pbf "$DL/andorra-latest.osm.pbf"
+  cp "$DL/andorra-latest.osm.pbf" "$R/geofabrik/" && md5 "$R/geofabrik/andorra-latest.osm.pbf"
   # pmtiles' own one-tile fixture, as every tile from zoom 0 to 5: one directory entry whose run covers them all
   mkdir -p "$R/protomaps"
   python3 - "$W/test_fixture_1.pmtiles" "$R/protomaps/build.pmtiles" <<'PY'
