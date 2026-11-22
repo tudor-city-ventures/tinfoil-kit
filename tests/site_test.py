@@ -51,9 +51,10 @@ URL = f"http://127.0.0.1:{srv.server_address[1]}/"
 FRAME = "document.querySelector('.fig canvas').toDataURL()"
 INKED = """(() => { const c = document.querySelector('.fig canvas'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
   let n = 0; for (let i = 3; i < d.length; i += 4) n += d[i] > 0; return n; })()"""
-# the Star on GitHub button and Menu share the brand's row, at every width
-ROW = """(() => { const mid = e => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; }, b = mid(document.querySelector('header .brand'));
-  return [...document.querySelectorAll('header .star, #menu')].filter(e => e.offsetWidth).every(e => Math.abs(mid(e) - b) < 8); })()"""
+# Star on GitHub: beside the two main buttons, or under them when the row is full, and above the download note
+STAR = """(() => { const r = s => document.querySelector(s).getBoundingClientRect(), s = r('.ctas .star'), g = r('.ctas .btn:not(.primary)'), n = r('.cta-note');
+  if (!s.height || s.bottom > n.top) return 'misplaced';
+  return Math.abs(s.top + s.height / 2 - g.top - g.height / 2) < 8 ? 'beside' : s.top >= g.bottom ? 'below' : 'misplaced'; })()"""
 
 # Travis: never mention 2 TB; the drive's size isn't the point
 site_text = " ".join(open(os.path.join(SITE, f), encoding="utf-8").read() for f in ("index.html", "hero.js", "llms.txt"))
@@ -91,15 +92,14 @@ with sync_playwright() as p:
         check(f"{name}: presets order by size", totals["essentials"] < totals["recommended"] < totals["everything"], str(totals))
         width = page.evaluate("document.documentElement.scrollWidth")
         check(f"{name}: no sideways scroll", width <= vp["width"], f"{width}px")
-        star = page.locator("header .star")
-        check(f"{name}: Star on GitHub sits in the header row", star.is_visible() and page.evaluate(ROW)
-              and star.get_attribute("href") == "https://github.com/tudor-city-ventures/tinfoilkit"
-              and " ".join(star.inner_text().split()) == "Star on GitHub")
+        star, where = page.locator(".ctas .star"), page.evaluate(STAR)
+        check(f"{name}: Star on GitHub sits {'beside' if name == 'desktop' else 'under'} the main buttons",
+              where == ("beside" if name == "desktop" else "below") and star.inner_text().strip() == "Star on GitHub"
+              and star.get_attribute("href") == "https://github.com/tudor-city-ventures/tinfoilkit", where)
         if name == "phone":
             page.set_viewport_size({"width": 320, "height": 640})    # the narrowest width WCAG asks a page to fit
             width = page.evaluate("document.documentElement.scrollWidth")
             check("320px phone: no sideways scroll", width <= 320, f"{width}px")
-            check("320px phone: brand, Star and Menu fit one row", page.evaluate(ROW))
             page.set_viewport_size(vp)
             closed = page.is_visible("#menu") and not page.is_visible("nav.links a[href='#faq']")
             page.click("#menu")
