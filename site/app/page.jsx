@@ -235,8 +235,10 @@ export default function Home() {
                 <SizeSelect />
               </div>
               <p className="hint" id="placeNote">
-                The map has street maps and directions for where you live and any places nearby you add, and a simple
-                map of everywhere else. Wikipedia comes in your language, in the size you want.
+                Why we ask: street maps and directions for the whole world would take hundreds of gigabytes, so your kit
+                gets them only for where you live and any places nearby you add, like the state or country next door.
+                Everywhere else gets a simple map. This page doesn't send your answers anywhere: they only go into the
+                command or prompt you copy.
               </p>
             </div>
             <div className="presets" role="group" aria-label="Preset">
