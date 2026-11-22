@@ -19,10 +19,10 @@ You are setting this up for a person, probably not a programmer. Work in their t
 - The kit holds each program for all three, so a kit on an exFAT drive starts on any of them, whichever one set it up.
 
 - Intel Macs and ARM Windows or Linux PCs can't run it: the kit downloads programs built for Apple Silicon and for x64 PCs only. On a Mac, `uname -m` prints arm64.
-- Memory decides which AI runs: a model may take 60% of it. 32 GB or more runs the default model, Inkling 2 Mini, and the other big models; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B. `./kit fit` says which one this computer runs (`--json` for agents), and `./kit fit --skip` switches off the models it can't run, which saves about 50 GB on a 16 or 24 GB laptop. `sysctl -n hw.memsize` prints the memory in bytes.
+- Memory decides which AI runs: a model may take 60% of it. 32 GB or more runs the default model, Inkling 2 Mini, and the other big models; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B. `./kit fit` says which one this computer runs (`--json` for agents). `./kit fit --skip` switches off the models it can't run, which saves about 50 GB on a 16 or 24 GB laptop, and `./kit fit --restore` switches them back on for a computer with more memory. SETUP asks about them itself (`./kit fit --ask`). `sysctl -n hw.memsize` prints the memory in bytes.
 - On Windows and Linux the AI uses the graphics card through Vulkan. Without a good one it's slow: pick Gemma 4 E4B.
-- Space: about 300 GB for the default kit. `./kit estimate` prints the number for the current kit.json, with no internet. Sync always leaves 50 GB free on the computer's own disk and 25 GB on a drive.
-- Setup needs the internet for a few hours, the laptop on its charger, and python3 (3.9 or newer) with curl. On a Mac they come with Apple's free Command Line Tools. On Linux, install them from the package manager (`sudo apt install python3 curl`). On Windows, SETUP-Windows.bat gets python.org's own Python by itself (about 15 MB, from nuget.org, kept in %LOCALAPPDATA%\TinfoilKit), and Windows has curl. After that, nothing needs the internet.
+- Space: about 300 GB for the default kit, or 30 to 50 GB for just the essentials: the programs, the map, the most important books (medical, preparedness, repair) and the AI this computer runs plus the smallest. `./kit estimate` (`--essentials` for those) prints the number for the current kit.json, with no internet. Sync always leaves 50 GB free on the computer's own disk and 25 GB on a drive, and SETUP warns before leaving less than 10% of the computer's disk or 5% of a drive.
+- Setup needs the internet for a few hours, the laptop on its charger, and python3 (3.9 or newer) with curl. A Mac has curl, and python3 comes with Apple's Command Line Tools. On a Mac without them, SETUP.command gets a standalone Python by itself (about 25 MB, python-build-standalone's build from GitHub, checked against its SHA-256 and kept in ~/Library/Application Support/TinfoilKit). On Linux, install them from the package manager (`sudo apt install python3 curl`). On Windows, SETUP-Windows.bat gets python.org's own Python by itself (about 15 MB, from nuget.org, kept in %LOCALAPPDATA%\TinfoilKit), and Windows has curl. After that, nothing needs the internet.
 
 ## How it works
 
@@ -74,7 +74,7 @@ Help the person pick one. It's the same kit folder each way; only its place and 
 2. An external drive, at TinfoilKit on the drive (/Volumes/<drive>/TinfoilKit on a Mac, <letter>:\TinfoilKit on Windows, under /media or /run/media on Linux). It survives the laptop breaking and, formatted exFAT, starts on any Mac, Windows PC or Linux PC. It keeps the laptop's disk free. It needs an SSD with room for the kit plus 25 GB.
 3. A home server: the kit on a computer that stays on (a Linux box, a Mac mini, or a laptop on its charger), shared with every phone and laptop at home behind an access code. See "A home server" below. In an outage the router still needs power, even with no internet: a small battery backup keeps it on.
 
-Recommend a drive when the laptop is short of space or the person wants a kit they can grab and go. Recommend this computer when it has room and the person wants nothing extra to carry. If neither has room, turn items off (step 3 below). Let the person choose.
+Recommend a drive when the laptop is short of space or the person wants a kit they can grab and go. Recommend this computer when it has room and the person wants nothing extra to carry. If neither has room for all of it, get just the essentials or turn items off (step 3 below). Let the person choose.
 
 ## Set it up
 
@@ -98,9 +98,9 @@ On Windows, in PowerShell:
 
 Windows has no `./kit`: run each `./kit COMMAND` in this file as `python tools\kit.py --root . COMMAND`, with Python 3.9 or newer. If `python --version` doesn't print one, ask the person before installing it (`winget install Python.Python.3.13`), or have them double-click SETUP-Windows.bat instead, which gets its own.
 
-It needs no internet and prints needs_gb (the GB the current kit.json needs), this_computer (path, free_bytes, and keeps_free_gb, the space sync always leaves free there) and drives (each with path, format, free_bytes, problem, has_kit and kit_path).
+It needs no internet and prints needs_gb (the GB the current kit.json needs), needs_essentials_gb (just the essentials), this_computer (path, free_bytes, keeps_free_gb and space) and drives (each with path, format, free_bytes, problem, has_kit, kit_path and space). space says how the kit fits there: full and essentials are each "fits" (leaving 10% of the computer's disk or 5% of a drive free), "tight" (fits, but leaves less) or "no". `./kit space PATH --json` says the same for any folder.
 
-On a Mac, if the Command Line Tools aren't installed, macOS offers to install them the first time `./kit` runs (or run `xcode-select --install`). It takes 5 to 15 minutes; then run the command again. `xcode-select -p` shows whether they're there.
+On a Mac without Apple's Command Line Tools, `./kit` stops and says the kit needs Python. Either have the person double-click SETUP.command, which gets a Python for the kit first (about 25 MB) and then walks them through the rest of setup, or, with their OK, install the tools (`xcode-select --install`, several GB, 5 to 15 minutes) and run the command again. `xcode-select -p` shows whether they're there.
 
 Developers can `git clone https://github.com/tudor-city-ventures/tinfoilkit` straight into the chosen place instead, and update with `git pull`.
 
@@ -108,8 +108,8 @@ Developers can `git clone https://github.com/tudor-city-ventures/tinfoilkit` str
 
 Go through "Where it can live" with the person, with the numbers from step 1:
 
-- This computer fits when its free space is at least needs_gb plus keeps_free_gb.
-- A drive fits when its free space is at least needs_gb plus 25 GB and its problem is null. exFAT works on Mac, Windows and Linux: the best choice for an emergency drive. APFS is fine if the drive will only ever meet Macs.
+- A place fits when its space.full is "fits". "tight" fits too, but leaves less than 10% of the computer's disk (5% of a drive) free: tell the person, and offer just the essentials. "no" doesn't fit: if space.essentials isn't "no", the essentials do (step 3).
+- A drive also needs its problem to be null. exFAT works on Mac, Windows and Linux: the best choice for an emergency drive. APFS is fine if the drive will only ever meet Macs.
 - A drive with a problem is FAT32 (it can't hold files over 4 GB) or, on a Mac, NTFS (a Mac can't write to it; Windows and Linux can). It needs erasing as exFAT first: on a Mac, in Disk Utility, select the drive, click Erase and choose ExFAT. On Windows, in File Explorer, right-click the drive, choose Format and pick exFAT. Erasing deletes everything on the drive: confirm which disk it is and get the person's explicit yes first.
 - A drive with has_kit already holds a kit: offer to update that one instead (see "Update it").
 
@@ -124,6 +124,8 @@ kit.json lists everything. The default kit:
 To change it:
 
 - Skip an item: set "enabled": false on it in models, library or maps.
+- Just the essentials: `./kit essentials on` (30 to 50 GB). The kit works with them alone, and `./kit essentials off` gets the rest whenever there's room.
+- Skip the models this computer can't run: `./kit fit --skip`.
 - Run without the AI: set "enabled": false on every model, or pick No AI in the builder. The library and the map work as usual, Ask shows the best passages instead of an answer, and `./kit test` doesn't ask for a model.
 - Add a book: `./kit search WORDS` finds Kiwix books and prints a line to paste into library.
 - Change the map region: edit "maps" (its notes explain how).
@@ -144,9 +146,11 @@ On Windows: `$KIT = python tools\kit.py --root . place "$HOME\TinfoilKit"` (or `
 
 Then, in the kit folder:
 
-    ./kit plan     # every item, version and size. Show the person the total and get a yes.
-    ./kit sync -y  # download, check, install: a few hours the first time
-    ./kit test     # start every server offline and check each one answers
+    ./kit plan                  # every item, version and size. Show the person the total and get a yes.
+    ./kit sync -y --essentials  # the essentials first: the programs, the map, the key books and the AI
+    ./kit test                  # start every server offline and check each one answers: now the kit works
+    ./kit sync -y               # then everything else: a few hours the first time
+    ./kit test
 
 - `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit already works with what it has.
 - Sync fetches the most important items first, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
@@ -155,7 +159,7 @@ Then, in the kit folder:
 
 ### For people who'd rather click
 
-Download https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip, unzip it and double-click SETUP.command (on Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat; on Linux, run `bash SETUP.command`). The first time, it asks "An external drive" or "This computer", lists the drives with their format and free space, and moves the kit there. Then it updates, downloads and tests, explaining each step. On macOS 15 and later the first double-click says Apple could not verify it: open System Settings > Privacy & Security and click Open Anyway, once. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
+Download https://github.com/tudor-city-ventures/tinfoilkit/archive/refs/heads/main.zip, unzip it and double-click SETUP.command (on Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat; on Linux, run `bash SETUP.command`). The first time, it asks "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it downloads and tests the essentials, then the rest, explaining each step. On a Mac without Python, it gets one first. On macOS 15 and later the first double-click says Apple could not verify it: open System Settings > Privacy & Security and click Open Anyway, once. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
 
 ## Use it
 
@@ -194,6 +198,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 
 - `./kit update` exits 3 after installing a newer version of the kit. That's success: carry on with the next command. It exits 0 when the kit is already the newest.
 - In a git checkout, run `git pull` instead of `./kit update`.
+- An update can bring models too big for this computer: `./kit fit` names them, and `./kit fit --skip` leaves them out. On a kit with just the essentials, `./kit space . --json` says when the rest fits; then run `./kit essentials off` before syncing. SETUP asks about both by itself.
 - If `./kit update` says a version isn't signed with the kit's release key, stop: don't install it another way. Tell the person, and report it at https://github.com/tudor-city-ventures/tinfoilkit/security.
 - Double-clicking SETUP again (SETUP.command, or SETUP-Windows.bat on Windows) does all four.
 - A normal update brings new library editions, the newest AI engine, any re-released models and fresh map data. Only what changed downloads.
@@ -203,7 +208,7 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 
 ## Remove it
 
-Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit folder. Once the person types "delete", it removes the kit folder and everything the kit downloaded, and on Windows the Python SETUP got. On a drive it leaves the rest of the drive alone. As an agent, run `bash UNINSTALL.command --yes` (`.\UNINSTALL-Windows.bat --yes` on Windows), which skips the question, only after the person's explicit yes.
+Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit folder. Once the person types "delete", it removes the kit folder and everything the kit downloaded, and the Python SETUP got (on Windows, or on a Mac that had none). On a drive it leaves the rest of the drive alone. As an agent, run `bash UNINSTALL.command --yes` (`.\UNINSTALL-Windows.bat --yes` on Windows), which skips the question, only after the person's explicit yes.
 
 ## When something goes wrong
 
@@ -211,7 +216,7 @@ Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit fol
 - "Windows protected your PC" on a double-click: More info, then Run anyway, once.
 - "Operation not permitted" in Terminal: macOS is keeping Terminal off the drive. System Settings > Privacy & Security > Files and Folders > Terminal: turn on Removable Volumes, then start again.
 - Sync ended with exit 1, or SETUP says some downloads didn't finish: run `./kit sync -y` again. It resumes and names what's left. The kit already works with what it has.
-- Not enough space: sync stops short of the free space it keeps (50 GB on the computer's own disk, 25 GB on a drive). Turn items off in kit.json, or move the kit to a bigger drive.
+- Not enough space: sync stops short of the free space it keeps (50 GB on the computer's own disk, 25 GB on a drive). Get just the essentials (`./kit essentials on`), turn items off in kit.json, or move the kit to a bigger drive.
 - A file may be corrupt: `./kit verify` re-checks every file. `./kit verify --fix` removes bad ones, and the next sync replaces them.
 - A model won't load or is very slow: quit other apps, pick Gemma 4 E4B, or start with `--no-maps` to free about 5 GB. Advanced, with the person's password: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
 - The map says address search or directions are "not running": they take up to a minute to start. If they never do, read logs/geocoder.log and logs/routing.log. If `./kit test` fails on address search with a "lock" error in logs/test-geocoder.log, the exFAT format is the cause: reformat the drive as APFS and copy the kit back.
@@ -226,7 +231,7 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 - AI models: Inkling 2 Mini by Thinking Machines (Apache 2.0, plus Thinking Machines' Model Acceptable Use Policy, which binds anyone who downloads the weights), Qwen3.8 27B by Alibaba (Apache 2.0), Gemma 4 26B-A4B, Gemma 4 12B and Gemma 4 E4B by Google (Apache 2.0). The files come from ggml-org's and Unsloth's Hugging Face repos.
 - Books: Wikipedia and its sister projects, WikiMed, Stack Exchange, Appropedia and Energypedia are CC BY-SA. iFixit, LibreTexts and Khan Academy are CC BY-NC-SA: no commercial use. Ready.gov and US Army publications are US government works. Project Gutenberg is public domain in the US. Survivor Library, Urban Prepper and the collections of field medicine, post-disaster, water, food and knots guides have mixed terms: free to read, not to republish.
 - Maps: OpenStreetMap data (© OpenStreetMap contributors, Open Database License), through Protomaps, Geofabrik and the Photon exports GraphHopper hosts. Map style: Protomaps basemaps (BSD-3-Clause). Fonts: Noto Sans (SIL Open Font License).
-- Programs: llama.cpp (MIT), kiwix-serve and the Kiwix app (GPL-3.0), Eclipse Temurin Java (GPL-2.0 with Classpath Exception), go-pmtiles (BSD-3-Clause), GraphHopper and Photon (Apache 2.0), MapLibre GL JS (BSD-3-Clause). On Windows, SETUP also gets Python (PSF License) for the kit's tools.
+- Programs: llama.cpp (MIT), kiwix-serve and the Kiwix app (GPL-3.0), Eclipse Temurin Java (GPL-2.0 with Classpath Exception), go-pmtiles (BSD-3-Clause), GraphHopper and Photon (Apache 2.0), MapLibre GL JS (BSD-3-Clause). SETUP also gets Python (PSF License) for the kit's tools on Windows, and on a Mac without one (python-build-standalone's build, which includes OpenSSL, SQLite and other libraries under their own licenses).
 - Setup and updates talk only to GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus nuget.org for Python on Windows and anything added to kit.json. Using the kit sends nothing over the internet: no account, no telemetry.
 
 ## Security
