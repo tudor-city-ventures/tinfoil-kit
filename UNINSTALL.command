@@ -46,6 +46,8 @@ if [ $YES = 0 ]; then
   case "$answer" in delete|Delete|DELETE) ;; *) say "Kept. Nothing was deleted."; finish 0 ;; esac
 fi
 
+# A home server starts the kit with the computer (./kit autostart): undo that, which also stops it.
+./kit autostart off >/dev/null 2>&1
 # Stop the kit if it's running (its programs run from its bin folder), so nothing holds its files open.
 pids="$(ps -axo pid=,command= 2>/dev/null | awk -v k="$KIT/bin/" 'index($0, k) {print $1}')"
 if [ -n "$pids" ]; then

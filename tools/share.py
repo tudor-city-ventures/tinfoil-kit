@@ -369,6 +369,23 @@ def on_home_network(ip: str) -> bool:
     return a.version == 4 and any(a in n for n in HOME_NETWORKS)
 
 
+# Names only a home network hands out. A website elsewhere can't point one of these at this computer.
+LOCAL_SUFFIXES = (".local", ".lan", ".home", ".internal", ".localdomain", ".home.arpa", ".fritz.box", ".ts.net")
+
+
+def local_host(host: str) -> bool:
+    """Whether a Host header names this computer the way a home network does: an address, a bare name like
+    homeserver, or a name like homeserver.local. A web page elsewhere can point a name it owns at this computer
+    and reach the gate as its own site (DNS rebinding), so other names are turned away."""
+    name = host.strip().lower()
+    name = (name[1:].split("]")[0] if name.startswith("[") else name.rsplit(":", 1)[0]).rstrip(".")
+    try:
+        ipaddress.ip_address(name)
+        return True
+    except ValueError:
+        return "." not in name or name.endswith(LOCAL_SUFFIXES)
+
+
 def join_url(host: str, code: str) -> str:
     """The link in the QR code: it opens the kit and lets the device in."""
     return f"http://{host}/?code={urllib.parse.quote(code)}"
@@ -573,6 +590,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not on_home_network(self.client_address[0]):
             self.close_connection = True
             return self.send(403, "text/plain; charset=utf-8", b"Tinfoil Kit only answers devices on its home network.\n")
+        if not local_host(self.headers.get("Host", "")):
+            self.close_connection = True
+            ips = lan_ips()
+            where = f" Open http://{ips[0]}:{self.server.server_address[1]} instead." if ips else ""
+            return self.send(403, "text/plain; charset=utf-8", f"Tinfoil Kit doesn't answer to that name.{where}\n".encode())
         url = urllib.parse.urlsplit(self.path)
         code, cookie = self.server.access()
         if url.path == "/_kit/login" and self.command == "POST":

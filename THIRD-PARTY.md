@@ -8,7 +8,7 @@ The kit's own code is [MIT](LICENSE). The models, books, maps and programs below
 | --- | --- | --- |
 | Inkling 2 Mini (default) | Thinking Machines | Apache 2.0, plus Thinking Machines' [Model Acceptable Use Policy](https://thinkingmachines.ai/model-acceptable-use-policy/), which binds anyone who downloads the weights |
 | Qwen3.8 27B | Alibaba (Qwen) | Apache 2.0 |
-| Gemma 4 26B-A4B, Gemma 4 E4B | Google | Apache 2.0 |
+| Gemma 4 26B-A4B, Gemma 4 12B, Gemma 4 E4B | Google | Apache 2.0 |
 
 The files come from ggml-org's and Unsloth's Hugging Face repos, which repackage the makers' weights.
 
