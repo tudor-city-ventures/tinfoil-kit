@@ -89,15 +89,14 @@ share_check() { # KIT
 mac() {
   local img="$W/drive.img" vol=/Volumes/TINFOIL disk kit src mock f much
   local py="$HOME/Library/Application Support/TinfoilKit"    # the Python SETUP gets for a Mac without one
-  python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
-  mock=$!
-
   step "a 2 GB disk, erased as exFAT the way Disk Utility does"
   hdiutil detach "$vol" > /dev/null 2>&1
   rm -f "$img" "$W/drive.vhd" && mkfile -n 2g "$img"
   disk=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount "$img" | awk 'NR == 1 {print $1}')
-  diskutil eraseDisk ExFAT TINFOIL GPT "$disk" || { fail "erase $disk"; kill "$mock"; return; }
+  diskutil eraseDisk ExFAT TINFOIL GPT "$disk" || { fail "erase $disk"; return; }
 
+  python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
+  mock=$!
   step "SETUP.command in the unzipped download, as on a Mac without Python: it gets the kit's own (the real"
   echo "build, from the mock internet); pick the drive; it moves the kit there and sets it up"
   src="$W/Downloads/tinfoilkit-main" kit="$vol/TinfoilKit"

@@ -114,6 +114,11 @@ jobs:
           path: tests/work/remote
       - name: Set up the drive, start the kit, use the page; then a home server, and uninstall (filmed)
         run: python3 tests/drive.py record mac -- tests/drive_test.sh mac
+      - name: What asked to find devices on local networks (temporary)
+        if: ${{ !cancelled() }}
+        run: >-
+          log show --last 20m --style compact --predicate 'process == "nehelper" OR eventMessage CONTAINS[c] "local network"
+          OR (process == "mDNSResponder" AND eventMessage CONTAINS[c] "python")' | tail -n 80
       - id: made
         if: ${{ !cancelled() }}
         run: if [ -f tests/work/drive.vhd ]; then echo "drive=yes" >> "$GITHUB_OUTPUT"; fi
