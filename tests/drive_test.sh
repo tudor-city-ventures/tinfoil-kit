@@ -3,9 +3,10 @@
 # CI runs it nightly and on demand (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive.
 #   tests/drive_test.sh mac     erase a disk image as exFAT the way Disk Utility does, build the Mac app, unzip
 #                               the kit as Download ZIP leaves it, run its SETUP against the mock internet and
-#                               pick the drive (it builds a small real map there: Andorra's), double-click Open
-#                               Tinfoil Kit, check the library, the AI and the map, check the page in WebKit, open
-#                               the kit with the app, eject. Leaves tests/work/drive.vhd. Then set the kit up on
+#                               pick the drive (the try-it kit), run SETUP again from the drive for the rest (it
+#                               builds a small real map there: Andorra's), double-click Open Tinfoil Kit, check
+#                               the library, the AI and the map, check the page in WebKit, open the kit with the
+#                               app, eject. Leaves tests/work/drive.vhd. Then set the kit up on
 #                               this Mac (~/TinfoilKit) from the app, as a home server (SETUP --home-server), check
 #                               that the Mac started it and that it's shared behind the access code, and remove
 #                               it with UNINSTALL.
@@ -84,7 +85,7 @@ setup() { # FOLDER LOG ANSWERS [SETUP'S OPTIONS]
   terminal "$dir" "$log" "$answers" env PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash SETUP.command "$@"
   echo "exit $?"
   grep -E "PASS|FAIL|All set|Moved|Problems|^  - |^  [0-9]  |home network|Access code|starts" "$L/$log" | tail -24
-  grep -q "All set" "$L/$log" || fail "SETUP didn't end with All set (logs/$log)"
+  grep -qE "All set|The try-it kit works" "$L/$log" || fail "SETUP didn't end with All set or a working try-it kit (logs/$log)"
 }
 # A home server's kit, checked the way a phone on the home network finds it: at the address and with the access
 # code that ./kit share shows. The servers behind the gate mustn't answer at that address themselves.
@@ -131,7 +132,7 @@ mac() {
   python3 "$TESTS/mock_remote.py" 19000 > "$L/mock_remote.log" 2>&1 &
   mock=$!
   step "SETUP.command in the unzipped download, as on a Mac without Python: it gets the kit's own (the real"
-  echo "build, from the mock internet); pick the drive; it moves the kit there and sets it up, map included"
+  echo "build, from the mock internet); pick the drive; it moves the kit there and gets the try-it kit"
   src="$W/Downloads/tinfoilkit-main" kit="$vol/TinfoilKit"
   rm -rf "$py"
   download_kit "$src" maps
@@ -142,8 +143,20 @@ mac() {
   # likes (it asks then), start downloading, don't open the kit, close.
   much=""; [ "$("$src/kit" space "$kit" | cut -f1)" = tight ] && much="2\n"
   KIT_OWN_PYTHON=1 setup "$src" setup.log "\n1\n${n:-1}\n${much}y\nn\n\n"
-  grep -q "All set" "$L/setup.log" || kit_logs "$kit" test-tiles.log test-geocoder.log test-routing.log
+  grep -q "The try-it kit works" "$L/setup.log" || kit_logs "$kit" test-tiles.log test-llama.log
+  [ -d "$kit/models/Two" ] || fail "the try-it kit didn't get its sample AI"
+  [ -d "$kit/maps/routing" ] && fail "the try-it kit got the map's roads, which come with the rest"
+
+  step "SETUP again, from the drive, to get the rest: the kit builder's questions (Return takes Recommended),"
+  echo "then the map's roads and address search, and the try-it kit's sample AI goes"
+  # Answers: keep where it's for, Recommended, all of it even if that leaves less free than SETUP likes (it asks
+  # then), start downloading, don't open the kit, close.
+  much=""; [ "$("$kit/kit" space "$kit" | cut -f1)" = tight ] && much="2\n"
+  KIT_OWN_PYTHON=1 setup "$kit" setup-rest.log "\n\n${much}y\nn\n\n"
+  grep -q "All set" "$L/setup-rest.log" || kit_logs "$kit" test-tiles.log test-geocoder.log test-routing.log
+  grep -q "What goes in the kit?" "$L/setup-rest.log" || fail "SETUP didn't ask what goes in the kit"
   [ -f "$kit/maps/routing/graph-cache/properties" ] || fail "SETUP didn't build the map's roads on the drive"
+  [ -d "$kit/models/Two" ] && fail "the try-it kit's sample AI is still there after the rest"
   "$py/python/bin/python3" --version || fail "SETUP didn't get the kit's own Python"
   [ -d "$kit/models" ] || fail "the kit isn't set up on the drive, at $kit"
   [ -d "$src" ] && fail "the download is still in $src after the move"
@@ -153,7 +166,7 @@ mac() {
   done
   [ -f "$vol/.metadata_never_index" ] || fail "no .metadata_never_index, so Spotlight would index the drive"
   if [ -d "$app" ]; then
-    grep -q "open Tinfoil Kit, in Applications" "$L/setup.log" || fail "SETUP didn't say to open the app in an outage"
+    grep -q "open Tinfoil Kit, in Applications" "$L/setup-rest.log" || fail "SETUP didn't say to open the app in an outage"
   fi
   [ "$(cat "$py/last-kit" 2> /dev/null)" = "$kit" ] || fail "SETUP didn't note where the kit is, for the app"
 

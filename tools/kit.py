@@ -7,7 +7,7 @@ Commands (run from the kit folder, e.g.  ./kit sync):
   sync [-y]          Download/update everything enabled in kit.json, verify every file
                      (SHA-256), then remove the old versions. Safe to interrupt and re-run.
                      --essentials: only the programs, the map, the most important books and the AI
-                     this computer runs plus the smallest. SETUP's first run gets these first.
+                     this computer runs plus the smallest. --starter: just the try-it kit.
   verify [--quick]   Re-check every downloaded file against its recorded SHA-256.
                      --fix deletes the bad ones so the next sync replaces them.
   status             What's installed, when it was last updated, free space.
@@ -19,7 +19,9 @@ Commands (run from the kit folder, e.g.  ./kit sync):
   pins               Pin the newest build of every program, with its SHA-256, in tools/pins.json.
                      Run before a release: drives install exactly those builds.
   estimate           About how many GB this kit.json needs, from the sizes the website's kit
-                     builder lists (--essentials: just those). Needs no internet. SETUP.command uses it.
+                     builder lists (--essentials: just those; --starter: the try-it kit). Needs no
+                     internet. --rest: the GB still to download for everything switched on, then how
+                     long that takes at this connection's speed, tab-separated. SETUP.command uses it.
   drives [--json]    The plugged-in drives the kit could go on: folder, format, GB free, and why
                      not (or -). --json adds this computer's free space and what the kit needs.
   place DEST         Put the kit at DEST (a TinfoilKit folder at the top of a drive or in the home
@@ -28,6 +30,9 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      would go) and leaves 10% of the computer's disk, or 5% of a drive, free.
   essentials [on|off]
                      Get just the essentials from now on (on), or everything switched on (off).
+  starter [on|off]   Get just the try-it kit from now on (on): a few GB to try the kit with, the
+                     smallest AI, a few small books and the area's map. off: everything switched on.
+                     Without on or off, says how big the rest is and how long it takes to download.
   fit [--ask]        Which AI model this computer runs, given its memory, and the switched-on ones
                      too big for it. --ask (SETUP.command) asks whether to download those anyway;
                      --skip switches them off, --restore back on. --json for scripts and agents.
@@ -40,7 +45,9 @@ Commands (run from the kit folder, e.g.  ./kit sync):
                      directions, address search, home and units. --wikipedia en,es also picks Wikipedia's
                      languages; --find WORDS lists places; --languages lists a place's languages.
   pick               What goes in the kit, by name (SETUP's options): --no-ai, --models IDS (just
-                     those), --skip IDS, --add IDS. Without options, says what's on.
+                     those), --skip IDS, --add IDS. --ask asks the kit builder's questions instead.
+                     Either one sets "picked" in kit.json, so SETUP doesn't ask again.
+                     Without options, says what's on, its size, and the time to download it.
 
 Only needs python3 (3.9+) and curl, both standard on macOS. aria2c is used if installed
 (brew install aria2) for faster multi-connection downloads.
@@ -156,6 +163,46 @@ def fmt_size(n: Optional[float]) -> str:
         if n >= div:
             return f"{n / div:.1f} {unit}"
     return f"{int(n)} B"
+
+
+def fmt_time(seconds: float) -> str:
+    m = seconds / 60
+    if m < 1.5:
+        return "about a minute"
+    if m < 55:
+        return f"about {round(m / 5) * 5 if m > 12 else round(m)} minutes"
+    h = m / 60
+    if h < 1.25:
+        return "about an hour"
+    if h < 36:
+        return f"about {round(h * 2) / 2:g} hours"
+    return f"about {round(h / 12) / 2:g} days"
+
+
+SPEED = {"bytes": 0, "seconds": 0.0}    # this run's downloads, for the time estimates
+
+
+def note_speed(state: Dict[str, Any]) -> None:
+    """Keep how fast this run's downloads came in (bytes a second), once there's enough of them to tell."""
+    if SPEED["bytes"] >= 100e6 and SPEED["seconds"] > 0:
+        state["download_speed"] = round(SPEED["bytes"] / SPEED["seconds"])
+
+
+def eta(root: Path, nbytes: float) -> str:
+    """How long nbytes take to download at the speed this kit's last sync measured ("" before there's one)."""
+    bps = load_state(root).get("download_speed")
+    if not isinstance(bps, (int, float)) or bps <= 0:
+        return ""
+    return f"{fmt_time(nbytes / bps)} at this connection's speed ({fmt_size(bps)}/s)"
+
+
+def tier(cfg: Dict[str, Any], args: argparse.Namespace) -> Tuple[bool, bool]:
+    """Just the try-it kit, just the essentials: this run's --starter or --essentials, else kit.json's setting."""
+    s = cfg["settings"]
+    if getattr(args, "essentials", False):
+        return False, True
+    starter = getattr(args, "starter", False) or s.get("starter_only") is True
+    return starter, not starter and s.get("essentials_only") is True
 
 
 def now_iso() -> str:
@@ -1028,12 +1075,58 @@ def essential(item: Item, fit: Dict[str, Any]) -> bool:
     return item.section in ("runtimes", "maps") or (item.section == "library" and item.priority <= 1)
 
 
+STARTER_MAPS = ("maplibre-gl", "protomaps-basemaps", "basemaps-assets", "basemap")
+
+
+def starter_part(item: Item) -> bool:
+    """The try-it kit, a few GB that SETUP gets first so the kit can be tried within minutes: this computer's programs
+    (not Java, which only the map's address search and directions use), the AI and books marked "starter": true in
+    kit.json, and the area's map without address search or directions. What it gets that kit.json doesn't switch on is
+    a sample, and goes once a full sync has the rest (drop_samples)."""
+    if item.section == "runtimes":
+        return item.id.endswith("-" + platform_tag()) and item.cfg.get("starter") is not False
+    if item.section == "maps":
+        return item.id in STARTER_MAPS
+    return item.cfg.get("starter") is True
+
+
+def starter_items(items: List[Item]) -> List[Item]:
+    """The try-it kit's items, its samples switched on. A part kit.json switches off entirely (no AI, no books) stays
+    out of it too."""
+    some = {s for s in ("models", "library") if any(i.enabled for i in items if i.section == s)}
+    out = [i for i in items if starter_part(i) and (i.section not in ("models", "library") or i.section in some)]
+    for i in out:
+        if not i.enabled and i.cfg.get("starter") is True:
+            i.cfg = {**i.cfg, "enabled": True}
+    return out
+
+
+def drop_samples(root: Path, state: Dict[str, Any], cfg: Dict[str, Any]) -> None:
+    """Once a full sync has everything, the try-it kit's samples go: what it had that kit.json doesn't switch on."""
+    for item in items_from_config(cfg):
+        v = state["items"].get(item.key)
+        if item.enabled or item.cfg.get("starter") is not True or not v or "files" not in v:
+            continue
+        try:
+            for name in v["files"]:
+                (root / v["dest"] / name).unlink(missing_ok=True)
+        except OSError as e:    # open in the kit, on Windows: the next sync tries again
+            log(f"Couldn't remove {item.id} from the try-it kit yet ({e.strerror}). The next sync will.")
+            continue
+        with contextlib.suppress(OSError):
+            (root / v["dest"]).rmdir()    # a model's own folder, once it's empty
+        del state["items"][item.key]
+        log(f"Removed {item.id}: the try-it kit had it, and it isn't in your picks.")
+
+
 def build_plan(root: Path, cfg: Dict[str, Any], state: Dict[str, Any], only: List[str],
-               essentials: bool = False) -> List[Item]:
+               essentials: bool = False, starter: bool = False) -> List[Item]:
     items = items_from_config(cfg)
     if only:
         items = [i for i in items if any(o.lower() in i.key.lower() for o in only)]
-    if essentials:
+    if starter:
+        items = starter_items(items)
+    elif essentials:
         fit = fit_report(root, cfg, state)
         items = [i for i in items if essential(i, fit)]
     resolver = Resolver(root, cfg)
@@ -1104,6 +1197,9 @@ def print_plan(root: Path, items: List[Item], state: Dict[str, Any], cfg: Dict[s
     keep, leave = keep_free(root, cfg), leave_free(root, cfg)
     log(f"\nTo download: {fmt_size(total)}   Free space: {fmt_size(free)}   "
         f"Free afterwards: ~{fmt_size(max(0, free - total))} (before old versions are removed)")
+    took = eta(root, total) if total else ""
+    if took:
+        log(f"That takes {took}.")
     if cfg["settings"].get("essentials_only") is True:
         log("Just the essentials, as chosen at setup. To get everything else too: ./kit essentials off")
     if free - total < keep:
@@ -1135,7 +1231,7 @@ def download(url: str, partial: Path, size: Optional[int], downloader: str) -> N
     use_aria = downloader == "aria2c" or (downloader == "auto" and shutil.which("aria2c"))
     for attempt in range(1, 6):
         before = partial.stat().st_size if partial.exists() else 0
-        status = ""
+        status, t0 = "", time.time()
         if use_aria:
             cmd = ["aria2c", "-c", "-x", "8", "-s", "8", "-k", "8M", "--file-allocation=none",
                    "--auto-file-renaming=false", "--allow-overwrite=true", "--summary-interval=0",
@@ -1154,6 +1250,9 @@ def download(url: str, partial: Path, size: Optional[int], downloader: str) -> N
             p = subprocess.run(cmd + [url], stdout=subprocess.PIPE, text=True)   # progress still shows (stderr)
             rc, status = p.returncode, p.stdout.strip()[-3:]
         got = partial.stat().st_size if partial.exists() else 0
+        if got > before:
+            SPEED["bytes"] += got - before
+            SPEED["seconds"] += time.time() - t0
         if rc == 0 and (not size or got == size):
             return
         # Finished, but a hair short of the size we were given: one rounded up to a whole KiB, as Kiwix's catalog does.
@@ -2377,7 +2476,8 @@ def cmd_plan(root: Path, args: argparse.Namespace) -> None:
     cfg, state = load_config(root), load_state(root)
     if args.json:
         return plan_json(root, cfg, args.only)
-    items = build_plan(root, cfg, state, args.only, args.essentials or cfg["settings"].get("essentials_only") is True)
+    starter, essentials = tier(cfg, args)
+    items = build_plan(root, cfg, state, args.only, essentials, starter)
     print_plan(root, items, state, cfg)
     if offline(items):
         sys.exit(1)
@@ -2477,9 +2577,9 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
     with Lock(root), keep_awake():
         prepare_folder(root)
         cfg, state = load_config(root), load_state(root)
-        items = build_plan(root, cfg, state, args.only,
-                           args.essentials or cfg["settings"].get("essentials_only") is True)
-        part = args.only or args.essentials    # just this once: the next full sync gets the rest
+        starter, essentials = tier(cfg, args)
+        items = build_plan(root, cfg, state, args.only, essentials, starter)
+        part = args.only or args.essentials or args.starter    # just this once: the next full sync gets the rest
         print_plan(root, items, state, cfg)
         if offline(items):
             sys.exit(1)
@@ -2488,7 +2588,7 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
         if todo and not args.yes and sys.stdin.isatty():
             if input(f"\nDownload {len(todo)} item(s) now? [Y/n] ").strip().lower() not in ("", "y", "yes"):
                 return
-        if not part:
+        if not part and not starter:    # (a try-it kit's plan doesn't list the rest, whose downloads stay)
             sweep_partials(root, state, items)
         failures, done_bytes, start = [], 0, time.time()
         try:
@@ -2501,14 +2601,18 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
                     log(f"    FAILED: {failures[-1][1]}")
                 save_state(root, state)
         except KeyboardInterrupt:
+            note_speed(state)
             save_state(root, state)
             log("\nStopped. Everything finished so far is saved; run ./kit sync again to resume.")
             sys.exit(130)
+        note_speed(state)
         errors = [i for i in items if i.enabled and i.status == "error"]
         if not part:
             drop_replaced_wikipedias(root, state, items)
         if not failures and not errors and not part:
             state["last_sync"] = now_iso()
+            if not starter:
+                drop_samples(root, state, cfg)
         save_state(root, state)
         write_inventory(root, state)
         try:
@@ -2605,13 +2709,25 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
         log(f"Kit version: {state['kit_version']}.")
 
 
-def estimate_gb(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] = None) -> int:
-    """About how many GB the switched-on items need, from the sizes the kit builder lists (site/sources.json), plus
-    about 1 GB of programs. Needs no internet, so SETUP can say how much room the kit needs before choosing where.
-    essentials: only those (see essential()); None goes by kit.json's essentials_only."""
+def estimate_gb(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] = None, starter: Optional[bool] = None,
+                left: bool = False) -> int:
+    return math.ceil(estimate_bytes(root, cfg, essentials, starter, left) / GB)
+
+
+def estimate_bytes(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] = None, starter: Optional[bool] = None,
+                   left: bool = False) -> float:
+    """About how many bytes the switched-on items need, from the sizes the kit builder lists (site/sources.json), plus
+    the programs. Needs no internet, so SETUP can say how much room the kit needs before choosing where.
+    essentials, starter: only those (see essential() and starter_part()). With neither given, kit.json's
+    essentials_only and starter_only decide. left: only what isn't in the kit yet."""
+    s = cfg["settings"]
+    if starter is None:
+        starter = essentials is None and s.get("starter_only") is True
     if essentials is None:
-        essentials = cfg["settings"].get("essentials_only") is True
-    fit = fit_report(root, cfg, load_state(root)) if essentials else {}
+        essentials = not starter and s.get("essentials_only") is True
+    state = load_state(root)
+    have = set(state["items"]) if left else set()
+    fit = fit_report(root, cfg, state) if essentials else {}
     try:
         listed = json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
         sizes = {s["id"]: s.get("bytes") or 0 for s in listed}
@@ -2622,21 +2738,42 @@ def estimate_gb(root: Path, cfg: Dict[str, Any], essentials: Optional[bool] = No
         sizes.setdefault(lang["zim"], lang.get("mb", 0) * 1e6)
     maps = cfg.get("maps") or {}
     r = region(maps.get("region"))
+    map_parts = {"maps/basemap": "tiles", "maps/routing": "roads", "maps/geocoder": "addresses"}
     if r and not any(k in maps for k in ("detail_bbox", "routing_osm_pbf", "geocoder_country")):
         wide = essentials and r.get("addresses_wide")     # see essential()
-        mb = {k: v for k, v in (r.get("mb") or {}).items() if not (wide and k == "addresses")}
-        sizes["maps"] = sum(mb.values()) * 1e6 + 0.1 * GB    # plus the map viewer, fonts and icons
-    on = [m["id"] for m in cfg.get("models", []) if m.get("enabled", True) and (
-          not essentials or m.get("essential") is True or m["id"] in (fit["runs"], fit["smallest"]))]
-    on += [z["zim"] for z in cfg.get("library", []) if z.get("enabled", True) and (
-           not essentials or z.get("essential") is True or int(z.get("priority", 2)) <= 1)]
+        for key, part in map_parts.items():
+            if not (wide and part == "addresses") and not (starter and part != "tiles"):
+                sizes[key] = (r.get("mb") or {}).get(part, 0) * 1e6
+        sizes["maps/basemap"] = sizes.get("maps/basemap", 0) + 0.1 * GB    # plus the map viewer, fonts and icons
+    else:
+        sizes["maps/basemap"] = sizes.get("maps", 0)    # the builder's size, for its own area
+    def some(section: str) -> bool:
+        return any(e.get("enabled", True) for e in cfg.get(section, []))
+
+    def wanted(e: Dict[str, Any], ident: str, important: bool) -> bool:
+        if starter:
+            return e.get("starter") is True
+        return e.get("enabled", True) and (not essentials or e.get("essential") is True or important)
+
+    on = [("models/" + m["id"], m["id"]) for m in cfg.get("models", []) if (not starter or some("models"))
+          and wanted(m, m["id"], m["id"] in (fit.get("runs"), fit.get("smallest")))]
+    on += [("library/" + z["zim"], z["zim"]) for z in cfg.get("library", []) if (not starter or some("library"))
+           and wanted(z, z["zim"], int(z.get("priority", 2)) <= 1)]
     if maps_settings(cfg)["enabled"]:
-        on.append("maps")
-    return math.ceil((sum(sizes.get(i, 0) for i in on) + GB) / GB)
+        on += [(k, k) for k in map_parts if k in sizes]
+    programs = (0.2 if starter else 1) * GB
+    if any(k.startswith("runtimes/") for k in have):
+        programs = 0
+    return sum(sizes.get(i, 0) for key, i in on if key not in have) + programs
 
 
 def cmd_estimate(root: Path, args: argparse.Namespace) -> None:
-    print(estimate_gb(root, load_config(root), True if args.essentials else None))
+    cfg = load_config(root)
+    if args.rest:    # what a try-it kit doesn't have yet
+        left = estimate_bytes(root, cfg, starter=False, left=True)
+        print(f"{math.ceil(left / GB)}\t{eta(root, left)}")
+        return
+    print(estimate_gb(root, cfg, True if args.essentials else None, True if args.starter else None))
 
 
 def space_at(path: Path, root: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -2684,6 +2821,21 @@ def cmd_essentials(root: Path, args: argparse.Namespace) -> None:
     else:
         log(f"Everything switched on in kit.json (about {estimate_gb(root, cfg)} GB). "
             "To get just the essentials: ./kit essentials on")
+
+
+def cmd_starter(root: Path, args: argparse.Namespace) -> None:
+    if args.action:
+        set_setting(root, "starter_only", True if args.action == "on" else None)
+    cfg = load_config(root)
+    if cfg["settings"].get("starter_only") is True:
+        left = estimate_bytes(root, cfg, starter=False, left=True)
+        took = eta(root, left)
+        log(f"Just the try-it kit (about {estimate_gb(root, cfg)} GB): a small AI, a few small books and the area's "
+            f"map. The rest is about {math.ceil(left / GB)} GB more{': ' + took if took else ''}. "
+            "To get everything: ./kit starter off")
+    else:
+        log(f"Everything switched on in kit.json (about {estimate_gb(root, cfg)} GB). "
+            "To get just the try-it kit: ./kit starter on")
 
 
 # ----------------------------------------------------------------------------- the AI models this computer can run
@@ -2827,9 +2979,107 @@ def find_parts(cfg: Dict[str, Any], word: str) -> List[Tuple[str, str]]:
             or [("library", z) for z in ids["library"] if w and w in [z.lower().split("_")[0]] + z.lower().split("_")[0].split(".")])
 
 
+PRESETS = (("recommended", "Recommended", "what we'd take"),
+           ("essentials", "Essentials", "the AI, the medical, preparedness and repair books, and the map"),
+           ("everything", "Everything", "every AI model and book, the biggest collections too"),
+           ("no-ai", "No AI", "the books and the map"))
+
+
+def ask_picks(root: Path) -> None:
+    """./kit pick --ask: the kit builder's choices on tinfoilkit.com (site/sources.json), asked in a terminal. A preset,
+    or each part. The AI in a preset is one this computer runs."""
+    try:
+        listed = json.loads((root / "site" / "sources.json").read_text(encoding="utf-8"))["sources"]
+    except (OSError, ValueError, KeyError, TypeError):
+        die("The kit builder's list (site/sources.json) isn't in this kit. Choose with ./kit pick --skip and --add.")
+    cfg = json.loads((root / "kit.json").read_text(encoding="utf-8"))
+    ids = {s: {e[k] for e in cfg.get(s, []) if isinstance(e, dict) and isinstance(e.get(k), str)}
+           for s, k in PART_KEYS.items()}
+    wikis = [z for z in ids["library"] if WIKIPEDIA_RE.match(z)]
+
+    def parts(src: Dict[str, Any]) -> List[Tuple[str, str]]:
+        if src["id"] == "maps":
+            return [("maps", "maps")]
+        if WIKIPEDIA_RE.match(src["id"]):
+            return [("library", w) for w in wikis]    # in the place's language
+        return [(s, src["id"]) for s in ("models", "library") if src["id"] in ids[s]]
+
+    sources = [s for s in listed if parts(s)]
+    ai = [s["id"] for s in sources if s.get("group") == "AI models"]
+    every = json.loads(json.dumps(cfg))
+    for m in every.get("models", []):
+        m.pop("enabled", None)
+    fits = {m["id"]: (m["fits"], m["bytes"] or 0) for m in fit_report(root, every, load_state(root))["models"]}
+
+    def is_on(c: Dict[str, Any], part: Tuple[str, str]) -> bool:
+        if part[0] == "maps":
+            return bool(maps_settings(c)["enabled"])
+        return next((e.get("enabled", True) for e in c.get(part[0], []) if e.get(PART_KEYS[part[0]]) == part[1]), False)
+
+    def applied(picked: Dict[str, bool]) -> Dict[Tuple[str, str], bool]:
+        return {part: picked[s["id"]] for s in sources for part in parts(s)}
+
+    def gb(picked: Dict[str, bool]) -> int:
+        c = json.loads(json.dumps(cfg))
+        for (section, ident), on in applied(picked).items():
+            if section == "maps":
+                c.setdefault("maps", {})["enabled"] = on
+            for e in c.get(section, []) if section != "maps" else []:
+                if e.get(PART_KEYS[section]) == ident:
+                    e["enabled"] = on
+        return math.ceil(estimate_bytes(root, c, essentials=False) / GB)
+
+    def preset(key: str) -> Dict[str, bool]:
+        picked = {s["id"]: key in s.get("presets", []) for s in sources}
+        chosen = [i for i in ai if picked[i]]
+        if chosen and not any(fits.get(i, (True, 0))[0] for i in chosen):    # none of them runs here
+            runs = [i for i in ai if fits.get(i, (False, 0))[0]]
+            pick = max(runs, key=lambda i: fits[i][1]) if runs else min(ai, key=lambda i: fits.get(i, (0, 0))[1])
+            picked = {**{i: False for i in chosen}, **{k: v for k, v in picked.items() if k not in chosen}, pick: True}
+        return picked
+
+    log("\nWhat goes in the kit? The same choices as the kit builder on tinfoilkit.com:")
+    for n, (key, name, what) in enumerate(PRESETS, 1):
+        log(f"  {n}  {name}: {what}. About {gb(preset(key))} GB.")
+    log(f"  {len(PRESETS) + 1}  Choose each part")
+    while True:
+        print("\nType a number, or press Return for 1: ", end="", flush=True)
+        said = read_line()
+        if said in [str(n) for n in range(1, len(PRESETS) + 2)] or not said:
+            break
+        print(f"Type a number from 1 to {len(PRESETS) + 1}.", end="")
+    n = int(said or 1)
+    if n <= len(PRESETS):
+        picked = preset(PRESETS[n - 1][0])
+    else:
+        picked = {s["id"]: all(is_on(cfg, part) for part in parts(s)) for s in sources}
+        while True:
+            group = None
+            for i, s in enumerate(sources, 1):
+                if s.get("group") != group:
+                    group = s.get("group")
+                    log(f"\n  {group}")
+                log(f"  {i:>3}  [{'x' if picked[s['id']] else ' '}] {s.get('title', s['id'])} ({fmt_size(s.get('bytes'))})")
+            took = eta(root, gb(picked) * GB)
+            log(f"\nIn all: about {gb(picked)} GB{', ' + took if took else ''}.")
+            print("Type numbers to switch them on or off (like 3 12), or press Return when it's right: ", end="", flush=True)
+            said = read_line()
+            if not said:
+                break
+            for w in re.split(r"[,\s]+", said):
+                if w.isdigit() and 1 <= int(w) <= len(sources):
+                    picked[sources[int(w) - 1]["id"]] = not picked[sources[int(w) - 1]["id"]]
+    changes = {part: on for part, on in applied(picked).items() if is_on(cfg, part) != on}
+    if changes:
+        switch_parts(root, changes)
+
+
 def cmd_pick(root: Path, args: argparse.Namespace) -> None:
-    """What goes in the kit: SETUP's --no-ai, --models, --skip and --add, for setting it up with one command.
-    Checks every name before it changes anything. Without options, says what's on."""
+    """What goes in the kit: SETUP's --no-ai, --models, --skip and --add, for setting it up with one command, or
+    --ask for the kit builder's questions. Checks every name before it changes anything. Without options, says what's
+    on, its size and the time to download it."""
+    if args.ask:
+        ask_picks(root)
     cfg = json.loads((root / "kit.json").read_text(encoding="utf-8"))
     models = [m["id"] for m in cfg.get("models", []) if isinstance(m, dict) and "id" in m]
     changes: Dict[Tuple[str, str], bool] = {}
@@ -2858,6 +3108,8 @@ def cmd_pick(root: Path, args: argparse.Namespace) -> None:
         die(f"Nothing in the kit is called {names(unknown)}. AI models: {', '.join(models)}. Books: {', '.join(books)}. "
             f"Extras: {', '.join(extras)}. Also maps, or a whole part: models, library, extras.", code=2)
     before = load_config(root)
+    if args.ask or args.no_ai or args.models or args.skip or args.add:
+        set_setting(root, "picked", True)    # SETUP asks what goes in only until someone has said
     if changes:
         switch_parts(root, changes, [h for h in named if changes.get(h)])
         # A model someone picks, or leaves out, by name isn't one to offer back on a computer with more memory.
@@ -2880,6 +3132,10 @@ def cmd_pick(root: Path, args: argparse.Namespace) -> None:
     if cfg.get("extras"):
         log(f"Extras: {', '.join(on('extras', 'id')) or 'none'}.")
     log(f"All of it is about {estimate_gb(root, cfg, False)} GB; just the essentials, about {estimate_gb(root, cfg, True)} GB.")
+    if load_state(root)["items"]:
+        left = estimate_bytes(root, cfg, cfg["settings"].get("essentials_only") is True, left=True)
+        took = eta(root, left)
+        log(f"To download: about {math.ceil(left / GB)} GB{', ' + took if took else ''}.")
 
 
 def read_line() -> str:
@@ -3222,7 +3478,9 @@ def start_server(procs: List[subprocess.Popen], log: Path, cmd: List[Any], cwd: 
                                       stderr=subprocess.STDOUT))
 
 
-def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.Popen], logs_dir: Path) -> None:
+def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.Popen], logs_dir: Path,
+              starter: bool = False) -> None:
+    """starter: a try-it kit, which gets address search and directions with the rest."""
     home = m["home"]
     pm = runtime_binary(root, "pmtiles", "pmtiles")
     tiles = root / "maps" / "tiles" / "basemap.pmtiles"
@@ -3246,6 +3504,8 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
     have = bool(java and photon and (gdir / "photon_data").is_dir())
     if not have and not m.get("geocoder_country"):
         log("  SKIP  address search: nobody publishes one for this map's area")
+    elif not have and starter:
+        log("  SKIP  address search: it comes with the rest of the kit")
     elif not have and m.get("geocoder_wide"):
         log("  SKIP  address search: not here yet. It's for a whole region of the world, so it comes after the essentials")
     else:
@@ -3277,8 +3537,12 @@ def test_maps(root: Path, m: Dict[str, Any], check: Any, procs: List[subprocess.
         check("address search works", ok, detail)
     gh = newest_file(root / "bin" / "graphhopper", "graphhopper-web-*.jar")
     rdir = root / "maps" / "routing"
-    check("directions installed", bool(java and gh and (rdir / "graph-cache" / "properties").exists()))
-    if java and gh and (rdir / "graph-cache" / "properties").exists():
+    routed = bool(java and gh and (rdir / "graph-cache" / "properties").exists())
+    if not routed and starter:
+        log("  SKIP  directions: they come with the rest of the kit")
+    else:
+        check("directions installed", routed)
+    if routed:
         port = free_port()
         start_server(procs, logs_dir / "test-routing.log",
                      [java, f"-Xmx{m['routing_heap']}", f"-Ddw.server.application_connectors[0].port={port}",
@@ -3388,7 +3652,7 @@ def cmd_test(root: Path, args: argparse.Namespace) -> None:
                       acao.group(1) if acao else "no CORS header")
         m = maps_settings(cfg)
         if m["enabled"]:
-            test_maps(root, m, check, procs, logs_dir)
+            test_maps(root, m, check, procs, logs_dir, cfg["settings"].get("starter_only") is True)
     finally:
         for p in procs:
             p.terminate()
@@ -3589,12 +3853,14 @@ def main() -> None:
     p.add_argument("--only", nargs="*", default=[], help="limit to items whose section/id contains these words")
     p.add_argument("--json", action="store_true", help="print every item's size as JSON, disabled ones too")
     p.add_argument("--essentials", action="store_true", help="only what the kit can't do without")
+    p.add_argument("--starter", action="store_true", help="only the try-it kit")
     p = sub.add_parser("sync", help="download and update everything")
     p.add_argument("-y", "--yes", action="store_true", help="don't ask for confirmation")
     p.add_argument("--force", action="store_true", help="ignore the free space the kit keeps (keep_free_gb)")
     p.add_argument("--only", nargs="*", default=[], help="limit to items whose section/id contains these words")
     p.add_argument("--essentials", action="store_true", help="only the programs, the map, the most important books "
-                   "and the AI this computer runs plus the smallest (SETUP's first run gets these first)")
+                   "and the AI this computer runs plus the smallest")
+    p.add_argument("--starter", action="store_true", help="only the try-it kit: a few GB to try the kit with")
     p = sub.add_parser("verify", help="re-check files against their checksums")
     p.add_argument("--quick", action="store_true", help="check sizes only (fast)")
     p.add_argument("--fix", action="store_true", help="delete corrupt files so the next sync replaces them")
@@ -3609,6 +3875,9 @@ def main() -> None:
     sub.add_parser("pins", help="pin the newest build of every program, with its checksum, in tools/pins.json (before a release)")
     p = sub.add_parser("estimate", help="about how many GB this kit.json needs (no internet needed)")
     p.add_argument("--essentials", action="store_true", help="just the essentials")
+    p.add_argument("--starter", action="store_true", help="just the try-it kit")
+    p.add_argument("--rest", action="store_true", help="GB still to download for everything switched on, and how long "
+                   "that takes (tab-separated)")
     p = sub.add_parser("drives", help="the plugged-in drives the kit could go on")
     p.add_argument("--json", action="store_true", help="with this computer's free space and what the kit needs")
     p = sub.add_parser("place", help="put the kit at DEST, a TinfoilKit folder on a drive or in the home folder")
@@ -3618,7 +3887,10 @@ def main() -> None:
     p.add_argument("--json", action="store_true", help="print it all as JSON")
     p = sub.add_parser("essentials", help="get just the essentials from now on (on), or everything again (off)")
     p.add_argument("action", nargs="?", choices=("on", "off"))
+    p = sub.add_parser("starter", help="get just the try-it kit from now on (on), or everything (off)")
+    p.add_argument("action", nargs="?", choices=("on", "off"))
     p = sub.add_parser("pick", help="what goes in the kit: switch models, books, extras and the map on or off")
+    p.add_argument("--ask", action="store_true", help="ask the kit builder's questions: a preset, or each part")
     p.add_argument("--no-ai", action="store_true", help="no AI models")
     p.add_argument("--models", metavar="IDS", help="only these AI models (ids, comma-separated)")
     p.add_argument("--skip", metavar="IDS", help="leave these out: AI models, books (a name, or its start up to an "
@@ -3648,7 +3920,7 @@ def main() -> None:
         die("curl is required")
     commands = {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "status": cmd_status,
                 "search": cmd_search, "test": cmd_test, "update": cmd_update, "estimate": cmd_estimate,
-                "drives": cmd_drives, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials,
+                "drives": cmd_drives, "place": cmd_place, "space": cmd_space, "essentials": cmd_essentials, "starter": cmd_starter,
                 "fit": cmd_fit, "pick": cmd_pick, "share": cmd_share, "autostart": cmd_autostart, "pins": cmd_pins, "region": cmd_region}
     if args.cmd not in commands:
         ap.print_help()

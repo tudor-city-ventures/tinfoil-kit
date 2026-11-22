@@ -170,6 +170,50 @@ try:
     check("sync after the essentials: gets the rest", rc == 0 and list((ess / "library").glob("testsurvival_*.zim"))
           and "last_sync" in json.loads((ess / ".kit" / "state.json").read_text()), out)
 
+    # Before that, it gets the try-it kit (./kit starter): this computer's programs, the map, and the AI and books
+    # marked "starter", even ones that are switched off (samples). The full sync after it removes the samples.
+    tk = work / "try"
+    shutil.copytree(TESTS.parent / "tools", tk / "tools")
+    (tk / "kit.json").write_text(json.dumps({"settings": {**cfg["settings"], "starter_only": True},
+                                             "models": [{**cfg["models"][0], "starter": True, "enabled": False}, cfg["models"][1]],
+                                             "library": [{**cfg["library"][0], "starter": True}, cfg["library"][1]]}))
+    (tk / "site").mkdir()
+    (tk / "site" / "sources.json").write_text(json.dumps({"sources": [
+        {"id": "Tiny", "bytes": 2 * 10**9}, {"id": "Two", "bytes": 3 * 10**9}, {"id": "testmed_en_all_maxi", "bytes": 4 * 10**9},
+        {"id": "testsurvival_en", "bytes": 60 * 10**9}]}))
+    rc, out = kit("plan", root=tk)
+    rc2, out2 = kit("estimate", root=tk)
+    check("plan on a try-it kit: the AI and books marked starter, even one that's switched off, and nothing else",
+          rc == 0 and out.count("NEW") == 2 and "Tiny" in out and "testmed_en_all_maxi" in out and "Two" not in out
+          and "testsurvival" not in out and rc2 == 0 and out2.strip() == "7", out + out2)
+    (tk / "library").mkdir()
+    (tk / "library" / "testsurvival_en_2026-02.zim.partial").write_bytes((R / "zim/testsurvival_en_2026-02.zim").read_bytes()[:1000])
+    rc, out = kit("sync", "-y", root=tk)
+    st = json.loads((tk / ".kit" / "state.json").read_text())
+    check("sync on a try-it kit: just those, it counts as a complete one, and another item's unfinished download stays",
+          rc == 0 and (tk / "models/Tiny/Tiny-Q4_K_M.gguf").exists() and not (tk / "models/Two").exists()
+          and list((tk / "library").glob("testmed_*.zim")) and not list((tk / "library").glob("testsurvival_*.zim"))
+          and (tk / "library" / "testsurvival_en_2026-02.zim.partial").exists() and "last_sync" in st, out)
+    st["download_speed"] = 10 * 10**6
+    (tk / ".kit" / "state.json").write_text(json.dumps(st))
+    rc, out = kit("starter", root=tk)
+    rc2, out2 = kit("estimate", "--rest", root=tk)
+    check("kit starter and estimate --rest: how big the rest is, and how long it takes at the speed measured",
+          rc == 0 and "Just the try-it kit" in out and "The rest is about 64 GB more: about 2 hours at this connection's speed "
+          "(10.0 MB/s)" in out and "./kit starter off" in out
+          and rc2 == 0 and out2 == "64\tabout 2 hours at this connection's speed (10.0 MB/s)\n", out + out2)
+    rc, out = kit("starter", "off", root=tk)
+    rc2, out2 = kit("plan", root=tk)
+    check("kit starter off: everything switched on, and plan says how long it takes",
+          rc == 0 and "starter_only" not in (tk / "kit.json").read_text() and "To get just the try-it kit" in out
+          and "Two" in out2 and "That takes about a minute at this connection's speed (10.0 MB/s)." in out2, out + out2)
+    rc, out = kit("sync", "-y", root=tk)
+    st = json.loads((tk / ".kit" / "state.json").read_text())
+    check("the full sync after it gets the rest, then removes the sample nobody picked and keeps the book they did",
+          rc == 0 and (tk / "models/Two/Two-Q4_K_M.gguf").exists() and not (tk / "models/Tiny").exists()
+          and "models/Tiny" not in st["items"] and "Removed Tiny" in out and list((tk / "library").glob("testmed_*.zim"))
+          and list((tk / "library").glob("testsurvival_*.zim")) and "library/testmed_en_all_maxi" in st["items"], out)
+
     rc, out = kit("verify")
     check("verify passes", rc == 0 and "All 5 files OK" in out, out)
     book = drive / "library/testmed_en_all_maxi_2026-01.zim"
@@ -626,8 +670,9 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # SETUP.command's choices, with a stand-in ./kit that exits as told. Its update rewrites SETUP.command in
     # place, the hard case for bash, which reads a script as it goes. Its space says what SPACE does (all of it, the
     # essentials, GB free, GB in all, GB all of it needs, GB the essentials need, GB worth leaving free), or for a
-    # drive what SPACE_DRIVE does. Calls with --essentials go in calls.log as plan-essentials and sync-essentials,
-    # and every call goes in args.log with its options.
+    # drive what SPACE_DRIVE does, and its estimate says 8 GB, or with --rest 380 GB in about 4 hours. Calls go in
+    # calls.log (essentials on as essentials-on, starter off as starter-off), all but space and estimate, and every
+    # call goes in args.log with its options.
     def space(*v):
         return "\t".join(map(str, v))
     roomy = space("fits", "fits", 900, 1000, 400, 100, 50)
@@ -635,14 +680,16 @@ pathlib.Path(str(out) + ".aria2").unlink()
 case "$1" in drives|place|region|pick) exec python3 "@KIT_PY@" --root "$(pwd)" "$@";; esac    # the real ones
 echo "$*" >> args.log
 c="$1"; case " $* " in *" --essentials "*) c="$1-essentials";; esac
-[ "$1" = essentials ] && c="essentials-$2"
-[ "$1" = space ] || echo "kit $c" >> calls.log
+case "$1" in essentials|starter) c="$1-$2";; esac
+case "$1" in space|estimate) ;; *) echo "kit $c" >> calls.log;; esac
 case "$1" in
   space) case "$2" in "${KIT_DRIVES:-/nowhere}"/*) echo "${SPACE_DRIVE:-$SPACE}";; *) echo "$SPACE";; esac;;
-  essentials) python3 - "$2" <<'PY'
+  estimate) case " $* " in *" --rest "*) printf '%s\t%s\n' 380 "about 4 hours at this connection's speed (24.0 MB/s)";;
+                                     *) echo 8;; esac;;
+  essentials|starter) python3 - "$1" "$2" <<'PY'
 import json, sys
 c = json.load(open("kit.json"))
-c.setdefault("settings", {})["essentials_only"] = True if sys.argv[1] == "on" else None
+c.setdefault("settings", {})[sys.argv[1] + "_only"] = True if sys.argv[2] == "on" else None
 c["settings"] = {k: v for k, v in c["settings"].items() if v is not None}
 json.dump(c, open("kit.json", "w"), indent=1)
 PY
@@ -667,6 +714,8 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
         (path / "tools" / "kit.py").write_text("# stand-in\n")
         (path / "GUIDE.md").write_text("guide\n")
         shutil.copy(TESTS.parent / "kit.json", path)     # ./kit region changes it
+        (path / "site").mkdir()
+        shutil.copy(TESTS.parent / "site" / "sources.json", path / "site")    # for ./kit pick --ask
         if git:
             (path / ".git").mkdir()
         return path
@@ -683,22 +732,61 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
                                 "SPACE": roomy, **env_extra})
         return p.returncode, p.stdout, (folder / "calls.log").read_text().split()[1::2]
 
-    first = ["update", "fit", "plan-essentials", "sync-essentials", "test", "sync", "test"]
+    first = ["update", "fit", "starter-on", "plan", "sync", "test"]    # the try-it kit
+    rest = ["starter-off", "essentials-off", "plan", "sync", "test"]    # the rest of the kit
+    asked = ("[Y/n]", "[y/N]", "Type a number", "Press Return")
     rc, out, calls = run_setup()
-    check("SETUP: all good: the essentials first, checked, then the rest", rc == 0 and "All set" in out and calls == first
-          and "Step 1 of 3: the kit is on" in out and "Step 2 of 3: the essentials" in out and "The essentials work" in out
-          and "Step 3 of 3: everything else (about 400 GB)" in out and "where should the kit go" not in out, out)
+    check("SETUP the first time: the try-it kit, checked, then how big the rest is, how long it takes, and how to get it",
+          rc == 0 and calls == first and '"starter_only": true' in (setup / "kit.json").read_text()
+          and "Step 1 of 2: the kit is on" in out and "Step 2 of 2: a small kit to try first (about 8 GB)" in out
+          and "The try-it kit works" in out and "Turn off Wi-Fi and try it" in out
+          and "The rest of the kit is about 380 GB more: about 4 hours at this connection's speed (24.0 MB/s)" in out
+          and "run bash SETUP.command again: it asks what you want in the kit, then gets that" in out
+          and "Open the kit now?" in out and "All set" not in out and "where should the kit go" not in out, out)
     (setup / ".kit" / "state.json").write_text('{"items": {}, "last_sync": "2026-01-01T00:00:00"}')
+    rc, out, calls = run_setup(answers="\n\ny\nn\n\n", KIT_MEMORY_MB="32768")
+    c = json.loads((setup / "kit.json").read_text())
+    check("SETUP again on the try-it kit: asks the kit builder's questions, shows what it gets, and gets the rest",
+          rc == 0 and calls == ["update", "fit"] + rest and "Step 2 of 3: the rest of the kit" in out
+          and "What goes in the kit?" in out and "Here's what it gets:" in out and "Start downloading?" in out
+          and "Step 3 of 3: start everything offline" in out and "All set" in out
+          and "starter_only" not in c["settings"] and c["settings"].get("picked") is True, out)
     update_calls = ["update", "fit", "plan", "sync", "test"]
+    rc, out, calls = run_setup()
+    check("SETUP after that: says it's an update, and how to update next time",
+          rc == 0 and "TINFOIL KIT UPDATE" in out and "TINFOIL KIT SETUP" not in out and "Step 3 of 3: start everything" in out
+          and "whenever you want the newest AI models" in out and calls == update_calls, out)
+
+    def try_kit(**settings):
+        c = json.loads((TESTS.parent / "kit.json").read_text())
+        c["settings"].update(starter_only=True, **settings)
+        (setup / "kit.json").write_text(json.dumps(c, indent=1))
+    try_kit(picked=True)
+    rc, out, calls = run_setup(answers="\nn\n\n")
+    check("SETUP again on a try-it kit, picked before: doesn't ask again, and a no to downloading keeps the try-it kit",
+          rc == 0 and "What goes in the kit?" not in out and "AI models:" in out
+          and calls == ["update", "fit", "starter-off", "essentials-off", "plan", "starter-on"]
+          and '"starter_only": true' in (setup / "kit.json").read_text(), out)
+    rc, out, calls = run_setup(answers="\n2\n\n", SPACE=space("no", "fits", 300, 1000, 400, 100, 100))
+    check("SETUP again on a try-it kit that all of it won't fit: offers the essentials or not now, and not now keeps it",
+          rc == 1 and "1  Just the essentials" in out and "2  Not now" in out and "Somewhere else" not in out
+          and "The try-it kit keeps working" in out and calls == ["update", "fit"]
+          and '"starter_only": true' in (setup / "kit.json").read_text(), out)
+    rc, out, calls = run_setup(answers="\n1\ny\nn\n\n", SPACE=space("no", "fits", 300, 1000, 400, 100, 100))
+    check("SETUP again on a try-it kit that all of it won't fit: the essentials, when chosen",
+          rc == 0 and calls == ["update", "fit", "starter-off", "essentials-on", "plan", "sync", "test"]
+          and '"essentials_only": true' in (setup / "kit.json").read_text(), out)
+    try_kit()
+    rc, out, calls = run_setup(args=("--yes",), answers="")
+    argv = (setup / "args.log").read_text().splitlines()
+    check("SETUP --yes on a try-it kit: gets the rest, asking nothing",
+          rc == 0 and calls == ["update", "fit"] + rest and "fit --restore --skip" in argv and "pick --ask" not in argv
+          and not any(a in out for a in asked) and "All set" in out, out)
 
     def essentials_only():
         c = json.loads((TESTS.parent / "kit.json").read_text())
         c["settings"]["essentials_only"] = True
         (setup / "kit.json").write_text(json.dumps(c, indent=1))
-    rc, out, calls = run_setup()
-    check("SETUP: set up before: says it's an update, and how to update next time",
-          rc == 0 and "TINFOIL KIT UPDATE" in out and "TINFOIL KIT SETUP" not in out and "Step 3 of 3: start everything" in out
-          and "whenever you want the newest AI models" in out and calls == update_calls, out)
     essentials_only()
     rc, out, calls = run_setup(answers="\ny\ny\nn\n\n")
     check("SETUP: an update of just the essentials, now that the rest fits: offers it, and a yes gets it",
@@ -708,7 +796,6 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out, calls = run_setup(answers="\n\ny\nn\n\n")
     check("SETUP: an update of just the essentials: just Return keeps it that way",
           rc == 0 and "room for the rest" in out and calls == update_calls and "essentials_only" in (setup / "kit.json").read_text(), out)
-    asked = ("[Y/n]", "[y/N]", "Type a number", "Press Return")
     rc, out, calls = run_setup(args=("--yes",), answers="")
     check("SETUP --yes: an update of just the essentials, now that the rest fits: says how to get it, asks nothing",
           rc == 0 and "SETUP --all gets it" in out and calls == update_calls and not any(a in out for a in asked)
@@ -727,26 +814,28 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     (setup / ".kit" / "state.json").unlink()
     rc, out, calls = run_setup(update=3)
     check("SETUP: after updating the kit it starts over on the new SETUP, once",
-          rc == 0 and "Step 2 (new version) of 3: the essentials" in out and out.count("TINFOIL KIT SETUP") == 1
+          rc == 0 and "Step 2 (new version) of 2: a small kit to try first" in out and out.count("TINFOIL KIT SETUP") == 1
           and out.count("Maps are for") == 1 and calls == first, out)
     rc, out, calls = run_setup(update=1)
-    check("SETUP: the kit's own update failed: carries on", rc == 0 and "All set" in out and calls == first, out)
+    check("SETUP: the kit's own update failed: carries on", rc == 0 and "The try-it kit works" in out and calls == first, out)
     rc, out, calls = run_setup(sync=1)
     check("SETUP: some downloads failed but the kit works: says so and lists them",
-          rc == 1 and "didn't finish" in out and "models/Big: download failed" in out and "All set" not in out, out)
+          rc == 1 and "didn't finish" in out and "models/Big: download failed" in out and "try-it kit works" not in out, out)
     rc, out, calls = run_setup(sync=1, test=1)
-    check("SETUP: checks failed: stops after the essentials", rc == 1 and "Some checks failed" in out and "models/Big" in out
-          and calls == first[:5], out)
+    check("SETUP: checks failed: stops after the try-it kit", rc == 1 and "Some checks failed" in out and "models/Big" in out
+          and calls == first, out)
     rc, out, calls = run_setup(sync=130)
-    check("SETUP: Ctrl-C during the download", rc == 130 and "Stopped" in out and calls == first[:4], out)
+    check("SETUP: Ctrl-C during the download", rc == 130 and "Stopped" in out and calls == first[:5], out)
     rc, out, calls = run_setup(plan=1)
-    check("SETUP: offline: stops before asking to download", rc == 1 and calls == first[:3] and "Start downloading" not in out, out)
+    check("SETUP: offline: stops before asking to download", rc == 1 and calls == first[:4] and "Start downloading" not in out, out)
     home = ["share on", "autostart on", "share"]
     check("SETUP: a normal setup doesn't share the kit or start it with the computer", (setup / "home.log").read_text() == "")
     rc, out, calls = run_setup(args=("--home-server",), answers="\ny\n\n")
-    check("SETUP --home-server: shares the kit, starts it with the computer, shows the address, and doesn't open it",
-          rc == 0 and calls[:len(first)] == first and (setup / "home.log").read_text().splitlines() == home
-          and "Home server" in out and "Open the kit now" not in out and "double-click Open Tinfoil Kit" not in out, out)
+    check("SETUP --home-server: the try-it kit and right after it the rest, then shares the kit, starts it with the "
+          "computer, shows the address, and doesn't open it",
+          rc == 0 and calls == first + rest + ["share", "autostart", "share"] and (setup / "home.log").read_text().splitlines() == home
+          and "Step 3 of 3: the rest of the kit" in out and "Home server" in out and "Open the kit now" not in out
+          and "double-click Open Tinfoil Kit" not in out, out)
     rc, out, calls = run_setup(update=3, args=("--home-server",), answers="\ny\n\n")
     check("SETUP --home-server: still a home server after the kit updates itself and starts over",
           rc == 0 and "(new version)" in out and (setup / "home.log").read_text().splitlines() == home, out)
@@ -757,24 +846,26 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("SETUP --home-server: checks failed: doesn't share it", rc == 1 and (setup / "home.log").read_text() == "", out)
     rc, out, calls = run_setup(answers="Bavaria\n1\ny\nn\n\n")
     c = json.loads((setup / "kit.json").read_text())
-    check("SETUP update: says where the maps are for, and changes the place and Wikipedia's language when told",
+    check("SETUP: says where the maps are for, and changes the place and Wikipedia's language when told",
           rc == 0 and "Maps are for US Northeast" in out and "Maps: Germany: Bayern" in out and c["maps"]["region"] == "bayern"
           and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_de_all_"], out)
     shutil.copy(TESTS.parent / "kit.json", setup)
     rc, out, calls = run_setup(args=("--yes",), answers="")
     argv = (setup / "args.log").read_text().splitlines()
-    check("SETUP --yes: asks nothing, gets what fits on this computer, doesn't open the kit, and closes on its own",
-          rc == 0 and "All set" in out and calls == first and "update --yes" in argv and "fit --restore --skip" in argv
-          and not any(a in out for a in asked) and "Start downloading" not in out and "Open the kit now" not in out, out)
+    check("SETUP --yes the first time: asks nothing, gets the try-it kit, says how to open it and get the rest, and closes",
+          rc == 0 and calls == first and "update --yes" in argv and "fit --restore --skip" in argv
+          and not any(a in out for a in asked) and "Start downloading" not in out and "Open the kit now" not in out
+          and f'When you\'re ready for it: bash "{setup}/SETUP.command" --yes' in out
+          and f'To open it: bash "{setup}/Open Tinfoil Kit.command"' in out, out)
     rc, out, calls = run_setup(args=("--region", "texas", "--wikipedia", "es", "--skip", "maps", "--add", "gutenberg_en_all",
                                      "--share", "--yes"), answers="")
     c = json.loads((setup / "kit.json").read_text())
-    check("SETUP --region, --wikipedia, --skip, --add and --share on an update: kit.json changes, and the kit is shared",
+    check("SETUP --region, --wikipedia, --skip, --add and --share: kit.json changes, and the kit is shared",
           rc == 0 and c["maps"]["region"] == "us/texas" and c["maps"]["enabled"] is False
           and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_es_all_"]
           and {k: v for k, v in c["library"][-1].items() if k in ("enabled", "essential")} == {"essential": True}
           and (setup / "home.log").read_text().splitlines() == ["share on", "share"] and "Sharing:" in out
-          and "Open the kit now" not in out, out)
+          and "Open the kit now" not in out and "it gets it" not in out, out)
     shutil.copy(TESTS.parent / "kit.json", setup)
     rc, out, calls = run_setup(args=("--no-ai", "--yes"), answers="")
     argv = (setup / "args.log").read_text().splitlines()
@@ -812,19 +903,19 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
               "KIT_MAC_PYTHON_URL": tgz.as_uri(), "KIT_MAC_PYTHON_SHA256": sha}
     rc, out, calls = run_setup(plan=1, answers="", **on_mac)
     check("SETUP on a Mac without Python: gets the kit's own, checks it, and carries on",
-          rc == 1 and "First, the kit gets the Python" in out and "this Mac" in out and calls == first[:3]
+          rc == 1 and "First, the kit gets the Python" in out and "this Mac" in out and calls == first[:4]
           and (py_home / "python" / "bin" / "python3").exists() and (py_home / "python" / ".kit-sha256").read_text().strip() == sha
           and not (py_home / "python.partial").exists() and not (py_home / "python.tar.gz").exists(), out)
     rc, out, calls = run_setup(plan=1, answers="", **on_mac)
-    check("SETUP on a Mac: the kit's Python is there: no download", calls == first[:3] and "Python" not in out, out)
+    check("SETUP on a Mac: the kit's Python is there: no download", calls == first[:4] and "Python" not in out, out)
     (py_home / "python" / ".kit-sha256").write_text("an older build\n")
     rc, out, calls = run_setup(plan=1, answers="", **{**on_mac, "KIT_MAC_PYTHON_URL": (mac / "nothing.tar.gz").as_uri()})
     check("SETUP on a Mac: a newer Python that can't be had: keeps the one it has",
-          calls == first[:3] and "Couldn't download it" in out and "keeps using the Python it has" in out
+          calls == first[:4] and "Couldn't download it" in out and "keeps using the Python it has" in out
           and (py_home / "python" / "bin" / "python3").exists(), out)
     rc, out, calls = run_setup(plan=1, answers="", **on_mac)
     check("SETUP on a Mac: a newer Python: replaces the old one",
-          calls == first[:3] and "a newer Python" in out and (py_home / "python" / ".kit-sha256").read_text().strip() == sha, out)
+          calls == first[:4] and "a newer Python" in out and (py_home / "python" / ".kit-sha256").read_text().strip() == sha, out)
     shutil.rmtree(py_home)
     rc, out, calls = run_setup(plan=1, answers="", **{**on_mac, "KIT_MAC_PYTHON_SHA256": "0" * 64})
     check("SETUP on a Mac: a download that doesn't match its checksum isn't used, and SETUP stops",
@@ -872,25 +963,29 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
                                 "SPACE": roomy, "PLAN": "0", "SYNC": "0", "TEST": "0", "UPDATE": "0", **env_extra})
         return p.returncode, p.stdout + p.stderr, dl, home, vols    # ./kit place says what it did on stderr
 
-    def placed_ok(where, essentials=False):
-        """Set up at where: the essentials first, then the rest, or with just the essentials only those."""
+    def placed_ok(where, essentials=False, then_rest=False):
+        """Set up at where: the try-it kit, and right after it the rest if told, with just the essentials or all."""
         log = where / "calls.log"
-        tail = ["update", "plan-essentials", "sync", "test"] if essentials else first[:1] + first[2:]
+        tail = first[:1] + first[2:]    # (fit was before the kit moved)
+        if then_rest:
+            tail += ["starter-off", "essentials-on" if essentials else "essentials-off"] + rest[2:]
         return ((where / "SETUP.command").exists() and (where / "kit").exists() and (where / "tools/kit.py").exists()
                 and (where / ".kit").is_dir() and log.exists() and log.read_text().split()[1::2][-len(tail):] == tail
                 and ('"essentials_only": true' in (where / "kit.json").read_text()) == essentials)
 
     rc, out, dl, home, vols = first_run("2\ny\nn\n\n")
     check("SETUP first run: this computer: says what fits, moves the kit to TinfoilKit in the home folder, sets up there",
-          rc == 0 and "Step 2 of 4: where should the kit go?" in out and "All of the kit is about 400 GB" in out
+          rc == 0 and "Step 2 of 3: where should the kit go?" in out and "All of the kit is about 400 GB" in out
           and "Just the essentials (the AI" in out and "Its disk has 900 GB free of 1.0 TB: room for all of it" in out
           and placed_ok(home / "TinfoilKit") and not dl.exists() and "Moved the kit to this computer" in out
-          and out.count("TINFOIL KIT SETUP") == 1 and "Step 4 of 4: everything else" in out and "All set" in out
+          and out.count("TINFOIL KIT SETUP") == 1 and "Step 3 of 3: a small kit to try first" in out
+          and "The try-it kit works" in out
           and (home / "TinfoilKit" / "calls.log").read_text().split()[1::2][:2] == ["fit", "essentials-off"], out)
     rc, out, _, _, _ = first_run("1\n1\ny\nn\n\n", drives=["SAMSUNG T7"])
     check("SETUP first run: a drive: lists it with what fits, the kit moves to TinfoilKit at its top and sets up there",
           rc == 0 and "1  SAMSUNG T7 (" in out and "900 GB free of 1.0 TB): room for all of it" in out and "Look again" in out
-          and placed_ok(vols / "SAMSUNG T7" / "TinfoilKit") and "Moved the kit to the drive SAMSUNG T7" in out and "All set" in out, out)
+          and placed_ok(vols / "SAMSUNG T7" / "TinfoilKit") and "Moved the kit to the drive SAMSUNG T7" in out
+          and "The try-it kit works" in out, out)
     rc, out, _, home, _ = first_run("1\n2\ny\nn\n\n")
     check("SETUP first run: no drive plugged in: says so, and offers this computer instead",
           rc == 0 and "No external drive is plugged in" in out and placed_ok(home / "TinfoilKit"), out)
@@ -898,7 +993,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     rc, out, _, home, _ = first_run("2\n1\ny\nn\n\n", SPACE=small)
     check("SETUP first run: all of it won't fit on this computer: offers just the essentials, and gets only those",
           rc == 0 and "room for the essentials, not all of it" in out and "it needs about 400 GB plus some to spare, and 300 GB is free" in out
-          and placed_ok(home / "TinfoilKit", essentials=True) and "You chose just the essentials" in out and "All set" in out, out)
+          and placed_ok(home / "TinfoilKit", essentials=True) and "The rest of the essentials is about 380 GB more" in out, out)
     rc, out, _, home, _ = first_run("2\n2\n2\n1\ny\nn\n\n", SPACE=small)
     check("SETUP first run: all of it won't fit: somewhere else goes to the drives", rc == 0 and "No external drive" in out
           and placed_ok(home / "TinfoilKit", essentials=True), out)
@@ -937,9 +1032,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
 
     rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Atlantis\nUSA\nTexas\n1\n")
     check("SETUP first run: asks where you live first, says when it can't tell, and sets the maps and Wikipedia",
-          rc == 0 and "Step 1 of 4: where do you live?" in out and 'No place called "Atlantis"' in out
-          and '"USA" matches' in out and "Maps: Texas" in out and "Step 2 of 4: where should the kit go" in out
-          and "Step 3 of 4: the essentials" in out and "Step 4 of 4: everything else" in out and placed_ok(home / "TinfoilKit")
+          rc == 0 and "Step 1 of 3: where do you live?" in out and 'No place called "Atlantis"' in out
+          and '"USA" matches' in out and "Maps: Texas" in out and "Step 2 of 3: where should the kit go" in out
+          and "Step 3 of 3: a small kit to try first" in out and placed_ok(home / "TinfoilKit")
           and placed_cfg(home / "TinfoilKit") == ("us/texas", ["wikipedia_en_all_maxi"]), out)
     rc, out, dl, home, _ = first_run("2\ny\nn\n\n", where="Georgia\n1\n2\n")
     check("SETUP first run: a name two places share: asks which, then which language",
@@ -951,14 +1046,16 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("SETUP --region texas --this-computer --yes: asks nothing, sets up in the home folder, doesn't open the kit",
           rc == 0 and placed_ok(k) and not dl.exists() and placed_cfg(k) == ("us/texas", ["wikipedia_en_all_maxi"])
           and "update --yes" in (k / "args.log").read_text().splitlines() and not any(a in out for a in asked)
-          and "Open the kit now" not in out and "All set" in out, out)
+          and "Open the kit now" not in out and "The try-it kit works" in out, out)
     t7 = work / "place" / "Volumes" / "SAMSUNG T7"
     rc, out, dl, home, _ = first_run("", where="", drives=["SAMSUNG T7"], args=(
         "--drive", str(t7), "--essentials", "--models", "Gemma-4-E4B", "--skip", "maps", "--add", "gutenberg_en_all,wikipedia",
         "--yes"))
     c = json.loads((t7 / "TinfoilKit" / "kit.json").read_text()) if (t7 / "TinfoilKit" / "kit.json").exists() else {}
-    check("SETUP --drive --essentials --models --skip --add --yes: on the drive, just the essentials plus what was added",
-          rc == 0 and placed_ok(t7 / "TinfoilKit", essentials=True) and "What goes in it:" in out
+    check("SETUP --drive --essentials --models --skip --add --yes: on the drive, the try-it kit, then just the essentials "
+          "plus what was added",
+          rc == 0 and placed_ok(t7 / "TinfoilKit", essentials=True, then_rest=True) and "What goes in it:" in out
+          and "Step 4 of 4: the rest of the kit" in out
           and [m["id"] for m in c["models"] if m.get("enabled", True)] == ["Gemma-4-E4B"] and c["maps"]["enabled"] is False
           and [z["zim"] for z in c["library"] if z.get("essential")] == ["wikipedia_en_all_maxi", "gutenberg_en_all"], out)
     rc, out, dl, home, _ = first_run("", where="", args=("--drive", str(t7.parent / "NOPE"), "--yes"))
@@ -1201,8 +1298,9 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("kit pick: just that model, every Stack Exchange site off, and the adds on, changing only the lines that say so",
           rc == 0 and [m["id"] for m in c["models"] if m.get("enabled", True)] == ["Gemma-4-E4B"]
           and len(se) == 10 and all(z.get("enabled") is False for z in se) and "enabled" not in c["library"][-1]
-          and len(added) == 17 and len(gone) == 12 and all('"enabled": false' in x or '"essential": true' in x for x in added)
-          and "AI models: Gemma-4-E4B." in out, out)
+          and len(added) == 18 and len(gone) == 12
+          and all('"enabled": false' in x or '"essential": true' in x or '"picked": true' in x for x in added)
+          and c["settings"]["picked"] is True and "AI models: Gemma-4-E4B." in out, out)
     items = {i.key: i for i in kp.items_from_config(kp.load_config(pk))}
     runs = {"runs": "Inkling-2-Mini", "smallest": "Inkling-2-Mini"}
     check("kit pick: what's asked for by name comes even with just the essentials",
@@ -1215,6 +1313,38 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
     check("kit pick: a name the kit doesn't have changes nothing, and says what there is",
           rc == rc2 == 2 and "Nothing in the kit is called nothing-such" in out and "Books: mdwiki_en_all_maxi" in out
           and "No AI model is called wikipedia" in out2 and (pk / "kit.json").read_text() == now, out + out2)
+
+    # ./kit pick --ask: the kit builder's choices, asked in a terminal: a preset, or each part.
+    ak = work / "ask"
+    shutil.copytree(TESTS.parent / "tools", ak / "tools")
+    ask_json = json.dumps({"settings": {}, "models": [{"id": "Tiny", "type": "hf"}, {"id": "Two", "type": "hf"}],
+                           "library": [{"zim": "testmed_en_all_maxi"}, {"zim": "testsurvival_en"}]}, indent=1)
+    (ak / "kit.json").write_text(ask_json)
+    (ak / "site").mkdir()
+    (ak / "site" / "sources.json").write_text(json.dumps({"sources": [
+        {"id": "Tiny", "group": "AI models", "title": "Tiny AI", "bytes": 2 * 10**9, "presets": ["recommended", "essentials", "everything"]},
+        {"id": "Two", "group": "AI models", "title": "Two AI", "bytes": 3 * 10**9, "presets": ["everything"]},
+        {"id": "testmed_en_all_maxi", "group": "Medicine", "title": "Medicine", "bytes": 4 * 10**9,
+         "presets": ["recommended", "essentials", "everything", "no-ai"]},
+        {"id": "testsurvival_en", "group": "Survival", "title": "Survival", "bytes": 60 * 10**9, "presets": ["everything", "no-ai"]}]}))
+
+    def ask(answers):
+        p = subprocess.run([sys.executable, str(ak / "tools" / "kit.py"), "--root", str(ak), "pick", "--ask"], input=answers,
+                           capture_output=True, text=True, timeout=60, env={**os.environ, "KIT_MEMORY_MB": str(32 * 1024)})
+        c = json.loads((ak / "kit.json").read_text())
+        return p.returncode, p.stdout + p.stderr, sorted(e.get("id", e.get("zim")) for s in ("models", "library")
+                                                          for e in c[s] if e.get("enabled", True)), c["settings"]
+    rc, out, on, settings = ask("\n")
+    check("kit pick --ask: lists the builder's presets with their sizes, and Return takes Recommended",
+          rc == 0 and "1  Recommended: what we'd take. About 7 GB." in out and "3  Everything:" in out
+          and "5  Choose each part" in out and on == ["Tiny", "testmed_en_all_maxi"] and settings == {"picked": True}, out)
+    rc, out, on, _ = ask("9\n4\n")
+    check("kit pick --ask: a number it doesn't have asks again; No AI switches every model off",
+          rc == 0 and "Type a number from 1 to 5" in out and on == ["testmed_en_all_maxi", "testsurvival_en"], out)
+    rc, out, on, _ = ask("5\n1 4\n\n")
+    check("kit pick --ask: choose each part, by group, switching them with their numbers",
+          rc == 0 and "AI models" in out and "[ ] Tiny AI (2.0 GB)" in out and "[x] Survival (60.0 GB)" in out
+          and on == ["Tiny", "testmed_en_all_maxi"], out)
 
     # ./kit space: whether the kit, or just its essentials, fits on a disk and leaves 10% of the computer's (5% of a
     # drive's) free. A made-up 1000 GB disk, a kit of 300 GB and essentials of 40 GB.

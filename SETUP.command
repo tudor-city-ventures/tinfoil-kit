@@ -2,16 +2,17 @@
 # Double-click me (macOS) to set up Tinfoil Kit, and again whenever you want the newest models, books and maps.
 # Linux: bash SETUP.command
 # The first time, it asks where you live and whether the kit goes on an external drive or on this Mac, says how much
-# fits there, and moves it there. Then it's ./kit update, ./kit sync and ./kit test (the first time, the essentials
-# come first), with checks and plain-English prompts for first-timers.
+# fits there, and moves it there. Then it's ./kit update, ./kit sync and ./kit test, with checks and plain-English
+# prompts for first-timers: first a small kit to try (./kit starter), then the rest when SETUP runs again.
 # The answers can come with it instead, so one command sets the kit up: an AI helping someone asks them the
 # questions, then gives them that command (site/llms.txt). It asks only what these leave out:
 #   --region PLACE      where you live: a US state, a country or a part of one, as ./kit region takes it
 #   --wikipedia CODES   Wikipedia's languages, like de or de,en
 #   --this-computer     the kit goes on this computer, in the home folder
 #   --drive PATH        the kit goes on the drive at PATH (like /Volumes/T7), in a TinfoilKit folder at its top
-#   --essentials        just the essentials
-#   --all               all of it, even when that leaves less free space than SETUP likes
+#   --essentials        just the essentials (the first time, right after the kit to try)
+#   --all               all of it, even when that leaves less free space than SETUP likes (the first time, right
+#                       after the kit to try)
 #   --no-ai             no AI models
 #   --models IDS        just these AI models (./kit pick)
 #   --skip IDS          leave these out: AI models, books, maps, extras (./kit pick)
@@ -159,9 +160,9 @@ room_note() {
 }
 
 # After space(): how much of the kit goes to the place it looked at ($1 names it). Sets ONLY to all or essentials,
-# or returns 1 to choose somewhere else.
+# or returns 1 for the way out: choosing somewhere else, or $2 if given ("Not now", once the kit is in place).
 how_much() {
-  local spare why="" pref="${KIT_HOW_MUCH:-}"
+  local spare why="" pref="${KIT_HOW_MUCH:-}" other="${2:-Somewhere else}"
   spare="$(gb "$LEAVE")"
   [ "$1" = "$THIS" ] && why=", so $THIS keeps running well"
   case "$pref/$FULL/$ESS" in    # --essentials or --all, and what fits
@@ -191,26 +192,26 @@ how_much() {
       say "All of it fits on $1, but leaves only $(gb $((FREE - NEED))) free. Better to leave at least $spare$why."
       echo "  1  Just the essentials (about $(gb "$NEED_ESS"))"
       echo "  2  All of it anyway (about $(gb "$NEED"))"
-      echo "  3  Somewhere else"
+      echo "  3  $other"
       choose "Type 1, 2 or 3, then press Return:" 3
       case "$pick" in 1) ONLY=essentials ;; 2) ONLY=all ;; *) return 1 ;; esac ;;
     */fits)
       say "All of it won't fit on $1: it needs about $(gb "$NEED") plus some to spare, and $(gb "$FREE") is free."
       echo "  1  Just the essentials (about $(gb "$NEED_ESS")). SETUP offers the rest later, once it fits."
-      echo "  2  Somewhere else"
+      echo "  2  $other"
       choose "Type 1 or 2, then press Return:" 2
       [ "$pick" = 1 ] || return 1
       ONLY=essentials ;;
     */tight)
       say "Only the essentials fit on $1, and they leave only $(gb $((FREE - NEED_ESS))) free. Better to leave at least $spare$why."
       echo "  1  Just the essentials anyway (about $(gb "$NEED_ESS"))"
-      echo "  2  Somewhere else"
+      echo "  2  $other"
       choose "Type 1 or 2, then press Return:" 2
       [ "$pick" = 1 ] || return 1
       ONLY=essentials ;;
     *)
       say "There isn't room on $1, even for the essentials: they need about $(gb "$NEED_ESS") plus some to spare, and $(gb "$FREE") is free."
-      echo "Make room there, or choose somewhere else."
+      [ -n "${2:-}" ] || echo "Make room there, or choose somewhere else."
       return 1 ;;
   esac
 }
@@ -334,6 +335,10 @@ given_region() {
   elif [ -n "${KIT_WIKIPEDIA:-}" ]; then ./kit region --wikipedia "$KIT_WIKIPEDIA"; fi
 }
 picked() { [ -n "${KIT_NO_AI:-}${KIT_MODELS:-}${KIT_SKIP:-}${KIT_ADD:-}" ]; }
+# Whether someone has said what goes in the kit, now or before (./kit pick sets "picked").
+chosen() { picked || grep -q '"picked": *true' kit.json 2>/dev/null; }
+# Whether the first run goes on to the rest of the kit right after the kit to try, instead of stopping there.
+goes_on() { case "${KIT_HOW_MUCH:-}" in all|essentials) true ;; *) [ "${KIT_HOME_SERVER:-}" = 1 ] ;; esac; }
 given_parts() {
   picked || return 0
   ./kit pick ${KIT_NO_AI:+--no-ai} ${KIT_MODELS:+--models "$KIT_MODELS"} ${KIT_SKIP:+--skip "$KIT_SKIP"} ${KIT_ADD:+--add "$KIT_ADD"}
@@ -500,10 +505,12 @@ if [ "${1:-}" != "--updated" ]; then
     fi
     need_python
     if [ -d .kit ]; then
+      [ $FIRST = 1 ] && { KIT_STEPS=2; goes_on && KIT_STEPS=3; }
       step "the kit is $(where_kit), in $KIT"
       [ -n "${KIT_PLACE:-}" ] && [ "$(given_dest)" != "$KIT" ] && echo "It stays there: --this-computer and --drive choose where a new kit goes."
     else
-      KIT_STEPS=4; pick_region first; place
+      KIT_STEPS=3; goes_on && KIT_STEPS=4
+      pick_region first; place
     fi
   else
     [ -n "${KIT_ESSENTIALS:-}" ] && ./kit essentials "$KIT_ESSENTIALS" >/dev/null
@@ -525,9 +532,18 @@ else
 fi
 [ -n "${KIT_REGION_ASKED:-}" ] || pick_region    # (after ./kit update, so a kit from before this question gets it)
 
-[ -n "${KIT_FIT_ASKED:-}" ] || fit_ai    # an update can bring models too big for this computer
 ONLY=all; grep -q '"essentials_only": *true' kit.json 2>/dev/null && ONLY=essentials
-if [ $FIRST = 0 ]; then
+# The first time, SETUP gets the try-it kit (./kit starter): a few GB, checked, then the kit opens to be tried. The
+# rest comes when SETUP runs again (that's saying it's ready), or right after the try-it kit with --all,
+# --essentials or --home-server. After that, SETUP updates what's there.
+TRY=0; { [ $FIRST = 1 ] || grep -q '"starter_only": *true' kit.json 2>/dev/null; } && TRY=1
+REST=0; { [ $FIRST = 0 ] || goes_on; } && REST=1    # with TRY: the rest, in this run
+LATER=0; [ $TRY = 1 ] && [ $FIRST = 0 ] && LATER=1   # the rest, on a run after the try-it kit's: it asks what goes in
+[ -n "${KIT_FIT_ASKED:-}" ] || [ $LATER = 1 ] || fit_ai    # an update can bring models too big for this computer
+if [ $FIRST = 1 ]; then
+  ./kit starter on >/dev/null
+  case "${KIT_HOW_MUCH:-}" in all|essentials) ONLY="$KIT_HOW_MUCH" ;; esac
+elif [ $TRY = 0 ]; then
   case "${KIT_HOW_MUCH:-}/$ONLY" in
     essentials/all) ./kit essentials on; ONLY=essentials ;;
     all/essentials) ./kit essentials off; ONLY=all ;;
@@ -541,23 +557,19 @@ if [ $FIRST = 0 ]; then
   esac
 fi
 
-# The first time, the essentials come first and get checked, so the kit works hours before the rest is in.
-if [ $FIRST = 1 ]; then
-  step "the essentials. Here's what comes first:"
-  ./kit plan --essentials || finish 1
-else
-  step "download. Here's what will change:"
-  ./kit plan || finish 1
-fi
-say "Each item comes from its publisher under its own license, listed in THIRD-PARTY.md. Downloading means you accept them."
-echo "Big downloads take hours. Keep $THIS plugged in with the lid open: it won't go to sleep while this runs."
-echo "You can stop any time (press Control-C, or close this window) and double-click SETUP later to carry on."
-on_battery && say "This Mac is running on battery. Plug it in before you start."
-[ -n "${KIT_YES:-}" ] || ask "Start downloading?" || finish
-# Keep the Mac awake (not the screen) until the download and checks are done. caffeinate runs in the
-# background so that Ctrl-C reaches the sync, which saves its progress, and this script carries on.
+# Before a download: whose files they are, and how to keep it going. $1 says how long it takes. Returns 1 if the
+# person would rather not start.
+before_download() {
+  say "Each item comes from its publisher under its own license, listed in THIRD-PARTY.md. Downloading means you accept them."
+  echo "$1 Keep $THIS plugged in with the lid open: it won't go to sleep while this runs."
+  echo "You can stop any time (press Control-C, or close this window) and double-click SETUP later to carry on."
+  on_battery && say "This Mac is running on battery. Plug it in before you start."
+  [ -n "${KIT_YES:-}" ] || ask "Start downloading?" || return 1
+  # Keep the Mac awake (not the screen) until the download and checks are done. caffeinate runs in the
+  # background so that Ctrl-C reaches the sync, which saves its progress, and this script carries on.
+  if [ -z "$awake" ] && command -v caffeinate >/dev/null 2>&1; then caffeinate -i -w $$ & awake=$!; fi
+}
 awake=""
-if command -v caffeinate >/dev/null 2>&1; then caffeinate -i -w $$ & awake=$!; fi
 
 # ./kit sync with these options, then start everything offline and check that it answers. Sets rc and tested.
 get() {
@@ -573,48 +585,106 @@ get() {
   tested=$?
   [ $tested -eq 130 ] && { say "Stopped."; finish 130; }
 }
-if [ $FIRST = 0 ] || [ $ONLY = essentials ]; then
-  get    # (with just the essentials in kit.json, that's all it gets)
-  [ $FIRST = 1 ] && [ $tested -eq 0 ] &&
-    step "everything else: not now. You chose just the essentials. Once there's room, SETUP offers the rest."
-else
-  get --essentials
-  if [ $tested -eq 0 ]; then
-    say "The essentials work: from now on, if the internet goes down, the kit is ready."
-    space "$KIT"
-    step "everything else (about $(gb "$NEED")). It takes hours, and the kit works the whole time."
-    get
-  fi
-fi
-[ -n "$awake" ] && kill "$awake" 2>/dev/null
-if [ $tested -eq 0 ] && [ $rc -eq 0 ]; then
-  all_set
-  [ "${KIT_HOME_SERVER:-}" = 1 ] && { home_server; finish; }
+
+# The try-it kit works: how big the rest is, how long it takes at the speed just measured, and how to get it. Then
+# the kit opens, to be tried.
+try_it() {
+  local left took what="The rest of the kit" then="it asks what you want in the kit, then gets that"
+  [ -n "$awake" ] && kill "$awake" 2>/dev/null
+  say "The try-it kit works. It's $(where_kit), in $KIT"
+  echo "Turn off Wi-Fi and try it: ask the AI something, look something up, find your street on the map."
+  IFS=$'\t' read -r left took < <(./kit estimate --rest 2>/dev/null)
+  [ "$ONLY" = essentials ] && what="The rest of the essentials"
+  say "$what is about $(gb "${left:-0}") more${took:+: $took}. You can use the kit while it downloads."
+  chosen && then="it gets it"
+  if [ -n "${KIT_YES:-}" ]; then echo "When you're ready for it: bash \"$KIT/SETUP.command\" --yes"
+  elif [ -n "$APP" ]; then echo "When you're ready, click Update in Tinfoil Kit: $then."
+  elif [ $MAC = 1 ]; then echo "When you're ready, double-click SETUP again: $then."
+  else echo "When you're ready, run bash SETUP.command again: $then."; fi
   [ -n "${KIT_SHARE:-}" ] && share_home
-  [ -n "${KIT_YES:-}" ] && finish    # (nobody may be there to use it)
+  if [ -n "${KIT_YES:-}" ]; then    # (in a window of its own, so a command an AI runs doesn't wait for it)
+    if [ -n "$APP" ]; then open -a "$APP"
+    elif [ $MAC = 1 ]; then open "Open Tinfoil Kit.command"
+    else echo "To open it: bash \"$KIT/Open Tinfoil Kit.command\""; fi
+    finish
+  fi
   if ask "Open the kit now?"; then
     [ -n "$APP" ] && { open -a "$APP"; exit 0; }
     exec bash "Open Tinfoil Kit.command"
   fi
   finish
-fi
-if [ $tested -eq 0 ]; then
-  say "Everything in the kit works, but some downloads didn't finish:"
-  problems
-  echo
-  [ -n "${KIT_SHARE:-}" ] && [ "${KIT_HOME_SERVER:-}" != 1 ] && share_home
-  if [ "${KIT_HOME_SERVER:-}" = 1 ]; then
-    home_server
-    say "Run SETUP again later to get the rest."
-  elif [ -n "$APP" ]; then
-    echo "You can use the kit now: open Tinfoil Kit, in Applications. Click Update in it later to get the rest."
-  else
-    echo "You can use the kit now: double-click Open Tinfoil Kit.command. Double-click SETUP again later to get the rest."
+}
+
+# How it went, after the last get.
+ending() {
+  [ -n "$awake" ] && kill "$awake" 2>/dev/null
+  if [ $tested -eq 0 ] && [ $rc -eq 0 ]; then
+    all_set
+    [ "${KIT_HOME_SERVER:-}" = 1 ] && { home_server; finish; }
+    [ -n "${KIT_SHARE:-}" ] && share_home
+    [ -n "${KIT_YES:-}" ] && finish    # (nobody may be there to use it)
+    if ask "Open the kit now?"; then
+      [ -n "$APP" ] && { open -a "$APP"; exit 0; }
+      exec bash "Open Tinfoil Kit.command"
+    fi
+    finish
   fi
+  if [ $tested -eq 0 ]; then
+    say "Everything in the kit works, but some downloads didn't finish:"
+    problems
+    echo
+    [ -n "${KIT_SHARE:-}" ] && [ "${KIT_HOME_SERVER:-}" != 1 ] && share_home
+    if [ "${KIT_HOME_SERVER:-}" = 1 ]; then
+      home_server
+      say "Run SETUP again later to get the rest."
+    elif [ -n "$APP" ]; then
+      echo "You can use the kit now: open Tinfoil Kit, in Applications. Click Update in it later to get the rest."
+    else
+      echo "You can use the kit now: double-click Open Tinfoil Kit.command. Double-click SETUP again later to get the rest."
+    fi
+    finish 1
+  fi
+  say "Some checks failed. The messages above say which; logs are in the logs folder."
+  [ $rc -eq 0 ] || problems
+  echo "Running SETUP again often fixes a download that was cut off."
   finish 1
+}
+
+if [ $FIRST = 1 ]; then
+  step "a small kit to try first (about $(gb "$(./kit estimate)")). Here's what it gets:"
+  ./kit plan || finish 1
+  if [ $REST = 1 ]; then before_download "The kit to try takes minutes on a fast connection, the rest hours." || finish
+  else before_download "It takes minutes on a fast connection." || finish; fi
+  get
+  [ $tested -eq 0 ] && [ $rc -eq 0 ] || ending
+  [ $REST = 1 ] || try_it
+  say "The try-it kit works: from now on, if the internet goes down, the kit is ready."
 fi
-say "Some checks failed. The messages above say which; logs are in the logs folder."
-[ $rc -eq 0 ] || problems
-echo "Running SETUP again often fixes a download that was cut off."
-finish 1
+if [ $TRY = 1 ]; then    # the rest, now that the try-it kit works
+  step "the rest of the kit"
+  if [ $LATER = 1 ]; then    # (the first time, it was all settled before the kit moved)
+    if chosen || [ -n "${KIT_YES:-}" ]; then ./kit pick; else ./kit pick --ask || finish 1; fi
+    fit_ai
+    space "$KIT"
+    if ! how_much "$(if on_this_mac; then echo "$THIS"; else drive_name "$KIT"; fi)" "Not now"; then
+      say "The try-it kit keeps working. Run SETUP again when you're ready for the rest."
+      finish 1
+    fi
+  fi
+  ./kit starter off >/dev/null
+  if [ "$ONLY" = essentials ]; then ./kit essentials on >/dev/null; else ./kit essentials off >/dev/null; fi
+  say "Here's what it gets:"
+  ./kit plan || { ./kit starter on >/dev/null; finish 1; }
+  if [ $LATER = 1 ] && ! before_download "The kit keeps working while it downloads."; then
+    ./kit starter on >/dev/null
+    finish
+  fi
+  get
+else
+  step "download. Here's what will change:"
+  ./kit plan || finish 1
+  before_download "Big downloads take hours." || finish
+  get
+fi
+ending
 }
