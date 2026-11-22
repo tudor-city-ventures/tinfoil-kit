@@ -1505,6 +1505,7 @@ esac""".replace("@KIT_PY@", str(TESTS.parent / "tools" / "kit.py"))
           and not own_python.exists(), out)
     check("UNINSTALL: a home server's kit stops starting with the computer first", kit_log.read_text() == "autostart off\n",
           kit_log.read_text())
+    check("UNINSTALL: with nothing running, it doesn't say it's stopping the kit", "Stopping the kit" not in out, out)
     rc, out, gone = uninstall(answers="delete\n\n", kit_files=False)
     check("UNINSTALL: refuses a folder that isn't a kit", rc == 1 and gone.exists() and "doesn't look like a Tinfoil Kit" in out, out)
     rc, out, gone = uninstall(answers="DELETE\n\n")

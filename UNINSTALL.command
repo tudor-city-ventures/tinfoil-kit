@@ -68,9 +68,9 @@ fi
 ./kit autostart off >/dev/null 2>&1
 # Stop the kit if it's running (its servers run from its downloads; the kit's own program, the notes and pins server
 # and the sharing gate from its app folder), so nothing holds its files open, and an open page can't save into a
-# folder that's gone.
-pids="$(ps -axo pid=,command= 2>/dev/null | awk -v a="$KIT/downloads/bin/" -v b="$KIT/bin/" -v c="$CODE/tools/" \
-  'index($0, a) || index($0, b) || index($0, c) {print $1}')"
+# folder that's gone. The folders reach awk through its environment: in its arguments, ps would list awk as a match.
+pids="$(ps -axo pid=,command= 2>/dev/null | A="$KIT/downloads/bin/" B="$KIT/bin/" C="$CODE/tools/" \
+  awk 'index($0, ENVIRON["A"]) || index($0, ENVIRON["B"]) || index($0, ENVIRON["C"]) {print $1}')"
 if [ -n "$pids" ]; then
   echo "Stopping the kit, which is running..."
   # shellcheck disable=SC2086
