@@ -15,8 +15,7 @@
     "keep_free_gb_this_computer": 50,
     "keep_previous_runtime_versions": 1,
     "llama_cpp_channel": "nightly",
-    "downloader": "auto",
-    "update_every_days": 75
+    "downloader": "auto"
   },
 
   "runtimes": [

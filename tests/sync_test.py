@@ -412,6 +412,12 @@ esac"""
     rc, out, calls = run_setup()
     check("SETUP: all good", rc == 0 and "All set" in out and calls == ["update", "plan", "sync", "test"]
           and "Step 1 of 3: the kit is on" in out and "where should the kit go" not in out, out)
+    (setup / ".kit" / "state.json").write_text('{"items": {}, "last_sync": "2026-01-01T00:00:00"}')
+    rc, out, calls = run_setup()
+    check("SETUP: set up before: says it's an update, and how to update next time",
+          rc == 0 and "TINFOIL KIT UPDATE" in out and "TINFOIL KIT SETUP" not in out
+          and "whenever you want the newest AI models" in out and calls == ["update", "plan", "sync", "test"], out)
+    (setup / ".kit" / "state.json").unlink()
     rc, out, calls = run_setup(update=3)
     check("SETUP: after updating the kit it starts over on the new SETUP, once",
           rc == 0 and "Step 2 of 3 (new version):" in out and out.count("TINFOIL KIT SETUP") == 1

@@ -7,8 +7,7 @@
     "keep_free_gb": 0.1,
     "keep_free_gb_this_computer": 0.1,
     "keep_previous_runtime_versions": 1,
-    "downloader": "curl",
-    "update_every_days": 75
+    "downloader": "curl"
   },
   "runtimes": [
     {

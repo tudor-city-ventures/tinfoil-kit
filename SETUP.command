@@ -1,5 +1,6 @@
 #!/bin/bash
-# Double-click me (macOS) to set up Tinfoil Kit, and again every 2-3 months to refresh it. Linux: bash SETUP.command
+# Double-click me (macOS) to set up Tinfoil Kit, and again whenever you want the newest models, books and maps.
+# Linux: bash SETUP.command
 # The first time, it asks whether the kit goes on an external drive or on this Mac, and moves it there.
 # Then it's ./kit update, ./kit sync and ./kit test, with checks and plain-English prompts for first-timers.
 # The whole script is one { } block, so bash reads all of it before running any: ./kit update can replace this
@@ -54,14 +55,17 @@ problems() {
                         on && /^  - / {buf = buf $0 "\n"} /^Re-run/ {on = 0} END {printf "%s", buf}' "$log"
 }
 
-# The kit's tools run on python3, which comes with Apple's free Command Line Tools. Wait for the install
-# instead of making the person find SETUP and start it again.
+# The kit's tools run on python3 and curl. A Mac has curl, and python3 comes with Apple's free Command Line Tools:
+# wait for that install instead of making the person find SETUP and start it again.
 need_python() {
-  python3 -c "" >/dev/null 2>&1 && return
   if [ $MAC = 0 ]; then
-    say "The kit needs python3 3.9 or newer. Install it (for example: sudo apt install python3), then run SETUP again."
+    python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' >/dev/null 2>&1 && command -v curl >/dev/null && return
+    say "The kit needs python3 (3.9 or newer) and curl. Install them, then run SETUP again:"
+    echo "  Debian, Ubuntu, Mint:  sudo apt install python3 curl"
+    echo "  Fedora:                sudo dnf install python3 curl"
     finish 1
   fi
+  python3 -c "" >/dev/null 2>&1 && return
   say "First, the kit needs Apple's free Command Line Tools. A window will ask to install them: click Install."
   echo "It takes about 5 to 15 minutes."
   xcode-select --install >/dev/null 2>&1
@@ -117,8 +121,12 @@ pick_drive() {
     if [ -n "$why" ]; then
       say "${VOL##*/} won't work: $why."
       echo "To use it, erase it as exFAT. Erasing deletes everything on it, so copy off anything you want to keep first."
-      echo "In Disk Utility: click ${VOL##*/} in the sidebar, click Erase, choose ExFAT as the format, and click Erase."
-      if [ $MAC = 1 ] && ask "Open Disk Utility now?"; then open -a "Disk Utility"; fi
+      if [ $MAC = 1 ]; then
+        echo "In Disk Utility: click ${VOL##*/} in the sidebar, click Erase, choose ExFAT as the format, and click Erase."
+        ask "Open Disk Utility now?" && open -a "Disk Utility"
+      else
+        echo "In Disks (or your system's disk tool): select ${VOL##*/}, choose Format Partition, and pick exFAT (under Other)."
+      fi
       printf '\nWhen the drive is ready, press Return to look again. '; read -r _ || exit 1
       continue
     fi
@@ -222,7 +230,8 @@ checks() {
   fi
   if ! ( : > .kit-write-test ) 2>/dev/null; then
     say "Can't save anything in $KIT. If it's on a drive, the drive may be locked or read-only."
-    echo "Check the drive in Disk Utility (First Aid), or move this folder somewhere else, and run SETUP again."
+    if [ $MAC = 1 ]; then echo "Check the drive in Disk Utility (First Aid), or move this folder somewhere else, and run SETUP again."
+    else echo "Check that the drive isn't mounted read-only, or move this folder somewhere else, and run SETUP again."; fi
     finish 1
   fi
   rm -f .kit-write-test
@@ -237,8 +246,12 @@ all_set() {
   else
     echo "In an outage: plug in the drive, open its ${KIT##*/} folder and double-click START-HERE.command. No internet needed."
   fi
-  echo "GUIDE.md in the same folder is a short guide to print and keep handy."
-  echo "To remove the kit and everything it downloaded, double-click UNINSTALL.command there."
+  if [ $MAC = 1 ]; then again="double-click it again"; else again="run it again"; fi
+  echo
+  echo "Also in that folder:"
+  echo "  GUIDE.md           a short guide. Print it and keep it handy."
+  echo "  SETUP.command      $again whenever you want the newest AI models, books and maps (needs internet)."
+  echo "  UNINSTALL.command  removes the kit and everything it downloaded."
   [ $MAC = 1 ] && open "$KIT" 2>/dev/null    # show where it lives
 }
 
@@ -246,9 +259,15 @@ all_set() {
 # --updated: the previous copy of this script did the checks and installed this one.
 if [ "${1:-}" != "--updated" ]; then
   if [ "${1:-}" != "--placed" ]; then
-    say "TINFOIL KIT SETUP"
-    echo "This gets an offline AI, library and maps ready for when the internet is down, then checks that they work."
-    echo "The first time takes a few hours. Later runs only download what changed."
+    if grep -q '"last_sync"' .kit/state.json 2>/dev/null; then    # set up before: this run is an update
+      say "TINFOIL KIT UPDATE"
+      echo "This gets the newest AI models, books and maps, including any added to the kit since you last ran it."
+      echo "It downloads only what changed. If it's cut off, the kit keeps working with what it has."
+    else
+      say "TINFOIL KIT SETUP"
+      echo "This gets an offline AI, library and maps ready for when the internet is down, then checks that they work."
+      echo "The first time takes a few hours. Later runs only download what changed."
+    fi
     need_python
     if [ -d .kit ]; then say "Step 1 of 3: the kit is $(where_kit), in $KIT"; else place; fi
   fi
@@ -261,7 +280,7 @@ fi
 say "Step 2 of 3: download. Here's what will change:"
 ./kit plan || finish 1
 say "Each item comes from its publisher under its own license, listed in THIRD-PARTY.md. Downloading means you accept them."
-echo "It takes a few hours. Keep $THIS plugged in with the lid open: it won't go to sleep while this runs."
+echo "Big downloads take hours. Keep $THIS plugged in with the lid open: it won't go to sleep while this runs."
 echo "You can stop any time (press Control-C, or close this window) and double-click SETUP later to carry on."
 on_battery && say "This Mac is running on battery. Plug it in before you start."
 ask "Start downloading?" || finish

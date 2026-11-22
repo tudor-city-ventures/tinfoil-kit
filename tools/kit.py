@@ -1731,9 +1731,7 @@ def cmd_sync(root: Path, args: argparse.Namespace) -> None:
                 log(f"  - {i.key}: {i.error}")
             log("Re-run ./kit sync to retry. Fix or disable items in kit.json if they keep failing.")
         if todo:
-            every = int(cfg["settings"].get("update_every_days", 75))
-            log(f"\nNext update due around {(dt.date.today() + dt.timedelta(days=every)).isoformat()}. "
-                "Now run ./kit test to check that everything starts.")
+            log("\nNow run ./kit test to check that everything starts.")
     sys.exit(1 if failures or errors else 0)
 
 
@@ -1778,7 +1776,7 @@ def cmd_verify(root: Path, args: argparse.Namespace) -> None:
 
 
 def cmd_status(root: Path, args: argparse.Namespace) -> None:
-    state, cfg = load_state(root), load_config(root)
+    state = load_state(root)
     usage = shutil.disk_usage(root)
     total = 0
     for section in SECTIONS:
@@ -1803,8 +1801,8 @@ def cmd_status(root: Path, args: argparse.Namespace) -> None:
     log(f"\nKit content: {fmt_size(total)}.  Free on {disk}: {fmt_size(usage.free)} of {fmt_size(usage.total)}.")
     if last:
         age = (dt.datetime.now() - dt.datetime.fromisoformat(last)).days
-        every = int(cfg["settings"].get("update_every_days", 75))
-        log(f"Last complete sync: {last[:10]} ({age} days ago)." + ("  Time to run ./kit sync." if age >= every else ""))
+        log(f"Last complete sync: {last[:10]} ({age} days ago). To get newer versions, run SETUP.command again, "
+            "or ./kit update and then ./kit sync, whenever you like.")
     else:
         log("Never fully synced. Run ./kit sync.")
     if state.get("kit_version"):
