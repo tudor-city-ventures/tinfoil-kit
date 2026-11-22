@@ -149,10 +149,10 @@ On Windows: `$KIT = .\kit.cmd place "$HOME\TinfoilKit"` (or `E:\TinfoilKit` for 
 Then, in the kit folder:
 
     ./kit plan                  # every item, version and size. Show the person the total and get a yes.
-    ./kit sync -y --essentials  # the essentials first: the programs, the map, the key books and the AI
+    ./kit sync -y --starter     # a small kit to try first (about 10 GB): the programs, the map, a small AI, a few books
     ./kit test                  # start every server offline and check each one answers: now the kit works
-    ./kit sync -y               # then everything else: a few hours the first time
-    ./kit test
+    ./kit sync -y               # then everything picked: a few hours the first time. It removes the try-it
+    ./kit test                  # files nobody picked once it all checks out.
 
 - `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit already works with what it has.
 - Sync fetches the most important items first, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
@@ -161,7 +161,7 @@ Then, in the kit folder:
 
 ### For people who'd rather click
 
-Download it from https://tinfoilkit.com: the Download button picks the computer's file from the latest release (TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, or TinfoilKit.tar.gz for Linux), and the page says what to do next. On a Mac, open the download (Safari unzips it into the Tinfoil Kit app), double-click Tinfoil Kit, click Open when macOS asks about an app from the internet, let it move itself to Applications and click Set Up: SETUP runs in a Terminal window. On Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat. On Linux, run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command`. The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), then "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it downloads and tests the essentials, then the rest, explaining each step. On a Mac without Python, it gets one first. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
+Download it from https://tinfoilkit.com: the Download button picks the computer's file from the latest release (TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, or TinfoilKit.tar.gz for Linux), and the page says what to do next. On a Mac, open the download (Safari unzips it into the Tinfoil Kit app), double-click Tinfoil Kit, click Open when macOS asks about an app from the internet, let it move itself to Applications and click Set Up: SETUP runs in a Terminal window. On Windows, right-click the ZIP, choose Extract All, and double-click SETUP-Windows.bat. On Linux, run `tar -xf TinfoilKit.tar.gz && bash TinfoilKit/SETUP.command`. The first time, it asks where the person lives (a US state or a country, for the maps and Wikipedia's language), then "An external drive" or "This computer", with what fits on each, and moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it gets a small kit to try (about 10 GB), tests it, opens it and says how long the rest takes on this connection. Running SETUP again gets the rest, after asking what goes in the kit (the website builder's choices). On a Mac without Python, it gets one first. On Windows, if it says Windows protected your PC, click More info, then Run anyway. SETUP asks questions as it goes, so as an agent, run the commands above instead.
 
 ## Use it
 

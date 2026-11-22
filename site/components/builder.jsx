@@ -14,7 +14,9 @@ import { loadJSON } from '@/lib/data';
 
 const VISIBLE = 6;   // cards a group shows before "Show all"
 const WIKI = /^wikipedia_[a-z-]+_all_/;
-const GROUPS = ['United States', 'North America', 'Central America', 'South America', 'Europe', 'Africa', 'Asia'];
+// The US has whole states (ids like us/texas) and a few areas of several (us-northeast): the areas get their own section, on top.
+const US_AREAS = 'Groups of US states', US_STATES = 'US states';
+const GROUPS = [US_AREAS, US_STATES, 'North America', 'Central America', 'South America', 'Europe', 'Africa', 'Asia'];
 
 function gb(bytes) {
   if (bytes == null) return 'size TBD';
@@ -122,7 +124,8 @@ export default function Builder({ children }) {
 // The places by group, nearest groups first, then A to Z.
 function placeGroups(regions) {
   const groups = {};
-  regions.forEach((r) => (groups[r.group] ||= []).push(r));
+  const section = (r) => (r.group !== 'United States' ? r.group : r.id.includes('/') ? US_STATES : US_AREAS);
+  regions.forEach((r) => (groups[section(r)] ||= []).push(r));
   const rank = (g) => (GROUPS.includes(g) ? GROUPS.indexOf(g) : GROUPS.length);
   return Object.keys(groups).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
     .map((g) => [g, groups[g].sort((a, b) => a.name.localeCompare(b.name))]);

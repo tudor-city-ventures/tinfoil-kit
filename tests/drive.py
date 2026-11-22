@@ -203,15 +203,17 @@ def check_share(address, code, lib, ai):
 
 def kit_json(out, maps=False):
     """The test kit: the real Mac, Windows and Linux programs, the tiny model and two test books, and with maps, a
-    map whose roads are Andorra's (small and real)."""
+    map whose roads are Andorra's (small and real). The try-it kit has the model and the books, and another tiny model
+    as its sample, which nobody picks: it goes once the rest is in."""
     tests = Path(__file__).resolve().parent
     t = json.loads((tests / "drive_kit.json").read_text(encoding="utf-8"))
     k = json.loads((tests.parent / "kit.json").read_text(encoding="utf-8"))
     t["runtimes"] = [r for r in k["runtimes"] if maps or not r.get("requires")]
     if maps:    # as "Where do you live?" sets it, with tiles to zoom 5 only, all the mock's map build has
         t["maps"] = {**k["maps"], "region": "andorra", "world_maxzoom": 2, "detail_maxzoom": 5}
-    t["models"] = [m for m in t["models"] if m["id"] == "Tiny"]
-    t["library"] = [z for z in t["library"] if z["zim"] in ("testmed_en_all_maxi", "testsurvival_en")]
+    t["models"] = ([{**m, "starter": True} for m in t["models"] if m["id"] == "Tiny"]
+                   + [{**m, "enabled": False, "starter": True} for m in t["models"] if m["id"] == "Two"])
+    t["library"] = [{**z, "starter": True} for z in t["library"] if z["zim"] in ("testmed_en_all_maxi", "testsurvival_en")]
     t["settings"].update(library_port=8888, ai_port=8080)
     Path(out).write_text(json.dumps(t, indent=2), encoding="utf-8")
 

@@ -140,18 +140,23 @@ Then run `./kit plan` to preview and `./kit sync` to apply. Updates of the kit i
      files on a removable volume, say yes.
    - **This computer**: nothing to plug in. It goes in the `TinfoilKit` folder in your home folder and leaves 50 GB
      free for the computer. On a Mac it stays out of Time Machine backups.
-5. It downloads the essentials first (about 30 to 50 GB) and starts each part offline to check it answers: from
-   then on, the kit works. Then it gets everything else (about 280 to 330 GB in all, a few hours; maps are 5 to
-   30 GB of that) and checks again. Leave the laptop plugged in; it stays awake while this runs. If you stop it,
-   start SETUP in the kit's folder again and it picks up where it left off. If it ends with "some downloads
-   didn't finish", the kit already works with what it has: run SETUP again later for the rest. With just the
-   essentials, a later SETUP offers the rest once there's room. `./kit essentials off` asks for it any time.
-6. Turn off Wi-Fi and start the kit (see the top of this page).
+5. It gets a small kit to try first (about 10 GB: a small AI, a few medical and how-to books, and your area's map),
+   starts each part offline to check it answers, and offers to open it. Turn off Wi-Fi and try it: from then on,
+   the kit works. It also says how big the rest is and how long it takes on your connection.
+6. When you're ready for the rest, start SETUP again (or click **Update** in the Mac app). It asks what you want in
+   the kit, the same choices as the kit builder on tinfoilkit.com, shows what that comes to, then gets it (about 280
+   to 330 GB for the recommended kit, a few hours; maps are 5 to 30 GB of that) and checks again. Then it removes
+   the try-it files you didn't pick. Leave the laptop plugged in; it stays awake while this runs, and the kit works
+   the whole time. If you stop it, start SETUP in the kit's folder again and it picks up where it left off. If it
+   ends with "some downloads didn't finish", the kit already works with what it has: run SETUP again later for the
+   rest. With just the essentials, a later SETUP offers the rest once there's room. `./kit essentials off` asks for
+   it any time.
+7. Turn off Wi-Fi and start the kit (see the top of this page).
 
 In a terminal, SETUP takes every answer as an option, and with `--yes` it asks nothing: for example
-`bash SETUP.command --region texas --this-computer --yes`, or on Windows
-`.\SETUP-Windows.bat --region texas --this-computer --yes`. `--help` lists them: a drive, just the essentials,
-which AI models and books, and sharing on the home network.
+`bash SETUP.command --region texas --this-computer --yes` (on Windows, `.\SETUP-Windows.bat` with the same options)
+gets the kit to try, and `bash ~/TinfoilKit/SETUP.command --yes` the rest. `--help` lists them: a drive, just the
+essentials, which AI models and books, and sharing on the home network.
 
 ## Removing it
 

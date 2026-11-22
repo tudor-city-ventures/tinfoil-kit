@@ -185,8 +185,10 @@ with sync_playwright() as p:
                                    "[g.querySelector('[data-slot=select-label]').textContent, g.querySelectorAll('[role=option]').length])")
             page.locator("[role=listbox]").screenshot(path=os.path.join(SHOTS, "site_place_list.png"))
             page.keyboard.press("Escape")
-            check("the place dropdown lists every place, by part of the world, the US first",
-                  groups and groups[0][0] == "United States" and sum(n for _, n in groups) == len(regions) and len(groups) >= 6, str(groups))
+            us_areas = sum(1 for r in regions if r["group"] == "United States" and "/" not in r["id"])
+            check("the place dropdown lists every place, by part of the world: groups of US states on top, then the states",
+                  len(groups) >= 7 and groups[0] == ["Groups of US states", us_areas] and groups[1][0] == "US states"
+                  and sum(n for _, n in groups) == len(regions), str(groups))
             before = page.inner_text("#totalText")
             choose(page, "#place", "Germany: Bayern")
             maps_why = page.locator(".card", has_text="Offline maps").locator(".why").inner_text()
@@ -210,7 +212,7 @@ with sync_playwright() as p:
             check("the setup prompt says where you live, as a ./kit region command", "./kit region bayern --wikipedia de" in prompt)
             us_georgia = next(r["name"] for r in regions if r["id"] == "us/georgia")
             page.click("#place")
-            in_us = page.locator("[role=listbox] [role=group]", has=page.get_by_text("United States", exact=True)).get_by_role("option", name=us_georgia, exact=True).count()
+            in_us = page.locator("[role=listbox] [role=group]", has=page.get_by_text("US states", exact=True)).get_by_role("option", name=us_georgia, exact=True).count()
             page.keyboard.press("Escape")
             choose(page, "#place", "Georgia", group="Europe")
             check("the builder: two places called Georgia, the country under Europe", in_us == 1
