@@ -357,7 +357,8 @@ def region_maps(r: Dict[str, Any]) -> Dict[str, Any]:
     if ".." in r["pbf"] or not re.fullmatch(r"[a-z0-9][a-z0-9/_-]*-latest\.osm\.pbf", r["pbf"]):
         raise ValueError(f"tools/regions.json has a bad road data path for {r['id']}")
     return {"label": r["name"], "home": {**r["home"], "zoom": 10}, "detail_bbox": r["bbox"],
-            "routing_osm_pbf": f"{GEOFABRIK.rstrip('/')}/{r['pbf']}", "geocoder_country": r["country"],
+            "routing_osm_pbf": f"{GEOFABRIK.rstrip('/')}/{r['pbf']}",
+            "geocoder_country": r["country"] if r.get("photon") else "",    # Photon publishes none for a few places
             "units": r["units"], "lang": (r.get("langs") or ["en"])[0]}
 
 
@@ -380,6 +381,8 @@ def maps_items(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     m = maps_settings(cfg)
     if not m["enabled"]:
         return []
+    geocoder = [{"id": "geocoder", "type": "photon_db", "country": m["geocoder_country"], "priority": 3,
+                 "note": "Address and place search database (Photon)"}] if m.get("geocoder_country") else []
     return [
         {"id": "maplibre-gl", "type": "npm", "package": "maplibre-gl", "version_prefix": "5.", "priority": 1,
          "note": "Map display engine (MapLibre)"},
@@ -391,9 +394,7 @@ def maps_items(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
          "note": "Road network for directions (GraphHopper)"},
         {"id": "basemap", "type": "protomaps", "priority": 2,    # after routing: its size estimate uses the road data's
          "note": f"Offline map: {m['label']} in street detail, plus a world overview"},
-        {"id": "geocoder", "type": "photon_db", "country": m["geocoder_country"], "priority": 3,
-         "note": "Address and place search database (Photon)"},
-    ]
+    ] + geocoder
 
 
 def items_from_config(cfg: Dict[str, Any]) -> List[Item]:
@@ -2803,8 +2804,9 @@ def cmd_region(root: Path, args: argparse.Namespace) -> None:
                 ", ".join(f"{c} ({v['name']})" for c, v in sorted(langs.items())))
     cfg = set_region(root, r, wiki)
     m = maps_settings(cfg)
-    log(f"Maps: {r['name']}. Street maps and directions for {r['name']}, address search for all of "
-        f"{r.get('addresses') or r['name']}, and a simple map of the whole world.")
+    search = (f"address search for all of {r.get('addresses') or r['name']}" if r.get("photon") else
+              "no address search (nobody publishes one for there yet)")
+    log(f"Maps: {r['name']}. Street maps and directions for {r['name']}, {search}, and a simple map of the whole world.")
     if not m["enabled"]:
         log('Maps are switched off in kit.json ("enabled": false under "maps"), so none of this downloads.')
     log(f"Home: {m['home'].get('label') or 'the middle of it'}. Directions and \"nearest\" searches start there; "
