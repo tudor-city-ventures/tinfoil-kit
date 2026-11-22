@@ -19,9 +19,10 @@ The files come from ggml-org's and Unsloth's Hugging Face repos, which repackage
 - iFixit: CC BY-NC-SA, no commercial use.
 - LibreTexts: mostly CC BY-NC-SA, no commercial use. Some books differ.
 - Khan Academy (off by default): mostly CC BY-NC-SA, no commercial use.
-- Ready.gov, US Army publications and the military medicine manuals: US government works, generally public domain.
+- Ready.gov, CDC Travelers' Health, US Army publications and the military medicine manuals: US government works, generally public domain.
+- MedlinePlus: the National Library of Medicine's own pages are US government works. Its medical encyclopedia (A.D.A.M.) and drug information (from ASHP) are copyrighted and licensed to it: free to read, not to republish.
 - Project Gutenberg (off by default): public domain in the US. "Project Gutenberg" is a trademark with its own rules for redistribution.
-- Urban Prepper, Survivor Library and the collections of field medicine, post-disaster, water, food and knots guides gather work from many authors under mixed terms. Treat them as free to read, not free to republish.
+- Urban Prepper, Survivor Library, CD3WD, the Learning Self-Reliance videos and the collections of field medicine, post-disaster, water, food and knots guides belong to their authors, under mixed terms. Treat them as free to read, not free to republish.
 
 ## Maps
 

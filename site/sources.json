@@ -120,6 +120,32 @@
    ]
   },
   {
+   "id": "medlineplus.gov_en_all",
+   "group": "Medical",
+   "title": "MedlinePlus",
+   "why": "Plain-language guides to illnesses, tests and medicines, from the US National Library of Medicine.",
+   "bytes": 1944841216,
+   "estimated": false,
+   "presets": [
+    "recommended",
+    "no-ai",
+    "everything"
+   ]
+  },
+  {
+   "id": "wwwnc.cdc.gov_en_all",
+   "group": "Medical",
+   "title": "CDC Travelers' Health",
+   "why": "The CDC's guide to diseases, vaccines and safe food and water.",
+   "bytes": 178327552,
+   "estimated": false,
+   "presets": [
+    "recommended",
+    "no-ai",
+    "everything"
+   ]
+  },
+  {
    "id": "zimgit-post-disaster_en",
    "group": "Preparedness",
    "title": "Post-disaster guides",
@@ -203,6 +229,19 @@
    ]
   },
   {
+   "id": "lrnselfreliance_en_all",
+   "group": "Preparedness",
+   "title": "Learning Self-Reliance",
+   "why": "Videos on homesteading, beekeeping and getting ready for emergencies.",
+   "bytes": 3974044672,
+   "estimated": false,
+   "presets": [
+    "recommended",
+    "no-ai",
+    "everything"
+   ]
+  },
+  {
    "id": "ifixit_en_all",
    "group": "Repair and skills",
    "title": "iFixit",
@@ -225,6 +264,19 @@
    "estimated": false,
    "presets": [
     "essentials",
+    "recommended",
+    "no-ai",
+    "everything"
+   ]
+  },
+  {
+   "id": "cd3wdproject.org_en_all",
+   "group": "Repair and skills",
+   "title": "CD3WD",
+   "why": "Over 900 practical manuals on farming, water, health and building, from aid groups.",
+   "bytes": 572638208,
+   "estimated": false,
+   "presets": [
     "recommended",
     "no-ai",
     "everything"

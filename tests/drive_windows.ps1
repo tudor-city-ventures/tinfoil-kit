@@ -1,10 +1,11 @@
 # The drive test's Windows setup: SETUP-Windows.bat from a fresh download, against the mock internet, the way
-# a person double-clicking it would answer. First onto this PC (~\TinfoilKit), then onto an exFAT drive, then onto
-# the drive again with the one command an AI hands over (--drive, --yes and more), which must ask nothing. Each
-# time Open Tinfoil Kit for Windows.bat must serve the library and the AI, and UNINSTALL-Windows.bat must remove it all. On this
-# PC, SETUP-Windows.bat --home-server must share it on the home network, behind the access code, and set it to start
-# as you sign in. Last, ./kit sync builds a small real map with the real map programs, and Open Tinfoil Kit for Windows.bat
-# --share must serve it, on this PC's own Python.
+# a person double-clicking it would answer. First onto this PC (~\TinfoilKit): the try-it kit, with a small real
+# map (Andorra's tiles), then SETUP again for the rest (the kit builder's questions, the map's roads and address
+# search with the real map programs), an update, and --home-server, which must share it on the home network, behind
+# the access code, and set it to start as you sign in. Then onto an exFAT drive, and onto the drive again with the
+# one command an AI hands over (--drive, --yes and more) and the same again for the rest, which must ask nothing.
+# Each time Open Tinfoil Kit for Windows.bat must serve the library, the AI and any map, and UNINSTALL-Windows.bat
+# must remove it all. Last, Open Tinfoil Kit for Windows.bat --share on a kit with no SETUP, on this PC's own Python.
 # With -Drive, it plugs in the drive the Mac made (tests\work\drive.vhd) instead, starts the kit on it with a
 # double-click and uses the page in Edge.
 # CI runs it (.github/workflows/drive.yml). Fixtures: tests/build_fixtures.sh drive, in tests\work\remote.
@@ -29,12 +30,13 @@ if (-not $Drive) {
 
 # The kit as a browser leaves a Download ZIP that File Explorer unzipped: in Downloads, every file marked as from
 # the internet. Its kit.json is the test kit, put in the folder the way one from the website's builder goes in.
-function Get-Kit($dir) {
+function Get-Kit($dir, [switch]$Maps) {
   if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
   New-Item -ItemType Directory -Force (Split-Path $dir) | Out-Null
   git -C $root archive --format=zip --prefix=tinfoilkit-main/ -o "$work\kit.zip" HEAD
   Expand-Archive "$work\kit.zip" (Split-Path $dir)
-  python "$tests\drive.py" kitjson "$dir\kit.json"
+  $kitjson = @("$tests\drive.py", "kitjson", "$dir\kit.json") + @(if ($Maps) { "maps" })
+  python @kitjson
   Get-ChildItem -Recurse -File $dir | ForEach-Object {
     Set-Content -LiteralPath $_.FullName -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
   }
@@ -55,11 +57,18 @@ function Invoke-Cmd($line, $log, $answers) {
 # SETUP-Windows.bat with these answers, one per line, as if typed. Its own Python, not this one, runs the kit.
 function Invoke-Setup($dir, $log, $answers, $flags = "") {
   Invoke-Cmd "`"$dir\SETUP-Windows.bat`" $flags" $log $answers
-  Get-Content "$logs\$log" | Select-String "PASS|FAIL|All set|Moved|Copied|Removed|Problems|^  - |^  [0-9]+  [A-Za-z]" |
+  Get-Content "$logs\$log" | Select-String "PASS|FAIL|All set|try-it kit|Moved|Copied|Removed|Problems|^  - |^  [0-9]+  [A-Za-z]" |
     Select-Object -Last 30 | ForEach-Object { $_.Line }
-  if (-not (Select-String -Quiet -Path "$logs\$log" -Pattern "All set")) {
-    Fail "SETUP didn't end with All set (logs\$log)"
+  if (-not (Select-String -Quiet -Path "$logs\$log" -Pattern "All set|The try-it kit works")) {
+    Fail "SETUP didn't end with All set or a working try-it kit (logs\$log)"
     Get-Content "$logs\$log" -Tail 40
+  }
+}
+
+# Fails for each of these SETUP didn't say in its log.
+function Test-Said($log, $what, [string[]]$said) {
+  foreach ($s in $said) {
+    if (-not (Select-String -Quiet -SimpleMatch -Path "$logs\$log" -Pattern $s)) { Fail "$what didn't say `"$s`"" }
   }
 }
 
@@ -163,29 +172,36 @@ if ($Drive) {
   exit 0
 }
 
-Step "SETUP-Windows.bat in the unzipped download: this PC; it copies the kit to ~\TinfoilKit and sets it up"
+Step "SETUP-Windows.bat in the unzipped download: this PC; it copies the kit to ~\TinfoilKit and gets the try-it kit"
 $dl = "$HOME\Downloads\tinfoilkit-main"
 $kit = "$HOME\TinfoilKit"
 if (Test-Path $kit) { Remove-Item -Recurse -Force $kit }
-Get-Kit $dl
+Get-Kit $dl -Maps
 # Answers: keep where it's for, this PC, how much if room is short (SETUP asks then), download, don't open it, close.
 $answers = @("", "2") + @(Get-RoomAnswer $dl $kit) + @("y", "n", "")
 Invoke-Setup $dl "setup-windows-pc.log" $answers
-foreach ($said in "Step 1 of 4: where do you live", "The essentials work", "Step 4 of 4: everything else") {
-  if (-not (Select-String -Quiet -SimpleMatch -Path "$logs\setup-windows-pc.log" -Pattern $said)) { Fail "SETUP didn't say `"$said`"" }
-}
-if (-not (Test-Path "$kit\models")) { Fail "the kit isn't set up in $kit" }
+Test-Said "setup-windows-pc.log" "SETUP" @("Step 1 of 3: where do you live", "Step 3 of 3: a small kit to try first",
+  "The try-it kit works. It's on this PC", "The rest of the kit is about", "double-click SETUP-Windows.bat again: it asks what you want")
+if (-not (Test-Path "$kit\models\Two")) { Fail "the try-it kit didn't get its sample AI" }
+if (Test-Path "$kit\maps\routing") { Fail "the try-it kit got the map's roads, which come with the rest" }
 if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
 foreach ($f in "Open Tinfoil Kit for Windows.bat", "SETUP-Windows.bat", "UNINSTALL-Windows.bat") {
   if (Get-Item -LiteralPath "$kit\$f" -Stream Zone.Identifier -ErrorAction SilentlyContinue) { Fail "$f is still marked as from the internet" }
 }
+Step "SETUP-Windows.bat again in ~\TinfoilKit, for the rest: what goes in it (Recommended), the map's roads and address search"
+# Answers: keep where it's for, Recommended, how much if room is short, download, don't open it, close.
+$answers = @("", "") + @(Get-RoomAnswer $kit $kit) + @("y", "n", "")
+Invoke-Setup $kit "setup-windows-rest.log" $answers
+Test-Said "setup-windows-rest.log" "SETUP" "What goes in the kit?", "Step 2 of 3: the rest of the kit", "All set"
+foreach ($f in "maps\routing\graph-cache\properties", "maps\geocoder\photon_data") {
+  if (-not (Test-Path "$kit\$f")) { Fail "SETUP didn't make $f (logs\setup-windows-rest.log)" }
+}
+if (Test-Path "$kit\models\Two") { Fail "the try-it kit's sample AI is still there after the rest" }
 Test-Kit $kit "this PC"
 Step "SETUP-Windows.bat again in ~\TinfoilKit: an update"
 # Answers: keep where it's for, download, don't open it, close.
 Invoke-Setup $kit "setup-windows-update.log" @("", "y", "n", "")
-foreach ($said in "TINFOIL KIT UPDATE", "To change that", "Step 3 of 3: start everything offline") {
-  if (-not (Select-String -Quiet -SimpleMatch -Path "$logs\setup-windows-update.log" -Pattern $said)) { Fail "the update didn't say `"$said`"" }
-}
+Test-Said "setup-windows-update.log" "the update" "TINFOIL KIT UPDATE", "To change that", "Step 3 of 3: start everything offline"
 Step "SETUP-Windows.bat --home-server: shared on the home network, and started now and whenever you sign in"
 $startup = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\Tinfoil Kit.cmd"
 # Answers: keep where it's for, download, close.
@@ -224,7 +240,7 @@ $kit = "${letter}:\TinfoilKit"
 "The drive is ${letter}:"
 Set-Content "${letter}:\keep-me.txt" "mine"
 
-Step "SETUP-Windows.bat in a new download: the drive; it copies the kit there and sets it up"
+Step "SETUP-Windows.bat in a new download: the drive; it copies the kit there and gets the try-it kit"
 Get-Kit $dl
 $lines = @(python "$dl\tools\kit.py" --root $dl drives)
 $lines | ForEach-Object { "  $_" }
@@ -233,7 +249,7 @@ if ($n -lt 1) { Fail "SETUP doesn't list the drive ${letter}:"; $n = 1 }
 # Answers: keep where it's for, an external drive, this one, how much if room is short, download, don't open it, close.
 $answers = @("", "1", "$n") + @(Get-RoomAnswer $dl $kit) + @("y", "n", "")
 Invoke-Setup $dl "setup-windows-drive.log" $answers
-if (-not (Test-Path "$kit\models")) { Fail "the kit isn't set up on the drive, at $kit" }
+if (-not (Test-Path "$kit\models\Two")) { Fail "the try-it kit isn't on the drive, at $kit" }
 if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
 Test-Kit $kit "the drive"
 Step "UNINSTALL-Windows.bat --yes on the drive: the kit goes, and nothing else on the drive"
@@ -246,55 +262,60 @@ $help = & "$dl\SETUP-Windows.bat" --help
 if ($LASTEXITCODE -ne 0 -or -not ($help -match "^--drive PATH")) { Fail "SETUP-Windows.bat --help didn't list its options (exit $LASTEXITCODE)"; $help }
 & "$dl\SETUP-Windows.bat" --nope > $null
 if ($LASTEXITCODE -ne 2) { Fail "SETUP-Windows.bat --nope should stop with exit 2, not $LASTEXITCODE" }
-Step "SETUP-Windows.bat --drive ${letter}: --models Tiny --share --yes: the one command an AI hands over, and no questions"
+Step "SETUP-Windows.bat --drive ${letter}: --models Tiny --share --yes: the one command an AI hands over; no questions, the try-it kit, and it opens"
 $out = Invoke-Setup $dl "setup-windows-yes.log" @("") "--drive ${letter}: --models Tiny --share --yes"
 $out
 if (-not ($out -contains "exit 0")) { Fail "SETUP --yes didn't end with exit 0" }
-foreach ($said in "What goes in it:", "Sharing: phones and laptops", "Access code") {
-  if (-not (Select-String -Quiet -SimpleMatch -Path "$logs\setup-windows-yes.log" -Pattern $said)) { Fail "SETUP --yes didn't say `"$said`"" }
-}
-if (Select-String -Quiet -Path "$logs\setup-windows-yes.log" -Pattern "\[Y/n\]|\[y/N\]|Type (1|a number)|Press Enter") { Fail "SETUP --yes asked something" }
-if (-not (Test-Path "$kit\models")) { Fail "the kit isn't set up on the drive, at $kit" }
+Test-Said "setup-windows-yes.log" "SETUP --yes" @("What goes in it:", "The try-it kit works",
+  "When you're ready for it: `"$kit\SETUP-Windows.bat`" --yes", "Sharing: phones and laptops", "Access code")
+$asked = "\[Y/n\]|\[y/N\]|Type (1|a number)|Press Enter"
+if (Select-String -Quiet -Path "$logs\setup-windows-yes.log" -Pattern $asked) { Fail "SETUP --yes asked something" }
+if (-not (Test-Path "$kit\models\Two")) { Fail "the try-it kit isn't on the drive, at $kit" }
 if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
+python "$tests\drive.py" check 8888 8080
+if ($LASTEXITCODE -ne 0) { Fail "the kit SETUP --yes opened" }
+Step "`"$kit\SETUP-Windows.bat`" --yes, as the try-it kit said, with the kit still open: it stops it, then gets the rest"
+$out = Invoke-Setup $kit "setup-windows-yes-rest.log" @("") "--yes"
+$out
+if (-not ($out -contains "exit 0")) { Fail "SETUP --yes for the rest didn't end with exit 0" }
+Test-Said "setup-windows-yes-rest.log" "SETUP --yes for the rest" "Step 2 of 3: the rest of the kit", "The kit is running. Stopping it", "All set"
+if (Select-String -Quiet -Path "$logs\setup-windows-yes-rest.log" -Pattern $asked) { Fail "SETUP --yes for the rest asked something" }
+if (Test-Path "$kit\models\Two") { Fail "the try-it kit's sample AI is still there after the rest" }
 Test-Kit $kit "the drive, set up with --yes"
 Invoke-Uninstall $kit "uninstall-windows-yes.log"
 Dismount-DiskImage -ImagePath $vhd | Out-Null
 
 # A cmd window, unlike the cmd /c that PowerShell or an AI's shell starts, would close at SETUP's exit: there
 # SETUP runs itself in a cmd of its own. Here cmd reads what's typed from a file, as a window reads the keyboard.
-Step "SETUP-Windows.bat --this-computer --models Tiny --yes typed in a cmd window: the window stays, and says how SETUP ended"
+# With --all, the rest comes right after the try-it kit, in the same run.
+Step "SETUP-Windows.bat --this-computer --models Tiny --all --yes typed in a cmd window: the window stays, and says how SETUP ended"
 Get-Kit $dl
 $kit = "$env:USERPROFILE\TinfoilKit"
-@("`"$dl\SETUP-Windows.bat`" --this-computer --models Tiny --yes", "echo SETUP ended with %errorlevel%", "exit") |
+@("`"$dl\SETUP-Windows.bat`" --this-computer --models Tiny --all --yes", "echo SETUP ended with %errorlevel%", "exit") |
   Set-Content -Encoding ascii "$work\cmd-window.txt"
 $p = Start-Process cmd.exe -ArgumentList "/d /q" -PassThru -NoNewWindow -RedirectStandardInput "$work\cmd-window.txt" `
   -RedirectStandardOutput "$logs\setup-windows-cmd.log" -RedirectStandardError "$logs\setup-windows-cmd.err"
 $null = $p.Handle
 if (-not $p.WaitForExit(1200000)) { Fail "SETUP in a cmd window was still running after 20 minutes"; Stop-Process -Id $p.Id -Force }
-Get-Content "$logs\setup-windows-cmd.log" | Select-String "All set|SETUP ended" | ForEach-Object { $_.Line }
+Get-Content "$logs\setup-windows-cmd.log" | Select-String "Step [0-9]|try-it kit|All set|SETUP ended" | ForEach-Object { $_.Line }
 if (-not (Select-String -Quiet -Path "$logs\setup-windows-cmd.log" -Pattern "SETUP ended with 0")) {
   Fail "SETUP --yes in a cmd window closed it, or didn't end with 0"
   Get-Content "$logs\setup-windows-cmd.log" -Tail 25; Get-Content "$logs\setup-windows-cmd.err" -ErrorAction SilentlyContinue
 }
-if (-not (Test-Path "$kit\models")) { Fail "the kit isn't set up on this PC, at $kit" }
+Test-Said "setup-windows-cmd.log" "SETUP --all --yes" "Step 3 of 4: a small kit to try first", "Step 4 of 4: the rest of the kit", "All set"
+if (Test-Path "$kit\models\Two") { Fail "the try-it kit's sample AI is still there after --all, at $kit" }
+if (-not (Test-Path "$kit\models\Tiny")) { Fail "the kit isn't set up on this PC, at $kit" }
 if (Test-Path $dl) { Fail "the download is still in $dl after the move" }
 Invoke-Uninstall $kit "uninstall-windows-cmd.log"
 
-Step "the map: ./kit sync builds Andorra's with the real pmtiles, Java, Photon and GraphHopper for Windows"
+# A kit on a drive opened on a PC that never ran SETUP: sharing it needs Python, and this PC's own does.
+Step "a kit ./kit sync got, with no SETUP: Open Tinfoil Kit for Windows.bat --share on this PC's own Python"
 Get-Kit $dl
-python "$tests\drive.py" kitjson "$dl\kit.json" maps
 Get-ChildItem -Recurse -File $dl | Unblock-File    # no SETUP here to do it, and Open Tinfoil Kit starts with a double-click
-python "$dl\tools\kit.py" --root $dl sync --yes *> "$logs\sync-windows-map.log"
+python "$dl\tools\kit.py" --root $dl sync --yes *> "$logs\sync-windows-own-python.log"
 "exit $LASTEXITCODE"
-Get-Content "$logs\sync-windows-map.log" | Select-String "map|road|GraphHopper|address|FAIL|failed|rror" |
-  Select-Object -Last 25 | ForEach-Object { $_.Line }
-foreach ($f in "maps\tiles\basemap.pmtiles", "maps\routing\graph-cache\properties", "maps\geocoder\photon_data") {
-  if (-not (Test-Path "$dl\$f")) { Fail "sync didn't make $f (logs\sync-windows-map.log)" }
-}
-python "$dl\tools\kit.py" --root $dl test *> "$logs\test-windows-map.log"    # what SETUP-Windows.bat checks last
-if ($LASTEXITCODE -ne 0) { Fail "./kit test with the map (logs\test-windows-map.log)" }
-Get-Content "$logs\test-windows-map.log" | Select-String "map|address|directions|FAIL" | ForEach-Object { $_.Line }
-Test-Kit $dl "the map" -Share
+if ($LASTEXITCODE -ne 0) { Fail "./kit sync (logs\sync-windows-own-python.log)"; Get-Content "$logs\sync-windows-own-python.log" -Tail 20 }
+Test-Kit $dl "this PC's own Python" -Share
 Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
 
 Stop-Process -Id $mock.Id -Force -ErrorAction SilentlyContinue
