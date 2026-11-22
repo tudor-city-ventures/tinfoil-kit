@@ -96,12 +96,12 @@ async function expect(name, opts, closed) {
   }
   check("an ordinary change passes", !(await files(["tools/kit.py", "kit.json", ".github/CONTRIBUTING.md", "site/index.html"])));
   for (const f of [".github/workflows/check.yml", ".github/workflows/new.yaml", ".github/CODEOWNERS", ".github/dependabot.yml",
-                   ".github/release.sh", ".gitattributes", "tools/release-signers", "tools/pins.json"]) {
+                   ".github/release.sh", ".gitattributes", "tools/release-signers", "tools/pins.json", "mac/build.sh"]) {
     const m = await files(["README.md", f]);
     check(`${f} fails it, by name`, !!m && m.includes(f));
   }
   check("renaming a workflow away fails it", !!(await files([["old.yml", ".github/workflows/check.yml"]])));
-  check("a look-alike path passes", !(await files(["tests/.github/workflows/x.yml", "docs/CODEOWNERS.md", "tools/release-signers.md", "tests/pins.json"])));
+  check("a look-alike path passes", !(await files(["tests/.github/workflows/x.yml", "docs/CODEOWNERS.md", "tools/release-signers.md", "tests/pins.json", "mac/app.sh"])));
   check("a branch in this repo skips it", !(await files([".github/workflows/check.yml"], { head: { repo: { full_name: "Tudor-City-Ventures/tinfoilkit" } } })));
   check("a deleted fork is still checked", !!(await files([".github/CODEOWNERS"], { head: { repo: null } })));
   check("more files than GitHub lists fails it", !!(await files(["README.md"], { changed_files: 3001 })));

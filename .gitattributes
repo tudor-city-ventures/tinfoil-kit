@@ -2,12 +2,14 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.png binary
+*.icns binary
 # Archives of the kit (a release, or Code > Download ZIP) stamp KIT_COMMIT in kit.py with their commit.
 tools/kit.py export-subst
-# Releases and Download ZIP carry the kit and nothing else: no tests, docs or website, except the two files of
+# Releases and Download ZIP carry the kit and nothing else: no tests, docs, website or Mac app, except the two files of
 # site/ the kit reads (kit.json's last version, for ./kit update's merge, and the builder's sizes, for estimate).
 /tests export-ignore
 /docs export-ignore
+/mac export-ignore
 /.github export-ignore
 /AGENTS.md export-ignore
 /CLAUDE.md export-ignore

@@ -39,7 +39,7 @@ if [ -n "$drive" ]; then where="from the drive $drive"; else where="from $THIS";
 echo
 echo "This deletes Tinfoil Kit $where: the folder $KIT,"
 echo "with the AI models, books, maps and programs it downloaded ($size in all)."
-[ -d "$PY_HOME" ] && echo "Also the Python it downloaded for $THIS, in $PY_HOME."
+[ -d "$PY_HOME/python" ] && echo "Also the Python it downloaded for $THIS, in $PY_HOME."
 echo "It can't be undone. The files don't go to the Trash."
 [ -n "$drive" ] && echo "Nothing else on the drive is touched."
 if [ $YES = 0 ]; then
@@ -72,5 +72,8 @@ top="${KIT%/*}"
 [ -n "$drive" ] && [ "$(dev_of "$top")" != "$(dev_of "$top/..")" ] && rm -f "$top/.metadata_never_index"
 say "Done. Tinfoil Kit is gone, and $size is free again."
 [ -n "$drive" ] && echo "You can eject the drive now."
+for a in "/Applications/Tinfoil Kit.app" "$HOME/Applications/Tinfoil Kit.app"; do
+  [ -d "$a" ] && echo "To remove the Tinfoil Kit app too, drag it from Applications to the Trash." && break
+done
 finish 0
 }

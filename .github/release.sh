@@ -4,12 +4,44 @@
 # so that the signing key never goes near GitHub.
 #   .github/release.sh key                 make the signing key and add it to tools/release-signers (once)
 #   .github/release.sh v1.2.0 NOTES.txt    sign and publish main as v1.2.0, with NOTES.txt as what's new
-# Needs git, ssh-keygen and GitHub's gh, signed in (brew install gh && gh auth login).
+#   .github/release.sh mac                 set up and try the Mac app's signing (once): it builds the app, Apple
+#                                          notarizes it, and a copy lands on the Desktop as if downloaded
+# Needs git, ssh-keygen and GitHub's gh, signed in (brew install gh && gh auth login). And for the Mac download, the
+# Tinfoil Kit app: a Mac with Apple's command line tools, a Developer ID Application certificate in its keychain and
+# notarytool's password for it (docs/HANDOFF.md, "The Mac app").
 set -eu
 cd "$(dirname "$0")/.."
 KEY="${KIT_RELEASE_KEY:-$HOME/.ssh/tinfoilkit-release}"
 NS=tinfoilkit-release
 die() { echo "release: $*" >&2; exit 1; }
+NOTARY="${KIT_MAC_NOTARY:-tinfoilkit}"    # the keychain profile notarytool keeps the password in
+mac_identity() { security find-identity -v -p codesigning 2> /dev/null | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p' | head -1; }
+mac_notary() { xcrun notarytool history --keychain-profile "$NOTARY" > /dev/null 2>&1; }
+
+if [ "${1:-}" = mac ]; then
+  [ "$(uname -s)" = Darwin ] || die "the Mac app is built on a Mac"
+  xcrun --find notarytool > /dev/null 2>&1 || die "needs Apple's command line tools: run  xcode-select --install"
+  id="${KIT_MAC_SIGN:-$(mac_identity)}"
+  [ -n "$id" ] || die "this Mac's keychain has no Developer ID Application certificate. docs/HANDOFF.md, \"The Mac app\", says how to make one"
+  echo "Signing with: $id"
+  if ! mac_notary; then
+    printf "The email of the Apple account in the developer program: "
+    read -r apple_id
+    echo "Now paste the app-specific password you made for notarizing. It isn't shown as you paste."
+    xcrun notarytool store-credentials "$NOTARY" --apple-id "$apple_id" --team-id "$(echo "$id" | sed 's/.*(\(.*\))$/\1/')" ||
+      die "notarytool didn't save the password. Check the email and the password, then run this again"
+  fi
+  out=$(mktemp -d)
+  git archive --format=tar --prefix=TinfoilKit/ HEAD | gzip -n > "$out/kit.tar.gz"
+  KIT_MAC_SIGN="$id" KIT_MAC_NOTARY="$NOTARY" mac/build.sh "$out/kit.tar.gz" "$out"
+  zip="$HOME/Desktop/TinfoilKit-Mac.zip"
+  cp "$out/TinfoilKit-Mac.zip" "$zip"
+  xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$zip"    # as Safari leaves a download
+  echo
+  echo "It works: $zip is signed, notarized and marked as downloaded. Double-click it, then open Tinfoil Kit."
+  echo "macOS should only ask whether to open an app from the internet. From now on every release's Mac download is the app."
+  exit 0
+fi
 
 if [ "${1:-}" = key ]; then
   [ -e "$KEY" ] || ssh-keygen -t ed25519 -C "Tinfoil Kit releases" -f "$KEY"
@@ -22,10 +54,13 @@ if [ "${1:-}" = key ]; then
 fi
 
 TAG="${1:-}" NOTES="${2:-}"
-echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || die "usage: .github/release.sh vX.Y.Z NOTES.txt   (or: .github/release.sh key)"
+echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || die "usage: .github/release.sh vX.Y.Z NOTES.txt   (or: .github/release.sh key, or mac)"
 [ -s "$NOTES" ] || die "write what's new in a file and pass it after the version"
 command -v gh > /dev/null || die "needs GitHub's gh: brew install gh && gh auth login"
 [ -e "$KEY" ] || die "no signing key at $KEY. Make one with: .github/release.sh key (or set KIT_RELEASE_KEY)"
+id="${KIT_MAC_SIGN:-$(mac_identity)}"
+[ -n "$id" ] && mac_notary ||
+  die "the Mac download is the Tinfoil Kit app, and this Mac can't sign and notarize it yet. Set that up once: .github/release.sh mac"
 git fetch -q origin main --tags
 [ -z "$(git status --porcelain)" ] || die "commit or stash your changes first"
 sha=$(git rev-parse HEAD)
@@ -45,10 +80,9 @@ trap '[ -n "${pushed:-}" ] || git tag -d "$TAG" > /dev/null' EXIT
 git archive --format=tar --prefix="tinfoilkit-$TAG/" "$TAG" | gzip -n -9 > "$asset"
 ssh-keygen -Y sign -f "$KEY" -n "$NS" "$asset"
 # What the website's download buttons and llms.txt fetch (releases/latest/download/NAME): the same kit files from the
-# same tag, in a folder called TinfoilKit; the tar.gz is for Linux and the command line. Not signed, since they're
-# only a first install: ./kit update takes the signed archive.
-git archive --format=zip --prefix=TinfoilKit/ "$TAG" > "$out/TinfoilKit-Mac.zip"
-cp "$out/TinfoilKit-Mac.zip" "$out/TinfoilKit-Windows.zip"
+# same tag, in a folder called TinfoilKit (on a Mac, inside the app); the tar.gz is for Linux and the command line.
+# Not signed with the release key, since they're only a first install: ./kit update takes the signed archive.
+git archive --format=zip --prefix=TinfoilKit/ "$TAG" > "$out/TinfoilKit-Windows.zip"
 git archive --format=tar --prefix=TinfoilKit/ "$TAG" | gzip -n -9 > "$out/TinfoilKit.tar.gz"
 downloads=("$out/TinfoilKit-Mac.zip" "$out/TinfoilKit-Windows.zip" "$out/TinfoilKit.tar.gz")
 # Drives on the last release check this one with that release's keys, so a key change needs both to accept it.
@@ -57,13 +91,18 @@ for ref in "$TAG" $prev; do
   ssh-keygen -Y verify -f "$out/signers" -I "$NS" -n "$NS" -s "$asset.sig" < "$asset" > /dev/null \
     || die "the signature doesn't match a key in $ref's tools/release-signers"
 done
+# The Mac download is the app, notarized so it opens with a double-click: macOS sends a script from the internet to
+# System Settings first, which people miss.
+KIT_MAC_SIGN="$id" KIT_MAC_NOTARY="$NOTARY" mac/build.sh "$asset" "$out/mac" "${TAG#v}" || die "the Mac app didn't build (above is why)"
+mv "$out/mac/TinfoilKit-Mac.zip" "$out/TinfoilKit-Mac.zip"
 
 echo
 echo "Ready: $TAG, $(git log -1 --format='%h %s' "$sha")"
 echo "  $asset and .sig"
 echo "  tar SHA-256 $(gunzip -c "$asset" | shasum -a 256 | cut -d' ' -f1)"
 echo "  (rebuild it: git archive --format=tar --prefix=tinfoilkit-$TAG/ $TAG | shasum -a 256)"
-echo "  downloads for the website: TinfoilKit-Mac.zip, TinfoilKit-Windows.zip, TinfoilKit.tar.gz"
+echo "  downloads for the website: TinfoilKit-Mac.zip (the app, signed by $id and notarized), TinfoilKit-Windows.zip,"
+echo "  TinfoilKit.tar.gz"
 echo "What's new:"
 sed 's/^/  /' "$NOTES"
 echo
