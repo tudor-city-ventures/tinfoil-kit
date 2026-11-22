@@ -15,6 +15,7 @@ __pycache__/
 tests/work/
 node_modules/
 
-# The website's build (npm run build in site/)
+# The website's build (npm run build in site/) and its agent skills (npm run skills)
 site/.next/
 site/out/
+site/.claude/
