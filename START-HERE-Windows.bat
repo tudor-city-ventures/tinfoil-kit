@@ -219,13 +219,13 @@ if not defined CURL exit /b 1
 "%CURL%" -s -f -o nul --max-time 2 "%~1" 2>nul
 goto :eof
 
-rem Another program can hold a port (many developer tools take 8080): use the next free one.
+rem Another program can hold a port (many developer tools take 8080): use the next free one. netstat says what's
+rem listening at once, where connecting to a free port takes Windows about 2 seconds to give up.
 :free_port
-if not defined CURL goto :eof
 set /a "P=!%~1!, LAST=!%~1!+9"
 :free_port_next
-"%CURL%" -s -o nul --max-time 2 "http://127.0.0.1:!P!/" 2>nul
-if errorlevel 7 if not errorlevel 8 goto free_port_done
+rem A listening port's line has no remote address: 0.0.0.0:0 or [::]:0 (the state's name depends on the language).
+netstat -an | findstr /r /c:"TCP  *[^ ]*:%P%  *0\.0\.0\.0:0 " /c:"TCP  *[^ ]*:%P%  *\[::\]:0 " >nul || goto free_port_done
 if !P! geq !LAST! goto free_port_done
 set /a "P+=1"
 goto free_port_next
