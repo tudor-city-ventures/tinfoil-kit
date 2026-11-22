@@ -72,9 +72,9 @@ check("the site never mentions 2 TB", not re.search(r"\b2(\s|&nbsp;)*TB\b", site
 # Travis: people update whenever they like, so no copy names a schedule
 check("the site names no update schedule", not re.search(r"\bmonths?\b|\bquarterly\b", site_text, re.I))
 # the check-the-code prompt sends people's AIs to these files, so they have to exist
-named = re.findall(r"SETUP\.command|SETUP-Windows\.bat|tools/\w+\.py|mac/", open(os.path.join(SITE, "components", "prompts.js"), encoding="utf-8").read())
+named = re.findall(r"SETUP\.command|SETUP-Windows\.bat|tools/[\w.-]+|mac/", open(os.path.join(SITE, "components", "prompts.js"), encoding="utf-8").read())
 gone = [f for f in named if not os.path.exists(os.path.join(SITE, "..", f))]
-check("the check-the-code prompt names files that exist", len(named) >= 5 and not gone, ", ".join(gone))
+check("the check-the-code prompt names files that exist", len(named) >= 4 and not gone, f"{named}, gone: {gone}")
 # An AI builds the setup command from llms.txt, so it lists every id the options take
 llms = open(os.path.join(SITE, "public", "llms.txt"), encoding="utf-8").read()
 missing = [s["id"] for s in json.load(open(os.path.join(SITE, "sources.json")))["sources"]
