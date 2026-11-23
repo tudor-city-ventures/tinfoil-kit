@@ -4,6 +4,7 @@ Set KIT_AXE to axe-core's axe.min.js (node_modules/axe-core/axe.min.js, after np
 to also check accessibility."""
 
 import datetime
+import decimal
 import functools
 import glob
 import http.server
@@ -32,6 +33,14 @@ def check(name, ok, detail=""):
     global fails
     print(("PASS  " if ok else "FAIL  ") + name + (f": {detail}" if detail else ""))
     fails += 0 if ok else 1
+
+
+def gb(mb):
+    """A size from regions.json's MB, written as the builder writes it (gb in site/components/builder.jsx)."""
+    g = decimal.Decimal(mb * 1e6 / 1e9)  # exactly the number JavaScript has, rounded as toFixed and Math.round do
+    if g < 1:
+        return "<1 GB"
+    return str(g.quantize(decimal.Decimal("0.1" if g < 10 else "1"), decimal.ROUND_HALF_UP)).removesuffix(".0") + " GB"
 
 
 def axe(page, label):
@@ -587,19 +596,23 @@ with sync_playwright() as p:
             )
             page.click("[data-preset=recommended]")
             # How much of Wikipedia: the sizes Kiwix makes in that language. A preset sets one, and one that isn't the
-            # preset's goes into SETUP's options.
+            # preset's goes into SETUP's options. The weekly refresh changes what Kiwix makes and how big, so the
+            # expected list comes from regions.json, in the builder's order (SIZES in builder.jsx).
             page.click("#wikiSize")
             sizes = page.locator("[role=listbox] [role=option]").all_inner_texts()
             page.keyboard.press("Escape")
+            de = json.load(open(os.path.join(SITE, "regions.json"), encoding="utf-8"))["languages"]["de"]
+            de = {de["zim"].split("_", 2)[2]: de["mb"], **de.get("sizes", {})}
+            labels = {
+                "all_maxi": "All, with pictures",
+                "all_nopic": "All, text only",
+                "top_maxi": "Best 50,000 articles, with pictures",
+                "top_nopic": "Best 50,000 articles, text only",
+                "top_mini": "Best 50,000 articles, opening paragraphs",
+            }
             check(
                 "the size dropdown lists the sizes Wikipedia comes in, in that language, with their GB",
-                sizes
-                == [
-                    "All, with pictures (49 GB)",
-                    "Best 50,000 articles, with pictures (4.5 GB)",
-                    "Best 50,000 articles, text only (1.3 GB)",
-                    "Best 50,000 articles, opening paragraphs (<1 GB)",
-                ],
+                sizes == [f"{label} ({gb(de[e])})" for e, label in labels.items() if e in de],
                 str(sizes),
             )
             before = page.inner_text("#totalText")
@@ -607,7 +620,7 @@ with sync_playwright() as p:
             check(
                 "a smaller Wikipedia: its card, the language's size and the total follow",
                 page.evaluate(wiki_titles) == ["Best of Wikipedia in German, text only"]
-                and page.inner_text("#wikiLang") == "German (1.3 GB)"
+                and page.inner_text("#wikiLang") == f"German ({gb(de['top_nopic'])})"
                 and page.inner_text("#totalText") != before,
                 page.inner_text("#wikiLang") + str(page.evaluate(wiki_titles)),
             )
