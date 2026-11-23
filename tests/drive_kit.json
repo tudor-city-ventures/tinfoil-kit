@@ -87,12 +87,6 @@
   ],
   "extras": [
     {
-      "id": "Kiwix-macOS-app",
-      "type": "kiwix_release",
-      "product": "kiwix-macos",
-      "pattern": "kiwix-macos_{version}.dmg"
-    },
-    {
       "id": "Guide",
       "type": "url",
       "url": "http://127.0.0.1:19000/files/guide.pdf",

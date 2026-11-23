@@ -221,8 +221,6 @@ and the Library tab don't use the AI, so they use almost nothing. Paper uses non
   Advanced, on a Mac: `sudo sysctl iogpu.wired_limit_mb=26624` lets the GPU use up to 26 GB until the next restart.
 - The previous version of each program is kept in `downloads/bin/` as a fallback and is used automatically if the newest
   one won't start.
-- The Kiwix app in `downloads/installers/` opens the `.zim` books in `downloads/library/` directly, without the rest of
-  the kit.
 
 ## On another computer
 
@@ -271,7 +269,6 @@ folder: `./kit sync -y && ./kit test`, then `./kit share on` and `./kit autostar
 | `downloads/models/` | The AI models (`.gguf` files) |
 | `downloads/maps/` | Map tiles, the address database, the road network for directions, and the map display code |
 | `downloads/bin/` | The programs: llama.cpp (AI), kiwix-serve (library), and for maps pmtiles, Photon, GraphHopper and Java |
-| `downloads/installers/` | Optional apps (Kiwix for Mac) |
 | `downloads/INVENTORY.md` | What's in the kit right now, with versions |
 | `data/` | Yours: no new version touches it |
 | `data/kit.json` | Your list of what to keep, with your changes |

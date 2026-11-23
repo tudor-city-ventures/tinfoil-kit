@@ -4,10 +4,6 @@
   "and every release carries it, signed with the rest. To take each program's newest build instead, set",
   "\"pin_programs\": false in kit.json's settings."
  ],
- "Kiwix-macOS-app": {
-  "version": "3.19.0",
-  "sha256": "5080cf2a25f9c13e4820e2775256d16feb02221152ea5c48e31e497a525b9b67"
- },
  "basemaps-assets": {
   "version": "028c18f713baecad011301ff7a69acc39bcc2ae7"
  },

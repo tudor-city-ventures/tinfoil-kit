@@ -81,7 +81,6 @@ TinfoilKit/
 │   ├── models/                   AI models
 │   ├── library/                  books (.zim files)
 │   ├── maps/                     map tiles, address database, road network
-│   ├── installers/               the Kiwix app, a backup way to read the books
 │   └── INVENTORY.md              what's installed, with versions and sizes
 └── data/                         yours: no new version touches it
     ├── kit.json                  what goes in your kit, and its settings

@@ -26,7 +26,7 @@ md5() { (cd "$(dirname "$1")" && md5sum "$(basename "$1")" > "$(basename "$1").m
 rand() { python3 -c "import os,sys; sys.stdout.buffer.write(os.urandom($2))" > "$1"; }
 
 rm -rf "$R" "$TMP"
-mkdir -p "$DL" "$TMP" "$R"/{zim,gh,gh2,hf/tiny,hf/tiny_v2,hf/two,npm,adoptium,files,geofabrik,release/kiwix-tools,release/kiwix-macos,photon/north-america/usa,maven/com/graphhopper/graphhopper-web/11.1}
+mkdir -p "$DL" "$TMP" "$R"/{zim,gh,gh2,hf/tiny,hf/tiny_v2,hf/two,npm,adoptium,files,geofabrik,release/kiwix-tools,photon/north-america/usa,maven/com/graphhopper/graphhopper-web/11.1}
 
 echo "== llama.cpp (real Linux CPU build, repacked as two fake nightly builds)"
 url=$(curl -fsSL "${GH_AUTH[@]}" "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=15" |
@@ -60,7 +60,6 @@ for v in 3.8.2 3.9.0; do
   rm -rf "$TMP/pack" && mkdir -p "$TMP/pack" && cp -a "$TMP"/kiwix/*/ "$TMP/pack/kiwix-tools_linux-x86_64-$v"
   tar -czf "$R/release/kiwix-tools/kiwix-tools_linux-x86_64-$v.tar.gz" -C "$TMP/pack" "kiwix-tools_linux-x86_64-$v"
 done
-echo "fake dmg" > "$R/release/kiwix-macos/kiwix-macos_3.8.0.dmg"
 
 echo "== fake Java and pmtiles (the scripts in tests/fakes)"
 rm -rf "$TMP/pack" && mkdir -p "$TMP/pack/jdk-21.0.9+10-jre/bin" && cp "$TESTS/fakes/java" "$TMP/pack/jdk-21.0.9+10-jre/bin/java"

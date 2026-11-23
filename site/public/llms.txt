@@ -69,7 +69,6 @@ What's in the folder:
     │   ├── models/                   AI models (.gguf)
     │   ├── library/                  books (.zim)
     │   ├── maps/                     map tiles, address database, road network
-    │   ├── installers/               the Kiwix app, a backup way to read the books
     │   └── INVENTORY.md              what's installed, with versions and sizes
     └── data/                         the person's: no new version touches it
         ├── kit.json                  what goes in their kit, and its settings
@@ -282,7 +281,6 @@ Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's a
 - The Notes or Map tab says notes or pins are saved in this browser: the kit couldn't start the server that keeps them. Read data/logs/data.log. They move into the kit the next time it starts.
 - Anything else: close the kit's window, start again, and read data/logs (sync-*.log for downloads, llama-server.log for the AI).
 - The previous version of each program stays in downloads/bin/ and starts automatically if the newest one won't.
-- If the library server won't start, the Kiwix app in downloads/installers/ opens the books in downloads/library/ directly.
 
 ## Where everything comes from
 
@@ -291,7 +289,7 @@ The kit's own code is MIT. Everything it downloads comes straight from its publi
 - AI models: Inkling 2 Mini by Thinking Machines (Apache 2.0, plus Thinking Machines' Model Acceptable Use Policy, which binds anyone who downloads the weights), Qwen3.8 27B by Alibaba (Apache 2.0), Gemma 4 26B-A4B, Gemma 4 12B and Gemma 4 E4B by Google (Apache 2.0). The files come from ggml-org's and Unsloth's Hugging Face repos.
 - Books: Wikipedia and its sister projects, WikiMed, Stack Exchange, Appropedia and Energypedia are CC BY-SA. iFixit, LibreTexts and Khan Academy are CC BY-NC-SA: no commercial use. Ready.gov, CDC Travelers' Health and US Army publications are US government works. So are MedlinePlus's own pages, but its encyclopedia and drug information are copyrighted: free to read, not to republish. Project Gutenberg is public domain in the US. Survivor Library, Urban Prepper, CD3WD, the Learning Self-Reliance videos and the collections of field medicine, post-disaster, water, food and knots guides have mixed terms: free to read, not to republish.
 - Maps: OpenStreetMap data (© OpenStreetMap contributors, Open Database License), through Protomaps, Geofabrik and the Photon exports GraphHopper hosts. Map style: Protomaps basemaps (BSD-3-Clause). Fonts: Noto Sans (SIL Open Font License).
-- Programs: llama.cpp (MIT), kiwix-serve and the Kiwix app (GPL-3.0), Eclipse Temurin Java (GPL-2.0 with Classpath Exception), go-pmtiles (BSD-3-Clause), GraphHopper and Photon (Apache 2.0), MapLibre GL JS (BSD-3-Clause).
+- Programs: llama.cpp (MIT), kiwix-serve (GPL-3.0), Eclipse Temurin Java (GPL-2.0 with Classpath Exception), go-pmtiles (BSD-3-Clause), GraphHopper and Photon (Apache 2.0), MapLibre GL JS (BSD-3-Clause).
 - Setup and updates talk only to GitHub, Kiwix, Hugging Face, Protomaps, Geofabrik, GraphHopper, Adoptium, Maven Central and npm, plus anything added to kit.json. Using the kit sends nothing over the internet: no account, no telemetry.
 
 ## How it compares to Project NOMAD

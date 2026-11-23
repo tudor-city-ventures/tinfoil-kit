@@ -39,7 +39,7 @@ The logs are in data/logs: sync-*.log for downloads, llama-server.log for the AI
 - Address search or directions "not running": they take up to a minute to start. If they never do, read geocoder.log and routing.log. A "lock" error in test-geocoder.log means the drive's exFAT format is the cause.
 - The Notes or Map tab says notes or pins are saved in this browser: the kit couldn't start the server that keeps them. Read data.log. They move into the kit the next time it starts.
 - Linux, Fedora 45 or later: the AI needs `sudo dnf install openssl3-libs`, installed while there's internet.
-- The previous version of each program stays in downloads/bin and starts by itself if the newest won't. If the library won't start at all, the Kiwix app in downloads/installers opens the books in downloads/library.
+- The previous version of each program stays in downloads/bin and starts by itself if the newest won't.
 
 ## Open it
 

@@ -262,13 +262,6 @@
 
   "extras": [
     {
-      "id": "Kiwix-macOS-app",
-      "type": "kiwix_release",
-      "product": "kiwix-macos",
-      "pattern": "kiwix-macos_{version}.dmg",
-      "note": "Kiwix desktop app: opens .zim files directly, a backup if the library server won't start"
-    },
-    {
       "id": "Ollama-macOS",
       "type": "url",
       "url": "https://ollama.com/download/Ollama.dmg",

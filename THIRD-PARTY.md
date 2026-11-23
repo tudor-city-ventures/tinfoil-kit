@@ -34,7 +34,7 @@ The files come from ggml-org's and Unsloth's Hugging Face repos, which repackage
 | Program | License |
 | --- | --- |
 | llama.cpp (llama-server) | MIT |
-| kiwix-tools (kiwix-serve), Kiwix for macOS | GPL-3.0 |
+| kiwix-tools (kiwix-serve) | GPL-3.0 |
 | Eclipse Temurin (Java) | GPL-2.0 with Classpath Exception |
 | go-pmtiles | BSD-3-Clause |
 | GraphHopper | Apache 2.0 |
