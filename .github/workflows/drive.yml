@@ -8,8 +8,9 @@ name: drive test
 # here. By hand (Actions > drive test > Run workflow) to test a commit again.
 run-name: drive test${{ inputs.only == 'windows-setup' && ', Windows setup only' || '' }}
 on:
-  schedule:
-    - cron: "17 9 * * *"
+  schedule:    # GitHub can start a scheduled run many hours late, even the next day: the changes job tells Monday's by its line
+    - cron: "17 9 * * 1"
+    - cron: "17 9 * * 0,2-6"
   workflow_dispatch:
     inputs:
       only:
@@ -42,11 +43,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
+          CRON: ${{ github.event.schedule }}
         run: |
           case "$EVENT" in
             push) base="$BEFORE" ;;
             schedule)
-              if [ "$(date -u +%u)" = 1 ]; then
+              if [ "${CRON##* }" = 1 ]; then    # Monday's line, whatever day GitHub starts it
                 base="" && echo "Monday: it runs anyway, on the newest llama.cpp and kiwix-tools builds."
               else
                 base="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/drive.yml/runs?status=success&per_page=30" \
