@@ -39,7 +39,9 @@ set "OTHER="
 for %%d in ("%KIT%") do set "KIT_NAME=%%~nxd"
 if /i not "%KIT%"=="%APP%" if /i not "!KIT_NAME!"=="TinfoilKit" for /f "eol=: delims=" %%f in ('dir /b /a "%KIT%" 2^>nul') do (
   set "ENTRY=%%f"
-  if /i not "!ENTRY!"=="app" if /i not "!ENTRY!"=="downloads" if /i not "!ENTRY!"=="data" if /i not "!ENTRY!"==".DS_Store" if /i not "!ENTRY!"=="desktop.ini" if /i not "!ENTRY!"=="Thumbs.db" if /i not "!ENTRY!"==".kit-write-test" if not "!ENTRY:~0,2!"=="._" set "OTHER=1"
+  set "KIT_OWN="
+  for %%n in (app downloads data "Open Tinfoil Kit.command" "Open Tinfoil Kit for Windows.bat" "Read me first.txt" .DS_Store desktop.ini Thumbs.db .kit-write-test) do if /i "!ENTRY!"=="%%~n" set "KIT_OWN=1"
+  if not "!ENTRY:~0,2!"=="._" if not defined KIT_OWN set "OTHER=1"
 )
 if defined OTHER (
   echo This app folder isn't in a folder of its own: !KIT! has other things in it, so nothing was deleted.
@@ -79,7 +81,8 @@ set "TK_BIN=%KIT%\downloads\bin\"
 if not exist "%KIT%\downloads\" set "TK_BIN=%KIT%\bin\"
 set "TK_TOOLS=%APP%\tools\"
 set "TK_START=%APP%\Open Tinfoil Kit for Windows.bat"
-powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and $_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0 } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'Stopping the kit, which is running...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
+set "TK_TOP=%KIT%\Open Tinfoil Kit for Windows.bat"
+powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and $_.Name -eq 'cmd.exe' -and ($c.IndexOf($env:TK_START, $k) -ge 0 -or $c.IndexOf($env:TK_TOP, $k) -ge 0) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'Stopping the kit, which is running...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 rem And Windows no longer starts it as you sign in (kit.cmd autostart on), if this is the kit it starts.
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Tinfoil Kit.cmd"
 if exist "%STARTUP%" findstr /i /c:"%APP%\Open Tinfoil Kit for Windows.bat" "%STARTUP%" >nul && del "%STARTUP%"

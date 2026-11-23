@@ -242,6 +242,9 @@ call :before_download "The kit keeps working while it downloads." || call :finis
 call :get
 
 :results
+rem Where Open Tinfoil Kit is: beside the kit's three folders, where the kit's program puts it, or in app
+set "OPEN_IN=!KIT!"
+if not exist "!KIT!\Open Tinfoil Kit for Windows.bat" set "OPEN_IN=!KIT!\app"
 if "%TESTED%"=="0" if "%RC%"=="0" goto all_set
 if "%TESTED%"=="0" (
   echo(
@@ -253,7 +256,7 @@ if "%TESTED%"=="0" (
     call :home_server
     echo Run SETUP again later to get the rest.
   ) else (
-    echo You can use the kit now: in its app folder, double-click Open Tinfoil Kit for Windows.bat. Double-click SETUP again later to get the rest.
+    echo You can use the kit now: in !OPEN_IN!, double-click Open Tinfoil Kit for Windows.bat. Double-click SETUP again later to get the rest.
   )
   call :finish 1
 )
@@ -269,13 +272,17 @@ echo(
 echo All set. Tinfoil Kit is !WHERE!, in !KIT!
 rem (a home server starts by itself: home_server says so)
 if not defined KIT_HOME_SERVER if "!WHERE!"=="on this PC" (
-  echo In an outage: in File Explorer, open the kit's app folder and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
+  echo In an outage: in File Explorer, open !OPEN_IN! and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
 ) else (
-  echo In an outage: plug in the drive, open !KIT:~3!\app and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
+  echo In an outage: plug in the drive, open !OPEN_IN:~3! and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
 )
 echo While you have power, open the kit and click Print the essentials at the top: about 20 pages worth having on paper.
 echo(
-echo Also in the app folder:
+if exist "!KIT!\Read me first.txt" (
+  echo Read me first.txt, beside Open Tinfoil Kit, says what each folder is for. In the app folder:
+) else (
+  echo Also in the app folder:
+)
 echo   GUIDE.md               a short guide. Print it and keep it handy.
 echo   SETUP-Windows.bat      double-click it again whenever you want the newest AI models, books and maps (needs internet).
 echo   UNINSTALL-Windows.bat  removes the kit and everything it downloaded.
@@ -967,7 +974,8 @@ set "TK_BIN=%KIT%\downloads\bin\"
 if not exist "%KIT%\downloads\" set "TK_BIN=%KIT%\bin\"
 set "TK_TOOLS=%APP%\tools\"
 set "TK_START=%APP%\Open Tinfoil Kit for Windows.bat"
-powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and $_.Name -eq 'cmd.exe' -and $c.IndexOf($env:TK_START, $k) -ge 0 } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'The kit is running. Stopping it, so its files can be updated...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
+set "TK_TOP=%KIT%\Open Tinfoil Kit for Windows.bat"
+powershell -NoProfile -Command "$k = [StringComparison]::OrdinalIgnoreCase; $p = @(Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith($env:TK_BIN, $k) -or $_.Path.StartsWith($env:TK_TOOLS, $k)) }) + @(Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and $_.Name -eq 'cmd.exe' -and ($c.IndexOf($env:TK_START, $k) -ge 0 -or $c.IndexOf($env:TK_TOP, $k) -ge 0) } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }); if ($p.Count) { 'The kit is running. Stopping it, so its files can be updated...'; $p | Stop-Process -Force; Start-Sleep 2 }" <nul 2>nul
 goto :eof
 
 rem The list of what failed, from the newest sync log: the sync's own copy has scrolled far up by now.

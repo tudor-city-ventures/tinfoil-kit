@@ -63,14 +63,15 @@ function Get-Kit($dir, [switch]$Maps, [switch]$Flat, [switch]$Bare) {
 # The folder with a kit's code: its app folder, or the top of one that's all in one folder.
 function Get-Code($dir) { if (Test-Path "$dir\app") { "$dir\app" } else { $dir } }
 
-# A kit's three folders, and nothing else at its top: the code in app, what sync got in downloads, the person's own
-# (their kit.json, logs and .kit) in data.
+# A kit's three folders, the launchers and Read me first.txt beside them, and nothing else at its top: the code in
+# app, what sync got in downloads, the person's own (their kit.json, logs and .kit) in data.
+$top = "Open Tinfoil Kit.command", "Open Tinfoil Kit for Windows.bat", "Read me first.txt"
 function Test-Layout($kit, $what) {
-  foreach ($f in "app\SETUP-Windows.bat", "app\kit.cmd", "downloads\bin", "data\kit.json", "data\.kit\state.json") {
-    if (-not (Test-Path "$kit\$f")) { Fail "$what has no $f" }
+  foreach ($f in @("app\SETUP-Windows.bat", "app\kit.cmd", "downloads\bin", "data\kit.json", "data\.kit\state.json") + $top) {
+    if (-not (Test-Path -LiteralPath "$kit\$f")) { Fail "$what has no $f" }
   }
-  $more = @(Get-ChildItem -Force -Name $kit | Where-Object { $_ -notin "app", "downloads", "data" })
-  if ($more) { Fail "$what has more than app, downloads and data at its top: $($more -join ', ')" }
+  $more = @(Get-ChildItem -Force -Name $kit | Where-Object { $_ -notin @("app", "downloads", "data") + $top })
+  if ($more) { Fail "$what has more than its three folders and the files beside them at its top: $($more -join ', ')" }
 }
 
 # A script in a console window of its own, with the answers typed in as it asks them (tests/drive.py type), and its
@@ -116,7 +117,7 @@ function Get-RoomAnswer($dir, $place) {
 function Stop-Kit($kit, $proc) {
   Get-Process | Where-Object { $_.Path -and ($_.Path.StartsWith("$kit\downloads\bin\", "OrdinalIgnoreCase") -or
     $_.Path.StartsWith("$kit\app\tools\", "OrdinalIgnoreCase")) } | Stop-Process -Force
-  $mine = "$kit\app\Open Tinfoil Kit for Windows.bat"
+  $mine = "$kit\app\Open Tinfoil Kit for Windows.bat", "$kit\Open Tinfoil Kit for Windows.bat"
   Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and ($mine | Where-Object { $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }) } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   if ($proc) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
@@ -141,15 +142,16 @@ function Test-Program($kit, $what) {
   else { Fail "Open Tinfoil Kit for Windows.bat didn't hand over to the kit's own program in $what" }
 }
 
-# Double-click Open Tinfoil Kit for Windows.bat, check the library, the AI and any map, stop it. -Share: with --share,
-# and a phone on the home network gets in with the access code.
+# Double-click Open Tinfoil Kit for Windows.bat beside the kit's three folders (it starts the one in app), check the
+# library, the AI and any map, stop it. -Share: with --share, and a phone on the home network gets in with the
+# access code.
 function Test-Kit($kit, $name, [switch]$Share) {
   if ($Share) {
     Step "Open Tinfoil Kit for Windows.bat --share in $kit"
-    $p = Start-Process "$kit\app\Open Tinfoil Kit for Windows.bat" -ArgumentList "--share" -WorkingDirectory "$kit\app" -PassThru
+    $p = Start-Process "$kit\Open Tinfoil Kit for Windows.bat" -ArgumentList "--share" -WorkingDirectory $kit -PassThru
   } else {
     Step "double-click Open Tinfoil Kit for Windows.bat in $kit"
-    $p = Start-Process "$kit\app\Open Tinfoil Kit for Windows.bat" -WorkingDirectory "$kit\app" -PassThru
+    $p = Start-Process "$kit\Open Tinfoil Kit for Windows.bat" -WorkingDirectory $kit -PassThru
   }
   python "$tests\drive.py" check 8888 8080
   if ($LASTEXITCODE -ne 0) {
@@ -192,8 +194,8 @@ if ($Drive) {
   $kit = "$($part.DriveLetter):\TinfoilKit"
   "The drive is $($part.DriveLetter):"
   Get-ChildItem -Force "$kit\downloads\library", "$kit\downloads\models" -Recurse | ForEach-Object { "$($_.Mode)  $($_.FullName)" }
-  Step "double-click Open Tinfoil Kit for Windows.bat on the drive: it starts the kit and opens the page"
-  $p = Start-Process "$kit\app\Open Tinfoil Kit for Windows.bat" -WorkingDirectory "$kit\app" -PassThru
+  Step "double-click Open Tinfoil Kit for Windows.bat on the drive, beside the kit's three folders: it starts the kit and opens the page"
+  $p = Start-Process "$kit\Open Tinfoil Kit for Windows.bat" -WorkingDirectory $kit -PassThru
   python "$tests\drive.py" check 8888 8080
   if ($LASTEXITCODE -ne 0) { Fail "the kit on the drive after a double-click" }
   Test-Program $kit "the kit on the drive"
@@ -264,6 +266,8 @@ Remove-Item -Recurse -Force $dl -ErrorAction SilentlyContinue
 Step "a kit from before the three folders, as an old SETUP's kit update leaves it: SETUP-Windows.bat --updated moves it into them"
 # Before, the code, what sync got and the person's own (their kit.json, logs and .kit) were all at the top, and
 # kit update puts the new version's code there too. Then the old SETUP runs the new one with --updated, mid-count.
+# (Nothing else was at the top then: the launchers and Read me first.txt beside the three folders came later.)
+$top | ForEach-Object { Remove-Item -LiteralPath "$kit\$_" }
 Get-ChildItem -Force "$kit\app" | Where-Object Name -ne "kit.json" | Move-Item -Destination $kit
 Get-ChildItem -Force "$kit\downloads", "$kit\data" | Move-Item -Destination $kit
 if (Test-Path "$kit\.partial") { Move-Item "$kit\.partial" "$kit\.kit\downloads" }    # (unfinished downloads were there then)
@@ -310,6 +314,7 @@ if ($out -ne "exit 1" -or -not (Test-Path "$loose\notes.txt") -or -not (Test-Pat
   Fail "UNINSTALL deleted something in a folder with more than the kit ($out)"
 }
 Remove-Item "$loose\notes.txt"
+$top | ForEach-Object { Set-Content -LiteralPath "$loose\$_" "the kit's" }    # (the kit's own, beside its three folders)
 $out = Invoke-Cmd "`"$loose\app\UNINSTALL-Windows.bat`" --yes" "uninstall-windows-alone.log" @("")
 if (Test-Path $loose) { Fail "UNINSTALL left $loose, which held just the kit ($out)"; Get-Content "$logs\uninstall-windows-alone.log" -Tail 5 }
 

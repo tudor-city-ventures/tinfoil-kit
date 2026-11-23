@@ -494,6 +494,8 @@ checks() {
 }
 
 all_set() {
+  local in=""    # where Open Tinfoil Kit is: beside the kit's three folders, where the kit's program puts it, or in app
+  [ -f "$KIT/Open Tinfoil Kit.command" ] || in="/app"
   say "All set. Tinfoil Kit is $(where_kit), in $KIT"
   if [ "${KIT_HOME_SERVER:-}" = 1 ]; then
     :    # it starts by itself: home_server says so
@@ -501,18 +503,19 @@ all_set() {
     echo "In an outage: open Tinfoil Kit, in Applications. No internet needed."
   elif [ -n "$APP" ]; then
     echo "In an outage: plug in the drive and open Tinfoil Kit, in Applications. No internet needed. On another"
-    echo "computer, open the drive's ${KIT##*/}/app folder and double-click Open Tinfoil Kit."
+    echo "computer, open the drive's ${KIT##*/}$in folder and double-click Open Tinfoil Kit."
   elif on_this_mac && [ "$KIT" = "$HOME/$NAME" ] && [ $MAC = 1 ]; then
-    echo "In an outage: in Finder choose Go > Home, open $NAME/app and double-click Open Tinfoil Kit.command. No internet needed."
+    echo "In an outage: in Finder choose Go > Home, open $NAME$in and double-click Open Tinfoil Kit.command. No internet needed."
   elif on_this_mac; then
-    echo "In an outage: open the kit's app folder and double-click Open Tinfoil Kit.command. No internet needed."
+    echo "In an outage: open $KIT$in and double-click Open Tinfoil Kit.command. No internet needed."
   else
-    echo "In an outage: plug in the drive, open ${KIT##*/}/app and double-click Open Tinfoil Kit.command. No internet needed."
+    echo "In an outage: plug in the drive, open ${KIT##*/}$in and double-click Open Tinfoil Kit.command. No internet needed."
   fi
   echo "While you have power, open the kit and click Print the essentials at the top: about 20 pages worth having on paper."
   if [ $MAC = 1 ]; then again="double-click it again"; else again="run it again"; fi
   echo
-  echo "Also in the app folder:"
+  if [ -f "$KIT/Read me first.txt" ]; then echo "Read me first.txt, beside Open Tinfoil Kit, says what each folder is for. In the app folder:"
+  else echo "Also in the app folder:"; fi
   echo "  GUIDE.md           a short guide. Print it and keep it handy."
   echo "  SETUP.command      $again whenever you want the newest AI models, books and maps (needs internet)."
   echo "  UNINSTALL.command  removes the kit and everything it downloaded."

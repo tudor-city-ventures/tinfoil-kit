@@ -33,12 +33,20 @@ kit_logs() { # KIT LOG...
   local k="$1" f; shift
   for f in "$@"; do [ -f "$k/data/logs/$f" ] && { echo "--- $f"; tail -15 "$k/data/logs/$f"; }; done
 }
-# A kit folder holds its app, downloads and data folders, and nothing else of its own.
-three_folders() { # KIT
-  local top
-  # shellcheck disable=SC2010  # just the names, hidden ones too, for one comparison and a message
-  top="$(ls -A "$1" | grep -vE '^(\._.*|\.DS_Store)$' | tr '\n' ' ')"
-  [ "$top" = "app data downloads " ] || fail "$1 holds $top, not just app, data and downloads"
+# A kit folder holds its app, downloads and data folders, the launchers and Read me first.txt beside them, and
+# nothing else of its own.
+TOP=(app data downloads "Open Tinfoil Kit.command" "Open Tinfoil Kit for Windows.bat" "Read me first.txt")
+just_the_kit() { # KIT
+  local f more=""
+  for f in "${TOP[@]}"; do [ -e "$1/$f" ] || fail "$1 has no $f"; done
+  for f in "$1"/* "$1"/.[!.]*; do
+    case "${f##*/}" in
+      app | data | downloads | "Open Tinfoil Kit.command" | "Open Tinfoil Kit for Windows.bat" | "Read me first.txt") ;;
+      ._* | .DS_Store | '*' | '.[!.]*') ;;
+      *) more="$more, ${f##*/}" ;;
+    esac
+  done
+  [ -z "$more" ] || fail "$1 holds more than ${TOP[*]}: ${more#, }"
 }
 # The kit's servers, gone before the next kit starts: a map server still answering would stand in for the next one's.
 SERVERS='llama-server|kiwix-serve|pmtiles serve|graphhopper-web|photon-'
@@ -179,7 +187,7 @@ mac() {
   grep -q "The try-it kit works" "$L/setup.log" || kit_logs "$kit" test-tiles.log test-llama.log
   [ -d "$kit/downloads/models/Two" ] || fail "the try-it kit didn't get its sample AI"
   [ -d "$kit/downloads/maps/routing" ] && fail "the try-it kit got the map's roads, which come with the rest"
-  three_folders "$kit"
+  just_the_kit "$kit"
 
   step "SETUP again, from the drive, to get the rest: the kit builder's questions (Return takes Recommended),"
   echo "then the map's roads and address search, and the try-it kit's sample AI goes"
@@ -205,10 +213,11 @@ mac() {
   grep -q "TINFOIL KIT UPDATE" "$L/setup-new-app.log" || fail "SETUP from a new download didn't update the kit on the drive"
   grep -E "^ +downloading " "$L/setup-new-app.log" && fail "SETUP downloaded something again after the app folder was replaced"
   [ -f "$kit/app/SETUP.command" ] || fail "the kit on the drive has no app folder after SETUP from a new download"
-  three_folders "$kit"
+  just_the_kit "$kit"
   echo "$(find "$kit" -name '._*' | wc -l | tr -d ' ') ._ files on the drive"
-  for f in "Open Tinfoil Kit.command" SETUP.command UNINSTALL.command kit tools/tinfoilkit-macos-arm64; do
-    xattr -p com.apple.quarantine "$kit/app/$f" > /dev/null 2>&1 && fail "$f is still marked as from the internet"
+  for f in "app/Open Tinfoil Kit.command" app/SETUP.command app/UNINSTALL.command app/kit app/tools/tinfoilkit-macos-arm64 \
+    "Open Tinfoil Kit.command"; do
+    xattr -p com.apple.quarantine "$kit/$f" > /dev/null 2>&1 && fail "$f is marked as from the internet"
   done
   [ -f "$vol/.metadata_never_index" ] || fail "no .metadata_never_index, so Spotlight would index the drive"
   if [ -d "$app" ]; then
@@ -216,8 +225,9 @@ mac() {
   fi
   [ "$(cat "$support/last-kit" 2> /dev/null)" = "$kit" ] || fail "SETUP didn't note where the kit is, for the app"
 
-  step "double-click Open Tinfoil Kit.command: Terminal runs it, and it opens the page in Safari"
-  open "$kit/app/Open Tinfoil Kit.command"
+  step "double-click Open Tinfoil Kit.command beside the kit's three folders: Terminal runs it, it starts the one in"
+  echo "app, and that opens the page in Safari"
+  open "$kit/Open Tinfoil Kit.command"
   python3 "$TESTS/drive.py" check 8888 8080 || { fail "the kit after a double-click"; kit_logs "$kit" tiles.log geocoder.log routing.log; }
   program_runs tinfoilkit-macos-arm64 "the kit on the drive"
   sleep 5
@@ -233,7 +243,7 @@ mac() {
   echo "kit's own program forwards 127.0.0.1 to it"
   stop_kit
   sudo ifconfig lo0 alias 127.0.0.2 up
-  open "$kit/app/Open Tinfoil Kit.command"
+  open "$kit/Open Tinfoil Kit.command"
   python3 "$TESTS/drive.py" check 8888 8080 || { fail "the kit with its library on ::1"; kit_logs "$kit" kiwix-serve.log; }
   grep -q "not available on this system: 127.0.0.1" "$kit/data/logs/kiwix-serve.log" ||
     fail "kiwix-serve took 127.0.0.1 anyway, so this didn't test the way around it"
@@ -292,7 +302,7 @@ mac() {
   setup "$src" setup-mac.log "\n2\n${much}y\n\n" --home-server
   [ -d "$kit/downloads/models" ] || fail "the kit isn't set up in $kit"
   [ -d "$src" ] && fail "the copy SETUP started from is still in $src after the move"
-  three_folders "$kit"
+  just_the_kit "$kit"
   tmutil isexcluded "$kit/downloads" | grep -q Excluded || fail "Time Machine would back up $kit/downloads"
   tmutil isexcluded "$kit/data" | grep -q Excluded && fail "Time Machine would skip your settings, in $kit/data"
   [ -f "$agent" ] || fail "no LaunchAgent, so the kit won't start with the Mac"
@@ -333,6 +343,7 @@ linux() {
   fi
   kit="$mnt/TinfoilKit"
   echo "$(find "$kit/downloads/library" "$kit/downloads/models" -name '._*' | wc -l | tr -d ' ') ._ files beside books and models"
+  just_the_kit "$kit"
 
   run_linux "this machine ($(. /etc/os-release && echo "$PRETTY_NAME"))" ""
   for img in ubuntu:24.04 ubuntu:22.04 debian:12 fedora:latest; do run_linux "$img" "$img"; done
@@ -362,9 +373,9 @@ linux() {
 run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IMAGE is set, and check it
   local name="$1" img="$2" log prep ok=1
   log="$L/linux-$(printf '%s' "${img:-host}" | tr -c 'a-zA-Z0-9.' '-').log"
-  step "$name: bash \"Open Tinfoil Kit.command\""
+  step "$name: bash \"Open Tinfoil Kit.command\", beside the kit's three folders"
   if [ -z "$img" ]; then
-    (cd "$kit/app" && exec bash "Open Tinfoil Kit.command" --no-browser > "$log" 2>&1) &
+    (cd "$kit" && exec bash "Open Tinfoil Kit.command" --no-browser > "$log" 2>&1) &
     window "bash \"Open Tinfoil Kit.command\"" tail -n +1 --pid=$! -f "$log"
   else
     # Libraries a desktop install has and these bare images don't, plus the package GUIDE.md tells Fedora users
@@ -373,7 +384,7 @@ run_linux() { # NAME IMAGE: start the kit from the drive, in a container when IM
       fedora*) prep="dnf install -y -q libgomp vulkan-loader openssl3-libs procps-ng findutils gawk > /dev/null" ;;
       *) prep="apt-get update -qq && apt-get install -y -qq libgomp1 libvulkan1 procps > /dev/null" ;;
     esac
-    docker run -d --name kit --network host -v "$mnt:/media/user/TINFOIL" -w /media/user/TINFOIL/TinfoilKit/app \
+    docker run -d --name kit --network host -v "$mnt:/media/user/TINFOIL" -w /media/user/TINFOIL/TinfoilKit \
       "$img" bash -c "$prep && exec bash \"Open Tinfoil Kit.command\" --no-browser" > /dev/null
     window "$name: bash \"Open Tinfoil Kit.command\"" docker logs -f kit
   fi

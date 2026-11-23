@@ -4,7 +4,7 @@ An offline kit for when the internet goes down, for Apple Silicon Macs and Windo
 
 - `SETUP.command` (`SETUP-Windows.bat` on Windows) sets a kit up and brings it up to date: `./kit update`, `./kit sync`, `./kit test`, whenever the person runs it, on no schedule.
 - `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat`) runs `./kit open`, which serves it all on 127.0.0.1 and opens the kit page: Ask, AI chat, Library, Map and Notes.
-- A kit is three folders. `TinfoilKit/app/` is this repo's code as released: only `./kit update` writes it, and it can be deleted any time for a new version's. `downloads/` holds everything sync gets, and `data/` the person's own files (kit.json, logs, notes and pins) with the kit's records in `data/.kit/`. A git checkout is its own app folder, with `downloads/` and `data/` inside it (git-ignored).
+- A kit is three folders. `TinfoilKit/app/` is this repo's code as released: only `./kit update` writes it, and it can be deleted any time for a new version's. `downloads/` holds everything sync gets, and `data/` the person's own files (kit.json, logs, notes and pins) with the kit's records in `data/.kit/`. Beside them, the program keeps a launcher for each computer and `Read me first.txt` (`topFiles`). A git checkout is its own app folder, with `downloads/` and `data/` inside it (git-ignored).
 
 How it all works, and why: [docs/DESIGN.md](docs/DESIGN.md). Releases: [docs/RELEASING.md](docs/RELEASING.md). The maintainer is @travisbloom.
 

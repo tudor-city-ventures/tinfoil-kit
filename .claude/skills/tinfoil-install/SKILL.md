@@ -88,7 +88,7 @@ Then tell them:
 
 When they've tried it and are ready, tell them how long the rest takes (SETUP said it; `./kit estimate --rest` in the kit's app folder prints it again: GB, a tab, then how long), and give them the command SETUP printed: `bash "/Volumes/Kit/TinfoilKit/app/SETUP.command" --yes`, or on Windows `& "E:\TinfoilKit\app\SETUP-Windows.bat" --yes` (in ~/TinfoilKit on this computer). It gets everything they picked, checks every file, and deletes the try-it files their picks left out. Add `--even-if-tight` to get all of it even if that leaves less free space than SETUP likes, or `--essentials` for just the essentials.
 
-When it's done, suggest they open the kit and print the essentials while they have power (the link at the top of its page): about 20 pages of its books worth having on paper, and a page of their own with their notes, pins and the nearest hospitals.
+When it's done, suggest they open the kit and print the essentials while they have power (the link at the top of its page): about 20 pages of its books worth having on paper, and a page of their own with their notes, pins and the nearest hospitals. And tell them what to do in an outage: open the TinfoilKit folder and double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows). Read me first.txt there says the same, and what each folder is for.
 
 ## When it fails
 

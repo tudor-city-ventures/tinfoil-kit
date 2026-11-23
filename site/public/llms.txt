@@ -53,9 +53,12 @@ Photon and GraphHopper run on a Java that's in the kit. Every server listens onl
 What's in the folder:
 
     TinfoilKit/
+    ├── Open Tinfoil Kit.command      start the kit offline (Mac, Linux; the .bat on Windows)
+    ├── Open Tinfoil Kit for Windows.bat
+    ├── Read me first.txt             for the person: what to open, and what each folder is for
     ├── app/                          the kit's code, as released: a new version replaces it
     │   ├── SETUP.command             set up or update (online; Mac, Linux)
-    │   ├── Open Tinfoil Kit.command  start the kit offline (Mac, Linux)
+    │   ├── Open Tinfoil Kit.command  what the two at the top start (Mac, Linux)
     │   ├── UNINSTALL.command         remove the kit and everything it downloaded (Mac, Linux)
     │   ├── SETUP-Windows.bat         the same three, for Windows
     │   ├── Open Tinfoil Kit for Windows.bat
@@ -188,6 +191,7 @@ SETUP's last message says how big the rest is, how long it takes at the speed it
 - Add `--even-if-tight` to get all of it even if that leaves less free space than SETUP likes. Without it, SETUP takes all of what they picked if it fits with room to spare, or else the essentials, and says so.
 - Double-clicking SETUP again gets the rest too. Without `--yes`, it asks the kit builder's questions first (`./kit pick --ask`), unless what goes in was picked already.
 - When it's done, suggest they open the kit and print the essentials while they have power (the link at the top of its page): about 20 pages, and a page of their own with their notes, pins and the nearest hospitals.
+- Tell them what to do in an outage: open the TinfoilKit folder (at the top of the drive, or in their home folder) and double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows). Read me first.txt there says the same, and what each folder is for.
 
 ### SETUP's own questions
 
@@ -218,7 +222,7 @@ For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` fo
 
 ## Use it
 
-- Double-click Open Tinfoil Kit.command in the kit's app folder (Open Tinfoil Kit for Windows.bat on Windows), or run `bash "Open Tinfoil Kit.command"`. It opens http://127.0.0.1:8888. Keep its window open: closing it stops everything.
+- Double-click Open Tinfoil Kit.command in the kit folder, TinfoilKit (Open Tinfoil Kit for Windows.bat on Windows), or run `bash "Open Tinfoil Kit.command"` there. It opens http://127.0.0.1:8888. Keep its window open: closing it stops everything. The kit's program keeps these launchers and Read me first.txt beside app, downloads and data once the kit is set up; they start the same launchers in app, which work too.
 - Open Tinfoil Kit.command's options: `--share` lets phones and laptops on the same network open it with an access code (it prints the address, the code and a QR code), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in downloads/models/), `--no-browser` skips opening the browser. Open Tinfoil Kit for Windows.bat and `./kit open` take the same. If macOS asks whether to accept incoming connections, click Allow; if Windows asks whether tinfoilkit-windows-x64.exe may use the network, click Allow access.
 - Ask the AI answers from the books and cites them; Search, beside it, shows the best passages without the AI, quicker and on far less power. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station, and keeps pins. Notes holds what the AI should know about the household, like an allergy or a medicine; they aren't encrypted, so passwords and bank details stay out. Print the essentials, at the top of the page, lists the pages worth printing while there's power.
 - Models: pick one on the Ask page. The first answer after switching takes up to a minute while it loads.

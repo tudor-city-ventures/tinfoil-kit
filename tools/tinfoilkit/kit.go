@@ -89,6 +89,7 @@ Commands (run from the kit's app folder, e.g.  ./kit sync):
 
 The kit folder holds app/ (this code, as released: replace it with a new version's any time),
 downloads/ (what sync downloads) and data/ (your kit.json, logs, and the kit's records in .kit/).
+Beside them, every command keeps Open Tinfoil Kit for each kind of computer, and Read me first.txt.
 
 Only needs curl, which macOS and Windows come with, as do most Linux PCs. A big file comes over
 several connections at once, which is often several times faster than one.
@@ -259,8 +260,9 @@ func isKit(folder string) bool {
 
 var junk = []string{".DS_Store", "desktop.ini", "Thumbs.db", ".kit-write-test"} // what computers leave in any folder
 
-// alone says whether the kit folder holds just the kit, so it can be moved or deleted whole. An app folder put
-// somewhere on its own, like the Desktop, has other things beside it, which are none of the kit's business.
+// alone says whether the kit folder holds just the kit (its three folders, and the launchers and Read me first.txt
+// beside them), so it can be moved or deleted whole. An app folder put somewhere on its own, like the Desktop, has
+// other things beside it, which are none of the kit's business.
 func alone(root string) bool {
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -268,7 +270,7 @@ func alone(root string) bool {
 	}
 	for _, e := range entries {
 		n := e.Name()
-		if n != "app" && n != "downloads" && n != "data" && !contains(junk, n) && !strings.HasPrefix(n, "._") {
+		if n != "app" && n != "downloads" && n != "data" && !isTopFile(n) && !contains(junk, n) && !strings.HasPrefix(n, "._") {
 			return false
 		}
 	}
@@ -2053,6 +2055,7 @@ func runKit(words []string) (code int) {
 	if cmd.name == "open" { // the launcher stops its servers on Ctrl-C itself, and opens a kit as it is
 		return openKit(root, a)
 	}
+	ready := false
 	defer func() {
 		if r := recover(); r != nil {
 			switch v := r.(type) {
@@ -2061,9 +2064,13 @@ func runKit(words []string) (code int) {
 			case interrupted:
 				log("\nStopped.")
 				code = 130
+				return
 			default:
 				panic(r)
 			}
+		}
+		if ready { // after the command, which may be the sync that set the kit up here
+			ensureTop(root)
 		}
 	}()
 	watchCtrlC()
@@ -2083,6 +2090,7 @@ func runKit(words []string) (code int) {
 		regionsCache = nil
 	}
 	ensureConfig(root)
+	ready = true
 	cmd.run(root, a)
 	return 0
 }

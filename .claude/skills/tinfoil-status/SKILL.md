@@ -43,8 +43,12 @@ The logs are in data/logs: sync-*.log for downloads, llama-server.log for the AI
 
 ## Open it
 
-- Mac: double-click Open Tinfoil Kit.command in the app folder, or run `bash "Open Tinfoil Kit.command"`.
-- Windows: double-click Open Tinfoil Kit for Windows.bat in the app folder, or run `& ".\Open Tinfoil Kit for Windows.bat"`.
+In the kit folder, TinfoilKit (the same launchers are in its app folder):
+
+- Mac: double-click Open Tinfoil Kit.command, or run `bash "Open Tinfoil Kit.command"`.
+- Windows: double-click Open Tinfoil Kit for Windows.bat, or run `& ".\Open Tinfoil Kit for Windows.bat"`.
 - Linux: `bash "Open Tinfoil Kit.command"`.
+
+Read me first.txt, beside them, tells the person the same, and what each folder is for. The kit's program puts these three there once the kit is set up, and puts back one that's gone; a kit last set up before they existed gets them at its next SETUP.
 
 It opens http://127.0.0.1:8888 in the browser, and needs no internet. Keep its window open: closing it stops everything. In a terminal in the app folder, `./kit open` (`.\kit.cmd open` on Windows) does the same. Each of them takes `--share` (phones and laptops at home, with the access code, this time only), `--no-maps` (frees about 5 GB of memory), `--model=NAME` (the model to load first) and `--no-browser`.

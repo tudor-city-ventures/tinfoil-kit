@@ -10,15 +10,15 @@ external drive. Print this page and keep it handy (with the drive, if the kit is
 
 1. If the kit is on a drive, plug it in: any Mac, Windows PC or Linux PC will do (ideally 32 GB memory; Windows and
    Linux are experimental for now). Plug the laptop into power if you can.
-2. Open the kit's `app` folder: on a drive, the `TinfoilKit` folder on the drive, then `app`. On the computer itself,
-   `TinfoilKit` in your home folder, then `app` (Mac: in Finder choose **Go > Home**. Windows: in File Explorer, your
-   user folder, `C:\Users\<you>`).
+2. Open the `TinfoilKit` folder: at the top of the drive, or on the computer itself in your home folder (Mac: in
+   Finder choose **Go > Home**. Windows: in File Explorer, your user folder, `C:\Users\<you>`). `Read me first.txt`
+   there says what to open, and what each folder is for.
 3. Start it:
    - **Mac**: double-click **`Open Tinfoil Kit.command`**. If macOS won't open it, open Terminal and type `bash ` (with
      a space), drag `Open Tinfoil Kit.command` into the window, and press Return. That always works.
-   - **Windows**: double-click **`Open Tinfoil Kit for Windows.bat`**. If Windows says it protected your PC, click
+   - **Windows**: double-click **`Open Tinfoil Kit for Windows`** (`.bat`). If Windows says it protected your PC, click
      **More info**, then **Run anyway**.
-   - **Linux**: open a terminal in the app folder and run `bash "Open Tinfoil Kit.command"`.
+   - **Linux**: open a terminal in the `TinfoilKit` folder and run `bash "Open Tinfoil Kit.command"`.
 4. A browser tab opens. **Keep the kit's window open** while you use it. Closing it stops everything.
 
 Nothing here needs the internet, an account, or an install.
@@ -52,9 +52,9 @@ Nothing here needs the internet, an account, or an install.
     don't fit.
   - `Gemma-4-E4B`: small. Use it to **save battery**. On an 8 GB laptop the kit starts with it.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
-- **Share with family**: start with `bash "Open Tinfoil Kit.command" --share` (on Windows,
-  `& ".\Open Tinfoil Kit for Windows.bat" --share` in PowerShell in the app folder). It shows an address, an access code
-  and a QR code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. Or
+- **Share with family**: start with `bash "Open Tinfoil Kit.command" --share` in the `TinfoilKit` folder (on Windows,
+  `& ".\Open Tinfoil Kit for Windows.bat" --share` in PowerShell there). It shows an address, an access code and a QR
+  code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. Or
   click **Share** at the top of the kit page and text them the message it copies: its link opens the kit, code
   included. No internet needed, only a Wi-Fi network: your router on a battery backup, a small battery-powered travel router, or a
   phone's hotspot (an iPhone's may not turn on without cell service). Nobody without the code gets in. To share every
@@ -256,11 +256,13 @@ folder: `./kit sync -y && ./kit test`, then `./kit share on` and `./kit autostar
 
 | Folder / file | What it is |
 |---|---|
+| `Open Tinfoil Kit.command` | Starts everything (Mac, Linux). It starts `app/Open Tinfoil Kit.command`, which works too |
+| `Open Tinfoil Kit for Windows.bat` | The same, for Windows |
+| `Read me first.txt` | How to start the kit, and what each folder is for |
 | `app/` | The kit itself, as released. A new version replaces it, and it can be deleted any time for a new download's |
-| `app/Open Tinfoil Kit.command` | Starts everything (Mac, Linux) |
 | `app/SETUP.command` | Sets the kit up, and updates it whenever you like (needs internet) |
 | `app/UNINSTALL.command` | Removes the kit and everything it downloaded |
-| `app/Open Tinfoil Kit for Windows.bat`, `SETUP-Windows.bat`, `UNINSTALL-Windows.bat` | The same three, for Windows |
+| `app/SETUP-Windows.bat`, `UNINSTALL-Windows.bat` | The same two, for Windows |
 | `app/kit` (`kit.cmd` on Windows), `app/kit.json` | The kit's command line, and the standard list of what it keeps |
 | `app/tools/` | The kit's own program (one for each kind of computer) and its web page |
 | `app/THIRD-PARTY.md` | Where each model, book, map and program comes from, and its license |

@@ -12,6 +12,7 @@ import (
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html"
@@ -1647,6 +1648,161 @@ func ensureLayout(root string) bool {
 
 // cmdLayout: runKit has done it by now: this is SETUP's way to have it done, and nothing else.
 func cmdLayout(root string, a *cliArgs) {}
+
+// topFiles are what the kit keeps at the top of its folder, beside app, downloads and data: what a person opens
+// first. No one file starts on a Mac, Windows and Linux alike (each goes by the file's ending to choose what a
+// double-click does), so there's a launcher for each, which starts the one in app/, and Read me first.txt, which all
+// of them open. cmd and Notepad get CRLF, and all of it is plain ASCII.
+var topFiles = []struct{ name, text string }{
+	{"Open Tinfoil Kit.command", `#!/bin/bash
+# Double-click me (Mac) to start Tinfoil Kit. Linux: bash "Open Tinfoil Kit.command". Read me first.txt says more.
+# The kit's program writes this file. It starts app/Open Tinfoil Kit.command, with the same options (--share...).
+cd "$(dirname "$0")" || exit 1
+if [ ! -f "app/Open Tinfoil Kit.command" ]; then
+  echo "This kit has no app folder, so it can't start. Put the app folder of a new download of the kit"
+  echo "(tinfoilkit.com) here, beside downloads and data."
+  exit 1
+fi
+exec bash "app/Open Tinfoil Kit.command" "$@"
+`},
+	{"Open Tinfoil Kit for Windows.bat", crlf(`@echo off
+rem Double-click me to start Tinfoil Kit. Read me first.txt says more. The kit's program writes this file. It
+rem starts app\Open Tinfoil Kit for Windows.bat, with the same options (--share...).
+if not exist "%~dp0app\Open Tinfoil Kit for Windows.bat" (
+  echo This kit has no app folder, so it can't start. Put the app folder of a new download of the kit
+  echo ^(tinfoilkit.com^) here, beside downloads and data.
+  echo(
+  set /p "_=Press Enter to close this window. "
+  exit /b 1
+)
+"%~dp0app\Open Tinfoil Kit for Windows.bat" %*
+`)},
+	{"Read me first.txt", crlf(`Tinfoil Kit
+===========
+
+An AI, a library and maps that work without the internet, all in this
+folder.
+
+
+Start it
+--------
+
+Mac:      Double-click "Open Tinfoil Kit.command". If your Mac asks
+          whether Terminal may use files on a removable volume, click
+          Allow.
+Windows:  Double-click "Open Tinfoil Kit for Windows".
+Linux:    Open a terminal in this folder and type
+          bash "Open Tinfoil Kit.command"
+
+A window opens, then the kit's page in your web browser: Ask, AI chat,
+Library, Map and Notes. No internet needed. Keep the window open while you
+use the kit: closing it stops the kit. If the page doesn't open by itself,
+type the address the window shows after "Open:" into your browser.
+
+Windows and Linux are experimental for now: tested less than the Mac, so
+expect rough edges.
+
+
+What's in this folder
+---------------------
+
+app        The kit's programs. Don't change anything in it: a new version
+           of the kit replaces it.
+downloads  The AI, the books and the maps: most of the kit. Don't move or
+           rename anything in it.
+data       Your own: your notes, your map pins and your settings. Copy it
+           somewhere safe to keep a spare.
+
+Keep these three folders together, with their names. To move the kit, move
+this whole folder.
+
+
+Update it, or remove it
+-----------------------
+
+To get the newest AI, books and maps, or to change what's in the kit, while
+you have internet: open app and double-click SETUP.command (SETUP-Windows
+on Windows).
+
+To remove the kit and everything it downloaded: open app and double-click
+UNINSTALL.command (UNINSTALL-Windows on Windows).
+
+
+If something doesn't work
+-------------------------
+
+The full guide is GUIDE.md, in the app folder. It opens in any text editor.
+Print it while you have power, and keep it with the kit.
+`)},
+}
+
+func crlf(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
+
+func isTopFile(name string) bool {
+	for _, f := range topFiles {
+		if f.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// ensureTop puts topFiles at the top of the kit folder once the kit is set up there (it has downloads/), and keeps
+// them current. Only in a folder of the kit's own (alone, or called TinfoilKit) with the code in app/: a git checkout
+// has its launchers at its top already, and a kit from before the three folders has its code there, which
+// ensureLayout moves into app/, launchers and all. A file someone changed is theirs: data/.kit/top.json has the
+// SHA-256 of what the kit last wrote, and only that is replaced. Every command but open runs it, when it's done.
+func ensureTop(root string) {
+	if samePath(appDir(root), root) || !isDir(appDir(root)) || !isDir(dlDir(root)) ||
+		isFile(filepath.Join(root, "kit")) || isDir(filepath.Join(root, ".kit")) ||
+		!(alone(root) || strings.EqualFold(filepath.Base(root), kitFolder)) {
+		return
+	}
+	record := filepath.Join(metaDir(root), "top.json")
+	wrote := newObj()
+	if data, err := os.ReadFile(record); err == nil {
+		if o, err := parseObj(data); err == nil {
+			wrote = o
+		}
+	}
+	hash := func(b []byte) string {
+		sum := sha256.Sum256(b)
+		return hex.EncodeToString(sum[:])
+	}
+	changed := false
+	for _, f := range topFiles {
+		p, want := filepath.Join(root, f.name), hash([]byte(f.text))
+		if have, err := os.ReadFile(p); err == nil && hash(have) != wrote.str(f.name) {
+			if hash(have) == want { // the kit's, from before this record
+				wrote.set(f.name, want)
+				changed = true
+			}
+			continue
+		}
+		if wrote.str(f.name) == want && isFile(p) {
+			continue
+		}
+		mode := os.FileMode(0o644)
+		if strings.HasSuffix(f.name, ".command") {
+			mode = 0o755
+		}
+		tmp := filepath.Join(metaDir(root), "top.tmp") // (a write cut off leaves it there, not at the kit's top)
+		os.MkdirAll(metaDir(root), 0o755)
+		if os.WriteFile(tmp, []byte(f.text), mode) != nil {
+			return // a drive that's read-only, or full: the kit works without these
+		}
+		os.Chmod(tmp, mode) // (exFAT has no modes: everything on it runs)
+		if replace(tmp, p) != nil {
+			os.Remove(tmp)
+			return
+		}
+		wrote.set(f.name, want)
+		changed = true
+	}
+	if changed {
+		saveText(record, dumps(wrote, jsonStyle{indent: 2, sortKeys: true, ascii: true}))
+	}
+}
 
 // diskUsage is diskSpace without the error: a disk that can't be read has no space.
 func diskUsage(p string) (free, total int64) {

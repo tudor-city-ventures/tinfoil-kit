@@ -8,13 +8,13 @@ An offline kit for when the internet goes down. One folder, on your computer or 
 - **An offline library** (Kiwix): Wikipedia, medical references, repair guides, preparedness manuals.
 - **Offline maps** with address search, driving and walking directions, and "nearest hospital".
 
-Open the kit's app folder (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library, Map and Notes tabs. No internet, account or install needed.
+Open the kit's folder, `TinfoilKit` (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library, Map and Notes tabs. No internet, account or install needed.
 
 ![The Ask tab: a question about making water safe with bleach, the Ask the AI and Search buttons, the AI's answer with numbered citations, and the three library articles it came from](docs/ask.png)
 
 ## How it works
 
-The whole kit is one folder, with three inside: `app` (the kit's code, as released), `downloads` (everything it downloads) and `data` (your settings, notes and pins, and the kit's records). A new version replaces `app` and leaves the other two as they are. Put the kit on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows.
+The whole kit is one folder, with three inside: `app` (the kit's code, as released), `downloads` (everything it downloads) and `data` (your settings, notes and pins, and the kit's records). Beside them are a launcher for each kind of computer and `Read me first.txt`, which says what to open. A new version replaces `app` and leaves the other two as they are. Put the kit on an external drive to grab and go, or on your computer's own disk. While you're online, SETUP fills it. When the internet is down, Open Tinfoil Kit starts a few servers from it on your computer, and your browser talks to them. Nothing goes over the internet. Each is a file you double-click: `SETUP.command` and `Open Tinfoil Kit.command` on a Mac or Linux, `SETUP-Windows.bat` and `Open Tinfoil Kit for Windows.bat` on Windows.
 
 ![How it works: online, SETUP fills the kit folder (app, downloads, data) from Tinfoil Kit releases and the publishers' downloads. Offline, Open Tinfoil Kit starts the servers (AI, library, maps, notes and pins) for the kit page in your browser, and for phones and laptops at home when sharing is on](docs/how-it-works.svg)
 
@@ -65,9 +65,12 @@ The kit page (`tools/portal.html`) is one HTML file with no build step. Each syn
 
 ```text
 TinfoilKit/
+├── Open Tinfoil Kit.command      start the kit offline (Mac, Linux; the .bat on Windows)
+├── Open Tinfoil Kit for Windows.bat
+├── Read me first.txt             what to open, and what each folder is for
 ├── app/                          the kit's code, as released: a new version replaces it
 │   ├── SETUP.command             set up, or update whenever you like (online; Mac, Linux)
-│   ├── Open Tinfoil Kit.command  start the kit offline (Mac, Linux)
+│   ├── Open Tinfoil Kit.command  what the two at the top start (Mac, Linux)
 │   ├── UNINSTALL.command         remove the kit and everything it downloaded (Mac, Linux)
 │   ├── SETUP-Windows.bat         the same three, for Windows
 │   ├── Open Tinfoil Kit for Windows.bat
@@ -128,7 +131,7 @@ tools/tinfoilkit/build.sh    # the kit's own program, from its Go source (needs 
 ./kit test    # start every server offline and check it answers
 ```
 
-Then turn Wi-Fi off and double-click `Open Tinfoil Kit.command` in the kit's app folder (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the app folder.
+Then turn Wi-Fi off and double-click `Open Tinfoil Kit.command` in the kit's folder (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the app folder.
 
 ## Update
 

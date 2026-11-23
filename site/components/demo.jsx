@@ -1262,8 +1262,8 @@ function PrintPanel({ notes, say }) {
           ))
         )}
         <p className="kd-sheetfoot">
-          Tinfoil Kit: an AI, a library and maps that work with no internet. To start it, see GUIDE.md in the kit&apos;s
-          app folder.
+          Tinfoil Kit: an AI, a library and maps that work with no internet. To start it, see Read me first.txt in the
+          TinfoilKit folder.
         </p>
       </div>
     </>

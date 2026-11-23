@@ -200,6 +200,109 @@ func TestLayout(t *testing.T) {
 	}
 }
 
+// What a person opens first, at the top of the kit folder: a launcher for each computer and Read me first.txt.
+func TestTopFiles(t *testing.T) {
+	top := t.TempDir()
+	kit := filepath.Join(top, "TinfoilKit")
+	for _, d := range []string{"app/tools", "data", "downloads"} {
+		os.MkdirAll(filepath.Join(kit, d), 0o755)
+	}
+	names := func(dir string) string {
+		var got []string
+		entries, _ := os.ReadDir(dir)
+		for _, e := range entries {
+			got = append(got, e.Name())
+		}
+		return strings.Join(got, ", ")
+	}
+	ensureTop(kit)
+	if got := names(kit); got != "Open Tinfoil Kit for Windows.bat, Open Tinfoil Kit.command, Read me first.txt, app, data, downloads" {
+		t.Fatalf("a kit set up here gets its launchers and Read me first.txt: %s", got)
+	}
+	if !alone(kit) {
+		t.Error("they're the kit's: a kit folder with them holds just the kit")
+	}
+	for _, f := range topFiles {
+		data, _ := os.ReadFile(filepath.Join(kit, f.name))
+		if string(data) != f.text {
+			t.Errorf("%s as the kit has it", f.name)
+		}
+		for i, line := range strings.Split(f.text, "\n") {
+			if strings.IndexFunc(line, func(r rune) bool { return r > 126 || r < 32 && r != '\r' }) >= 0 {
+				t.Errorf("%s:%d is plain ASCII: %q", f.name, i+1, line)
+			}
+			if strings.HasSuffix(f.name, ".txt") && len(strings.TrimSuffix(line, "\r")) > 76 {
+				t.Errorf("%s:%d fits in Notepad without wrapping: %q", f.name, i+1, line)
+			}
+		}
+		if crlf := strings.Count(f.text, "\r\n") == strings.Count(f.text, "\n"); crlf == strings.HasSuffix(f.name, ".command") {
+			t.Errorf("%s: CRLF for Windows and Notepad, LF for bash", f.name)
+		}
+	}
+	launcher := filepath.Join(kit, "Open Tinfoil Kit.command")
+	if st, _ := os.Stat(launcher); !windows && st.Mode().Perm() != 0o755 {
+		t.Errorf("the Mac's launcher runs with a double-click: %v", st.Mode())
+	}
+	if !windows && which("bash") {
+		if _, stderr, rc := output("bash", "-n", launcher); rc != 0 {
+			t.Errorf("the launcher parses: %s", stderr)
+		}
+		if stdout, _, rc := output("shellcheck", "-S", "warning", launcher); which("shellcheck") && rc != 0 {
+			t.Errorf("shellcheck, as for the kit's other scripts: %s", stdout)
+		}
+		os.WriteFile(filepath.Join(kit, "app", "Open Tinfoil Kit.command"), []byte("echo \"started $*\"\n"), 0o644)
+		if out, _, rc := output("bash", launcher, "--share"); rc != 0 || string(out) != "started --share\n" {
+			t.Errorf("it starts the app folder's launcher, with its options: %d %q", rc, out)
+		}
+	}
+
+	readMe, bat := filepath.Join(kit, "Read me first.txt"), filepath.Join(kit, "Open Tinfoil Kit for Windows.bat")
+	os.WriteFile(readMe, []byte("Grandma's notes\r\n"), 0o644)
+	os.Remove(launcher)
+	older := "rem an older version's\r\n" // and the record of what the kit wrote, as that version left it
+	os.WriteFile(bat, []byte(older), 0o644)
+	data, _ := os.ReadFile(filepath.Join(kit, "data", ".kit", "top.json"))
+	record, err := parseObj(data)
+	if err != nil {
+		t.Fatal("the record of what the kit wrote: ", err)
+	}
+	sum := sha256.Sum256([]byte(older))
+	record.set(filepath.Base(bat), hex.EncodeToString(sum[:]))
+	os.WriteFile(filepath.Join(kit, "data", ".kit", "top.json"), []byte(dumps(record, jsonStyle{indent: 2})), 0o644)
+	ensureTop(kit)
+	if data, _ := os.ReadFile(readMe); string(data) != "Grandma's notes\r\n" {
+		t.Error("a file someone changed is theirs: the kit leaves it be")
+	}
+	if !isFile(launcher) {
+		t.Error("a launcher that's gone comes back")
+	}
+	if data, _ := os.ReadFile(bat); string(data) != topFiles[1].text {
+		t.Errorf("what an older version wrote is replaced: %q", data)
+	}
+
+	for what, k := range map[string]string{"not set up yet (no downloads)": "fresh", "a git checkout": "checkout",
+		"in a folder with other things": "Desktop", "from before the three folders": "old"} {
+		k = filepath.Join(top, k)
+		os.MkdirAll(filepath.Join(k, "app", "tools"), 0o755)
+		os.MkdirAll(filepath.Join(k, "data"), 0o755)
+		if what != "not set up yet (no downloads)" {
+			os.MkdirAll(filepath.Join(k, "downloads"), 0o755)
+		}
+		if what == "a git checkout" {
+			os.MkdirAll(filepath.Join(k, ".git"), 0o755)
+		}
+		if what == "in a folder with other things" {
+			os.WriteFile(filepath.Join(k, "taxes.pdf"), nil, 0o644)
+		}
+		if what == "from before the three folders" { // a new app folder in it, the old code still at its top
+			os.WriteFile(filepath.Join(k, "kit"), nil, 0o755)
+		}
+		if ensureTop(k); isFile(filepath.Join(k, "Read me first.txt")) {
+			t.Errorf("nothing at the top of a kit %s", what)
+		}
+	}
+}
+
 func TestNames(t *testing.T) {
 	for _, h := range []string{"192.168.1.20:8000", "homeserver.local:8000", "homeserver:8000", "localhost:8000", "kit.lan",
 		"[::1]:8000", "box.home.arpa", "KIT.LOCAL.", ""} {

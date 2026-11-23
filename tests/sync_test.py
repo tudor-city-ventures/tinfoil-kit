@@ -50,6 +50,8 @@ PLAT = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.ge
 PROGRAM = TESTS.parent / "tools" / f"tinfoilkit-{PLAT}"  # the kit's own program for this computer
 if not PLAT or not PROGRAM.exists():
     sys.exit("The tests need the kit's program for this computer: tools/tinfoilkit/build.sh builds it")
+# What the program keeps at the top of a kit's own folder, beside app, downloads and data
+TOP = ["Open Tinfoil Kit for Windows.bat", "Open Tinfoil Kit.command", "Read me first.txt"]
 
 
 def kit_cmd(code, root, *args):
@@ -241,6 +243,13 @@ try:
     write_cfg()
     rc, out = kit("sync", "-y")
     check("second sync has nothing to do", rc == 0 and "Everything is up to date." in out, out)
+    top = sorted(p.name for p in drive.iterdir())
+    check(
+        "once the kit is set up, its folder has a launcher for each computer and Read me first.txt beside its three",
+        top == [*TOP, "app", "data", "downloads"]
+        and "open app and double-click SETUP.command" in (drive / "Read me first.txt").read_text(),
+        top,
+    )
     check(
         "the page shows when everything was last brought up to date",
         f'window.KIT_REFRESHED = "{state().get("last_sync")}";'
@@ -872,7 +881,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
         "an older kit moves into app, downloads and data, by renaming: its code, downloads, kit.json, logs and records; "
         "an update that stopped partway goes, and a file of the person's at its top stays",
         rc == 0
-        and top == ["app", "data", "downloads", "my-notes.txt"]
+        and top == [*TOP, "app", "data", "downloads", "my-notes.txt"]
         and (old / "app" / "tools" / "pins.json").is_file()
         and (old / "app" / "SETUP.command").is_file()
         and (old / "app" / "v1-notes.txt").is_file()
@@ -966,7 +975,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
         "an app folder put into an older kit: the old code goes, the downloads and kit.json move, and kit.json gets "
         "the new version's changes",
         rc == 0
-        and top == ["app", "data", "downloads"]
+        and top == [*TOP, "app", "data", "downloads"]
         and (drop / "app" / "kit").is_file()
         and (drop / "downloads" / "library" / "book.zim").read_text() == "a book"
         and json.loads((drop / "data" / "kit.json").read_text())["settings"]["context_size"] == 4096,
@@ -1543,7 +1552,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
         and "Better maps." in out
         and (up / "app" / "docs/v2.txt").exists()
         and json.loads((up / "data" / ".kit/state.json").read_text())["kit_version"] == "v2"
-        and sorted(f.name for f in up.iterdir()) == ["app", "data", "downloads"]
+        and sorted(f.name for f in up.iterdir()) == [*TOP, "app", "data", "downloads"]
         and (up / "downloads" / "library" / "book.zim").read_text() == "a book"
         and (up / "data" / "notes" / "plan.txt").read_text() == "meet at the school",
         out,
@@ -2633,8 +2642,8 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
             (gone / "app" / "tools").mkdir()
             (gone / "app" / "tools" / "pins.json").write_text("{}\n")
         (gone.parent / "keep.txt").write_text("not the kit's")
-        if beside:
-            (gone / beside).write_text("mine")
+        for b in [beside] if isinstance(beside, str) else beside or ():
+            (gone / b).write_text("mine")
         p = subprocess.run(
             ["bash", str(gone / "app" / "UNINSTALL.command"), *args],
             input=answers,
@@ -2699,9 +2708,10 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         out,
     )
     rc, out, gone = uninstall(answers="delete\n\n", beside="my-notes.txt")
-    rc2, out2, gone2 = uninstall(answers="delete\n\n", name="Old kit")
+    rc2, out2, gone2 = uninstall(answers="delete\n\n", name="Old kit", beside=TOP)
     check(
-        "UNINSTALL: a TinfoilKit folder goes whole, and so does a renamed one that holds just the kit",
+        "UNINSTALL: a TinfoilKit folder goes whole, and so does a renamed one that holds just the kit (with the files "
+        "beside its three folders)",
         rc == rc2 == 0 and not gone.exists() and not gone2.exists(),
         out + out2,
     )
