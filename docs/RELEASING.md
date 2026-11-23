@@ -17,7 +17,7 @@ Everything is built from the tag and can be rebuilt byte for byte: `tools/tinfoi
 
 1. CI passed on the commit: `check` (a commit a workflow pushed starts no checks, so run `check` on `main` by hand then) and `e2e`.
 2. The `drive test` workflow passed on it.
-3. Run the `pin program builds` workflow, or wait for its Monday run, so `tools/pins.json` names the newest builds.
+3. Run the `pin program builds` workflow, or wait for its Saturday run, so `tools/pins.json` names the newest builds.
 4. On a Mac with a real drive, from that commit: `./kit sync && ./kit test`. This is the only run against the real downloads and Apple Silicon's GPU, and it makes the pinned builds the tested ones.
 5. Write `NOTES.txt`: a few plain lines on what's new. SETUP shows them before it installs the release.
 

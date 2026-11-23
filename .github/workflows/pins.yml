@@ -6,7 +6,7 @@ name: pin program builds
 # every publisher, has a read-only token and hands its result over as an artifact.
 on:
   schedule:
-    - cron: "41 6 * * 1"
+    - cron: "41 6 * * 6"
   workflow_dispatch:
 permissions:
   contents: read
