@@ -199,6 +199,24 @@ nav.links a.btn {
 nav.links {
   margin-left: auto;
 }
+/* On a wide screen the sections sit in one row: a thin rule between them keeps their names apart */
+@media (min-width: 881px) {
+  nav.links {
+    column-gap: 29px;
+  }
+  nav.links a {
+    position: relative;
+  }
+  nav.links a + a::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: -15px;
+    height: 16px;
+    margin-top: -8px;
+    border-left: 1px solid var(--mute);
+  }
+}
 /* Narrow screens fold the sections behind the Menu button. Without the script (no .js) they stay listed,
    and so do a flat bar's few links (the agent page's). */
 @media (max-width: 880px) {
