@@ -1449,6 +1449,7 @@ pre.code {
   color: var(--signal-text);
 }
 .kd-head {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1483,14 +1484,79 @@ pre.code {
   border-radius: 50%;
   background: var(--olive);
 }
-.kd-tabs {
+.kd-pill.off::before {
+  background: var(--mute);
+}
+/* The status button: one word for how the kit is, and the pills it stands for in its panel */
+.kd-statuswrap {
+  position: relative;
+}
+.kd-statusbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  background: transparent;
+  font: 500 12px var(--mono);
+  color: var(--ink);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.kd-statusbtn::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--olive);
+}
+.kd-statusbtn:hover,
+.kd-statusbtn[aria-expanded="true"] {
+  background: var(--paper2);
+}
+.kd-menu {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 8px);
+  min-width: 16rem;
+  border: var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 0.12);
+}
+#kd-statuspanel {
+  left: 0;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+}
+#kd-statuspanel .kd-pill {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+}
+.kd-stamp {
+  padding-top: 10px;
+  border-top: 1px solid var(--mute);
+  font: 12px var(--mono);
+  color: var(--ink2);
+}
+/* the tabs: segmented buttons, the open one filled in. More holds the pages used now and then. */
+.kd-nav {
   display: flex;
   margin-left: auto;
   border: var(--rule);
   border-radius: 4px;
   overflow: hidden;
 }
-.kd-tabs button {
+.kd-nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   min-height: 40px;
   padding: 0 16px;
   border: 0;
@@ -1501,18 +1567,45 @@ pre.code {
   white-space: nowrap;
   cursor: pointer;
 }
-.kd-tabs button:first-child {
+.kd-nav button:first-child {
   border-left: 0;
 }
-.kd-tabs button:hover {
+.kd-nav button:last-child {
+  padding-right: 12px;
+}
+.kd-nav button:hover {
   background: var(--paper2);
 }
-.kd-tabs button[aria-selected="true"] {
+.kd-nav button[aria-current="page"],
+.kd-nav button.on {
   background: var(--ink);
   color: var(--paper);
 }
-.kd-tabs button:focus-visible {
+.kd-nav button:focus-visible {
   outline-offset: -5px;
+}
+#kd-more {
+  right: 24px;
+  top: calc(100% - 6px);
+  padding: 6px 0;
+}
+#kd-more button {
+  display: block;
+  width: 100%;
+  padding: 11px 18px;
+  border: 0;
+  background: transparent;
+  font: 500 16px var(--sans);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+#kd-more button:hover,
+#kd-more button[aria-current="page"] {
+  background: var(--paper2);
+}
+#kd-more button[aria-current="page"] {
+  font-weight: 600;
 }
 .kd-page {
   max-width: 960px;
@@ -1797,21 +1890,6 @@ pre.code {
   margin: 8px 0 4px;
 }
 /* Print the essentials: numbered on across both lists, then the household's own page */
-.kd-printlink {
-  background: transparent;
-  color: var(--ink);
-  cursor: pointer;
-}
-.kd-printlink::before {
-  content: none;
-}
-.kd-printlink:hover {
-  background: var(--paper2);
-}
-.kd-printlink[aria-current="page"] {
-  background: var(--ink);
-  color: var(--paper);
-}
 #kd-print {
   counter-reset: src;
 }
@@ -1959,6 +2037,81 @@ pre.code {
 }
 .kd-notes textarea {
   min-height: 14rem;
+}
+.kd-note.kd-tight {
+  margin-top: 10px;
+}
+.kd-nowrap {
+  white-space: nowrap;
+}
+/* Share with family */
+.kd-card {
+  margin: 12px 0 16px;
+  padding: 20px 24px;
+  border: var(--rule);
+}
+.kd-card p {
+  margin: 0 0 12px;
+}
+.kd-card p:last-child {
+  margin: 0;
+}
+.kd-sharestate {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--mute);
+}
+.kd-sharestate::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--mute);
+}
+.kd-sharestate.on {
+  color: var(--olive);
+}
+.kd-sharestate.on::before {
+  background: var(--olive);
+}
+.kd-invite {
+  padding: 12px 14px;
+  border: var(--rule);
+  border-radius: 4px;
+  background: var(--paper2);
+  overflow-wrap: anywhere;
+  -webkit-user-select: all;
+  user-select: all;
+}
+.kd-shareon .kd-btn {
+  margin-bottom: 20px;
+}
+.kd-qr {
+  display: block;
+  width: 12rem;
+  max-width: 100%;
+  height: auto;
+  margin: 12px 0;
+  border: var(--rule);
+}
+/* Help */
+.kd-help ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink2);
+}
+.kd-help b {
+  color: var(--ink);
+}
+.kd-help .kd-link {
+  font: inherit;
+  font-weight: 600;
 }
 .kd-status {
   min-height: 1.4rem;
@@ -2321,13 +2474,24 @@ pre.code {
   .kd-head {
     padding: 12px 16px;
   }
-  .kd-tabs {
+  .kd-statuswrap {
+    margin-left: auto;
+  }
+  #kd-statuspanel {
+    left: auto;
+    right: 0;
+  }
+  .kd-nav {
     flex-basis: 100%;
     margin-left: 0;
   }
-  .kd-tabs button {
+  .kd-nav button,
+  .kd-nav button:last-child {
     flex: 1 1 auto;
     padding: 0 8px;
+  }
+  #kd-more {
+    right: 16px;
   }
   .kd-page {
     padding: 20px 16px 28px;
@@ -2389,7 +2553,8 @@ pre.code {
   }
 }
 @container (max-width:360px) {
-  .kd-tabs button {
+  .kd-nav button,
+  .kd-nav button:last-child {
     padding: 0 5px;
     font-size: 13px;
   }

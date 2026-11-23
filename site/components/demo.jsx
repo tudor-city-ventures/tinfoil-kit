@@ -20,6 +20,7 @@ import {
   PRINT,
   QUESTIONS,
   RIVER,
+  SHARE,
   STREETS,
   W,
 } from "@/components/demo-data";
@@ -471,11 +472,11 @@ function AskPanel({ notes, cmd, onMap, say }) {
         </div>
         <div className="kd-hint">
           <p>
-            <b>Ask the AI</b>: it reads your books and writes an answer, with sources. Slower, and it uses a lot of
-            power.
+            <b>Search</b>: the best passages from your books in seconds, without the AI. It uses very little power.
           </p>
           <p>
-            <b>Search</b>: the best passages from your books in seconds, without the AI. It uses very little power.
+            <b>Ask the AI</b>: it reads your books and writes an answer, with sources. Slower, and it uses more power
+            than Search.
           </p>
         </div>
       </form>
@@ -957,7 +958,7 @@ function MapPanel({ cmd }) {
 }
 
 /* ------------------------------------------------------------------------------------------ library, notes, chat */
-function LibraryPanel({ say }) {
+function LibraryPanel({ say, onPrint }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState(null);
   function search(e) {
@@ -983,6 +984,13 @@ function LibraryPanel({ say }) {
           Search
         </button>
       </form>
+      <p className="kd-note kd-tight">
+        Which pages to print first, while there&apos;s power:{" "}
+        <button type="button" className="kd-link small" onClick={onPrint}>
+          Print the essentials
+        </button>
+        .
+      </p>
       {hits && (
         <div className="kd-hits">
           <p className="kd-progress" role="status">
@@ -1037,7 +1045,7 @@ function LibraryPanel({ say }) {
   );
 }
 
-function NotesPanel({ notes, setNotes, onAsk }) {
+function NotesPanel({ notes, setNotes, onAsk, onPrint }) {
   const [edited, setEdited] = useState(false);
   return (
     <>
@@ -1058,13 +1066,25 @@ function NotesPanel({ notes, setNotes, onAsk }) {
           {edited ? "Only in this demo: nothing is sent or saved." : "Saved in the kit"}
         </div>
       </div>
+      <div className="kd-try">
+        <span>Try:</span>
+        <button type="button" className="kd-chip" onClick={onAsk}>
+          Ask where to meet
+        </button>
+      </div>
       <p className="kd-note">
         Write down what you&apos;d need to know in an emergency: who lives here, allergies and medicines, doctors, where
         to meet, where the water shut-off is. Ask reads your notes with every question, so its answers fit your
         household.{" "}
-        <button type="button" className="kd-link small" onClick={onAsk}>
-          Ask where to meet
-        </button>
+        <button type="button" className="kd-link small" onClick={onPrint}>
+          Print them
+        </button>{" "}
+        with your pins and the nearest hospital, for when the battery&apos;s flat.
+      </p>
+      <p className="kd-note">
+        They&apos;re saved in the kit&apos;s data folder, as notes.txt, which updates never touch. They aren&apos;t
+        encrypted: anyone with this drive or computer, or with the kit&apos;s access code when it&apos;s shared, can
+        read them. Leave out passwords and bank details.
       </p>
     </>
   );
@@ -1270,38 +1290,278 @@ function PrintPanel({ notes, say }) {
   );
 }
 
+/* ------------------------------------------------------------------------------------------ share with family */
+// What Share copies for the person to text, word for word as the kit page writes it (Kit.invite in tools/portal.html)
+const invite = (address, code) =>
+  "You can use my Tinfoil Kit: an AI, a library and maps that work without the internet. Join my Wi-Fi, then open " +
+  address +
+  "/?code=" +
+  encodeURIComponent(code.replace(/\s+/g, ""));
+const QR_PATH = SHARE.qr
+  .map((row, y) => [...row].map((m, x) => (m === "1" ? `M${x + 4},${y + 4}h1v1h-1z` : "")).join(""))
+  .join("");
+
+function SharePanel({ shared, setShared, say }) {
+  const next = useRef(""); // the button to focus once the page changes, as the one pressed is gone
+  useEffect(() => {
+    if (next.current) document.getElementById(next.current).focus();
+    next.current = "";
+  }, [shared]);
+  function turn(on) {
+    next.current = on ? "kd-invite-copy" : "kd-share-on";
+    setShared(on);
+    say(on ? "Only in this demo: nothing is shared." : "Turned off, the kit is on this computer only.");
+  }
+  return (
+    <>
+      <h3 className="kd-h">
+        Share with family and friends{" "}
+        <span className={"kd-sharestate" + (shared ? " on" : "")}>{shared ? "On" : "Off"}</span>
+      </h3>
+      {shared ? (
+        <>
+          <div className="kd-card kd-shareon">
+            <p>
+              The kit is shared on this network. To let someone in, text them this message. Its link opens the kit on
+              their phone or laptop with no code to type, once they&apos;re on the same{" "}
+              <span className="kd-nowrap">Wi-Fi</span>.
+            </p>
+            <p className="kd-invite">{invite(SHARE.address, SHARE.code)}</p>
+            <button
+              id="kd-invite-copy"
+              type="button"
+              className="kd-btn"
+              onClick={() => say("In the kit, this copies the message, to text it to your family.")}
+            >
+              Copy message
+            </button>
+            <p>
+              Or they open <b>{SHARE.address}</b> and type the access code <b>{SHARE.code}</b>, or scan this with the
+              phone&apos;s camera:
+            </p>
+            <svg
+              className="kd-qr"
+              viewBox="0 0 37 37"
+              role="img"
+              aria-label="QR code that opens the kit, access code included"
+              shapeRendering="crispEdges"
+            >
+              <rect width="37" height="37" fill="#fff" />
+              <path d={QR_PATH} fill="#000" />
+            </svg>
+            <p className="kd-note">
+              No internet needed: a router with power, or a phone&apos;s hotspot, is enough. Anyone with the link or the
+              code can get in while they&apos;re on this Wi-Fi.
+            </p>
+          </div>
+          <div className="kd-row">
+            <button
+              type="button"
+              className="kd-btn secondary"
+              onClick={() => say("In the kit, this makes a new access code and signs every device out.")}
+            >
+              New code
+            </button>
+            <button type="button" className="kd-btn secondary" onClick={() => turn(false)}>
+              Turn off sharing
+            </button>
+          </div>
+          <p className="kd-note kd-tight">
+            A new code turns old links off and signs every device out. Turned off, the kit is on this computer only.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="kd-lead">
+            Phones and laptops on your Wi-Fi can use the kit too: the AI, the library, the map and your notes. No
+            internet needed: a router with power, or a phone&apos;s hotspot, is enough.
+          </p>
+          <button id="kd-share-on" type="button" className="kd-btn" onClick={() => turn(true)}>
+            Turn on sharing
+          </button>
+          <p className="kd-note kd-tight">
+            Each phone or laptop needs an 8-digit access code once, and this page then gives you a message with it to
+            text them. Anyone on the Wi-Fi with the code can use the kit and read your notes and pins, so share on your
+            own Wi-Fi or a phone&apos;s hotspot, not a caf&eacute;&apos;s.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------------------------------------------ help */
+function HelpPanel({ go }) {
+  const to = (id, text) => (
+    <button type="button" className="kd-link" onClick={() => go(id)}>
+      {text}
+    </button>
+  );
+  return (
+    <>
+      <h3 className="kd-h">Using the kit</h3>
+      <ul>
+        <li>
+          On <b>Ask</b>, <b>Ask the AI</b> searches your offline books, then the AI answers and cites them as [1], [2].
+          Click a source to read it in full. The AI is slower and uses more power than Search.
+        </li>
+        <li>
+          <b>Search</b>, beside it, skips the AI: the best passages from your books in seconds, on very little power.
+          Use it to save battery, or when you&apos;d rather read for yourself. <b>Have the AI answer from these</b> then
+          turns what it found into an answer. With the AI off, Ask the AI shows the passages too.
+        </li>
+        <li>
+          <b>Library</b> lets you browse every book: Wikipedia, medical guides, repair manuals and more. Its search
+          lists every article with the words you type.
+        </li>
+        <li>
+          <b>Notes</b>, under <b>More</b>, is where you write down what matters to your household: allergies, medicines,
+          doctors, where to meet. Ask reads them with every question. They&apos;re saved in the kit&apos;s data folder
+          as <b>notes.txt</b>, which updates never touch, and they aren&apos;t encrypted.
+        </li>
+        <li>
+          <b>AI chat</b>, under <b>More</b>, is a plain chat with the AI. It doesn&apos;t search your books or read your
+          notes, so check anything important on Ask or in the Library. You can attach photos there, e.g. of a broken
+          part or a label. Use a model that reads photos (Inkling, Qwen, Gemma).
+        </li>
+        <li>
+          Pick a different <b>model</b> for a second opinion. <b>Gemma-4-E4B</b> is the small one: use it to save
+          battery.
+        </li>
+        <li>
+          The first answer after picking a model is slow while it loads into memory (up to a minute). After that
+          it&apos;s quick.
+        </li>
+        <li>
+          <b>{to("print", "Print the essentials")}</b> while there&apos;s power: the few pages of the kit&apos;s books
+          worth having on paper, and a page of your own with your notes, your pins and the nearest hospital.
+        </li>
+        <li>
+          <b>{to("share", "Share with family")}</b> lets the phones and laptops on your Wi-Fi use the kit too.
+        </li>
+        <li>
+          The button beside the name says how the kit is: <b>Ready</b>, <b>Starting</b> while the AI loads, or{" "}
+          <b>AI off</b>, and <b>Shared</b> while others can use it. Click it for more.
+        </li>
+      </ul>
+      <h3 className="kd-h">Maps and directions</h3>
+      <ul>
+        <li>
+          <b>Map</b> works like a simple Google Maps: search an address or place, get driving or walking directions, or
+          find the nearest hospital, pharmacy, gas station and more. Your computer has no GPS, so set <b>home</b>{" "}
+          (bottom of the map panel) to where you are.
+        </li>
+        <li>
+          Click anywhere on the map for its coordinates, directions there, or a <b>pin</b> with a note, like where the
+          family meets. Pins and home are saved in the kit, and search, directions and Ask find pins by name. The search
+          box also takes coordinates, e.g. 40.7128, -74.0060 or 40°42&apos;46&quot;N 74°0&apos;22&quot;W.
+        </li>
+        <li>
+          You can also ask in plain words on the Ask page, e.g. &quot;How do I get to the nearest hospital?&quot; or
+          &quot;Directions from home to 350 Fifth Avenue, New York&quot;. The answer appears there and the route on the
+          Map tab.
+        </li>
+        <li>
+          For driving, a phone with an offline maps app (Organic Maps, or downloaded areas in Apple or Google Maps) is
+          better: it has GPS and spoken turn-by-turn directions.
+        </li>
+      </ul>
+      <h3 className="kd-h">If something doesn&apos;t work</h3>
+      <ul>
+        <li>
+          Close the kit&apos;s Terminal window and double-click <b>Open Tinfoil Kit.command</b> again.
+        </li>
+        <li>
+          Logs are in the kit&apos;s <b>data</b> folder, in <b>logs</b>.
+        </li>
+        <li>If the AI won&apos;t start, the library still works.</li>
+        <li>
+          Big models need most of the computer&apos;s memory: quit other apps. If a model still won&apos;t load, use
+          Gemma-4-E4B.
+        </li>
+      </ul>
+    </>
+  );
+}
+
 /* --------------------------------------------------------------------------------------------- the window */
+// The kit page's tabs, and the pages its More menu holds (nav and #moreMenu in tools/portal.html). In the kit, AI
+// chat opens in a tab of its own; here it's a page that says so.
 const TABS = [
   ["ask", "Ask"],
   ["map", "Map"],
   ["library", "Library"],
-  ["notes", "Notes"],
-  ["chat", "AI chat"],
 ];
+const MORE = [
+  ["notes", "Notes"],
+  ["share", "Share with family"],
+  ["print", "Print the essentials"],
+  ["chat", "AI chat ↗"],
+  ["help", "Help"],
+];
+const chevron = (
+  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+    <path
+      d="m6 9 6 6 6-6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+// When SETUP last brought everything up to date: a few days back, drawn only while it shows, so it's the visitor's day
+function refreshed() {
+  const d = new Date();
+  d.setDate(d.getDate() - 3);
+  return "Refreshed " + d.toLocaleDateString(undefined, { dateStyle: "medium" });
+}
 
 export default function Demo() {
-  const [tab, setTab] = useState("ask");
+  const [page, setPage] = useState("ask");
+  const [pop, setPop] = useState(""); // "status" or "more" while its panel is open
+  const [shared, setShared] = useState(false);
   const [notes, setNotes] = useState(NOTES);
   const [toMap, setToMap] = useState(null);
   const [toAsk, setToAsk] = useState(null);
   const [toast, setToast] = useState("");
   const timer = useRef(0);
+  const statusBtn = useRef(null),
+    statusBox = useRef(null),
+    moreBtn = useRef(null),
+    moreBox = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
+  // As on the kit page: one open at a time, and a click elsewhere or Escape closes it
+  useEffect(() => {
+    if (!pop) return;
+    const [btn, box] = pop === "more" ? [moreBtn, moreBox] : [statusBtn, statusBox];
+    function click(e) {
+      if (![statusBtn, statusBox, moreBtn, moreBox].some((r) => r.current.contains(e.target))) setPop("");
+    }
+    function key(e) {
+      if (e.key !== "Escape") return;
+      if (box.current.contains(document.activeElement)) btn.current.focus();
+      setPop("");
+    }
+    document.addEventListener("click", click);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("click", click);
+      document.removeEventListener("keydown", key);
+    };
+  }, [pop]);
   function say(text) {
     setToast(text);
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setToast(""), 4000);
   }
-  function keys(e) {
-    const i = TABS.findIndex(([id]) => id === tab);
-    const j = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: TABS.length - 1 }[e.key];
-    if (j === undefined) return;
-    e.preventDefault();
-    const id = TABS[(j + TABS.length) % TABS.length][0];
-    setTab(id);
-    document.getElementById("kd-tab-" + id).focus();
+  function go(id) {
+    setPage(id);
+    setPop("");
   }
-  const panel = (id) => ({ role: "tabpanel", id: "kd-" + id, "aria-labelledby": "kd-tab-" + id, hidden: tab !== id });
+  const show = (id) => ({ id: "kd-" + id, hidden: page !== id });
+  const current = (id) => (page === id ? "page" : undefined);
 
   return (
     <div className="kd" role="region" aria-label="Demo of the Tinfoil Kit page">
@@ -1329,66 +1589,102 @@ export default function Demo() {
           <img src="/icon.svg" width="30" height="30" alt="" />
           Tinfoil Kit
         </span>
-        <span className="kd-pill">Library: on</span>
-        <span className="kd-pill">AI: ready</span>
-        <button
-          type="button"
-          className="kd-pill kd-printlink"
-          aria-current={tab === "print" ? "page" : undefined}
-          onClick={() => setTab("print")}
-        >
-          Print the essentials
-        </button>
-        <div className="kd-tabs" role="tablist" aria-label="The kit page">
+        <div className="kd-statuswrap">
+          <button
+            ref={statusBtn}
+            type="button"
+            className="kd-statusbtn"
+            aria-expanded={pop === "status"}
+            aria-controls="kd-statuspanel"
+            aria-label={"Kit status: Ready" + (shared ? ", shared on this network" : "")}
+            onClick={() => setPop(pop === "status" ? "" : "status")}
+          >
+            <span>Ready</span>
+            {shared && <span>&middot; Shared</span>}
+            {chevron}
+          </button>
+          <div ref={statusBox} id="kd-statuspanel" className="kd-menu" hidden={pop !== "status"}>
+            <span className="kd-pill">Library: on</span>
+            <span className="kd-pill">AI: ready</span>
+            <span className={"kd-pill" + (shared ? "" : " off")}>
+              {shared ? "Shared on this network" : "Not shared"}
+            </span>
+            {pop === "status" && <span className="kd-stamp">{refreshed()}</span>}
+          </div>
+        </div>
+        <div className="kd-nav" role="group" aria-label="The kit page">
           {TABS.map(([id, label]) => (
+            <button key={id} type="button" aria-current={current(id)} onClick={() => go(id)}>
+              {label}
+            </button>
+          ))}
+          <button
+            ref={moreBtn}
+            type="button"
+            className={MORE.some(([id]) => id === page) ? "on" : undefined}
+            aria-expanded={pop === "more"}
+            aria-controls="kd-more"
+            onClick={() => setPop(pop === "more" ? "" : "more")}
+          >
+            More
+            {chevron}
+          </button>
+        </div>
+        <div ref={moreBox} id="kd-more" className="kd-menu" hidden={pop !== "more"}>
+          {MORE.map(([id, label]) => (
             <button
               key={id}
               type="button"
-              role="tab"
-              id={"kd-tab-" + id}
-              aria-selected={tab === id}
-              aria-controls={"kd-" + id}
-              tabIndex={id === (tab === "print" ? "ask" : tab) ? 0 : -1}
-              onClick={() => setTab(id)}
-              onKeyDown={keys}
+              aria-current={current(id)}
+              onClick={() => {
+                go(id);
+                moreBtn.current.focus();
+              }}
             >
               {label}
             </button>
           ))}
         </div>
       </div>
-      <div {...panel("ask")} className="kd-page">
+      <div {...show("ask")} className="kd-page">
         <AskPanel
           notes={notes}
           cmd={toAsk}
           say={say}
           onMap={() => {
             setToMap({});
-            setTab("map");
+            go("map");
           }}
         />
       </div>
-      <div {...panel("map")}>
+      <div {...show("map")}>
         <MapPanel cmd={toMap} />
       </div>
-      <div {...panel("library")} className="kd-page">
-        <LibraryPanel say={say} />
+      <div {...show("library")} className="kd-page">
+        <LibraryPanel say={say} onPrint={() => go("print")} />
       </div>
-      <div {...panel("notes")} className="kd-page">
+      <div {...show("notes")} className="kd-page">
         <NotesPanel
           notes={notes}
           setNotes={setNotes}
+          onPrint={() => go("print")}
           onAsk={() => {
             setToAsk({ q: QUESTIONS.find((x) => x.notes).q });
-            setTab("ask");
+            go("ask");
           }}
         />
       </div>
-      <div {...panel("chat")} className="kd-page">
+      <div {...show("share")} className="kd-page">
+        <SharePanel shared={shared} setShared={setShared} say={say} />
+      </div>
+      <div {...show("print")} className="kd-page">
+        {page === "print" && <PrintPanel notes={notes} say={say} />}
+      </div>
+      <div {...show("chat")} className="kd-page">
         <ChatPanel />
       </div>
-      <div id="kd-print" role="region" aria-labelledby="kd-print-h" hidden={tab !== "print"} className="kd-page">
-        {tab === "print" && <PrintPanel notes={notes} say={say} />}
+      <div {...show("help")} className="kd-page kd-help">
+        <HelpPanel go={go} />
       </div>
       <div className="kd-toast" role="status">
         {toast && <span>{toast}</span>}

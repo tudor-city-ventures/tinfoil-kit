@@ -126,14 +126,77 @@
         color: var(--ink);
         background: var(--panel);
       }
-      #shareLink::before {
-        display: none; /* an action, not a status */
-      }
       .stamp {
         font: 12px var(--mono);
         color: var(--ink2);
       }
-      /* the tabs: the site's segmented buttons, the open one filled in */
+      /* The status button: one word for how the kit is, and the pills it stands for in its panel, so the top of
+         a phone stays two rows */
+      header {
+        position: relative;
+      }
+      .status-wrap {
+        position: relative;
+      }
+      button.status,
+      button.status:enabled:hover {
+        gap: 7px;
+        min-height: 32px;
+        padding: 0 8px 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        font: 500 12px var(--mono);
+        color: var(--ink);
+        background: transparent;
+        white-space: nowrap;
+      }
+      button.status:enabled:hover,
+      button.status[aria-expanded="true"] {
+        background: var(--panel);
+      }
+      button.status::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--mute);
+      }
+      button.status.ok::before {
+        background: var(--olive);
+      }
+      button.status.bad {
+        border-color: var(--signal);
+      }
+      button.status.bad::before {
+        background: var(--signal);
+      }
+      .pop {
+        position: absolute;
+        z-index: 30;
+        top: calc(100% + 8px);
+        min-width: 16rem;
+        border: 2px solid var(--line);
+        border-radius: 4px;
+        background: var(--bg);
+        box-shadow: 4px 4px 0 rgb(0 0 0 / 0.12);
+      }
+      #statusPanel {
+        left: 0;
+        display: grid;
+        gap: 10px;
+        padding: 14px 16px;
+      }
+      #statusPanel .pill {
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        font-size: 13px;
+      }
+      #statusPanel .stamp {
+        padding-top: 10px;
+        border-top: 1px solid var(--mute);
+      }
+      /* the tabs: the site's segmented buttons, the open one filled in. More holds the pages used now and then. */
       nav {
         display: flex;
         margin-left: auto;
@@ -165,8 +228,48 @@
         color: var(--bg);
         background: var(--ink);
       }
-      nav a:focus-visible {
+      nav a:focus-visible,
+      nav button:focus-visible {
         outline-offset: -5px;
+      }
+      nav button,
+      nav button:enabled:hover {
+        gap: 4px;
+        min-height: 40px;
+        padding: 0 12px 0 16px;
+        border: 0;
+        border-left: 2px solid var(--line);
+        border-radius: 0;
+        font: 500 14px var(--mono);
+        color: var(--ink);
+        background: transparent;
+      }
+      nav button:enabled:hover {
+        background: var(--panel);
+      }
+      nav button.on,
+      nav button.on:enabled:hover {
+        color: var(--bg);
+        background: var(--ink);
+      }
+      #moreMenu {
+        right: 32px;
+        top: calc(100% - 6px);
+        padding: 6px 0;
+      }
+      #moreMenu a {
+        display: block;
+        padding: 11px 18px;
+        font: 500 16px var(--sans);
+        color: var(--ink);
+        text-decoration: none;
+      }
+      #moreMenu a:hover,
+      #moreMenu a.on {
+        background: var(--panel);
+      }
+      #moreMenu a.on {
+        font-weight: 600;
       }
 
       main {
@@ -539,14 +642,43 @@
       .help b {
         color: var(--ink);
       }
-      .help .card p {
+
+      /* Share with family */
+      #share .lead {
+        margin: 0 0 18px;
+        font-size: 17px;
+        color: var(--ink2);
+      }
+      #share ul {
+        margin: 0 0 16px;
+        padding-left: 22px;
+        font-size: 17px;
+        color: var(--ink2);
+      }
+      #share .card p {
         margin: 0 0 12px;
       }
-      .help .card p:last-child {
+      #share .card p:last-child {
         margin: 0;
       }
-      #share {
-        scroll-margin-top: 20px; /* where Share lands */
+      .share-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--mute);
+      }
+      .share-state::before {
+        content: "";
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--mute);
+      }
+      .share-state.on {
+        color: var(--olive);
+      }
+      .share-state.on::before {
+        background: var(--olive);
       }
       #invite {
         padding: 12px 14px;
@@ -561,6 +693,16 @@
       #inviteCopy {
         margin-bottom: 20px;
       }
+      #shareOn {
+        margin-bottom: 16px;
+      }
+      #shareOff .note,
+      #shareControls .note {
+        margin: 10px 0 0;
+      }
+      #shareSay:empty {
+        display: none;
+      }
       #shareQr {
         display: block;
         width: 12rem;
@@ -573,13 +715,6 @@
 
       /* Print the essentials: what to print, numbered on across both lists in the site's step circles, then the
          household's own page as it prints */
-      #printLink.on {
-        color: var(--bg);
-        background: var(--ink);
-      }
-      #printLink::before {
-        display: none;
-      }
       #print {
         counter-reset: doc;
       }
@@ -950,13 +1085,25 @@
         header {
           padding: 12px 16px;
         }
+        .status-wrap {
+          margin-left: auto;
+        }
+        #statusPanel {
+          left: auto;
+          right: 0;
+        }
         nav {
           flex-basis: 100%;
           margin-left: 0;
         }
-        nav a {
+        nav a,
+        nav button {
           flex: 1 1 auto;
+          justify-content: center;
           padding: 0 8px;
+        }
+        #moreMenu {
+          right: 16px;
         }
         main {
           padding: 20px 16px 32px;
@@ -1042,6 +1189,7 @@
     <!--KIT:MAPS-->
   </head>
   <body>
+    <!-- The website's Try it demo (site/components/demo.jsx) copies this page: a change here changes it too. -->
     <header>
       <h1 class="brand">
         <svg viewBox="0 0 64 64" aria-hidden="true">
@@ -1073,25 +1221,56 @@
         </svg>
         Tinfoil Kit
       </h1>
-      <span id="libStatus" class="pill ok">Library: on</span>
-      <span id="aiStatus" class="pill">AI: checking</span>
-      <span id="sharePill" class="pill ok" hidden>Shared on this network</span>
-      <a id="shareLink" class="pill" href="#share" hidden>Share</a>
-      <span
-        id="refreshed"
-        class="stamp"
-        title="When SETUP last brought every book, model and map up to date"
-        hidden
-      ></span>
-      <a id="printLink" class="pill" href="#print" data-tab="print">Print the essentials</a>
+      <div class="status-wrap">
+        <button id="statusBtn" type="button" class="status" aria-expanded="false" aria-controls="statusPanel">
+          <span id="statusText">Starting</span><span id="sharePill" hidden>&middot; Shared</span
+          ><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path
+              d="m6 9 6 6 6-6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <div id="statusPanel" class="pop" hidden>
+          <span id="libStatus" class="pill ok">Library: on</span>
+          <span id="aiStatus" class="pill">AI: checking</span>
+          <span id="shareLine" class="pill">Not shared</span>
+          <span
+            id="refreshed"
+            class="stamp"
+            title="When SETUP last brought every book, model and map up to date"
+            hidden
+          ></span>
+        </div>
+      </div>
       <nav>
         <a href="#ask" data-tab="ask" class="on" aria-current="page">Ask</a>
         <a href="#map" data-tab="map">Map</a>
         <a href="#library" data-tab="library">Library</a>
-        <a href="#notes" data-tab="notes">Notes</a>
-        <a id="chatLink" target="_blank" rel="noopener">AI chat</a>
-        <a href="#help" data-tab="help">Help</a>
+        <button id="moreBtn" type="button" aria-expanded="false" aria-controls="moreMenu">
+          More<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path
+              d="m6 9 6 6 6-6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
       </nav>
+      <div id="moreMenu" class="pop" hidden>
+        <a href="#notes" data-tab="notes">Notes</a>
+        <a href="#share" data-tab="share">Share with family</a>
+        <a href="#print" data-tab="print">Print the essentials</a>
+        <a id="chatLink" target="_blank" rel="noopener">AI chat &#8599;</a>
+        <a href="#help" data-tab="help">Help</a>
+      </div>
     </header>
     <main>
       <section id="ask" class="on">
@@ -1110,11 +1289,11 @@
           </div>
           <div id="askHint" class="note">
             <p>
-              <b>Ask the AI</b>: it reads your books and writes an answer, with sources. Slower, and it uses a lot of
-              power.
+              <b>Search</b>: the best passages from your books in seconds, without the AI. It uses very little power.
             </p>
             <p>
-              <b>Search</b>: the best passages from your books in seconds, without the AI. It uses very little power.
+              <b>Ask the AI</b>: it reads your books and writes an answer, with sources. Slower, and it uses more power
+              than Search.
             </p>
           </div>
         </form>
@@ -1227,6 +1406,59 @@
         </div>
       </section>
 
+      <section id="share">
+        <h2>Share with family and friends <span id="shareState" class="share-state">Off</span></h2>
+        <div id="shareOn" class="card" hidden>
+          <p>
+            The kit is shared on this network. To let someone in, text them this message. Its link opens the kit on
+            their phone or laptop with no code to type, once they're on the same
+            <span style="white-space: nowrap">Wi-Fi</span>.
+          </p>
+          <p id="invite"></p>
+          <button id="inviteCopy" type="button">Copy message</button>
+          <p>
+            Or they open <b id="shareAddr"></b> and type the access code <b id="shareCode"></b>, or scan this with the
+            phone's camera:
+          </p>
+          <img id="shareQr" alt="QR code that opens the kit, access code included" />
+          <p class="note">
+            No internet needed: a router with power, or a phone's hotspot, is enough. Anyone with the link or the code
+            can get in while they're on this Wi-Fi.
+          </p>
+        </div>
+        <ul id="shareNoNet" hidden>
+          <li>
+            Sharing is on, but this computer isn't on a network. Connect it to your Wi-Fi or a phone's hotspot (no
+            internet needed), and this page shows how others get in.
+          </li>
+        </ul>
+        <div id="shareOff">
+          <p class="lead">
+            Phones and laptops on your Wi-Fi can use the kit too: the AI, the library, the map and your notes. No
+            internet needed: a router with power, or a phone's hotspot, is enough.
+          </p>
+          <button id="shareOnBtn" type="button">Turn on sharing</button>
+          <p class="note">
+            Each phone or laptop needs an 8-digit access code once, and this page then gives you a message with it to
+            text them. Anyone on the Wi-Fi with the code can use the kit and read your notes and pins, so share on your
+            own Wi-Fi or a phone's hotspot, not a caf&eacute;'s.
+          </p>
+        </div>
+        <div id="shareControls" hidden>
+          <div class="row">
+            <button id="newCodeBtn" type="button" class="secondary">New code</button>
+            <button id="shareOffBtn" type="button" class="secondary">Turn off sharing</button>
+          </div>
+          <p class="note">
+            A new code turns old links off and signs every device out. Turned off, the kit is on this computer only.
+          </p>
+        </div>
+        <p id="shareNotHere" class="note" hidden>
+          Only the computer the kit runs on can turn sharing off or change the code.
+        </p>
+        <p id="shareSay" class="note" role="status"></p>
+      </section>
+
       <section id="print">
         <h2>Print the essentials</h2>
         <p class="lead">
@@ -1263,7 +1495,7 @@
         <ul>
           <li>
             On <b>Ask</b>, <b>Ask the AI</b> searches your offline books, then the AI answers and cites them as [1],
-            [2]. Click a source to read it in full. The AI is slower and uses a lot of power.
+            [2]. Click a source to read it in full. The AI is slower and uses more power than Search.
           </li>
           <li>
             <b>Search</b>, beside it, skips the AI: the best passages from your books in seconds, on very little power.
@@ -1275,14 +1507,14 @@
             lists every article with the words you type.
           </li>
           <li>
-            <b>Notes</b> is where you write down what matters to your household: allergies, medicines, doctors, where to
-            meet. Ask reads them with every question. They're saved in the kit's data folder as <b>notes.txt</b>, which
-            updates never touch, and they aren't encrypted.
+            <b>Notes</b>, under <b>More</b>, is where you write down what matters to your household: allergies,
+            medicines, doctors, where to meet. Ask reads them with every question. They're saved in the kit's data
+            folder as <b>notes.txt</b>, which updates never touch, and they aren't encrypted.
           </li>
           <li>
-            <b>AI chat</b> is a plain chat with the AI. It doesn't search your books or read your notes, so check
-            anything important on Ask or in the Library. You can attach photos there, e.g. of a broken part or a label.
-            Use a model that reads photos (Inkling, Qwen, Gemma).
+            <b>AI chat</b>, under <b>More</b>, is a plain chat with the AI. It doesn't search your books or read your
+            notes, so check anything important on Ask or in the Library. You can attach photos there, e.g. of a broken
+            part or a label. Use a model that reads photos (Inkling, Qwen, Gemma).
           </li>
           <li>
             Pick a different <b>model</b> for a second opinion. <b>Gemma-4-E4B</b> is the small one: use it to save
@@ -1295,6 +1527,13 @@
           <li>
             <b><a href="#print">Print the essentials</a></b> while there's power: the few pages of the kit's books worth
             having on paper, and a page of your own with your notes, your pins and the nearest hospital.
+          </li>
+          <li>
+            <b><a href="#share">Share with family</a></b> lets the phones and laptops on your Wi-Fi use the kit too.
+          </li>
+          <li>
+            The button beside the name says how the kit is: <b>Ready</b>, <b>Starting</b> while the AI loads, or
+            <b>AI off</b>, and <b>Shared</b> while others can use it. Click it for more.
           </li>
         </ul>
         <h2>Maps and directions</h2>
@@ -1316,39 +1555,6 @@
           <li>
             For driving, a phone with an offline maps app (Organic Maps, or downloaded areas in Apple or Google Maps) is
             better: it has GPS and spoken turn-by-turn directions.
-          </li>
-        </ul>
-        <h2 id="share">Sharing with family</h2>
-        <div id="shareOn" class="card" hidden>
-          <p>
-            The kit is shared on this network. To let someone in, text them this message. Its link opens the kit on
-            their phone or laptop with no code to type, once they're on the same
-            <span style="white-space: nowrap">Wi-Fi</span>.
-          </p>
-          <p id="invite"></p>
-          <button id="inviteCopy" type="button">Copy message</button>
-          <p>
-            Or they open <b id="shareAddr"></b> and type the access code <b id="shareCode"></b>, or scan this with the
-            phone's camera:
-          </p>
-          <img id="shareQr" alt="QR code that opens the kit, access code included" />
-          <p class="note">
-            No internet needed: a router with power, or a phone's hotspot, is enough. Anyone with the link or the code
-            can get in while they're on this Wi-Fi. <kbd>./kit share new-code</kbd> replaces the code, which turns old
-            links off and signs every device out.
-          </p>
-        </div>
-        <ul id="shareNoNet" hidden>
-          <li>
-            Sharing is on, but this computer isn't on a network. Connect it to your Wi-Fi or a phone's hotspot (no
-            internet needed), then open this page again.
-          </li>
-        </ul>
-        <ul id="shareOff">
-          <li>
-            Phones and laptops on your Wi-Fi can use the kit too. In the kit's folder, run <kbd>./kit share on</kbd> in
-            a terminal, then start the kit again. This section then shows how they get in, with a message to text them.
-            No internet needed: a router with power, or a phone's hotspot, is enough.
           </li>
         </ul>
         <h2>If something doesn't work</h2>
@@ -2796,13 +3002,27 @@
             $("refreshed").hidden = false;
           }
           // Sharing on the home network: how others get in. Through the gate, the gate told the page (KIT_GATE); on
-          // this computer, the kit's notes server says, while the kit is shared.
+          // this computer, the kit's notes server says, and turns sharing on and off. Only this computer gets the
+          // buttons: the notes server turns away a device that comes through the gate.
           function showShare(s) {
             var on = Boolean(s && s.address),
+              shared = on || Boolean(s && s.shared),
               qr = s && s.qr ? "data:image/svg+xml," + encodeURIComponent(s.qr) : "/_kit/qr.svg";
-            $("sharePill").hidden = $("shareLink").hidden = $("shareOn").hidden = !on;
-            $("shareNoNet").hidden = on || !(s && s.shared);
-            $("shareOff").hidden = on || !$("shareNoNet").hidden;
+            $("sharePill").hidden = $("shareOn").hidden = !on;
+            $("shareLine").textContent = on
+              ? "Shared on this network"
+              : shared
+                ? "Shared, but not on a network"
+                : "Not shared";
+            $("shareLine").className = "pill" + (on ? " ok" : "");
+            $("shareState").textContent = shared ? "On" : "Off";
+            $("shareState").classList.toggle("on", shared);
+            summarize();
+            $("shareNoNet").hidden = on || !shared;
+            $("shareOff").hidden = shared || Boolean(GATE);
+            $("shareControls").hidden = !shared || !(s && s.canChange) || Boolean(GATE);
+            $("shareNotHere").hidden = !GATE;
+            $("shareSay").textContent = (s && s.note) || "";
             if (!on) return;
             $("shareAddr").textContent = s.address;
             $("shareCode").textContent = s.code;
@@ -2813,12 +3033,73 @@
             if (GATE) showShare(GATE);
             else dataApi("GET", "/share").then(showShare, function () {});
           }
-          $("shareLink").addEventListener("click", function (ev) {
-            ev.preventDefault();
-            showTab("help");
-            history.replaceState(null, "", "#help");
-            $("share").scrollIntoView();
-            $("inviteCopy").focus({ preventScroll: true });
+          // One change at a time. The buttons stay enabled meanwhile, as disabling one takes the keyboard's place away.
+          var shareBusy = false;
+          function setShare(body, then) {
+            if (shareBusy) return;
+            shareBusy = true;
+            $("shareSay").textContent = body.on
+              ? "Turning sharing on..."
+              : body.on === false
+                ? "Turning sharing off..."
+                : "";
+            dataApi("PUT", "/share", body)
+              .then(
+                function (s) {
+                  showShare(s);
+                  if (body.newCode)
+                    $("shareSay").textContent =
+                      "New code made. Text the new message to everyone who should get back in.";
+                  if ($(then).offsetParent) $(then).focus(); // where the next step is, the button pressed being gone
+                },
+                function (e) {
+                  $("shareSay").textContent = e.status
+                    ? e.message
+                    : "The kit didn't answer. Close its window and open it again.";
+                },
+              )
+              .finally(function () {
+                shareBusy = false;
+              });
+          }
+          [
+            ["shareOnBtn", { on: true }, "inviteCopy"],
+            ["shareOffBtn", { on: false }, "shareOnBtn"],
+            ["newCodeBtn", { newCode: true }, "newCodeBtn"],
+          ].forEach(function (a) {
+            $(a[0]).addEventListener("click", function () {
+              setShare(a[1], a[2]);
+            });
+          });
+          // The status panel and More: one open at a time, and a click elsewhere or Escape closes it
+          var pops = [
+            ["statusBtn", "statusPanel"],
+            ["moreBtn", "moreMenu"],
+          ];
+          function closePops() {
+            pops.forEach(function (p) {
+              $(p[1]).hidden = true;
+              $(p[0]).setAttribute("aria-expanded", "false");
+            });
+          }
+          pops.forEach(function (p) {
+            $(p[0]).addEventListener("click", function (ev) {
+              ev.stopPropagation();
+              var open = $(p[1]).hidden;
+              closePops();
+              $(p[1]).hidden = !open;
+              $(p[0]).setAttribute("aria-expanded", String(open));
+            });
+          });
+          document.addEventListener("click", function (ev) {
+            if (!ev.target.closest(".pop") || ev.target.closest("a")) closePops();
+          });
+          document.addEventListener("keydown", function (ev) {
+            if (ev.key !== "Escape") return;
+            pops.forEach(function (p) {
+              if (!$(p[1]).hidden && $(p[1]).parentNode.contains(document.activeElement)) $(p[0]).focus();
+            });
+            closePops();
           });
           $("inviteCopy").addEventListener("click", function () {
             var b = $("inviteCopy");
@@ -2838,7 +3119,9 @@
             });
             document.querySelector("main").classList.toggle("wide", name === "map");
             if (name === "notes") loadNotes();
-            if (name === "help") loadShare(); // a new code, or a network since the page opened
+            if (name === "share") loadShare(); // a new code, or a network since the page opened
+            $("moreBtn").classList.toggle("on", ["notes", "share", "print", "help"].indexOf(name) >= 0);
+            closePops();
             if (name === "print") showPrint();
             if (name === "map")
               // (with home and the pins as the kit has them, which may have changed on another device)
@@ -2855,11 +3138,12 @@
               ev.preventDefault();
               showTab(a.dataset.tab);
               history.replaceState(null, "", "#" + a.dataset.tab);
+              if ($("moreMenu").contains(a)) $("moreBtn").focus(); // the link went with the menu
             });
           });
           function tabInAddress() {
             var t = location.hash.slice(1);
-            return ["ask", "map", "library", "notes", "print", "help"].indexOf(t) >= 0 ? t : "";
+            return ["ask", "map", "library", "notes", "share", "print", "help"].indexOf(t) >= 0 ? t : "";
           }
           window.addEventListener("hashchange", function () {
             if (tabInAddress()) showTab(tabInAddress());
@@ -2868,6 +3152,20 @@
           function setPill(el, text, ok) {
             el.textContent = text;
             el.className = "pill " + (ok ? "ok" : "bad");
+            summarize();
+          }
+          // The status button says what the pills in its panel say, in a word or two
+          function summarize() {
+            var libBad = $("libStatus").classList.contains("bad"),
+              ready = !libBad && $("aiStatus").classList.contains("ok"),
+              bad = libBad || $("aiStatus").classList.contains("bad"),
+              text = libBad ? "Library error" : ready ? "Ready" : bad ? "AI off" : "Starting";
+            $("statusText").textContent = text;
+            $("statusBtn").className = "status" + (ready ? " ok" : bad ? " bad" : "");
+            $("statusBtn").setAttribute(
+              "aria-label",
+              "Kit status: " + text + ($("sharePill").hidden ? "" : ", shared on this network"),
+            );
           }
 
           async function loadBooks() {
@@ -4345,7 +4643,7 @@
                     '<p class="blank"></p>'.repeat(home ? 1 : 2)
                   );
                 }).join("") +
-                '<p class="screen">Or write them on the <a href="#notes">Notes</a> tab, and they print here.</p>';
+                '<p class="screen">Or write them in <a href="#notes">Notes</a>, under More, and they print here.</p>';
             s +=
               '<p class="foot">Tinfoil Kit: an AI, a library and maps that work with no internet. To start it, see ' +
               "Read me first.txt in the TinfoilKit folder.</p>";

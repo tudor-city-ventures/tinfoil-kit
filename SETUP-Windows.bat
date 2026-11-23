@@ -276,7 +276,7 @@ if not defined KIT_HOME_SERVER if "!WHERE!"=="on this PC" (
 ) else (
   echo In an outage: plug in the drive, open !OPEN_IN:~3! and double-click Open Tinfoil Kit for Windows.bat. No internet needed.
 )
-echo While you have power, open the kit and click Print the essentials at the top: about 20 pages worth having on paper.
+echo While you have power, open the kit and click More, then Print the essentials: about 20 pages worth having on paper.
 echo(
 if exist "!KIT!\Read me first.txt" (
   echo Read me first.txt, beside Open Tinfoil Kit, says what each folder is for. In the app folder:

@@ -1,6 +1,6 @@
 # Tinfoil Kit
 
-> A free, open-source (MIT) kit for when the internet is down. One folder, kept on the computer's own disk or on an external drive, holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: Wikipedia in the person's language, all of it or just its best articles, plus medical, repair and preparedness books) and offline maps (address search, driving and walking directions, "nearest hospital"). Open Tinfoil Kit starts it all on 127.0.0.1 and opens a browser page with Ask, AI chat, Library, Map and Notes tabs. Once it's filled, it needs no internet, account or install.
+> A free, open-source (MIT) kit for when the internet is down. One folder, kept on the computer's own disk or on an external drive, holds a local AI (llama.cpp's llama-server), an offline library (Kiwix: Wikipedia in the person's language, all of it or just its best articles, plus medical, repair and preparedness books) and offline maps (address search, driving and walking directions, "nearest hospital"). Open Tinfoil Kit starts it all on 127.0.0.1 and opens a browser page with Ask, Map and Library tabs, and Notes, Share with family, Print the essentials, AI chat and Help under More. Once it's filled, it needs no internet, account or install.
 
 You are helping a person set this up, probably not a programmer. Don't install it yourself: ask them what they want in it, then give them one command to paste into their terminal (Terminal on a Mac, PowerShell on Windows), and explain it in plain words. Updates, fixes and removal work the same way: tell them what to run, and ask before anything slow, costly or destructive. This file has what you need: what the kit runs on, how it works, where it can live, how to set it up, use it, update it and remove it, what to do when something breaks, where every file comes from, and how it compares to Project NOMAD.
 
@@ -39,14 +39,14 @@ The whole kit is one folder, TinfoilKit, with three inside: app (the kit's code 
 | Map | pmtiles | 8090 | Serves the map: street detail for a region, plus a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes |
-| Notes and pins | the kit's program | 8095 | Keeps the Notes tab and the map's home and pins in data/ (notes.txt, places.json), so a new version keeps them and every browser on the kit sees the same ones |
+| Notes and pins | the kit's program | 8095 | Keeps Notes and the map's home and pins in data/ (notes.txt, places.json), so a new version keeps them and every browser on the kit sees the same ones |
 | Sharing (off by default) | the kit's program | 8000 | Lets phones and laptops on the home network in with the access code, and passes their requests to the servers above |
 
 Photon and GraphHopper run on a Java that's in the kit. Every server listens only on 127.0.0.1; sharing is the one way in from the network.
 
 - Ask, with two buttons. Ask the AI: the AI turns the question into short searches, kiwix-serve searches every book, and the AI answers from the top articles with numbered sources. Search: no AI, the question's own words over the same indexes, and the best passages in seconds, on very little power; Have the AI answer from these then answers from them, with no second search. With the AI off, Ask the AI shows the passages too. Map questions ("nearest pharmacy", "directions to the hospital") go to three map tools instead (search places, find nearby, get directions), and the answer shows on the Map tab.
-- Notes: what the person keeps about their household (allergies, medicines, who to call, where to meet), in data/notes.txt. The AI reads them with every question on Ask.
-- Print the essentials, a link at the top of the kit page: the few pages of the kit's books worth having on paper, most important first (making water safe, first aid, dehydration, power outages), each opening at the first page to print, and a page of the household's own (home and pins with their coordinates, notes, the nearest hospitals) that prints alone.
+- Notes, under More on the kit page: what the person keeps about their household (allergies, medicines, who to call, where to meet), in data/notes.txt. The AI reads them with every question on Ask.
+- Print the essentials, under More: the few pages of the kit's books worth having on paper, most important first (making water safe, first aid, dehydration, power outages), each opening at the first page to print, and a page of the household's own (home and pins with their coordinates, notes, the nearest hospitals) that prints alone.
 - The kit page (tools/portal.html) is one HTML file. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
 - The kit's code: `./kit` (`.\kit.cmd` on Windows) runs the kit's own program, tools/tinfoilkit-* (built from the Go source in tools/tinfoilkit/, standard library only, with curl for every download), and Open Tinfoil Kit starts the servers with it (`./kit open`). Every download carries the program. A git checkout or GitHub's Download ZIP has none until `tools/tinfoilkit/build.sh` builds it (it needs Go); with Go installed, `./kit` builds it by itself.
 
@@ -75,7 +75,7 @@ What's in the folder:
     │   └── INVENTORY.md              what's installed, with versions and sizes
     └── data/                         the person's: no new version touches it
         ├── kit.json                  what goes in their kit, and its settings
-        ├── notes.txt                 the Notes tab, which the AI reads
+        ├── notes.txt                 Notes on the kit page, which the AI reads
         ├── places.json               the map's home and pins
         ├── logs/                     what each sync and launch did
         └── .kit/                     download progress, caches, the built kit page, the access code
@@ -190,7 +190,7 @@ SETUP's last message says how big the rest is, how long it takes at the speed it
 
 - Add `--even-if-tight` to get all of it even if that leaves less free space than SETUP likes. Without it, SETUP takes all of what they picked if it fits with room to spare, or else the essentials, and says so.
 - Double-clicking SETUP again gets the rest too. Without `--yes`, it asks the kit builder's questions first (`./kit pick --ask`), unless what goes in was picked already.
-- When it's done, suggest they open the kit and print the essentials while they have power (the link at the top of its page): about 20 pages, and a page of their own with their notes, pins and the nearest hospitals.
+- When it's done, suggest they open the kit and print the essentials while they have power (More, then Print the essentials): about 20 pages, and a page of their own with their notes, pins and the nearest hospitals.
 - Tell them what to do in an outage: open the TinfoilKit folder (at the top of the drive, or in their home folder) and double-click Open Tinfoil Kit.command (Open Tinfoil Kit for Windows.bat on Windows). Read me first.txt there says the same, and what each folder is for.
 
 ### SETUP's own questions
@@ -224,7 +224,7 @@ For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` fo
 
 - Double-click Open Tinfoil Kit.command in the kit folder, TinfoilKit (Open Tinfoil Kit for Windows.bat on Windows), or run `bash "Open Tinfoil Kit.command"` there. It opens http://127.0.0.1:8888. Keep its window open: closing it stops everything. The kit's program keeps these launchers and Read me first.txt beside app, downloads and data once the kit is set up; they start the same launchers in app, which work too.
 - Open Tinfoil Kit.command's options: `--share` lets phones and laptops on the same network open it with an access code (it prints the address, the code and a QR code), `--no-maps` frees about 5 GB of memory, `--model=NAME` picks the first model (a folder name in downloads/models/), `--no-browser` skips opening the browser. Open Tinfoil Kit for Windows.bat and `./kit open` take the same. If macOS asks whether to accept incoming connections, click Allow; if Windows asks whether tinfoilkit-windows-x64.exe may use the network, click Allow access.
-- Ask the AI answers from the books and cites them; Search, beside it, shows the best passages without the AI, quicker and on far less power. AI chat is plain chat that can read a photo but doesn't search the books. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station, and keeps pins. Notes holds what the AI should know about the household, like an allergy or a medicine; they aren't encrypted, so passwords and bank details stay out. Print the essentials, at the top of the page, lists the pages worth printing while there's power.
+- The kit page has three tabs. Ask: Search shows the best passages from the books without the AI, quickly and on very little power; Ask the AI answers from the books and cites them, slower and on more power than Search. Library browses and searches every book. Map searches places, plans routes and finds the nearest hospital, pharmacy or gas station, and keeps pins. More holds the rest: Notes, what the AI should know about the household, like an allergy or a medicine (they aren't encrypted, so passwords and bank details stay out); Share with family, which turns sharing on and off and gives the message to text; Print the essentials, the pages worth printing while there's power; AI chat, plain chat that can read a photo but doesn't search the books; and Help. The button beside the name says how the kit is: Ready, Starting, AI off, and Shared while others can use it.
 - Models: pick one on the Ask page. The first answer after switching takes up to a minute while it loads.
 - Map: set home first, since a laptop has no GPS (Set as home on a search result, or Set home to the map center). For actually driving, a phone with offline maps and GPS is better; the kit's map is for planning and for the AI's map questions.
 - Power: a big model drains a laptop battery in a couple of hours of steady use. Gemma 4 E4B saves battery, and Search and the Library tab use almost nothing.
@@ -232,12 +232,12 @@ For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` fo
 
 ## A home server
 
-Experimental for now: tell the person. For a computer that stays on, with or without a screen. The setup command with `--this-computer --home-server` (see "Set it up") sets the kit up on that computer's own disk, gets all of it, and turns on both of these. By hand, in the kit's app folder:
+Sharing with the phones and laptops at home is off until the person turns it on: Share with family, under More on the kit page (only on the computer the kit runs on), or `./kit share on`. A home server is experimental for now: tell the person. For a computer that stays on, with or without a screen. The setup command with `--this-computer --home-server` (see "Set it up") sets the kit up on that computer's own disk, gets all of it, and turns on both of these. By hand, in the kit's app folder:
 
     ./kit share on       # share it on the home network behind an access code: prints the address, the code and a QR code
     ./kit autostart on   # start it now, and whenever the computer starts
 
-- Phones and laptops open the address, like http://192.168.1.20:8000, and type the 8-digit code once; the QR code includes it, and so does the link in the message that Share on the kit page copies for the person to text. `./kit share` shows them again. `./kit share new-code` replaces the code and signs every device out. `./kit share off` stops sharing.
+- Phones and laptops open the address, like http://192.168.1.20:8000, and type the 8-digit code once; the QR code includes it, and so does the link in the message that Share with family, on the kit page, copies for the person to text. `./kit share` shows them again. `./kit share new-code` replaces the code and signs every device out. `./kit share off` stops sharing.
 - How it works: the kit's program listens on the network on port 8000 (`share_port` in data/kit.json), asks for the code, and passes requests on: /ai/ to the AI, /tiles/, /geocoder/ and /routing/ to the map, /data/ to the notes and pins, everything else to the library. It answers only devices with home network addresses, turns away names that aren't this computer's, and allows 10 wrong codes per 10 minutes from each device.
 - Programs can use the code as an API key: `Authorization: Bearer CODE` with the OpenAI-compatible API at http://ADDRESS:8000/ai/v1.
 - Linux: autostart is a systemd user service (`systemctl --user status tinfoil-kit`) that starts at boot once lingering is on (`sudo loginctl enable-linger $USER`; the kit tries it and says if it needs you). Mac: a LaunchAgent that starts when the person logs in, so turn on automatic login on a Mac that's a server, and keep the kit on its own disk. Windows: "Tinfoil Kit.cmd" in the Startup folder, which starts Open Tinfoil Kit for Windows.bat minimized when the person signs in, so keep that PC signed in (locking it is fine) and plugged in. While it shares, the kit keeps Windows from sleeping.

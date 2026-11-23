@@ -911,12 +911,52 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SHOTS, "site_setup_phone.png"))
     ctx.close()
     # The demo of the kit page is faked, so it costs nothing to run: answers written ahead of time, a sample town's
-    # map, the library, notes and AI chat, all in the page
+    # map, the library, notes, sharing and AI chat, all in the page
     demo, errs = b.new_page(viewport={"width": 1440, "height": 900}), []
     demo.on("pageerror", lambda e: errs.append(str(e)))
     demo.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
     demo.goto(URL + "#demo")
     demo.wait_for_selector(".kd")
+    tab = lambda name: demo.click(f".kd-nav > button:text-is('{name}')")
+    current = lambda sel: demo.get_attribute(sel, "aria-current") == "page"
+    focused = lambda: " ".join(demo.evaluate("document.activeElement.textContent").split())
+
+    def more(name):  # a page in the More menu
+        demo.click(".kd-nav > button:text-is('More')")
+        demo.click(f"#kd-more button:text-is('{name}')")
+
+    # The demo copies the kit page (AGENTS.md, "Keep these in step"): its tabs, its More menu and the words on its
+    # pages, read from tools/portal.html as it ships, with its script off so nothing fills them in
+    portal = os.path.abspath(os.path.join(SITE, "..", "tools", "portal.html"))
+    kit = b.new_page(java_script_enabled=False)
+    kit.goto("file://" + portal)
+    words = lambda pg, sel: pg.eval_on_selector_all(
+        sel, "els => els.map(e => e.textContent.replace(/\\s+/g, ' ').trim())"
+    )
+
+    def same(what, kit_sel, demo_sel):
+        k, d = words(kit, kit_sel), words(demo, demo_sel)
+        check(f"demo matches the kit page: {what}", k and k == d, "" if k == d else f"kit page {k}; demo {d}")
+
+    same("the tabs", "nav > a, nav > button", ".kd-nav > button")
+    same("the More menu", "#moreMenu > a", "#kd-more > button")
+    same(
+        "Ask, its buttons and what they do",
+        "#askForm label, #askForm .row button, #askHint p",
+        "#kd-ask form label, #kd-ask form .kd-row button, #kd-ask .kd-hint p",
+    )
+    same("the Library's way to Print the essentials", "#library > p.note", "#kd-library > p.kd-note")
+    same("Notes", "#notes label, #notes > p:nth-of-type(1)", "#kd-notes label, #kd-notes > p:nth-of-type(1)")
+    same("Share with family, while it's off", "#share > h2, #shareOff > *", "#kd-share > *")
+    same("Help", "#help h2, #help li", "#kd-help h3, #kd-help li")
+    script = open(portal, encoding="utf-8").read().split("<script>")[1].split("</script>")[0]
+    sample = b.new_page()  # Kit, the kit page's logic, run as its node tests run it: with no document, no page
+    kit_invite = sample.evaluate(
+        "([src, a, c]) => { const m = { exports: {} }; new Function('module', 'exports', 'document', src)(m, m.exports);"
+        " return m.exports.invite(a, c); }",
+        [script, "http://192.168.1.20:8000", "4821 7736"],
+    )
+    sample.close()
     progress, chip = (
         "#kd-ask .kd-progress",
         lambda panel, text: demo.locator(f"#kd-{panel} .kd-chip", has_text=text).click(),
@@ -928,8 +968,9 @@ with sync_playwright() as p:
         "#kd-ask .kd-answer .kd-cite", "a => [...new Set(a.map(e => e.getAttribute('href')))]"
     )
     check(
-        "demo: the kit page's tabs, opening on a finished answer that cites its four sources",
-        demo.locator(".kd [role=tab]").all_inner_texts() == ["Ask", "Map", "Library", "Notes", "AI chat"]
+        "demo: the kit page's tabs and More, opening on a finished answer that cites its four sources",
+        demo.locator(".kd-nav > button").all_inner_texts() == ["Ask", "Map", "Library", "More"]
+        and current(".kd-nav > button:text-is('Ask')")
         and demo.inner_text(progress).startswith("Done in")
         and cites == [f"#kd-src-{n}" for n in range(1, 5)]
         and demo.locator("#kd-ask .kd-sources li").count() == 4,
@@ -990,7 +1031,7 @@ with sync_playwright() as p:
         "demo: a question it wasn't written for says so",
         "only knows the sample questions" in demo.inner_text(progress) and not demo.is_visible("#kd-ask .kd-answer"),
     )
-    demo.click("#kd-tab-notes")
+    more("Notes")
     demo.fill("#kd-notes-text", "If we're split up, we meet at the fire station.")
     status = demo.inner_text("#kd-notes .kd-status")
     demo.click("#kd-notes button:text-is('Ask where to meet')")
@@ -999,7 +1040,7 @@ with sync_playwright() as p:
     check(
         "demo: Ask reads the notes, so changing where to meet changes the answer, and nothing is saved",
         status.startswith("Only in this demo")
-        and demo.get_attribute("#kd-tab-ask", "aria-selected") == "true"
+        and current(".kd-nav > button:text-is('Ask')")
         and "fire station" in meet
         and "pinned" not in meet,
         meet[:200],
@@ -1009,7 +1050,7 @@ with sync_playwright() as p:
     steps, summary = demo.locator("#kd-map .kd-steps li").all_inner_texts(), demo.inner_text("#kd-map .kd-dirsum")
     check(
         "demo: Show on the map opens the route to the hospital, turn by turn",
-        demo.get_attribute("#kd-tab-map", "aria-selected") == "true"
+        current(".kd-nav > button:text-is('Map')")
         and "driving from Home to Riverside General Hospital" in summary
         and steps[0].startswith("Continue onto Elm Street")
         and steps[-1] == "Arrive at destination",
@@ -1048,7 +1089,7 @@ with sync_playwright() as p:
         f"{found}; {popup}",
     )
     axe(demo, "demo's map")
-    demo.click("#kd-tab-library")
+    tab("Library")
     demo.fill("#kd-library input[type=search]", "water")
     demo.click("#kd-library button[type=submit]")
     said, hits = demo.inner_text("#kd-library .kd-progress"), demo.locator("#kd-library .kd-hits li").count()
@@ -1060,7 +1101,7 @@ with sync_playwright() as p:
         said,
     )
     axe(demo, "demo's library")
-    demo.click("#kd-tab-chat")
+    more("AI chat \u2197")
     chip("chat", "A note for the door")
     demo.wait_for_selector("#kd-chat .kd-msg.ai:last-child:has-text('Back by')", timeout=20000)
     demo.fill("#kd-chat textarea", "Tell me a joke")
@@ -1070,15 +1111,59 @@ with sync_playwright() as p:
         demo.locator("#kd-chat .kd-msg").count() == 4
         and "only knows the examples above" in demo.inner_text("#kd-chat .kd-progress"),
     )
-    demo.focus("#kd-tab-chat")
-    demo.keyboard.press("ArrowRight")
-    check(
-        "demo: arrow keys move between the tabs",
-        demo.evaluate("document.activeElement.id") == "kd-tab-ask"
-        and demo.get_attribute("#kd-tab-ask", "aria-selected") == "true"
-        and demo.is_hidden("#kd-chat"),
+    demo.click(".kd-nav > button:text-is('More')")
+    opened = demo.is_visible("#kd-more") and demo.get_attribute(
+        "#kd-more button:text-is('AI chat \u2197')", "aria-current"
     )
-    demo.click(".kd-printlink")
+    axe(demo, "demo's More menu")
+    demo.focus("#kd-more button:text-is('Help')")
+    demo.keyboard.press("Escape")
+    check(
+        "demo: More opens its menu, and Escape closes it and goes back to More",
+        opened == "page" and demo.is_hidden("#kd-more") and focused() == "More",
+    )
+    demo.click(".kd-statusbtn")
+    panel = demo.text_content("#kd-statuspanel")
+    axe(demo, "demo's status")
+    demo.click(".kd-url")
+    check(
+        "demo: the status button says Ready, opens what it stands for, and a click elsewhere closes it",
+        demo.locator(".kd-statusbtn span").all_text_contents() == ["Ready"]
+        and all(t in panel for t in ("Library: on", "AI: ready", "Not shared", "Refreshed"))
+        and demo.is_hidden("#kd-statuspanel"),
+        panel,
+    )
+    more("Share with family")
+    demo.click("#kd-share button:text-is('Turn on sharing')")
+    shown = demo.text_content("#kd-share .kd-invite")
+    check(
+        "demo: Share with family turns sharing on: the message to text, the address, the code and a QR code",
+        shown == kit_invite
+        and "http://192.168.1.20:8000 and type the access code 4821 7736" in demo.text_content("#kd-share .kd-card")
+        and demo.locator("#kd-share svg.kd-qr path").count() == 1
+        and focused() == "Copy message"
+        and demo.locator(".kd-statusbtn span").all_text_contents() == ["Ready", "\u00b7 Shared"]
+        and "Shared on this network" in demo.text_content("#kd-statuspanel")
+        and demo.text_content(".kd-toast") == "Only in this demo: nothing is shared.",
+        f"{shown!r}, the kit page's: {kit_invite!r}",
+    )
+    same(
+        "Share with family, while it's on",
+        "#shareOn > p:first-child, #shareOn > button, #shareOn > p.note, #shareControls button, #shareControls .note",
+        "#kd-share .kd-card > p:first-child, #kd-share .kd-card > button, #kd-share .kd-card > p.kd-note,"
+        " #kd-share .kd-row button, #kd-share .kd-row + p",
+    )
+    axe(demo, "demo's share with family")
+    demo.locator(".kd").screenshot(path=os.path.join(SHOTS, "site_demo_share.png"))
+    demo.click("#kd-share button:text-is('Turn off sharing')")
+    check(
+        "demo: Turn off sharing goes back to Turn on sharing",
+        focused() == "Turn on sharing"
+        and demo.locator(".kd-statusbtn span").all_text_contents() == ["Ready"]
+        and words(demo, "#kd-share .kd-sharestate") == ["Off"],
+    )
+    more("Help")
+    demo.click("#kd-help button:text-is('Print the essentials')")
     sheet = demo.inner_text("#kd-print .kd-sheet")
     check(
         "demo: Print the essentials lists the pages to print, then a page with the notes and the nearest hospital",
@@ -1086,11 +1171,13 @@ with sync_playwright() as p:
         and demo.locator("#kd-print .kd-print li").count() == 7
         and "we meet at the fire station" in sheet
         and "Riverside General Hospital" in sheet
-        and demo.get_attribute(".kd-printlink", "aria-current") == "page"
-        and demo.get_attribute("#kd-tab-ask", "tabindex") == "0",
+        and current("#kd-more button:text-is('Print the essentials')")
+        and "on" in (demo.get_attribute(".kd-nav > button:text-is('More')", "class") or "").split(),
         sheet[:300],
     )
+    same("Print the essentials", "#print > h2", "#kd-print > h3")
     axe(demo, "demo's print the essentials")
+    kit.close()
     check("demo: no page errors", not errs, "; ".join(errs))
     demo.close()
     demo = b.new_page(viewport={"width": 390, "height": 844}, reduced_motion="reduce")
@@ -1106,7 +1193,28 @@ with sync_playwright() as p:
         demo.inner_text(progress) == "Done in 11s. Sources are listed below.",
         demo.inner_text(progress),
     )
-    demo.click("#kd-tab-map")
+    demo.click(".kd-statusbtn")
+    head, status, tabs, box = (demo.locator(s).bounding_box() for s in (".kd-head", ".kd-statusbtn", ".kd-nav", ".kd"))
+    menu = demo.locator("#kd-statuspanel").bounding_box()
+    check(
+        "phone: the demo's header is two rows, the status beside the name and the tabs under them, its panel inside",
+        head["height"] < 130
+        and status["y"] + status["height"] <= tabs["y"]
+        and box["x"] <= menu["x"]
+        and menu["x"] + menu["width"] <= box["x"] + box["width"],
+        f"header {head['height']:.0f}px, panel {menu}",
+    )
+    demo.keyboard.press("Escape")  # the panel covers the tabs while it's open, as on the kit page
+    demo.click(".kd-nav > button:text-is('More')")
+    menu = demo.locator("#kd-more").bounding_box()
+    check(
+        "phone: the demo's More menu opens inside it",
+        box["x"] <= menu["x"] and menu["x"] + menu["width"] <= box["x"] + box["width"],
+        str(menu),
+    )
+    demo.locator(".kd").screenshot(path=os.path.join(SHOTS, "site_demo_phone_more.png"))
+    demo.keyboard.press("Escape")
+    tab("Map")
     edges = """(() => { const m = document.querySelector('#kd-map .kd-mcanvas').getBoundingClientRect();
       return [...document.querySelectorAll('#kd-map .kd-mlabel')].filter(l => { const r = l.getBoundingClientRect();
       return r.left < m.left || r.right > m.right; }).map(l => l.textContent); })()"""

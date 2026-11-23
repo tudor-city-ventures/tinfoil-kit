@@ -3,7 +3,7 @@
 An offline kit for when the internet goes down, for Apple Silicon Macs and Windows and Linux PCs (x64): local AI (llama.cpp), an offline library (Kiwix) and offline maps (pmtiles, Photon, GraphHopper) in one folder, on the computer's own disk or an external SSD. A kit on an exFAT drive starts on all three.
 
 - `SETUP.command` (`SETUP-Windows.bat` on Windows) sets a kit up and brings it up to date: `./kit update`, `./kit sync`, `./kit test`, whenever the person runs it, on no schedule.
-- `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat`) runs `./kit open`, which serves it all on 127.0.0.1 and opens the kit page: Ask, AI chat, Library, Map and Notes.
+- `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat`) runs `./kit open`, which serves it all on 127.0.0.1 and opens the kit page: Ask, Map and Library, and under More: Notes, Share with family, Print the essentials, AI chat and Help.
 - A kit is three folders. `TinfoilKit/app/` is this repo's code as released: only `./kit update` writes it, and it can be deleted any time for a new version's. `downloads/` holds everything sync gets, and `data/` the person's own files (kit.json, logs, notes and pins) with the kit's records in `data/.kit/`. Beside them, the program keeps a launcher for each computer and `Read me first.txt` (`topFiles`). A git checkout is its own app folder, with `downloads/` and `data/` inside it (git-ignored).
 
 How it all works, and why: [docs/DESIGN.md](docs/DESIGN.md). Releases: [docs/RELEASING.md](docs/RELEASING.md). The maintainer is @travisbloom.
@@ -15,7 +15,7 @@ How it all works, and why: [docs/DESIGN.md](docs/DESIGN.md). Releases: [docs/REL
 | `kit.json` | The standard list: settings, programs, models, maps, books and extras. A kit's own is `data/kit.json`, a copy that every command merges a new version's changes into |
 | `kit`, `kit.cmd` | Run the kit's program for this computer (`tools/tinfoilkit-<computer> --root <kit folder>`). On Windows: `.\kit.cmd sync`. In a checkout with Go installed, `./kit` builds it first when it's missing or older than its source |
 | `tools/tinfoilkit/` | The kit's program, in Go: every `./kit` command, the launcher (`open.go`), sharing on the home network (`gate.go`, `qr.go`) and the notes and pins server (`data.go`). `build.sh` builds it for each computer, the same bytes anywhere; `build.sh check` runs gofmt, vet and its tests |
-| `tools/portal.html` | The kit page: one file, no build step, styled like the website (paper, ink, signal orange) in the computer's own fonts. Its logic is a `Kit` object, exported for the node tests |
+| `tools/portal.html` | The kit page: one file, no build step, styled like the website (paper, ink, signal orange) in the computer's own fonts. Its logic is a `Kit` object, exported for the node tests. The website's Try it demo is a copy of it |
 | `tools/pins.json` | The exact build and SHA-256 of every program this version installs (`./kit pins`; the `pin program builds` workflow refreshes it weekly) |
 | `tools/regions.json` | The places "Where do you live?" offers, each with its map area, road data, address search, home and languages. `site/build_regions.py` makes it; the weekly `refresh builder sizes` workflow rebuilds it |
 | `tools/release-signers` | The keys a release must be signed with to reach a kit |
@@ -75,7 +75,7 @@ Keep these in step:
 - When setup or a command changes: `site/public/llms.txt`, the GUIDE, the README and the skills. `tests/skills_test.py` fails when any of them, this file or the docs name a command or option that doesn't exist, or when a command people use has no skill.
 - README's "How it works" (the diagram, `docs/how-it-works.svg`, the servers table and the folder layout) changes with any server, port, setup step or top-level folder.
 - A new model, source or program goes in `THIRD-PARTY.md` with its license and any use policy; a new download host also goes in the site FAQ's "Does anything leave my laptop?".
-- A change to the kit page's look reaches the website's demo of it (`site/components/demo.jsx`).
+- The kit page and the website's Try it demo of it (`site/components/demo.jsx`) stay the same to look at: a change to the kit page's tabs, menus, buttons, words or look changes the demo in the same commit. The demo only fakes what needs a server: the answers, the map, sharing. `tests/site_test.py` fails when their tabs, More menu, Ask, Notes, Share with family, Help or Print the essentials headings differ.
 
 Workflows: actions pinned to a full commit SHA with the version as a comment; read-only tokens except the jobs `WRITES` lists in `tests/actions_test.py`; values reach `run:` and `script:` only through `env:`; GitHub's runners only; no secrets; `pull_request_target` and `issues` only in `pr-gate.yml`, which never touches the pull request's code. The quick gate checks it.
 

@@ -8,7 +8,7 @@ An offline kit for when the internet goes down. One folder, on your computer or 
 - **An offline library** (Kiwix): Wikipedia, medical references, repair guides, preparedness manuals.
 - **Offline maps** with address search, driving and walking directions, and "nearest hospital".
 
-Open the kit's folder, `TinfoilKit` (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, AI chat, Library, Map and Notes tabs. No internet, account or install needed.
+Open the kit's folder, `TinfoilKit` (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, Map and Library tabs, and Notes, Share with family, Print the essentials, AI chat and Help under More. No internet, account or install needed.
 
 ![The Ask tab: a question about making water safe with bleach, the Ask the AI and Search buttons, the AI's answer with numbered citations, and the three library articles it came from](docs/ask.png)
 
@@ -49,8 +49,8 @@ Nothing needs installing first. The kit's own program (`tools/tinfoilkit-*`, one
 | Map | `pmtiles` | 8090 | Serves the map: street detail where you live (a US state, a country, or part of a big one) and a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy (the whole US by default) |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
-| Notes and pins | the kit's program | 8095 | Keeps the Notes tab and the map's home and pins in `data`, so a new version keeps them and every browser on the kit sees the same ones |
-| Sharing (off by default) | the kit's program | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. `./kit share on` turns it on (`.\kit.cmd share on` on Windows), `--share` for one run |
+| Notes and pins | the kit's program | 8095 | Keeps Notes and the map's home and pins in `data`, so a new version keeps them and every browser on the kit sees the same ones |
+| Sharing (off by default) | the kit's program | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. Share with family on the kit page turns it on and off, as does `./kit share on` (`.\kit.cmd share on` on Windows); `--share` for one run |
 
 Photon and GraphHopper run on a Java that's in the kit. The kit has each program for Macs, Windows PCs and Linux PCs, so a drive set up on one starts on all three.
 
@@ -87,7 +87,7 @@ TinfoilKit/
 │   └── INVENTORY.md              what's installed, with versions and sizes
 └── data/                         yours: no new version touches it
     ├── kit.json                  what goes in your kit, and its settings
-    ├── notes.txt                 the Notes tab: what the AI should know about your household
+    ├── notes.txt                 Notes on the kit page: what the AI should know about your household
     ├── places.json               the map's home and pins
     ├── logs/                     what each sync and launch did
     └── .kit/                     download progress, caches, the built kit page, the access code
@@ -145,7 +145,7 @@ Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit
 
 ## Home server
 
-Experimental for now. A computer that stays on (Linux, a Mac mini or a Windows PC) can serve the kit to every phone and laptop at home. `bash SETUP.command --home-server` (`.\SETUP-Windows.bat --home-server` on Windows) sets it up as usual, then shares it on the home network behind an access code and starts it with the computer (a systemd user service on Linux, from boot; a LaunchAgent on a Mac or the Startup folder on Windows, once you log in). Phones open the address it shows and type the code, scan its QR code, or open the link that Share on the kit page copies, in a message to text them. Programs can use the code as an API key for the AI's OpenAI-compatible API: `Authorization: Bearer <code>` at `http://<server>:8000/ai/v1`. Details: [GUIDE.md](GUIDE.md#a-home-server-advanced).
+Experimental for now. A computer that stays on (Linux, a Mac mini or a Windows PC) can serve the kit to every phone and laptop at home. `bash SETUP.command --home-server` (`.\SETUP-Windows.bat --home-server` on Windows) sets it up as usual, then shares it on the home network behind an access code and starts it with the computer (a systemd user service on Linux, from boot; a LaunchAgent on a Mac or the Startup folder on Windows, once you log in). Phones open the address it shows and type the code, scan its QR code, or open the link that Share with family, on the kit page, copies in a message to text them. Programs can use the code as an API key for the AI's OpenAI-compatible API: `Authorization: Bearer <code>` at `http://<server>:8000/ai/v1`. Details: [GUIDE.md](GUIDE.md#a-home-server-advanced).
 
 ## Security
 

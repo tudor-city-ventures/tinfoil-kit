@@ -511,7 +511,7 @@ all_set() {
   else
     echo "In an outage: plug in the drive, open ${KIT##*/}$in and double-click Open Tinfoil Kit.command. No internet needed."
   fi
-  echo "While you have power, open the kit and click Print the essentials at the top: about 20 pages worth having on paper."
+  echo "While you have power, open the kit and click More, then Print the essentials: about 20 pages worth having on paper."
   if [ $MAC = 1 ]; then again="double-click it again"; else again="run it again"; fi
   echo
   if [ -f "$KIT/Read me first.txt" ]; then echo "Read me first.txt, beside Open Tinfoil Kit, says what each folder is for. In the app folder:"

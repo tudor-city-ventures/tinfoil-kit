@@ -7,8 +7,10 @@ test's videos: typing, pausing on answers, and also opening a source, AI chat, t
 
 import json
 import os
+import socket
 import subprocess
 import sys
+import urllib.parse
 
 from playwright.sync_api import sync_playwright
 
@@ -100,6 +102,15 @@ def chat(tab):
     tab.wait_for_timeout(9000)
 
 
+def open_tab(page, tab):
+    """A tab, or a page under More: Notes, Share with family, Print the essentials, Help."""
+    if tab in ("notes", "share", "print", "help"):
+        page.click("#moreBtn")
+        page.click(f"#moreMenu a[data-tab={tab}]")
+    else:
+        page.click(f"nav a[data-tab={tab}]")
+
+
 with sync_playwright() as p:
     show = {"headless": not VIDEO, "slow_mo": 150 if VIDEO else 0}
     if BROWSER == "webkit":
@@ -127,6 +138,7 @@ with sync_playwright() as p:
     page.wait_for_function("document.getElementById('aiStatus').textContent.includes('ready')", timeout=20000)
     check("redirected localhost -> 127.0.0.1", page.url.startswith(f"http://127.0.0.1:{LIB}/"), page.url)
     check("AI status pill", "ready" in page.inner_text("#aiStatus"))
+    check("the status button says the kit is ready", page.inner_text("#statusText") == "Ready")
     opts = page.eval_on_selector_all("#scope option", "els => els.map(e => e.textContent)")
     check("scope options", len(opts) >= 3, " | ".join(opts))
     check("model preselected", page.input_value("#model") == "Tiny")
@@ -192,10 +204,11 @@ with sync_playwright() as p:
     if VIDEO:
         note("A source opens its article in the offline library")
         popup(page, "#sources li a", lambda tab: pause(tab, 4))
-        note("AI chat: llama.cpp's own chat page, for anything that isn't in the library")
+        note("AI chat, under More: llama.cpp's own chat page, for anything that isn't in the library")
+        page.click("#moreBtn")
         popup(page, "#chatLink", chat)
-    note("Notes: what your household needs to know. Ask reads them with every question")
-    page.click("nav a[data-tab=notes]")
+    note("Notes, under More: what your household needs to know. Ask reads them with every question")
+    open_tab(page, "notes")
     page.wait_for_function("document.getElementById('notesWhere').textContent.length > 0", timeout=10000)
     check(
         "notes: kept in the kit's data folder",
@@ -211,12 +224,16 @@ with sync_playwright() as p:
     check("notes: saved in the kit, there after a reload", True)
     note("Print the essentials: the pages worth having on paper, and a page of your own")
     page.evaluate("window.print = () => { window.printed = true; }")  # (no print dialog in a test)
-    page.click("#printLink")
+    open_tab(page, "print")
+    kept = page.evaluate("document.activeElement.id")  # the link went with the menu, so the keyboard goes to More
     page.wait_for_function(f"document.getElementById('sheet').textContent.includes({json.dumps(NOTES)})", timeout=10000)
     page.click("#printMine")
     check(
-        "print the essentials: your page has your notes, and prints",
-        page.evaluate("window.printed === true") and page.get_attribute("#printLink", "aria-current") == "page",
+        "print the essentials, under More: your page has your notes, and prints",
+        page.evaluate("window.printed === true")
+        and page.get_attribute("#moreMenu a[data-tab=print]", "aria-current") == "page"
+        and page.is_hidden("#moreMenu")
+        and kept == "moreBtn",
         page.inner_text("#sheet")[:200],
     )
     pause(page)
@@ -240,10 +257,11 @@ with sync_playwright() as p:
         has_map = page.evaluate("!!(window.KIT_MAPS && window.KIT_MAPS.available)")
         for tab, what in (
             ("map", "The Map tab: the offline map" if has_map else "The Map tab (this test kit has no map)"),
+            ("share", "Share with family, under More: the phones and laptops at home can use the kit too"),
             ("help", "Help"),
         ):
             note(what)
-            page.click(f"nav a[data-tab={tab}]")
+            open_tab(page, tab)
             pause(page, 3.5)
 
     if os.environ.get("KIT_AXE"):  # axe-core's axe.min.js
@@ -252,10 +270,15 @@ with sync_playwright() as p:
             pa.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai={AI}&data={DATA}")
             pa.wait_for_function("document.querySelectorAll('#scope option').length > 1", timeout=20000)
             pa.add_script_tag(path=os.environ["KIT_AXE"])
-            for tab in ("ask", "map", "library", "notes", "print", "help"):
-                pa.click(f"a[data-tab={tab}]")
+            for tab in ("ask", "map", "library", "notes", "share", "print", "help"):
+                open_tab(pa, tab)
                 bad = pa.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
                 check(f"{scheme} mode, {tab} tab: no accessibility violations (axe)", not bad, ", ".join(bad))
+            for button in ("#statusBtn", "#moreBtn"):  # and with each of the header's menus open
+                pa.click(button)
+                bad = pa.evaluate("axe.run().then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + ')'))")
+                check(f"{scheme} mode, {button} open: no accessibility violations (axe)", not bad, ", ".join(bad))
+                pa.keyboard.press("Escape")
             pa.close()
 
     # AI down, on a phone (how family members use a shared kit): Ask shows the library's best passages instead
@@ -273,8 +296,18 @@ with sync_playwright() as p:
     check("AI-off fallback shows passages", "5 to 7 cm" in page2.inner_text("#sources"), page2.inner_text("#progress"))
     pause(page2, 4)
     page2.screenshot(path=os.path.join(SHOTS, "shot_ai_off.png"), full_page=True)
-    for tab in ("ask", "map", "library", "notes", "print", "help"):
-        page2.click(f"a[data-tab={tab}]")
+    check(
+        "phone: the status button says the AI is off, beside the name, and the tabs fit below",
+        page2.inner_text("#statusText") == "AI off"
+        and page2.evaluate(
+            "Math.abs(document.getElementById('statusBtn').getBoundingClientRect().top - "
+            "document.querySelector('.brand').getBoundingClientRect().top) < 20 && "
+            "document.querySelector('header').getBoundingClientRect().height < 130"
+        ),
+        page2.inner_text("#statusText"),
+    )
+    for tab in ("ask", "map", "library", "notes", "share", "print", "help"):
+        open_tab(page2, tab)
         width = page2.evaluate("document.documentElement.scrollWidth")
         check(f"phone, {tab} tab: no sideways scroll", width <= 390, f"{width}px")
 
@@ -284,16 +317,20 @@ with sync_playwright() as p:
         link = f"{share}/?code={code}"  # what Share copies: the address, with the code in it
         host = b.new_page(viewport=size)
         host.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai={AI}&data={DATA}")
-        host.wait_for_selector("#shareLink", state="visible", timeout=15000)
-        host.click("#shareLink")
+        host.wait_for_selector("#sharePill", state="visible", timeout=15000)  # "Shared", beside Ready
+        open_tab(host, "share")
+        host.wait_for_selector("#invite", state="visible", timeout=15000)
         invite = host.inner_text("#invite")
         check(
-            "shared: this computer's page has Share, which opens a message to text, its link with the code in it",
-            host.evaluate("document.activeElement.id") == "inviteCopy"
-            and "Tinfoil Kit" in invite
+            "shared: this computer's page has Share with family, a message to text with the code in its link",
+            "Tinfoil Kit" in invite
             and invite.endswith(" " + link)
             and host.inner_text("#shareCode").replace(" ", "") == code,
             invite,
+        )
+        check(
+            "shared: this computer's page can change the code or turn sharing off",
+            host.is_visible("#newCodeBtn") and host.is_visible("#shareOffBtn") and host.is_hidden("#shareOnBtn"),
         )
         host.wait_for_function("document.getElementById('shareQr').naturalWidth > 0", timeout=10000)
         host.screenshot(path=os.path.join(SHOTS, "shot_share_invite.png"))
@@ -330,20 +367,24 @@ with sync_playwright() as p:
         check("shared: the AI's answer arrives intact through the gate", *intact(p3))
         r = p3.request.get(share + p3.get_attribute("#sources li a", "href"))
         check("shared: a source opens through the gate", r.ok and "8 drops" in r.text())
-        p3.click("nav a[data-tab=notes]")
+        open_tab(p3, "notes")
         p3.wait_for_function(f"document.getElementById('notesText').value === {json.dumps(NOTES)}", timeout=10000)
         check(
             "shared: a phone has the same notes, through the gate", "saved in the kit" in p3.inner_text("#notesWhere")
         )
-        p3.click("nav a[data-tab=help]")
+        open_tab(p3, "share")
         check(
-            "shared: Help shows the address and the access code",
+            "shared: Share with family shows the address and the access code",
             share.split("//")[1] in p3.inner_text("#shareAddr")
             and p3.inner_text("#shareCode").replace(" ", "") == code,
             p3.inner_text("#shareOn"),
         )
+        check(
+            "shared: a phone gets no buttons to change sharing, and is told why",
+            p3.is_hidden("#shareControls") and p3.is_hidden("#shareOff") and p3.is_visible("#shareNotHere"),
+        )
         p3.wait_for_function("document.getElementById('shareQr').naturalWidth > 0", timeout=10000)
-        p3.screenshot(path=os.path.join(SHOTS, "shot_share_help.png"), full_page=True)
+        p3.screenshot(path=os.path.join(SHOTS, "shot_share_phone.png"), full_page=True)
         check("shared: a phone can pass the link on too", p3.inner_text("#invite").endswith(" " + link))
         friend = b.new_context(viewport={"width": 390, "height": 844})
         p4 = friend.new_page()
@@ -431,6 +472,32 @@ with sync_playwright() as p:
         outsider = b.new_context().request.get(share + "/ai/v1/models")
         check("shared: no AI without the code", outsider.status == 401, str(outsider.status))
         phone.close()
+
+        # Last, as everything above needs the kit shared: this computer's page turns sharing off and on again.
+        def gate_up():
+            u = urllib.parse.urlsplit(share)
+            with socket.socket() as s:
+                return s.connect_ex((u.hostname, u.port)) == 0
+
+        host = b.new_page(viewport=size)
+        host.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai={AI}&data={DATA}#share")
+        host.wait_for_selector("#shareOffBtn", state="visible", timeout=15000)
+        host.click("#shareOffBtn")
+        host.wait_for_selector("#shareOnBtn", state="visible", timeout=15000)
+        check(
+            "shared: Turn off sharing stops it on the spot",
+            not gate_up() and host.is_hidden("#sharePill") and host.is_hidden("#shareOn"),
+            host.inner_text("#shareSay"),
+        )
+        host.screenshot(path=os.path.join(SHOTS, "shot_share_off.png"))
+        host.click("#shareOnBtn")
+        host.wait_for_selector("#invite", state="visible", timeout=15000)
+        check(
+            "shared: ...and Turn on sharing starts it again, with the same link",
+            gate_up() and host.inner_text("#invite").endswith(" " + link) and host.is_visible("#sharePill"),
+            host.inner_text("#shareSay"),
+        )
+        host.close()
     b.close()
 
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")

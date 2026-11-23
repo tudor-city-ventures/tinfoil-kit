@@ -23,5 +23,5 @@ On a drive: `bash /Volumes/NAME/TinfoilKit/app/UNINSTALL.command --yes`, or `E:\
 ## Before they run it
 
 - Close the kit's window first.
-- To keep their notes (the Notes tab), copy data/notes.txt somewhere else first: it's plain text. data/places.json holds the map's home and pins, and data/kit.json their picks, for a later kit.
+- To keep their notes (Notes, on the kit page), copy data/notes.txt somewhere else first: it's plain text. data/places.json holds the map's home and pins, and data/kit.json their picks, for a later kit.
 - To free some space and keep the kit, see the tinfoil-data skill instead.

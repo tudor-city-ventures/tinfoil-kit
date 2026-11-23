@@ -25,25 +25,30 @@ Nothing here needs the internet, an account, or an install.
 
 ## Using it
 
+The kit page has three tabs, Ask, Map and Library, and **More** for the rest: Notes, Share with family, Print the
+essentials, AI chat and Help. The button beside the name says how the kit is: **Ready**, **Starting** while the AI
+loads, or **AI off**, and **Shared** while others can use it. Click it for more.
+
 - **Ask**: type a question, then pick one of two buttons:
-  - **Ask the AI**: the kit searches your offline books, then the AI answers and cites them as [1], [2]. Click a source
-    to read the original. It's slower, and it uses a lot of power.
   - **Search**: the best passages from your books in seconds, without the AI, on very little power. Use it to save
     battery, or to read for yourself. **Have the AI answer from these** then turns what it found into an answer.
+  - **Ask the AI**: the kit searches your offline books, then the AI answers and cites them as [1], [2]. Click a source
+    to read the original. It's slower, and it uses more power than Search.
 
   If the AI won't start, Ask the AI still shows the best passages from the books.
 - **Library**: browse or search every book yourself.
 - **Map**: search an address or place, get driving or walking directions, or find the nearest hospital, pharmacy, gas
   station and more. See [Maps](#maps).
-- **Notes**: write down what you'd need to know in an emergency: who lives here, allergies and medicines, doctors, where
-  to meet. The AI reads them with every question on Ask. They're saved in the kit, in `data/notes.txt` (a plain text
-  file you can also open in any text editor), and every browser and phone on the kit sees the same notes. They aren't
-  encrypted, so leave out passwords and bank details.
-- **Print the essentials** (at the top of the page): about 20 pages of the kit's books worth having on paper, most
-  important first, from making water safe to first aid, and a page of your own with your notes, your pins and the
-  nearest hospitals. Print them while you have power and keep them with the kit.
-- **AI chat**: plain chat with the AI. You can attach a photo (a broken part, a label). It doesn't search the library,
-  so check anything important there, and never eat a wild plant or mushroom because an AI said it was safe.
+- **Notes** (under More): write down what you'd need to know in an emergency: who lives here, allergies and medicines,
+  doctors, where to meet. The AI reads them with every question on Ask. They're saved in the kit, in `data/notes.txt`
+  (a plain text file you can also open in any text editor), and every browser and phone on the kit sees the same
+  notes. They aren't encrypted, so leave out passwords and bank details.
+- **Print the essentials** (under More): about 20 pages of the kit's books worth having on paper, most important
+  first, from making water safe to first aid, and a page of your own with your notes, your pins and the nearest
+  hospitals. Print them while you have power and keep them with the kit.
+- **AI chat** (under More, in a tab of its own): plain chat with the AI. You can attach a photo (a broken part, a
+  label). It doesn't search the library, so check anything important there, and never eat a wild plant or mushroom
+  because an AI said it was safe.
 - **Models**: pick from the list on the Ask page.
   - `Inkling-2-Mini` (default): fast, good quality, reads photos.
   - `Qwen3.8-27B` and `Gemma-4-26B-A4B`: second and third opinions from other labs. Worth asking twice on anything
@@ -52,15 +57,15 @@ Nothing here needs the internet, an account, or an install.
     don't fit.
   - `Gemma-4-E4B`: small. Use it to **save battery**. On an 8 GB laptop the kit starts with it.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
-- **Share with family**: start with `bash "Open Tinfoil Kit.command" --share` in the `TinfoilKit` folder (on Windows,
-  `& ".\Open Tinfoil Kit for Windows.bat" --share` in PowerShell there). It shows an address, an access code and a QR
-  code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. Or
-  click **Share** at the top of the kit page and text them the message it copies: its link opens the kit, code
-  included. No internet needed, only a Wi-Fi network: your router on a battery backup, a small battery-powered travel router, or a
-  phone's hotspot (an iPhone's may not turn on without cell service). Nobody without the code gets in. To share every
-  time the kit starts, run `./kit share on` once in the app folder (`.\kit.cmd share on` on Windows). If macOS asks
-  whether to accept incoming connections, click **Allow**. If Windows asks about tinfoilkit-windows-x64.exe, click
-  **Allow access**.
+- **Share with family** (under More): click **Turn on sharing**, then text the message it gives you: its link opens the
+  kit on a phone or laptop on the same Wi-Fi, code included. Or they open the address it shows and type the access
+  code, or scan the QR code. No internet needed, only a Wi-Fi network: your router on a battery backup, a small
+  battery-powered travel router, or a phone's hotspot (an iPhone's may not turn on without cell service). Nobody
+  without the code gets in. Sharing stays on, every time the kit starts, until you click **Turn off sharing**; **New
+  code** signs every device out. Only the computer the kit runs on can do either. In the app folder, `./kit share on`
+  and `./kit share off` do the same (`.\kit.cmd share on` on Windows), and `bash "Open Tinfoil Kit.command" --share`
+  in the `TinfoilKit` folder shares for one run. If macOS asks whether to accept incoming connections, click
+  **Allow**. If Windows asks about tinfoilkit-windows-x64.exe, click **Allow access**.
 
 The AI can be wrong. Treat it like a well-read friend, not a doctor: check the sources, and get trained help whenever
 you can.
@@ -73,7 +78,7 @@ you can.
 - **Coordinates and pins**: click anywhere on the map to see its coordinates (with **Copy**), get directions there, or
   **Pin this place** with a name and a note, like where the family meets or a spring. Pins show on the map and under
   **Pins**, and search, directions and Ask find them by name ("directions to the meeting place"). They're saved in the
-  kit, like home (`data/places.json`), so a phone using the shared kit sees them too. If the Map or Notes tab says
+  kit, like home (`data/places.json`), so a phone using the shared kit sees them too. If the Map or Notes says
   they're saved in this browser, the kit couldn't start the part that keeps them: run SETUP once while online, which
   gets what it needs, and they move into the kit the next time it starts.
 - **Directions**: fill in From (leave it blank for home) and To, pick Drive or Walk, press Go. Click a step to zoom to
@@ -274,6 +279,6 @@ folder: `./kit sync -y && ./kit test`, then `./kit share on` and `./kit autostar
 | `downloads/INVENTORY.md` | What's in the kit right now, with versions |
 | `data/` | Yours: no new version touches it |
 | `data/kit.json` | Your list of what to keep, with your changes |
-| `data/notes.txt` | Your notes (the Notes tab) |
+| `data/notes.txt` | Your notes (Notes, under More) |
 | `data/places.json` | The map's home and pins |
 | `data/logs/` | What each update and start did |
