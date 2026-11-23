@@ -36,7 +36,7 @@ export const metadata = pageMetadata({
 // the site's one affiliate link, with Amazon's required line. It stays off the kit page, llms.txt and anything
 // printed: Amazon's rules allow no offline use. The link stays as Amazon gives it: its tag credits the sale to us.
 const DRIVE_PICK =
-  "https://www.amazon.com/dp/B0H4H1SNMY?th=1&linkCode=ll2&tag=tudorcityvent-20&linkId=fb03313047929fee546f0c03cb665f4d&language=en_US&gaOptInStatus=true&ref_=as_li_ss_tl";
+  "https://www.amazon.com/dp/B0H4HHBHY8?th=1&gaOptInStatus=true&linkCode=ll2&tag=tudorcityvent-20&linkId=0d121fd04615136d21e63a6aa2d1864c&language=en_US&gaOptInStatus=true&ref_=as_li_ss_tl";
 
 const STEPS = [
   [
