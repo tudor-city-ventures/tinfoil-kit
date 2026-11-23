@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -135,10 +136,10 @@ func TestShareDetails(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
 	n := &notesServer{kit: kit, sharePort: port}
-	if s := n.share(); s["shared"] != false || len(s) != 1 {
+	if s := n.share(true); s["shared"] != false || len(s) != 1 {
 		t.Errorf("no gate running, so not shared: %v", s)
 	}
-	if s := (&notesServer{}).share(); s["shared"] != false {
+	if s := (&notesServer{}).share(true); s["shared"] != false {
 		t.Errorf("the notes server on its own (./kit test's) knows of no sharing: %v", s)
 	}
 	if ln, err = net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", port)); err != nil {
@@ -146,7 +147,7 @@ func TestShareDetails(t *testing.T) {
 	}
 	defer ln.Close()
 	go http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Header().Set("Server", "TinfoilKit") }))
-	s := n.share()
+	s := n.share(true)
 	qr, _ := s["qr"].(string)
 	if s["shared"] != true || s["address"] != fmt.Sprintf("http://192.168.1.20:%d", port) || s["code"] != "4821 7736" ||
 		!strings.HasPrefix(qr, "<svg") {
@@ -337,6 +338,129 @@ func TestNames(t *testing.T) {
 	}
 	if htmlEscape(`didn't <b>"&`) != "didn&#x27;t &lt;b&gt;&quot;&amp;" {
 		t.Error("escaped as Python's html.escape")
+	}
+}
+
+// The kit page on this computer turns sharing on and off, and gives the kit a new code; a device through the gate
+// can't, nor can another web page.
+func TestShareSwitch(t *testing.T) {
+	t.Setenv("KIT_LAN_IP", "192.168.1.20")
+	kit := t.TempDir()
+	os.MkdirAll(filepath.Join(kit, "data", "logs"), 0o755)
+	os.WriteFile(filepath.Join(kit, "data", "kit.json"), []byte("{\n  \"settings\": {\n    \"share_on_network\": false\n  }\n}\n"), 0o644)
+	if err := saveAccess(kit, access{Code: "48217736", Key: "ab"}); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sharePort := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	n, err := newNotesServer(filepath.Join(kit, "data"), 0, 18888, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.ln.Close()
+	var told []string
+	sh := &sharer{kit: kit, port: sharePort, told: func(on bool, port int) { told = append(told, fmt.Sprint(on, port)) },
+		open: func() (*gate, error) {
+			return startGate(kit, filepath.Join(kit, "data", "logs", "share.log"), sharePort, map[string]int{"data": n.port})
+		}}
+	n.kit, n.sharePort = kit, sharePort
+	n.sharing.Store(sh)
+	go n.serve() // for the gate, and ./kit share
+	defer func() {
+		if g := sh.g; g != nil {
+			g.close()
+		}
+	}()
+	page := "http://127.0.0.1:18888"
+	ask := func(method, body string, header ...string) (int, map[string]any) {
+		r := httptest.NewRequest(method, "/share", strings.NewReader(body))
+		r.Host = fmt.Sprintf("127.0.0.1:%d", n.port)
+		r.Header.Set("Content-Type", "application/json")
+		for i := 0; i+1 < len(header); i += 2 {
+			r.Header.Set(header[i], header[i+1])
+		}
+		w := httptest.NewRecorder()
+		n.ServeHTTP(w, r)
+		var v map[string]any
+		json.Unmarshal(w.Body.Bytes(), &v)
+		return w.Code, v
+	}
+	saved := func() string {
+		return setting(filepath.Join(kit, "data", "kit.json"), "share_on_network", "")
+	}
+
+	if code, v := ask("GET", "", "Origin", page); code != 200 || v["shared"] != false || v["canChange"] != true {
+		t.Errorf("not shared yet, and the page may turn it on: %d %v", code, v)
+	}
+	if code, _ := ask("PUT", `{"on": true}`, "Origin", "http://evil.example"); code != 403 || sh.running() != 0 {
+		t.Errorf("another web page can't turn sharing on: %d", code)
+	}
+	if code, _ := ask("PUT", `{"on": true}`, "Tinfoilkit-Gate", "1"); code != 403 || sh.running() != 0 {
+		t.Errorf("a device through the gate can't turn sharing on: %d", code)
+	}
+	if code, v := ask("GET", "", "Tinfoilkit-Gate", "1"); code != 200 || v["canChange"] != nil {
+		t.Errorf("...and isn't offered the buttons: %d %v", code, v)
+	}
+	if code, _ := ask("PUT", `{}`, "Origin", page); code != 400 {
+		t.Errorf("a change needs on or newCode: %d", code)
+	}
+	code, v := ask("PUT", `{"on": true}`, "Origin", page)
+	if code != 200 || v["shared"] != true || v["address"] != fmt.Sprintf("http://192.168.1.20:%d", sharePort) ||
+		v["code"] != "4821 7736" || sh.running() != sharePort || gatePort(sharePort) != sharePort {
+		t.Fatalf("the page turns sharing on, on the spot: %d %v", code, v)
+	}
+	if saved() != "true" || len(told) != 1 || told[0] != fmt.Sprint(true, sharePort) {
+		t.Errorf("...for next time too, and the kit's window says so: %s %v", saved(), told)
+	}
+
+	// a device at home, signed in: it can use the notes, but not change sharing
+	_, cookie := sh.g.access()
+	viaGate := func(method, target string, cookie string) int {
+		r := httptest.NewRequest(method, target, strings.NewReader(`{"on": false}`))
+		r.Host, r.RemoteAddr = fmt.Sprintf("192.168.1.20:%d", sharePort), "192.168.1.31:50000"
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Cookie", cookieName+"="+cookie)
+		w := httptest.NewRecorder()
+		sh.g.ServeHTTP(w, r)
+		return w.Code
+	}
+	if got := viaGate("GET", "/data/notes", cookie); got != 200 {
+		t.Errorf("a device signed in reads the notes through the gate: %d", got)
+	}
+	for _, target := range []string{"/data/share", "/data/%73hare", "/data//share", "/data/x/../share?on=0"} {
+		if got := viaGate("PUT", target, cookie); got != 403 {
+			t.Errorf("a device signed in can't change sharing (%s): %d", target, got)
+		}
+	}
+	if sh.running() != sharePort {
+		t.Fatal("...and sharing stays on")
+	}
+
+	if code, v := ask("PUT", `{"newCode": true}`, "Origin", page); code != 200 || v["code"] == "4821 7736" || v["shared"] != true {
+		t.Errorf("a new code: %d %v", code, v)
+	}
+	if got := viaGate("GET", "/data/notes", cookie); got != 401 {
+		t.Errorf("a new code signs every device out: %d", got)
+	}
+	if code, v := ask("PUT", `{"on": false}`, "Origin", page); code != 200 || v["shared"] != false || sh.running() != 0 {
+		t.Errorf("the page turns sharing off: %d %v", code, v)
+	}
+	if gatePort(sharePort) != 0 || saved() != "false" || len(told) != 2 || told[1] != fmt.Sprint(false, 0) {
+		t.Errorf("...on the spot, for next time too, and the kit's window says so: %d %s %v", gatePort(sharePort), saved(), told)
+	}
+	if code, v := ask("PUT", `{"on": true}`); code != 200 || v["shared"] != true {
+		t.Errorf("./kit share on (a program on this computer, with no Origin) turns it on too: %d %v", code, v)
+	}
+	if !tellKitAt(n.port, false) || sh.running() != 0 {
+		t.Error("./kit share off tells the running kit")
+	}
+	n.sharing.Store(nil)
+	if code, _ := ask("PUT", `{"on": true}`, "Origin", page); code != 409 {
+		t.Errorf("a notes server the launcher didn't start (./kit test's) can't change sharing: %d", code)
 	}
 }
 

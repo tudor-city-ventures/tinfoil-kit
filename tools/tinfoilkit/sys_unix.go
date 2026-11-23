@@ -35,7 +35,7 @@ func physMemory() int64 {
 func colorsOn() bool { return true }
 
 // stayAwake is for Windows; the launcher keeps a Mac or Linux PC awake with the system's own tool.
-func stayAwake() {}
+func stayAwake() (release func()) { return func() {} }
 
 func openBrowser(url string) {
 	var cmd *exec.Cmd

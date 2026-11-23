@@ -282,42 +282,54 @@ func (l *launcher) open(o openOptions) int {
 		}
 	}
 
-	// --- sharing on the home network: the gate asks for the access code, then passes requests on
-	var g *gate
+	// --- sharing on the home network: the gate asks for the access code, then passes requests on. The kit page on
+	// this computer can turn it on and off while the kit runs, through the notes server.
+	ports := map[string]int{"library": libPort, "ai": aiPort, "data": dataPort}
+	if withMaps {
+		ports["tiles"], ports["geocoder"], ports["routing"] = tilesPort, geoPort, routePort
+	}
+	wanted := sharePort
+	sh := &sharer{kit: l.kit, port: wanted, open: func() (*gate, error) {
+		p := wanted
+		if taken(p) {
+			p = freePort(p)
+			if windows {
+				say(fmt.Sprintf("  Another program is using port %d, so sharing uses %d.", wanted, p),
+					`  For an address that stays the same, set share_port in data\kit.json to a free port.`)
+			} else {
+				say(fmt.Sprintf("  Another program is using port %d, so sharing uses %d. For an address that stays the same, set", wanted, p),
+					"  share_port in kit.json to a free port.")
+			}
+		}
+		if windows {
+			say("  Starting sharing on the home network...")
+		}
+		g, err := startGate(l.kit, filepath.Join(l.data, "logs", "share.log"), p, ports)
+		if err == nil && windows {
+			exe, _ := os.Executable()
+			say(fmt.Sprintf("  If Windows asks whether %s may use the network, allow it, or phones and laptops can't reach the kit.", filepath.Base(exe)))
+		}
+		return g, err
+	}}
+	sh.told = func(on bool, port int) { // when the kit page or ./kit share turns it on or off
+		if on {
+			say("", "  Sharing is on now.", banner(l.kit, port, isTerminal(os.Stdout)), "")
+		} else {
+			say("", "  Sharing is off now: only this computer can open the kit.", "")
+		}
+	}
+	if notes != nil {
+		notes.sharing.Store(sh)
+	}
 	shareOK, gateFailed := false, false
 	if o.share {
 		if ourGate(sharePort) {
 			say(fmt.Sprintf("  Sharing already on, on port %d.", sharePort))
 			shareOK = true
+		} else if g, _, err := sh.start(); err != nil {
+			gateFailed = true
 		} else {
-			if taken(sharePort) {
-				p := freePort(sharePort)
-				if windows {
-					say(fmt.Sprintf("  Another program is using port %d, so sharing uses %d.", sharePort, p),
-						`  For an address that stays the same, set share_port in data\kit.json to a free port.`)
-				} else {
-					say(fmt.Sprintf("  Another program is using port %d, so sharing uses %d. For an address that stays the same, set", sharePort, p),
-						"  share_port in kit.json to a free port.")
-				}
-				sharePort = p
-			}
-			ports := map[string]int{"library": libPort, "ai": aiPort, "data": dataPort}
-			if withMaps {
-				ports["tiles"], ports["geocoder"], ports["routing"] = tilesPort, geoPort, routePort
-			}
-			if windows {
-				say("  Starting sharing on the home network...")
-			}
-			var err error
-			if g, err = startGate(l.kit, filepath.Join(l.data, "logs", "share.log"), sharePort, ports); err != nil {
-				gateFailed = true
-			} else {
-				sharePort, shareOK = g.port, true
-				if windows {
-					exe, _ := os.Executable()
-					say(fmt.Sprintf("  If Windows asks whether %s may use the network, allow it, or phones and laptops can't reach the kit.", filepath.Base(exe)))
-				}
-			}
+			sharePort, shareOK = g.port, true
 		}
 	}
 
@@ -390,13 +402,13 @@ func (l *launcher) open(o openOptions) int {
 	if windows {
 		os.Chdir(os.TempDir()) // out of the kit folder, so nothing here holds it open (UNINSTALL can delete it)
 	}
-	if len(running) == 0 && g == nil && notes == nil {
+	if len(running) == 0 && sh.running() == 0 && notes == nil {
 		say("  (Nothing was started by this window.)")
 		if !windows { // a window Windows opened for this closes when it ends: leave it for the person to read
 			l.stop()
 		}
 	}
-	if g != nil || notes != nil || windows {
+	if sh.running() != 0 || notes != nil || windows {
 		select {} // until the window closes
 	}
 	for _, p := range running {

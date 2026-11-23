@@ -7,7 +7,8 @@ package main
 // It listens on 127.0.0.1 and answers the kit page only: another web page is turned away by its Origin, and any name
 // but this computer's own (a website pointing a name of its own at 127.0.0.1) by its Host. Through the gate, the
 // devices at home that have the access code reach it at /data/. It also tells the kit page on this computer how
-// others get in when the kit is shared (/share), which only the gate knows otherwise.
+// others get in when the kit is shared (/share), which only the gate knows otherwise, and turns sharing on and off for
+// that page and ./kit share, never for a device through the gate.
 
 import (
 	"bytes"
@@ -28,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 )
@@ -297,8 +299,9 @@ type notesServer struct {
 	ln      net.Listener
 	log     *stdlog.Logger
 
-	kit       string // for /share: the kit folder, with the access code
-	sharePort int    // and share_port, where the gate answers if the kit is shared
+	kit       string                 // for /share: the kit folder, with the access code
+	sharePort int                    // and share_port, where the gate answers if the kit is shared
+	sharing   atomic.Pointer[sharer] // turns sharing on and off, when the launcher runs this server
 }
 
 func newNotesServer(data string, port, library int, logTo io.Writer) (*notesServer, error) {
@@ -390,7 +393,12 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 	case path == "/places/home" && put:
 		return withBody(st.putHome)
 	case path == "/share" && reading:
-		return 200, n.share(), nil
+		return 200, n.share(r.Header.Get(viaGate) == ""), nil
+	case path == "/share" && put:
+		if r.Header.Get(viaGate) != "" { // (the gate refuses these itself, too)
+			return 0, nil, &turnedDown{403, "Only the computer the kit runs on can change sharing.", nil}
+		}
+		return withBody(n.setShare)
 	}
 	id, isPin := strings.CutPrefix(path, "/places/pins/")
 	if isPin && !pinID.MatchString(id) {
@@ -411,17 +419,32 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 // share is how other devices get in, when the gate is running: the address it answers at on the home network, the
 // access code, and the QR code, whose link carries the code. The kit page on this computer shows them, and copies
 // that link for the person to text. A device at /data/share through the gate learns only what it was let in with.
-func (n *notesServer) share() map[string]any {
+//
+// here is true for this computer, which may turn sharing on and off (canChange) when the launcher runs this server.
+func (n *notesServer) share(here bool) map[string]any {
+	sh := n.sharing.Load()
 	off := map[string]any{"shared": false}
+	if here && sh != nil {
+		off["canChange"] = true
+	}
 	if n.kit == "" || n.sharePort == 0 {
 		return off
 	}
-	port := gatePort(n.sharePort)
+	port := 0
+	if sh != nil {
+		port = sh.running()
+	}
+	if port == 0 {
+		port = gatePort(n.sharePort)
+	}
 	a, _ := loadAccess(n.kit, false)
 	if port == 0 || a.Code == "" {
 		return off
 	}
 	s := map[string]any{"shared": true, "address": "", "code": prettyCode(a.Code)}
+	if here && sh != nil {
+		s["canChange"] = true
+	}
 	if ips := lanIPs(); len(ips) > 0 { // else this computer isn't on a network yet
 		host := fmt.Sprintf("%s:%d", ips[0], port)
 		s["address"] = "http://" + host
@@ -430,6 +453,42 @@ func (n *notesServer) share() map[string]any {
 		}
 	}
 	return s
+}
+
+// setShare turns sharing on or off ({"on": true}), or gives the kit a new access code ({"newCode": true}), then
+// answers as GET /share does, with a note for the page if there's one.
+func (n *notesServer) setShare(b map[string]any) (map[string]any, error) {
+	on, hasOn := b["on"].(bool)
+	fresh, _ := b["newCode"].(bool)
+	if !hasOn && !fresh {
+		return nil, &turnedDown{400, `Send {"on": true} or {"on": false}, or {"newCode": true}.`, nil}
+	}
+	sh := n.sharing.Load()
+	if sh == nil {
+		return nil, &turnedDown{409, "This kit can't change sharing from its page while it runs this way. Use " +
+			kitCmd("share on") + " or " + kitCmd("share off") + ".", nil}
+	}
+	if fresh {
+		if err := sh.newCode(); err != nil {
+			return nil, err
+		}
+	}
+	note := ""
+	if hasOn {
+		var err error
+		if note, err = sh.set(on); err != nil {
+			var no *turnedDown
+			if errors.As(err, &no) {
+				return nil, err
+			}
+			return nil, &turnedDown{500, "Couldn't turn sharing on: " + errText(err) + ".", nil}
+		}
+	}
+	s := n.share(true)
+	if note != "" {
+		s["note"] = note
+	}
+	return s, nil
 }
 
 // body is the JSON object a save sends. JSON only: a web page can't send that to another address without asking

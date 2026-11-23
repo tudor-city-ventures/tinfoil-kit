@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -52,14 +53,21 @@ func colorsOn() bool {
 }
 
 // stayAwake asks Windows not to sleep while the kit is shared (the screen can still turn off): Windows sleeps after
-// a while with nobody at the keyboard, and the kit with it. The request lasts as long as the thread that made it.
-func stayAwake() {
+// a while with nobody at the keyboard, and the kit with it. The request lasts as long as the thread that made it,
+// until release.
+func stayAwake() (release func()) {
+	done := make(chan struct{})
 	go func() {
 		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		const continuous, systemRequired = 0x80000000, 0x00000001
-		kernel32.NewProc("SetThreadExecutionState").Call(uintptr(continuous | systemRequired))
-		select {}
+		state := kernel32.NewProc("SetThreadExecutionState")
+		state.Call(uintptr(continuous | systemRequired))
+		<-done
+		state.Call(uintptr(continuous))
 	}()
+	var once sync.Once
+	return func() { once.Do(func() { close(done) }) }
 }
 
 func openBrowser(url string) {

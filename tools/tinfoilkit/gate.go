@@ -335,8 +335,15 @@ var aiOffPaths = map[string]bool{"/tools": true, "/cors-proxy": true}
 
 const aiOffAnswer = `{"error": {"message": "this feature is disabled", "type": "feature_disabled"}}`
 
+const shareHereOnly = `{"error": "Only the computer the kit runs on can change sharing."}`
+
 var dropRequest = words("connection keep-alive proxy-authorization proxy-connection te trailer transfer-encoding " +
-	"upgrade host cookie authorization origin referer content-length expect")
+	"upgrade host cookie authorization origin referer content-length expect " + viaGate)
+
+// viaGate marks each request the gate passes to the notes server, so it knows the request came from another device:
+// only the computer the kit runs on may change sharing.
+const viaGate = "tinfoilkit-gate"
+
 var dropResponse = words("connection keep-alive transfer-encoding server date trailer upgrade")
 var serverNames = map[string]string{"library": "The library", "ai": "The AI", "data": "Saving notes and pins",
 	"tiles": "The map", "geocoder": "Address search", "routing": "Directions"}
@@ -358,10 +365,12 @@ const (
 )
 
 type gate struct {
-	kit   string
-	port  int
-	ports map[string]int
-	ln    net.Listener
+	kit     string
+	port    int
+	ports   map[string]int
+	ln      net.Listener
+	srv     *http.Server
+	release func() // Windows' keep-awake request
 
 	mu       sync.Mutex
 	failures map[string][]time.Time
@@ -380,12 +389,30 @@ func newGate(kit string, port int, ports map[string]int) (*gate, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &gate{kit: kit, port: ln.Addr().(*net.TCPAddr).Port, ports: ports, ln: ln, failures: map[string][]time.Time{}}, nil
+	g := &gate{kit: kit, port: ln.Addr().(*net.TCPAddr).Port, ports: ports, ln: ln, failures: map[string][]time.Time{},
+		release: func() {}}
+	g.srv = &http.Server{Handler: g, ReadHeaderTimeout: time.Minute}
+	return g, nil
 }
 
 func (g *gate) serve(errs io.Writer) error {
-	srv := &http.Server{Handler: g, ErrorLog: stdlog.New(errs, "", stdlog.LstdFlags), ReadHeaderTimeout: time.Minute}
-	return srv.Serve(g.ln)
+	g.srv.ErrorLog = stdlog.New(errs, "", stdlog.LstdFlags)
+	return g.srv.Serve(g.ln)
+}
+
+// close stops sharing: the gate stops listening and drops every device's connection.
+func (g *gate) close() {
+	g.srv.Close()
+	g.ln.Close()
+	g.release()
+}
+
+// forget makes the gate read the access code again, as it does when the file's time changes: a new code from this
+// program can come within the file system's clock tick.
+func (g *gate) forget() {
+	g.mu.Lock()
+	g.accSeen = false
+	g.mu.Unlock()
 }
 
 // access gives the access code and the cookie that proves it, read again whenever ./kit share changes the code.
@@ -626,6 +653,10 @@ func (g *gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		g.send(w, r, 403, "application/json", aiOffAnswer, false)
 		return
 	}
+	if name == "data" && r.Method != "GET" && r.Method != "HEAD" && cleanPath(to) == "/share" {
+		g.send(w, r, 403, "application/json", shareHereOnly, false)
+		return
+	}
 	g.proxy(w, r, name, to, name == "library" && upath == "/" && r.Method == "GET", code)
 }
 
@@ -663,6 +694,9 @@ func (g *gate) proxy(w http.ResponseWriter, r *http.Request, name, to string, in
 	defer conn.Close()
 	var req bytes.Buffer
 	fmt.Fprintf(&req, "%s %s HTTP/1.1\r\nHost: 127.0.0.1:%d\r\n", r.Method, to, port)
+	if name == "data" {
+		fmt.Fprintf(&req, "%s: 1\r\n", viaGate)
+	}
 	keys := make([]string, 0, len(r.Header))
 	for k := range r.Header {
 		keys = append(keys, k)
@@ -759,10 +793,13 @@ func (g *gate) relay(w http.ResponseWriter, r *http.Request, resp *http.Response
 }
 
 // aiOff says whether a path is one of aiOffPaths, however it's spelled: llama-server decodes %74ools as /tools.
-func aiOff(p string) bool {
+func aiOff(p string) bool { return aiOffPaths[cleanPath(p)] }
+
+// cleanPath is a request's path as a server might read it: decoded, without its query, dots and doubled slashes.
+func cleanPath(p string) string {
 	p = strings.SplitN(strings.SplitN(p, "?", 2)[0], "#", 2)[0]
 	p = regexp.MustCompile(`/+`).ReplaceAllString("/"+percentDecode(p), "/")
-	return aiOffPaths[path.Clean(p)]
+	return path.Clean(p)
 }
 
 // percentDecode decodes each %XX it can and leaves the rest, as Python's unquote does.
@@ -831,9 +868,130 @@ func startGate(kit, logPath string, port int, ports map[string]int) (*gate, erro
 		return nil, err
 	}
 	fmt.Fprintf(out, "Sharing on port %d: %s\n", g.port, describePorts(ports))
-	stayAwake()
-	go g.serve(out)
+	g.release = stayAwake()
+	go func() {
+		g.serve(out)
+		if logf != nil {
+			logf.Close()
+		}
+	}()
 	return g, nil
+}
+
+// sharer turns sharing on and off while the kit runs, for the kit page on this computer (the notes server's PUT
+// /share): it starts or stops the gate on the spot, and saves share_on_network so the kit starts the same way next
+// time.
+type sharer struct {
+	kit  string
+	port int                     // share_port
+	open func() (*gate, error)   // starts the gate on share_port, or the next free port
+	told func(on bool, port int) // tells the kit's window
+	mu   sync.Mutex
+	g    *gate // the gate this program runs, or nil
+}
+
+// start starts the gate, unless this program runs it already: then started is false.
+func (s *sharer) start() (g *gate, started bool, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.g != nil {
+		return s.g, false, nil
+	}
+	if g, err = s.open(); err == nil {
+		s.g = g
+	}
+	return g, err == nil, err
+}
+
+// running is the port this program's gate answers on, or 0.
+func (s *sharer) running() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.g == nil {
+		return 0
+	}
+	return s.g.port
+}
+
+// set turns sharing on or off, now and from the next start. It returns a note for the page, or "".
+func (s *sharer) set(on bool) (string, error) {
+	note := ""
+	if on {
+		if s.running() == 0 && gatePort(s.port) == 0 {
+			g, started, err := s.start()
+			if err != nil {
+				return "", err
+			}
+			if started && s.told != nil {
+				s.told(true, g.port)
+			}
+		}
+		if windows {
+			exe, _ := os.Executable()
+			note = "If Windows asks whether " + filepath.Base(exe) + " may use the network, allow it, or phones and " +
+				"laptops can't reach the kit."
+		}
+	} else {
+		s.mu.Lock()
+		g := s.g
+		s.g = nil
+		s.mu.Unlock()
+		if g != nil {
+			g.close()
+			if s.told != nil {
+				s.told(false, 0)
+			}
+		} else if gatePort(s.port) != 0 {
+			return "", &turnedDown{409, "Another window of the kit is sharing it. Close that window to stop sharing.", nil}
+		}
+	}
+	if err := saveSetting(s.kit, "share_on_network", on); err != nil {
+		note = strings.TrimSpace(note + " The kit couldn't save this for the next time it starts: " + errText(err) + ".")
+	}
+	return note, nil
+}
+
+// newCode gives the kit a new access code, which signs every device out and turns old links off.
+func (s *sharer) newCode() error {
+	a, err := loadAccess(s.kit, true)
+	if err != nil {
+		return err
+	}
+	a.Code = newCode()
+	if err := saveAccess(s.kit, a); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	if s.g != nil {
+		s.g.forget()
+	}
+	s.mu.Unlock()
+	return nil
+}
+
+// tellKit turns sharing on or off in the kit that's running, if there is one: its notes server starts or stops the
+// gate on the spot, as the kit page's buttons do. True if it did.
+func tellKit(root string, on bool) bool {
+	return tellKitAt(int(intOr(loadConfig(root).child("settings").getOr("data_port", 8095), 8095)), on)
+}
+
+// tellKitAt is tellKit for the notes server on port.
+func tellKitAt(port int, on bool) bool {
+	if !ourNotes(port) {
+		return false
+	}
+	req, err := http.NewRequest("PUT", fmt.Sprintf("http://127.0.0.1:%d/share", port), strings.NewReader(fmt.Sprintf(`{"on": %t}`, on)))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true}}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 func describePorts(ports map[string]int) string {

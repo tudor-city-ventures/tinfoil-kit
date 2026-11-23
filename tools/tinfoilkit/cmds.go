@@ -45,10 +45,17 @@ func literal(text string) func([]string) string { return func([]string) string {
 
 // setSetting changes one setting in kit.json (nil removes it), and leaves the rest of the file as it is.
 func setSetting(root, key string, value any) {
+	if err := saveSetting(root, key, value); err != nil {
+		die(oserr(err))
+	}
+}
+
+// saveSetting is setSetting for the servers the launcher runs, which mustn't stop the kit: it says what went wrong.
+func saveSetting(root, key string, value any) error {
 	path := filepath.Join(dataDir(root), "kit.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		die(oserr(err))
+		return err
 	}
 	text := string(data)
 	val := dumpsLine(value)
@@ -79,7 +86,7 @@ func setSetting(root, key string, value any) {
 	if !ok {
 		cfg, err := parseObj(data)
 		if err != nil {
-			die(oserr(err))
+			return err
 		}
 		s := cfg.child("settings")
 		if s == nil {
@@ -95,11 +102,9 @@ func setSetting(root, key string, value any) {
 	}
 	tmp := filepath.Join(dataDir(root), "kit.tmp")
 	if err := os.WriteFile(tmp, []byte(fresh), 0o644); err != nil {
-		die(oserr(err))
+		return err
 	}
-	if err := replace(tmp, path); err != nil {
-		die(oserr(err))
-	}
+	return replace(tmp, path)
 }
 
 // partKeys is what names an entry in each part of kit.json.

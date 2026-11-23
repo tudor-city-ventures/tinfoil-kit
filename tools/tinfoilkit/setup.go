@@ -1370,7 +1370,9 @@ func cmdShare(root string, a *cliArgs) {
 	case action == "off":
 		setSetting(root, "share_on_network", false)
 		log("Sharing is off: only this computer can open the kit.")
-		if restartIfAutostarted(root) {
+		if tellKit(root, false) {
+			log("The running kit stopped sharing.")
+		} else if restartIfAutostarted(root) {
 			log("The kit restarted without it.")
 		} else {
 			log("If the kit is running, close its window and start it again.")
@@ -1378,6 +1380,7 @@ func cmdShare(root string, a *cliArgs) {
 		return
 	case action == "on" && on:
 		log("Sharing is already on.")
+		tellKit(root, true) // in case the kit that's running isn't sharing
 	case action == "on":
 		setSetting(root, "share_on_network", true)
 		on = true
@@ -1386,7 +1389,9 @@ func cmdShare(root string, a *cliArgs) {
 		if windows {
 			start = "Open Tinfoil Kit for Windows.bat"
 		}
-		if restartIfAutostarted(root) {
+		if tellKit(root, true) {
+			log("The running kit started sharing.")
+		} else if restartIfAutostarted(root) {
 			log("The kit restarted with sharing on.")
 		} else {
 			log("Start the kit to share it (" + start + "), or restart it if it's running.")

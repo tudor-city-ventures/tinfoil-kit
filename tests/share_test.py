@@ -618,6 +618,89 @@ http.server.HTTPServer(("127.0.0.1", int(sys.argv[sys.argv.index("--port") + 1])
         f"{status} {str(share)[:300]}",
     )
     check("launcher, sharing on: ...and no other web page does", ask_notes("/share", "http://evil.example")[0] == 403)
+
+    # ------------------------------------------------------------------------- turning sharing on and off as it runs
+    page = f"http://127.0.0.1:{lport}"
+    signed_in = {"Cookie": (r.getheader("Set-Cookie") or "").split(";")[0]}
+
+    def put_share(body, origin=page):
+        c = http.client.HTTPConnection("127.0.0.1", dport, timeout=60)
+        c.request("PUT", "/share", json.dumps(body), {"Content-Type": "application/json", "Origin": origin})
+        r = c.getresponse()
+        answer = r.read()
+        c.close()
+        return r.status, json.loads(answer or b"{}")
+
+    def gate_up():
+        with socket.socket() as s:
+            return s.connect_ex(("127.0.0.1", sport)) == 0
+
+    def window_says(text, since):
+        end = time.time() + 10
+        while time.time() < end and text not in "".join(lines[since:]):
+            time.sleep(0.1)
+        return text in "".join(lines[since:])
+
+    def setting():
+        return json.loads(mine.read_text())["settings"]["share_on_network"]
+
+    check("launcher: the kit page on this computer may turn sharing on and off", share.get("canChange") is True)
+    r4, data4, _ = req("PUT", "/data/share", b'{"on": false}', {**signed_in, "Content-Type": "application/json"})
+    check(
+        "launcher: a device signed in through the gate can't change sharing",
+        r4.status == 403 and gate_up() and setting() is True,
+        f"{r4.status} {data4}",
+    )
+    check("launcher: ...nor can another web page", put_share({"on": False}, "http://evil.example")[0] == 403)
+    seen = len(lines)
+    status, answer = put_share({"on": False})
+    check(
+        "launcher: the kit page turns sharing off: the gate stops, the window and kit.json say so",
+        status == 200
+        and not answer.get("shared")
+        and not gate_up()
+        and window_says("Sharing is off now", seen)
+        and setting() is False,
+        f"{status} {answer}",
+    )
+    seen = len(lines)
+    status, answer = put_share({"on": True})
+    check(
+        "launcher: ...and on again, at the same address and code",
+        status == 200
+        and answer.get("address") == f"http://192.168.1.20:{sport}"
+        and answer.get("code") == "1357 2468"
+        and gate_up()
+        and window_says("Access code: 1357 2468", seen)
+        and setting() is True,
+        f"{status} {answer}",
+    )
+    r5, _, _ = req("GET", "/data/notes", headers=signed_in)
+    check("launcher: devices signed in before stay signed in", r5.status == 200, str(r5.status))
+    status, answer = put_share({"newCode": True})
+    code = json.loads((k2 / "data" / ".kit" / "share.json").read_text())["code"]
+    r6, _, _ = req("GET", "/data/notes", headers=signed_in)
+    check(
+        "launcher: New code: a new code, and every device signed out",
+        status == 200 and answer.get("code") == pretty(code) and code != "13572468" and r6.status == 401,
+        f"{status} {answer} {r6.status}",
+    )
+    seen = len(lines)
+    rc, out = kit_cmd("share", "off")
+    check(
+        "launcher: ./kit share off stops the running kit's sharing",
+        rc == 0
+        and "The running kit stopped sharing." in out
+        and not gate_up()
+        and window_says("Sharing is off now", seen),
+        out,
+    )
+    rc, out = kit_cmd("share", "on")
+    check(
+        "launcher: ./kit share on starts it again",
+        rc == 0 and "The running kit started sharing." in out and gate_up() and setting() is True,
+        out,
+    )
     os.killpg(p.pid, 15)
     try:
         p.wait(timeout=15)
