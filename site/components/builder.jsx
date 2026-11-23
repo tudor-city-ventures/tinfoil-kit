@@ -101,6 +101,7 @@ function wikiCard(regions, code, size, like) {
     presets: like.presets,
     estimated: live ? like.estimated : true,
     bytes: live ? like.bytes : Math.round(editions(regions, code)[e] * 1e6),
+    source: `https://${code === "nb" ? "no" : code}.wikipedia.org/`,
     title:
       (e.startsWith("top") ? "Best of Wikipedia" : "Wikipedia") +
       (code === "en" ? "" : " in " + l.name) +
@@ -142,6 +143,7 @@ function mapsCard(kit, places, like) {
     title: like.title,
     estimated: like.estimated,
     bytes: like.bytes,
+    source: `https://www.openstreetmap.org/#map=10/${first.home.lat}/${first.home.lon}`,
     why:
       "Street maps and driving or walking directions for " +
       listNames(places.map((p) => p.name)) +
@@ -543,6 +545,11 @@ export function Groups() {
                     <span className="why" id={`why-${s.id}`}>
                       {s.why}
                     </span>
+                    {s.source && (
+                      <a className="src" href={s.source} target="_blank" rel="noopener">
+                        {new URL(s.source).hostname.replace(/^www\./, "")}
+                      </a>
+                    )}
                   </span>
                 </label>
               ))}

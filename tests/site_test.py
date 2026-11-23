@@ -553,6 +553,45 @@ with sync_playwright() as p:
                 and page.inner_text("#totalText") != before,
                 maps_why,
             )
+            # Each card links where it comes from, so people can see what it is: the map OpenStreetMap at the place's
+            # home, Wikipedia its language's, a model its Hugging Face repo. Only the collections Kiwix made itself, and
+            # two with no page we could confirm, have none. The link opens a new tab and leaves the box as it is.
+            sources = json.load(open(os.path.join(SITE, "sources.json")))["sources"]
+            bayern = next(r for r in regions if r["id"] == "bayern")["home"]
+            src = "card => card.querySelector('.src') && [card.querySelector('.src').href, card.querySelector('.src').textContent, card.querySelector('.src').target]"
+            wikimed = page.locator(".card[data-id=mdwiki_en_all_maxi]")
+            ticked = wikimed.locator("[role=checkbox]").get_attribute("aria-checked")
+            page.context.route(re.compile(r"^https://mdwiki\.org/"), lambda route: route.abort())
+            with page.context.expect_page() as tab:
+                wikimed.locator(".src").click()
+            tab.value.close()
+            check(
+                "each card links where it comes from, in a new tab, without ticking or unticking it",
+                {s["id"] for s in sources if not s["source"]}
+                == {
+                    "zimgit-medicine_en",
+                    "zimgit-post-disaster_en",
+                    "zimgit-water_en",
+                    "zimgit-food-preparation_en",
+                    "zimgit-knots_en",
+                    "urban-prepper_en_all",
+                    "lrnselfreliance_en_all",
+                }
+                and all(re.match(r"https?://[a-z0-9.-]+\.[a-z]+/", s["source"]) for s in sources if s["source"])
+                and page.locator(".card", has_text="Offline maps").evaluate(src)
+                == [
+                    f"https://www.openstreetmap.org/#map=10/{bayern['lat']}/{bayern['lon']}",
+                    "openstreetmap.org",
+                    "_blank",
+                ]
+                and page.locator(".card", has_text="Wikipedia in German").evaluate(src)
+                == ["https://de.wikipedia.org/", "de.wikipedia.org", "_blank"]
+                and page.locator(".card[data-id=Inkling-2-Mini]").evaluate(src)
+                == ["https://huggingface.co/ggml-org/Inkling-2-Mini-GGUF", "huggingface.co", "_blank"]
+                and page.locator(".card[data-id=zimgit-medicine_en]").evaluate(src) is None
+                and wikimed.locator("[role=checkbox]").get_attribute("aria-checked") == ticked,
+                str([s["id"] for s in sources if not s["source"]]),
+            )
             choose(page, "#wikiLang", re.compile(r"^German and English \("))
             check(
                 "two languages: a Wikipedia card for each",

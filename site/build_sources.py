@@ -90,6 +90,31 @@ COPY = {
     "medicalsciences.stackexchange.com_en_all": ("Medical sciences Q&A", "How the body, diseases and medicines work."),
 }
 
+# Where each item comes from, which the builder links so people can see what it is. Models link their Hugging Face
+# repo, LibreTexts its library, and a name that starts with a site's address that site; the rest are here. Kiwix put
+# the field medicine, post-disaster, water, food and knots collections together itself, so they have no page to link,
+# and Urban Prepper and Learning Self-Reliance have none we could confirm.
+SOURCES = {
+    "maps": "https://www.openstreetmap.org/",
+    "mdwiki_en_all_maxi": "https://mdwiki.org/",
+    "irp.fas.org_en_military-medicine": "https://irp.fas.org/doddir/milmed",
+    "wwwnc.cdc.gov_en_all": "https://wwwnc.cdc.gov/travel",
+    "ready.gov_en_all": "https://www.ready.gov/",
+    "ifixit_en_all": "https://www.ifixit.com/",
+    "appropedia_en_all_maxi": "https://www.appropedia.org/",
+    "cd3wdproject.org_en_all": "http://www.cd3wdproject.org/",
+    "energypedia_en_all_nopic": "https://energypedia.info/",
+    "armypubs_en_all": "https://armypubs.army.mil/",
+    "wikipedia_en_all_maxi": "https://en.wikipedia.org/",
+    "wiktionary_en_all_nopic": "https://en.wiktionary.org/",
+    "wikibooks_en_all_maxi": "https://en.wikibooks.org/",
+    "wikivoyage_en_all_maxi": "https://en.wikivoyage.org/",
+    "wikiversity_en_all_maxi": "https://en.wikiversity.org/",
+    "survivorlibrary.com_en_all": "https://www.survivorlibrary.com/",
+    "khanacademy_en_all": "https://www.khanacademy.org/",
+    "gutenberg_en_all": "https://www.gutenberg.org/",
+}
+
 GROUPS = [
     ("Medical", r"med|mdwiki|cdc\."),
     ("Preparedness", r"ready|prepper|reliance|post-disaster|water|food|knots|army|outdoors"),
@@ -140,13 +165,21 @@ def group_for(zim):
     return next(g for g, rx in GROUPS if re.search(rx, zim))
 
 
+def source_for(zim):
+    if zim in SOURCES:
+        return SOURCES[zim]
+    lib = re.match(r"libretexts\.org_en_(\w+)$", zim)
+    site = re.match(r"([a-z0-9-]+(?:\.[a-z0-9-]+)+)_", zim)
+    return f"https://{lib[1]}.libretexts.org/" if lib else f"https://{site[1]}/" if site else None
+
+
 def main():
     cfg = json.loads((ROOT / "kit.json").read_text())
     live = load_plan(Path(sys.argv[1])) if len(sys.argv) > 1 else previous_live()
     default_model = cfg["settings"]["default_model"]
     out = []
 
-    def add(sid, group, note, enabled, essential):
+    def add(sid, group, note, enabled, essential, source):
         title, why = COPY.get(sid, (None, None))
         size = live.get(sid) or size_from_note(note)
         out.append(
@@ -155,6 +188,7 @@ def main():
                 "group": group,
                 "title": title or note.split(":")[0].split("(")[0].strip(),
                 "why": why or note,
+                "source": source,
                 "bytes": int(size) if size else None,
                 "estimated": sid not in live,
                 "presets": [
@@ -171,11 +205,18 @@ def main():
         )
 
     for m in cfg["models"]:
-        add(m["id"], "AI models", m.get("note", ""), m.get("enabled", True), m["id"] in (default_model, "Gemma-4-E4B"))
+        add(
+            m["id"],
+            "AI models",
+            m.get("note", ""),
+            m.get("enabled", True),
+            m["id"] in (default_model, "Gemma-4-E4B"),
+            "https://huggingface.co/" + m["repo"] if m.get("type") == "hf" else None,
+        )
     mp = cfg["maps"]
     regions = json.loads((ROOT / "tools" / "regions.json").read_text(encoding="utf-8"))
     place = next(r for r in regions["regions"] if r["id"] == mp["region"])
-    add("maps", "Maps", place["name"], mp.get("enabled", True), True)
+    add("maps", "Maps", place["name"], mp.get("enabled", True), True, SOURCES["maps"])
     if "maps" not in live:  # the map viewer, fonts and icons, and the place's map, road data and address search
         out[-1]["bytes"] = int(0.1 * GB + sum(place["mb"].values()) * 1e6)
     for z in cfg["library"]:  # Essentials takes Wikipedia too, in a smaller size (builder.jsx's WIKI_PRESET)
@@ -185,6 +226,7 @@ def main():
             z.get("note", ""),
             z.get("enabled", True),
             z.get("enabled", True) and (z.get("priority", 9) == 1 or z["zim"].startswith("wikipedia_")),
+            source_for(z["zim"]),
         )
 
     site = ROOT / "site"

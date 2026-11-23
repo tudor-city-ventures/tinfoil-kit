@@ -114,7 +114,7 @@ Cloud sessions can't reach library.kiwix.org, GitHub releases or most download h
 
 1. Find the exact ZIM name: run the `kiwix search` workflow (cloud) or `./kit search WORDS`.
 2. Add it to `library` in `kit.json` with a priority and a short note that ends with the rough size.
-3. Give it a title and a one-line "why" in `COPY` in `site/build_sources.py`, and check its group regex. If `THIRD-PARTY.md` doesn't cover its license yet, add it. Add its id to "What goes in" in `site/public/llms.txt`, where AIs find the ids for the setup command.
+3. Give it a title and a one-line "why" in `COPY` in `site/build_sources.py`, and the page it comes from in `SOURCES` unless its name starts with that site's address, and check its group regex. If `THIRD-PARTY.md` doesn't cover its license yet, add it. Add its id to "What goes in" in `site/public/llms.txt`, where AIs find the ids for the setup command.
 4. `python3 site/build_sources.py`, then `tests/check.sh`. After pushing, run `refresh builder sizes` to fill in the real size and confirm it resolves.
 
 ## Guardrails

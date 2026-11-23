@@ -780,6 +780,21 @@ html:not(.js) .fig {
   line-height: 1.45;
   color: var(--ink2);
 }
+/* Where it comes from: a link in the card, which opens in a new tab and leaves the box as it is */
+.card .src {
+  align-self: flex-start;
+  padding: 4px 0; /* a bigger target for a finger, in the same space */
+  margin: -4px 0;
+  font: 13px var(--mono);
+  color: var(--ink2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.card .src::after {
+  content: " ↗";
+  content: " ↗" / "";
+}
 .more {
   align-self: flex-start;
   min-height: 44px;
