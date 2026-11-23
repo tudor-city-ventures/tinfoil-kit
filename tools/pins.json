@@ -5,8 +5,8 @@
   "\"pin_programs\": false in kit.json's settings."
  ],
  "Kiwix-macOS-app": {
-  "version": "3.18.0",
-  "sha256": "58744c6301d7ad6cb24c288e04d46c32fa0f032ba66deed1d75f7d2279f946bd"
+  "version": "3.19.0",
+  "sha256": "5080cf2a25f9c13e4820e2775256d16feb02221152ea5c48e31e497a525b9b67"
  },
  "basemaps-assets": {
   "version": "028c18f713baecad011301ff7a69acc39bcc2ae7"
@@ -40,16 +40,16 @@
   "sha256": "fcd01ed2b93e9a68632c7863c83b9f66bf64406a66357be1df7b8b75596f3e45"
  },
  "llama.cpp-linux-x64": {
-  "version": "b12623",
-  "sha256": "7a13a8e04702a17f90570847f1bc5357b95c91f267ca6896f662bce88160c796"
+  "version": "b12651",
+  "sha256": "0bbcf2093f15c64c8a9bf54b809c9b2c812b982992dc2fbc9b36720c1d32cf13"
  },
  "llama.cpp-macos-arm64": {
-  "version": "b12623",
-  "sha256": "879f6063c075fc4d27beb51ca176743a5a79a43b32ffa65c55ae78a46bdd3b1d"
+  "version": "b12651",
+  "sha256": "264fd872de61679c45ad57e1e21c2a2a54e29b35734ecf3d50f24166447ab8d2"
  },
  "llama.cpp-windows-x64": {
-  "version": "b12623",
-  "sha256": "36ee2d2bbfed23c5b41e55ac258b42668fb0961dafdd3e382ce575d4772b2a02"
+  "version": "b12651",
+  "sha256": "e58fa9a137d8046c69334005ad6fb3e904ddc7e56f2a61ad1b844335826ef3f4"
  },
  "maplibre-gl": {
   "version": "5.24.1",
