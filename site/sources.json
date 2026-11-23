@@ -74,7 +74,7 @@
    "title": "Offline maps",
    "why": "Street maps, address search and driving or walking directions for your region.",
    "source": "https://www.openstreetmap.org/",
-   "bytes": 16910995737,
+   "bytes": 16911300523,
    "estimated": false,
    "presets": [
     "essentials",
