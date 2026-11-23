@@ -636,10 +636,11 @@ tools/tinfoilkit/build.sh verify SHA256SUMS`}
               isn't a doctor: read the source, and get trained help when you can.
             </Question>
             <Question q="Can my family use it from their phones?">
-              Yes. Turn on sharing, and phones and laptops on your Wi-Fi or hotspot can open it: they scan its QR code
-              or type its 8-digit access code. No internet is needed, just your local network, and nobody can use it
-              without the code. A computer that stays on can share it all the time, as a home server, which is
-              experimental for now. <a href={`${REPO}/blob/main/GUIDE.md#using-it`}>The guide</a> shows how.
+              Yes. Turn on sharing, and phones and laptops on your Wi-Fi or hotspot can open it: they scan its QR code,
+              open a link you text them, or type its 8-digit access code. No internet is needed, just your local
+              network, and nobody can use it without the code. A computer that stays on can share it all the time, as a
+              home server, which is experimental for now. <a href={`${REPO}/blob/main/GUIDE.md#using-it`}>The guide</a>{" "}
+              shows how.
             </Question>
             <Question q="How long does it run on battery?">
               The big AI uses a lot of power: expect a couple of hours of active use. The small one uses much less, and

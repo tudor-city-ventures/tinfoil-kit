@@ -120,6 +120,54 @@ func TestAccessCodes(t *testing.T) {
 	}
 }
 
+// How the kit page learns to invite others: from the notes server on this computer, while the gate runs, and from
+// the gate on other devices, with the address every phone can open.
+func TestShareDetails(t *testing.T) {
+	t.Setenv("KIT_LAN_IP", "192.168.1.20")
+	kit := t.TempDir()
+	if err := saveAccess(kit, access{Code: "48217736", Key: "ab"}); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	n := &notesServer{kit: kit, sharePort: port}
+	if s := n.share(); s["shared"] != false || len(s) != 1 {
+		t.Errorf("no gate running, so not shared: %v", s)
+	}
+	if s := (&notesServer{}).share(); s["shared"] != false {
+		t.Errorf("the notes server on its own (./kit test's) knows of no sharing: %v", s)
+	}
+	if ln, err = net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", port)); err != nil {
+		t.Skip("the port went elsewhere:", err)
+	}
+	defer ln.Close()
+	go http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Header().Set("Server", "TinfoilKit") }))
+	s := n.share()
+	qr, _ := s["qr"].(string)
+	if s["shared"] != true || s["address"] != fmt.Sprintf("http://192.168.1.20:%d", port) || s["code"] != "4821 7736" ||
+		!strings.HasPrefix(qr, "<svg") {
+		t.Errorf("the gate running: its address on the home network, the code and the QR code: %v", s)
+	}
+	g := &gate{port: 8000}
+	for host, want := range map[string]string{
+		"192.168.1.31:8000":     "192.168.1.31:8000", // the address this device used
+		"100.101.1.2:8000":      "100.101.1.2:8000",
+		"homeserver.local:8000": "192.168.1.20:8000", // a name not every phone can look up
+		"homeserver:8000":       "192.168.1.20:8000",
+		"127.0.0.1:8000":        "192.168.1.20:8000", // this computer
+		"localhost:8000":        "192.168.1.20:8000",
+		"[::1]:8000":            "192.168.1.20:8000",
+	} {
+		if got := g.publicHost(&http.Request{Host: host}); got != want {
+			t.Errorf("the address to pass on, for a device that used %s: %s, not %s", host, got, want)
+		}
+	}
+}
+
 func TestLayout(t *testing.T) {
 	top := t.TempDir()
 	kit := filepath.Join(top, "TinfoilKit")

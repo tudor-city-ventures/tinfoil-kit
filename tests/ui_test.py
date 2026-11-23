@@ -281,6 +281,23 @@ with sync_playwright() as p:
     share = os.environ.get("KIT_SHARE_URL")
     if share:
         code = os.environ["KIT_SHARE_CODE"]
+        link = f"{share}/?code={code}"  # what Share copies: the address, with the code in it
+        host = b.new_page(viewport=size)
+        host.goto(f"http://127.0.0.1:{LIB}/?model=Tiny&ai={AI}&data={DATA}")
+        host.wait_for_selector("#shareLink", state="visible", timeout=15000)
+        host.click("#shareLink")
+        invite = host.inner_text("#invite")
+        check(
+            "shared: this computer's page has Share, which opens a message to text, its link with the code in it",
+            host.evaluate("document.activeElement.id") == "inviteCopy"
+            and "Tinfoil Kit" in invite
+            and invite.endswith(" " + link)
+            and host.inner_text("#shareCode").replace(" ", "") == code,
+            invite,
+        )
+        host.wait_for_function("document.getElementById('shareQr').naturalWidth > 0", timeout=10000)
+        host.screenshot(path=os.path.join(SHOTS, "shot_share_invite.png"))
+        host.close()
         phone = b.new_context(viewport={"width": 390, "height": 844})
         p3 = phone.new_page()
         bad, js = [], []
@@ -327,6 +344,15 @@ with sync_playwright() as p:
         )
         p3.wait_for_function("document.getElementById('shareQr').naturalWidth > 0", timeout=10000)
         p3.screenshot(path=os.path.join(SHOTS, "shot_share_help.png"), full_page=True)
+        check("shared: a phone can pass the link on too", p3.inner_text("#invite").endswith(" " + link))
+        friend = b.new_context(viewport={"width": 390, "height": 844})
+        p4 = friend.new_page()
+        p4.goto(link)
+        p4.wait_for_selector("#sharePill", state="visible", timeout=15000)
+        check(
+            "shared: the link lets a new phone in, and takes the code out of the address", p4.url == share + "/", p4.url
+        )
+        friend.close()
         p3.click("nav a[data-tab=map]")
         p3.wait_for_function(
             "/Address search: ready.*Directions: ready/.test(document.getElementById('mapStatus').textContent)",

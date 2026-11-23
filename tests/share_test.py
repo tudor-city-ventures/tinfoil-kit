@@ -174,6 +174,7 @@ try:
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        env={**os.environ, "KIT_LAN_IP": "192.168.1.20"},  # this computer's address on the home network
         start_new_session=True,
     )
     running.append(gate)
@@ -231,8 +232,7 @@ try:
         r.status == 200
         and data.startswith(b"<!doctype html><html><head><script>window.KIT_GATE")
         and b"the kit page" in data
-        and info.get("code") == "4821 7736"
-        and info.get("address", "").startswith("http://"),
+        and info == {"address": f"http://192.168.1.20:{gport}", "code": "4821 7736"},
         data[:120],
     )
     up = Upstream.seen[-1][3] if Upstream.seen else {}
@@ -258,6 +258,15 @@ try:
     hosts = ("192.168.1.20:8000", "homeserver.local:8000", "homeserver:8000", "localhost:8000", "kit.lan", "[::1]:8000")
     codes = [req("GET", "/ai/v1/models", headers={**signed, "Host": h})[0].status for h in hosts]
     check("gate: an address, a bare name and a .local or .lan name all work", codes == [200] * len(hosts), str(codes))
+    shown = []
+    for h in ("192.168.1.31:8000", "homeserver.local:8000"):
+        page = req("GET", "/", headers={**signed, "Host": h})[1]
+        shown.append(json.loads(page.split(b"window.KIT_GATE = ")[1].split(b";</script>")[0])["address"])
+    check(
+        "gate: the page passes on the address a device used, or for a name, the address every phone can open",
+        shown == ["http://192.168.1.31:8000", f"http://192.168.1.20:{gport}"],
+        str(shown),
+    )
     r, data, _ = req("HEAD", "/catalog", headers=signed)
     check("gate: HEAD has headers and no body", r.status == 200 and data == b"" and r.getheader("Content-Length"))
 
@@ -589,6 +598,26 @@ http.server.HTTPServer(("127.0.0.1", int(sys.argv[sys.argv.index("--port") + 1])
         r3.status == 200 and json.loads(data3) == {"text": "", "version": ""} and f"&data={dport}" in out,
         f"{r3.status} {data3}",
     )
+
+    def ask_notes(path, origin):
+        c = http.client.HTTPConnection("127.0.0.1", dport, timeout=20)
+        c.request("GET", path, headers={"Origin": origin})
+        r = c.getresponse()
+        body = r.read()
+        c.close()
+        return r.status, json.loads(body or b"{}")
+
+    status, share = ask_notes("/share", f"http://127.0.0.1:{lport}")
+    check(
+        "launcher, sharing on: the kit page on this computer learns the address, the code and the QR code, for Share",
+        status == 200
+        and share.get("shared") is True
+        and share.get("address") == f"http://192.168.1.20:{sport}"
+        and share.get("code") == "1357 2468"
+        and share.get("qr", "").startswith("<svg"),
+        f"{status} {str(share)[:300]}",
+    )
+    check("launcher, sharing on: ...and no other web page does", ask_notes("/share", "http://evil.example")[0] == 403)
     os.killpg(p.pid, 15)
     try:
         p.wait(timeout=15)

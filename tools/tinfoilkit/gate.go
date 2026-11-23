@@ -496,19 +496,20 @@ func (g *gate) loginPage(w http.ResponseWriter, r *http.Request, status int, nex
 	g.send(w, r, status, "text/html; charset=utf-8", body, false)
 }
 
-// publicHost is the address other devices can reach the kit at: the one this device used, unless that was this
-// computer.
+// publicHost is the address other devices can reach the kit at, for the page to show and the QR code and the link
+// it copies to carry: the address this device used, unless that was this computer or a name (not every phone can
+// look up one like homeserver.local), which become this computer's address on the home network.
 func (g *gate) publicHost(r *http.Request) string {
 	host := r.Host
 	name := host
 	if i := strings.LastIndex(name, ":"); i >= 0 {
 		name = name[:i]
 	}
-	name = strings.Trim(name, "[]")
-	if name == "" || name == "localhost" || name == "::1" || strings.HasPrefix(name, "127.") {
-		if ips := lanIPs(); len(ips) > 0 {
-			return fmt.Sprintf("%s:%d", ips[0], g.port)
-		}
+	if ip := net.ParseIP(strings.Trim(name, "[]")); ip != nil && ip.To4() != nil && !ip.IsLoopback() {
+		return host
+	}
+	if ips := lanIPs(); len(ips) > 0 {
+		return fmt.Sprintf("%s:%d", ips[0], g.port)
 	}
 	return host
 }

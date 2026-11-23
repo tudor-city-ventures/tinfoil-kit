@@ -22,6 +22,12 @@ const check = (name, ok, detail) => {
 (async () => {
   // unit-level checks
   check(
+    "Share's message says what the kit is, with a link that has the access code in it",
+    Kit.invite("http://192.168.1.20:8000", "4821 7736") ===
+      "You can use my Tinfoil Kit: an AI, a library and maps that work without the internet. Join my Wi-Fi, then open http://192.168.1.20:8000/?code=48217736",
+    Kit.invite("http://192.168.1.20:8000", "4821 7736"),
+  );
+  check(
     "keywords drop stopwords",
     JSON.stringify(Kit.keywords("How do I make water safe to drink?")) === JSON.stringify(["water", "safe", "drink"]),
   );

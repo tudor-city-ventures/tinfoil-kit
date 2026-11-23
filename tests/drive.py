@@ -213,6 +213,23 @@ def check_share(address, code, lib, ai):
     )
     status, svg, _ = ask("GET", address + "/_kit/qr.svg", headers=signed)
     check("the QR code", status == 200 and svg.startswith("<svg"), str(status))
+    # Share on the kit page on this computer, which has it from the notes server, and the link it copies
+    status, out, _ = ask("GET", "http://127.0.0.1:8095/share", headers={"Origin": f"http://127.0.0.1:{lib}"})
+    try:
+        share = json.loads(out)
+    except ValueError:
+        share = {}
+    check(
+        "the kit page on this computer has Share, with the address and the code",
+        status == 200 and share.get("address") == address and share.get("code", "").replace(" ", "") == code,
+        f"{status} {out[:200]}",
+    )
+    status, _, h = ask("GET", f"{address}/?code={code}")
+    check(
+        "Share's link lets a new phone in, and takes the code out of the address",
+        status == 303 and h.get("location") == "/" and h.get("set-cookie", "").startswith("tinfoilkit="),
+        f"{status} {h.get('location')}",
+    )
     status, _, _ = ask("GET", address + "/", headers={**signed, "Host": "evil.example.com"})
     check("a website's own name for this computer is turned away", status == 403, str(status))
     host = urllib.parse.urlsplit(address).hostname

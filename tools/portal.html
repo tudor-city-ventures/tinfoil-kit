@@ -126,6 +126,9 @@
         color: var(--ink);
         background: var(--panel);
       }
+      #shareLink::before {
+        display: none; /* an action, not a status */
+      }
       .stamp {
         font: 12px var(--mono);
         color: var(--ink2);
@@ -541,6 +544,22 @@
       }
       .help .card p:last-child {
         margin: 0;
+      }
+      #share {
+        scroll-margin-top: 20px; /* where Share lands */
+      }
+      #invite {
+        padding: 12px 14px;
+        border: 2px solid var(--line);
+        border-radius: 4px;
+        color: var(--ink);
+        background: var(--panel);
+        overflow-wrap: anywhere;
+        -webkit-user-select: all; /* a tap takes all of it, to copy by hand */
+        user-select: all;
+      }
+      #inviteCopy {
+        margin-bottom: 20px;
       }
       #shareQr {
         display: block;
@@ -1056,7 +1075,8 @@
       </h1>
       <span id="libStatus" class="pill ok">Library: on</span>
       <span id="aiStatus" class="pill">AI: checking</span>
-      <a id="sharePill" class="pill ok" href="#help" hidden>Shared on this network</a>
+      <span id="sharePill" class="pill ok" hidden>Shared on this network</span>
+      <a id="shareLink" class="pill" href="#share" hidden>Share</a>
       <span
         id="refreshed"
         class="stamp"
@@ -1301,18 +1321,34 @@
         <h2 id="share">Sharing with family</h2>
         <div id="shareOn" class="card" hidden>
           <p>
-            The kit is shared on this network. On another phone or laptop on the same
-            <span style="white-space: nowrap">Wi-Fi</span>, open <b id="shareAddr"></b> and type the access code
-            <b id="shareCode"></b>. Or scan this with the phone's camera:
+            The kit is shared on this network. To let someone in, text them this message. Its link opens the kit on
+            their phone or laptop with no code to type, once they're on the same
+            <span style="white-space: nowrap">Wi-Fi</span>.
+          </p>
+          <p id="invite"></p>
+          <button id="inviteCopy" type="button">Copy message</button>
+          <p>
+            Or they open <b id="shareAddr"></b> and type the access code <b id="shareCode"></b>, or scan this with the
+            phone's camera:
           </p>
           <img id="shareQr" alt="QR code that opens the kit, access code included" />
-          <p class="note">No internet needed: a router with power, or a phone's hotspot, is enough.</p>
+          <p class="note">
+            No internet needed: a router with power, or a phone's hotspot, is enough. Anyone with the link or the code
+            can get in while they're on this Wi-Fi. <kbd>./kit share new-code</kbd> replaces the code, which turns old
+            links off and signs every device out.
+          </p>
         </div>
+        <ul id="shareNoNet" hidden>
+          <li>
+            Sharing is on, but this computer isn't on a network. Connect it to your Wi-Fi or a phone's hotspot (no
+            internet needed), then open this page again.
+          </li>
+        </ul>
         <ul id="shareOff">
           <li>
             Phones and laptops on your Wi-Fi can use the kit too. In the kit's folder, run <kbd>./kit share on</kbd> in
-            a terminal, then start the kit again. It shows an address, an access code and a QR code to scan. No internet
-            needed: a router with power, or a phone's hotspot, is enough.
+            a terminal, then start the kit again. This section then shows how they get in, with a message to text them.
+            No internet needed: a router with power, or a phone's hotspot, is enough.
           </li>
         </ul>
         <h2>If something doesn't work</h2>
@@ -2645,7 +2681,19 @@
           });
         }
 
+        // The message Share copies for the person to text: what the kit is, and the link that lets them in, the access
+        // code in it. The gate swaps the code for a sign-in and takes it out of the address.
+        function invite(address, code) {
+          var link = address + "/?code=" + encodeURIComponent(String(code).replace(/\s+/g, ""));
+          return (
+            "You can use my Tinfoil Kit: an AI, a library and maps that work without the internet. " +
+            "Join my Wi-Fi, then open " +
+            link
+          );
+        }
+
         return {
+          invite: invite,
           keywords: keywords,
           terms: terms,
           decode: decode,
@@ -2750,14 +2798,38 @@
               });
             $("refreshed").hidden = false;
           }
-          if (GATE) {
-            $("sharePill").hidden = false;
-            $("shareOn").hidden = false;
-            $("shareOff").hidden = true;
-            $("shareAddr").textContent = GATE.address;
-            $("shareCode").textContent = GATE.code;
-            $("shareQr").src = "/_kit/qr.svg";
+          // Sharing on the home network: how others get in. Through the gate, the gate told the page (KIT_GATE); on
+          // this computer, the kit's notes server says, while the kit is shared.
+          function showShare(s) {
+            var on = Boolean(s && s.address),
+              qr = s && s.qr ? "data:image/svg+xml," + encodeURIComponent(s.qr) : "/_kit/qr.svg";
+            $("sharePill").hidden = $("shareLink").hidden = $("shareOn").hidden = !on;
+            $("shareNoNet").hidden = on || !(s && s.shared);
+            $("shareOff").hidden = on || !$("shareNoNet").hidden;
+            if (!on) return;
+            $("shareAddr").textContent = s.address;
+            $("shareCode").textContent = s.code;
+            if ($("shareQr").getAttribute("src") !== qr) $("shareQr").src = qr;
+            $("invite").textContent = Kit.invite(s.address, s.code);
           }
+          function loadShare() {
+            if (GATE) showShare(GATE);
+            else dataApi("GET", "/share").then(showShare, function () {});
+          }
+          $("shareLink").addEventListener("click", function (ev) {
+            ev.preventDefault();
+            showTab("help");
+            history.replaceState(null, "", "#help");
+            $("share").scrollIntoView();
+            $("inviteCopy").focus({ preventScroll: true });
+          });
+          $("inviteCopy").addEventListener("click", function () {
+            var b = $("inviteCopy");
+            copyText($("invite").textContent, b);
+            setTimeout(function () {
+              b.textContent = "Copy message";
+            }, 3000);
+          });
           function showTab(name) {
             document.querySelectorAll("a[data-tab]").forEach(function (x) {
               x.classList.toggle("on", x.dataset.tab === name);
@@ -2769,6 +2841,7 @@
             });
             document.querySelector("main").classList.toggle("wide", name === "map");
             if (name === "notes") loadNotes();
+            if (name === "help") loadShare(); // a new code, or a network since the page opened
             if (name === "print") showPrint();
             if (name === "map")
               // (with home and the pins as the kit has them, which may have changed on another device)
@@ -3636,13 +3709,16 @@
               // the home network is plain http, where browsers turn the clipboard API off
               var ta = document.createElement("textarea");
               ta.value = text;
+              ta.readOnly = true; // no keyboard on a phone
               ta.style.cssText = "position:fixed;opacity:0";
               document.body.appendChild(ta);
               ta.select();
+              ta.setSelectionRange(0, text.length); // an iPhone selects only this way
               try {
                 if (document.execCommand("copy")) done();
               } catch (e) {}
               ta.remove();
+              b.focus();
             }
             if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
             else fallback();
@@ -4378,6 +4454,7 @@
 
           loadPlaces();
           loadNotes();
+          loadShare();
           if (tabInAddress()) showTab(tabInAddress());
           loadBooks().catch(function (e) {
             $("bookList").textContent = "Could not load the book list: " + e.message;

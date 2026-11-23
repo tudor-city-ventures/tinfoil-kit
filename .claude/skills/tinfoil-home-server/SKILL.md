@@ -5,7 +5,7 @@ description: Share a Tinfoil Kit with the phones and laptops at home, behind an 
 
 # Share the kit at home
 
-Sharing is off until the person turns it on. Then phones and laptops on the same Wi-Fi or hotspot open an address like http://192.168.1.20:8000 and type an 8-digit access code once, or scan a QR code that includes it. No internet is needed, just the home network. To find the kit, see the tinfoil-update skill.
+Sharing is off until the person turns it on. Then phones and laptops on the same Wi-Fi or hotspot open an address like http://192.168.1.20:8000 and type an 8-digit access code once, or scan a QR code that includes it. Share, at the top of the kit page, copies a message to text them, with a link that includes it too. No internet is needed, just the home network. To find the kit, see the tinfoil-update skill.
 
 ## A new kit, as a home server
 
@@ -38,6 +38,6 @@ In the kit's app folder (`.\kit.cmd` for `./kit` in PowerShell on Windows):
 
 - Every device sees the same notes (the Notes tab) and map pins, and can change them: anyone with the code can read them.
 - It's plain HTTP inside the home network: share it on the person's own Wi-Fi or hotspot, never a public one.
-- Only devices with home network addresses get in, and each gets 10 wrong codes per 10 minutes.
+- Only devices with home network addresses get in, and each gets 10 wrong codes per 10 minutes. Anyone with the code, or a link from Share, gets in from the home network: `./kit share new-code` turns old links off and signs every device out.
 - The gate listens on port 8000 (`share_port` in data/kit.json). Every server behind it listens only on 127.0.0.1.
 - Programs can use the AI's OpenAI-compatible API with the code as the key: `Authorization: Bearer CODE` at http://ADDRESS:8000/ai/v1.

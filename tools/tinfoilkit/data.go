@@ -6,7 +6,8 @@ package main
 //
 // It listens on 127.0.0.1 and answers the kit page only: another web page is turned away by its Origin, and any name
 // but this computer's own (a website pointing a name of its own at 127.0.0.1) by its Host. Through the gate, the
-// devices at home that have the access code reach it at /data/.
+// devices at home that have the access code reach it at /data/. It also tells the kit page on this computer how
+// others get in when the kit is shared (/share), which only the gate knows otherwise.
 
 import (
 	"bytes"
@@ -295,6 +296,9 @@ type notesServer struct {
 	port    int
 	ln      net.Listener
 	log     *stdlog.Logger
+
+	kit       string // for /share: the kit folder, with the access code
+	sharePort int    // and share_port, where the gate answers if the kit is shared
 }
 
 func newNotesServer(data string, port, library int, logTo io.Writer) (*notesServer, error) {
@@ -385,6 +389,8 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 		return 200, v, err
 	case path == "/places/home" && put:
 		return withBody(st.putHome)
+	case path == "/share" && reading:
+		return 200, n.share(), nil
 	}
 	id, isPin := strings.CutPrefix(path, "/places/pins/")
 	if isPin && !pinID.MatchString(id) {
@@ -396,10 +402,34 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 	case isPin && r.Method == http.MethodDelete:
 		v, err := st.deletePin(id)
 		return 200, v, err
-	case isPin || path == "/" || path == "/notes" || path == "/places" || path == "/places/home":
+	case isPin || path == "/" || path == "/notes" || path == "/places" || path == "/places/home" || path == "/share":
 		return 405, map[string]any{"error": "Not that way."}, nil
 	}
 	return 404, map[string]any{"error": "Nothing here."}, nil
+}
+
+// share is how other devices get in, when the gate is running: the address it answers at on the home network, the
+// access code, and the QR code, whose link carries the code. The kit page on this computer shows them, and copies
+// that link for the person to text. A device at /data/share through the gate learns only what it was let in with.
+func (n *notesServer) share() map[string]any {
+	off := map[string]any{"shared": false}
+	if n.kit == "" || n.sharePort == 0 {
+		return off
+	}
+	port := gatePort(n.sharePort)
+	a, _ := loadAccess(n.kit, false)
+	if port == 0 || a.Code == "" {
+		return off
+	}
+	s := map[string]any{"shared": true, "address": "", "code": prettyCode(a.Code)}
+	if ips := lanIPs(); len(ips) > 0 { // else this computer isn't on a network yet
+		host := fmt.Sprintf("%s:%d", ips[0], port)
+		s["address"] = "http://" + host
+		if q, err := qrCode(joinURL(host, a.Code), -1); err == nil {
+			s["qr"] = qrSVG(q)
+		}
+	}
+	return s
 }
 
 // body is the JSON object a save sends. JSON only: a web page can't send that to another address without asking
@@ -462,13 +492,15 @@ func ourNotes(port int) bool {
 	return ok && status == 200 && json.Unmarshal([]byte(b), &v) == nil && v.Notes == "/notes"
 }
 
-// startNotes starts the notes and pins server on port, in this program, logging to logTo.
-func startNotes(data string, logTo io.Writer, port, library int) (*notesServer, error) {
+// startNotes starts the notes and pins server on port, in this program, logging to logTo. With the kit folder and
+// share_port, it tells the kit page how others get in once the kit is shared.
+func startNotes(data string, logTo io.Writer, port, library int, kit string, sharePort int) (*notesServer, error) {
 	n, err := newNotesServer(data, port, library, logTo)
 	if err != nil {
 		fmt.Fprintf(logTo, "Can't keep notes and pins on port %d: %s\n", port, errText(err))
 		return nil, err
 	}
+	n.kit, n.sharePort = kit, sharePort
 	fmt.Fprintf(logTo, "Notes and pins on port %d, in %s\n", n.port, data)
 	go n.serve()
 	return n, nil

@@ -228,7 +228,7 @@ func (l *launcher) open(o openOptions) int {
 		if f := l.logFile("data.log", true); f != nil {
 			w = f
 		}
-		if n, err := startNotes(l.data, w, dataPort, libPort); err == nil {
+		if n, err := startNotes(l.data, w, dataPort, libPort, l.kit, sharePort); err == nil {
 			notes, dataPort = n, n.port
 		}
 	}

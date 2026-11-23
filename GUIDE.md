@@ -54,8 +54,9 @@ Nothing here needs the internet, an account, or an install.
 - The first answer after switching models takes up to a minute while it loads. After that it's quick.
 - **Share with family**: start with `bash "Open Tinfoil Kit.command" --share` (on Windows,
   `& ".\Open Tinfoil Kit for Windows.bat" --share` in PowerShell in the app folder). It shows an address, an access code
-  and a QR code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. No
-  internet needed, only a Wi-Fi network: your router on a battery backup, a small battery-powered travel router, or a
+  and a QR code. Phones and laptops on the same Wi-Fi open the address and type the code, or scan the QR code. Or
+  click **Share** at the top of the kit page and text them the message it copies: its link opens the kit, code
+  included. No internet needed, only a Wi-Fi network: your router on a battery backup, a small battery-powered travel router, or a
   phone's hotspot (an iPhone's may not turn on without cell service). Nobody without the code gets in. To share every
   time the kit starts, run `./kit share on` once in the app folder (`.\kit.cmd share on` on Windows). If macOS asks
   whether to accept incoming connections, click **Allow**. If Windows asks about tinfoilkit-windows-x64.exe, click
