@@ -1021,6 +1021,129 @@ func TestDownloadRoundedSize(t *testing.T) {
 	}
 }
 
+// A server that says it's busy (429, 503) gets the wait it asks for (Retry-After), then asked again; one that stays
+// busy is left alone for a while, and the problem says so plainly. A server error gets asked again three times.
+func TestBusyServer(t *testing.T) {
+	waits, retry := busyWaits, retryWaits
+	defer func() { busyWaits, retryWaits, busyUntil = waits, retry, map[string]time.Time{} }()
+	busyWaits, retryWaits = []time.Duration{time.Millisecond, time.Millisecond}, []time.Duration{0, 0, 0}
+	var asked atomic.Int32
+	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := asked.Add(1)
+		switch {
+		case r.URL.Path == "/soon" && n <= 2:
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(429)
+		case r.URL.Path == "/soon":
+			w.Write([]byte("here"))
+		case r.URL.Path == "/later":
+			w.Header().Set("Retry-After", "3600")
+			w.WriteHeader(429)
+		case r.URL.Path == "/busy":
+			w.WriteHeader(503)
+		default:
+			w.WriteHeader(500)
+		}
+	}))
+	defer web.Close()
+	var data []byte
+	var err error
+	t0 := time.Now()
+	said := captured(t, func() { data, err = httpGet(web.URL+"/soon", 0, "") })
+	if took := time.Since(t0); err != nil || string(data) != "here" || asked.Load() != 3 || took < 2*time.Second ||
+		strings.Count(said, "127.0.0.1 says it's had too many requests. Asking again in a second...\n") != 2 {
+		t.Errorf("Retry-After: %q %v, asked %d times in %s, said %q", data, err, asked.Load(), took, said)
+	}
+	asked.Store(0)
+	if _, err = httpGet(web.URL+"/later", 0, ""); err == nil || asked.Load() != 1 ||
+		!strings.HasPrefix(err.Error(), "127.0.0.1 says it's had too many requests. Nothing's wrong") {
+		t.Errorf("a wait longer than the kit waits: %v, asked %d times", err, asked.Load())
+	}
+	asked.Store(0)
+	busyUntil = map[string]time.Time{}
+	captured(t, func() { _, err = httpGet(web.URL+"/busy", 0, "") })
+	if want := "127.0.0.1 says it's busy, or down for maintenance. Nothing's wrong with this computer: try again " +
+		"later (" + web.URL + "/busy)"; err == nil || err.Error() != want || asked.Load() != 3 {
+		t.Errorf("still busy after every wait: %v, asked %d times", err, asked.Load())
+	}
+	asked.Store(0)
+	if _, err = httpGet(web.URL+"/busy", 0, ""); err == nil || asked.Load() != 1 {
+		t.Errorf("a server just given up on is asked once, without waiting: %v, asked %d times", err, asked.Load())
+	}
+	asked.Store(0)
+	if _, err = httpGet(web.URL+"/broken", 0, ""); err == nil || !strings.Contains(err.Error(), "500") || asked.Load() != 4 {
+		t.Errorf("a server error: %v, asked %d times", err, asked.Load())
+	}
+}
+
+// A pinned program from Kiwix is fetched by the name its pin gives it, without reading the folder's listing, which
+// Kiwix turns away when it's read too often; a pinned build Kiwix took down says so. Without a pin, the newest build
+// in the listing, which is read once a run, even when that fails.
+func TestKiwixRelease(t *testing.T) {
+	saved, waits := kiwixReleases, busyWaits
+	defer func() { kiwixReleases, busyWaits, busyUntil = saved, waits, map[string]time.Time{} }()
+	busyWaits = []time.Duration{time.Millisecond}
+	var listings atomic.Int32
+	busy := false
+	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/release/kiwix-tools/":
+			listings.Add(1)
+			if busy {
+				w.WriteHeader(429)
+				return
+			}
+			for _, v := range []string{"linux-x86_64-3.8.2", "linux-x86_64-3.10.0", "linux-x86_64-3.9.1", "macos-arm64-3.11.0"} {
+				fmt.Fprintf(w, `<a href="kiwix-tools_%s.tar.gz">kiwix-tools_%[1]s.tar.gz</a><br>`, v)
+			}
+		case "/release/kiwix-tools/kiwix-tools_linux-x86_64-3.8.2.tar.gz",
+			"/release/kiwix-tools/kiwix-tools_linux-x86_64-3.10.0.tar.gz":
+			w.Header().Set("Content-Length", "1234")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer web.Close()
+	kiwixReleases = web.URL + "/release/{product}/"
+	program := func() *item {
+		return newItem("runtimes", "kiwix-tools-linux-x64", newObj("type", "kiwix_release", "product", "kiwix-tools",
+			"pattern", "kiwix-tools_linux-x86_64-{version}.tar.gz"))
+	}
+	r := newResolver(t.TempDir(), newObj())
+	r.pins = map[string]*obj{"kiwix-tools-linux-x64": newObj("version", "3.8.2", "sha256", strings.Repeat("ab", 32))}
+	it := program()
+	r.resolve(it)
+	if f := it.files; it.err != "" || it.version != "3.8.2" || len(f) != 1 || f[0].size != 1234 ||
+		f[0].url != web.URL+"/release/kiwix-tools/kiwix-tools_linux-x86_64-3.8.2.tar.gz" ||
+		f[0].sha256 != strings.Repeat("ab", 32) || listings.Load() != 0 {
+		t.Errorf("pinned: %q %q %+v, %d listings read", it.err, it.version, f, listings.Load())
+	}
+	r.pins = map[string]*obj{"kiwix-tools-linux-x64": newObj("version", "3.7.0")}
+	it = program()
+	r.resolve(it)
+	if !strings.HasPrefix(it.err, "Kiwix no longer publishes kiwix-tools_linux-x86_64-3.7.0.tar.gz, the build") {
+		t.Errorf("pinned build taken down: %q", it.err)
+	}
+	r = newResolver(t.TempDir(), newObj())
+	it = program()
+	r.resolve(it)
+	if it.err != "" || it.version != "3.10.0" || it.files[0].size != 1234 || listings.Load() != 1 {
+		t.Errorf("unpinned: %q %q, %d listings read", it.err, it.version, listings.Load())
+	}
+	busy = true
+	r = newResolver(t.TempDir(), newObj())
+	captured(t, func() {
+		for _, it := range []*item{program(), program()} {
+			if r.resolve(it); !strings.Contains(it.err, "says it's had too many requests") {
+				t.Errorf("listing turned away: %q", it.err)
+			}
+		}
+	})
+	if listings.Load() != 3 {
+		t.Errorf("a listing that's turned away is asked for again only after waiting, and once a run: %d", listings.Load()-1)
+	}
+}
+
 // measureSpeed: about the speed a server sends at, over as many connections as sync uses, in a few seconds; 0 when it
 // can't download at all.
 func TestMeasureSpeed(t *testing.T) {

@@ -117,6 +117,7 @@ type resolver struct {
 	catalogErr error
 	releases   map[string][]any
 	listings   map[string]string
+	listErrs   map[string]error
 	resolved   map[string]*item
 	pins       map[string]*obj
 	maxAge     time.Duration // how old a saved Kiwix catalog may be
@@ -124,7 +125,7 @@ type resolver struct {
 
 func newResolver(root string, cfg *obj) *resolver {
 	return &resolver{root: root, cfg: cfg, releases: map[string][]any{}, listings: map[string]string{},
-		resolved: map[string]*item{}, pins: loadPins(root, cfg), maxAge: 12 * time.Hour}
+		listErrs: map[string]error{}, resolved: map[string]*item{}, pins: loadPins(root, cfg), maxAge: 12 * time.Hour}
 }
 
 // catalog is the Kiwix catalog: each book's file prefix (wikipedia_en_all_maxi) and its newest edition.
@@ -418,54 +419,65 @@ var (
 	versionSep = regexp.MustCompile(`[.-]`)
 )
 
+// kiwixRelease is a program from Kiwix's downloads: the pinned build, or the newest its folder lists.
 func (r *resolver) kiwixRelease(it *item) error {
 	product, pattern := pyStr(need(it.cfg, "product")), pyStr(need(it.cfg, "pattern"))
 	base := strings.ReplaceAll(kiwixReleases, "{product}", product)
-	if _, ok := r.listings[base]; !ok {
-		data, err := httpGet(base, 0, "")
+	pin := r.pinned(it)
+	name, version := strings.ReplaceAll(pattern, "{version}", pin), pin
+	if pin == "" { // (a pinned build's name is known: Kiwix turns away a kit that reads its listings too often)
+		listing, err := r.listing(base)
 		if err != nil {
 			return err
 		}
-		r.listings[base] = strings.ToValidUTF8(string(data), "�")
-	}
-	rx := regexp.MustCompile("^" + strings.ReplaceAll(regexp.QuoteMeta(pattern), regexp.QuoteMeta("{version}"),
-		`(\d+(?:\.\d+)*(?:-\d+)?)`) + "$")
-	type hit struct{ version, name string }
-	var found []hit
-	seen := map[string]bool{}
-	pin := r.pinned(it)
-	for _, m := range hrefRE.FindAllStringSubmatch(r.listings[base], -1) {
-		if seen[m[1]] {
-			continue
+		rx := regexp.MustCompile("^" + strings.ReplaceAll(regexp.QuoteMeta(pattern), regexp.QuoteMeta("{version}"),
+			`(\d+(?:\.\d+)*(?:-\d+)?)`) + "$")
+		found := false
+		for _, m := range hrefRE.FindAllStringSubmatch(listing, -1) {
+			n := unquote(m[1][strings.LastIndexByte(m[1], '/')+1:])
+			v := rx.FindStringSubmatch(n)
+			if v == nil {
+				continue
+			}
+			// the newest: by its numbers, then its spelling
+			c := compareInts(versionSep.Split(v[1], -1), versionSep.Split(version, -1))
+			if !found || c > 0 || c == 0 && (v[1] > version || v[1] == version && n > name) {
+				name, version, found = n, v[1], true
+			}
 		}
-		seen[m[1]] = true
-		name := unquote(m[1][strings.LastIndexByte(m[1], '/')+1:])
-		if v := rx.FindStringSubmatch(name); v != nil && (pin == "" || v[1] == pin) {
-			found = append(found, hit{v[1], name})
-		}
-	}
-	if len(found) == 0 {
-		forPin := ""
-		if pin != "" {
-			forPin = " for version " + pin
-		}
-		return fmt.Errorf("no file matching '%s'%s in %s", pattern, forPin, base)
-	}
-	best := found[0]
-	for _, h := range found[1:] { // the newest: by its numbers, then its spelling
-		c := compareInts(versionSep.Split(h.version, -1), versionSep.Split(best.version, -1))
-		if c > 0 || c == 0 && (h.version > best.version || h.version == best.version && h.name > best.name) {
-			best = h
+		if !found {
+			return fmt.Errorf("no file matching '%s' in %s", pattern, base)
 		}
 	}
-	url := base + best.name
+	url := base + name
+	h, err := httpHead(url)
+	var he *httpError
+	if pin != "" && errors.As(err, &he) && he.status == 404 {
+		return fmt.Errorf("Kiwix no longer publishes %s, %s", name, pinGone)
+	}
 	it.kind, it.dest = "files", "installers"
-	if isArchive(best.name) {
+	if isArchive(name) {
 		it.kind, it.dest = "archive", "bin/"+it.id
 	}
-	it.version = best.version
-	it.files = []*remoteFile{{name: best.name, url: url, size: headSize(url), sha256Sidecar: true}}
+	it.version = version
+	it.files = []*remoteFile{{name: name, url: url, size: contentLength(h), sha256Sidecar: true}}
 	return nil
+}
+
+// listing is a Kiwix release folder's list of files, fetched once a run, even when that fails.
+func (r *resolver) listing(base string) (string, error) {
+	if err := r.listErrs[base]; err != nil {
+		return "", err
+	}
+	if _, ok := r.listings[base]; !ok {
+		data, err := httpGet(base, 0, "")
+		if err != nil {
+			r.listErrs[base] = err
+			return "", err
+		}
+		r.listings[base] = strings.ToValidUTF8(string(data), "�")
+	}
+	return r.listings[base], nil
 }
 
 func (r *resolver) url(it *item) error {

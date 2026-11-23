@@ -118,18 +118,12 @@ else:
     get "$url" "$DL/$(basename "$url")"
     cp "$DL/$(basename "$url")" "$R/gh/llama-b99990-bin-$suffix"
   done
-  curl -fsSL https://download.kiwix.org/release/kiwix-tools/ > "$TMP/kiwix.html"
-  for plat in macos-arm64.tar.gz win-x86_64.zip; do
-    name=$(python3 -c '
-import re, sys
-plat, ext = sys.argv[2].split(".", 1)
-found = re.findall(r"kiwix-tools_%s-([0-9.]+)\.%s" % (re.escape(plat), re.escape(ext)), open(sys.argv[1]).read())
-if not found:
-    sys.exit("no kiwix-tools build for " + sys.argv[2])
-newest = max(set(found), key=lambda v: [int(x) for x in v.split(".")])
-print("kiwix-tools_%s-%s.%s" % (plat, newest, ext))' "$TMP/kiwix.html" "$plat")
-    get "https://download.kiwix.org/release/kiwix-tools/$name" "$DL/$name"
-    cp "$DL/$name" "$R/release/kiwix-tools/kiwix-tools_${plat%%.*}-3.8.2.${plat#*.}"
+  # the builds tools/pins.json names, as kits get them: Kiwix turns away a script that reads its listings too often
+  for p in "kiwix-tools-macos-arm64 macos-arm64 tar.gz" "kiwix-tools-windows-x64 win-x86_64 zip"; do
+    read -r id plat ext <<< "$p"
+    v=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["version"])' "$TESTS/../tools/pins.json" "$id")
+    get "https://download.kiwix.org/release/kiwix-tools/kiwix-tools_$plat-$v.$ext" "$DL/kiwix-tools_$plat-$v.$ext"
+    cp "$DL/kiwix-tools_$plat-$v.$ext" "$R/release/kiwix-tools/kiwix-tools_$plat-3.8.2.$ext"
   done
   echo "== drive test: the real map programs for each computer, Andorra's roads and addresses, and a map build with tiles at zoom 0-5"
   # They replace the e2e's stand-ins: pmtiles and Java for the Mac, Windows and Linux, and GraphHopper (a fake jar)

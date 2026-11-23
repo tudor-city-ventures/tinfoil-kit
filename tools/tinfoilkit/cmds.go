@@ -1730,7 +1730,7 @@ func (s *server) quit() bool {
 func waitHTTP(url string, timeout time.Duration, s *server) bool {
 	end := time.Now().Add(timeout)
 	for time.Now().Before(end) {
-		if _, err := httpGet(url, 5, ""); err == nil {
+		if _, err := localGet(url, 5); err == nil {
 			return true
 		}
 		if s != nil && s.quit() {
@@ -1794,7 +1794,7 @@ func testMaps(root string, m *obj, check func(string, bool, string), servers *[]
 			"--public-url", "http://127.0.0.1:"+itoa(port)) // without it, /basemap.json is a 501
 		ok := false
 		if waitHTTP(fmt.Sprintf("http://127.0.0.1:%d/basemap.json", port), 30*time.Second, nil) {
-			body, err := httpGet(fmt.Sprintf("http://127.0.0.1:%d/basemap/0/0/0.mvt", port), 0, "")
+			body, err := localGet(fmt.Sprintf("http://127.0.0.1:%d/basemap/0/0/0.mvt", port), 0)
 			ok = err == nil && len(body) > 0
 		}
 		check("map tile server works", ok, "")
@@ -1823,7 +1823,7 @@ func testMaps(root string, m *obj, check func(string, bool, string), servers *[]
 			// What's near home, then a search for it by name: that finds something in any place and language
 			nearHome := "lat=" + pyStr(home.get("lat")) + "&lon=" + pyStr(home.get("lon"))
 			features := func(url string) ([]any, error) {
-				v, err := httpJSON(url, 0)
+				v, err := localJSON(url)
 				if err != nil {
 					return nil, err
 				}
@@ -1898,8 +1898,8 @@ func testMaps(root string, m *obj, check func(string, bool, string), servers *[]
 			}
 			lat, _ := asNumber(home.get("lat"))
 			lon, _ := asNumber(home.get("lon"))
-			v, err := httpJSON(fmt.Sprintf("http://127.0.0.1:%d/route?point=%s,%s&point=%s,%s&profile=%s&points_encoded=false&locale=en",
-				port, pyFloat(lat), pyFloat(lon), pyFloat(lat+0.02), pyFloat(lon+0.02), profile), 0)
+			v, err := localJSON(fmt.Sprintf("http://127.0.0.1:%d/route?point=%s,%s&point=%s,%s&profile=%s&points_encoded=false&locale=en",
+				port, pyFloat(lat), pyFloat(lon), pyFloat(lat+0.02), pyFloat(lon+0.02), profile))
 			if err != nil {
 				detail = clip(err.Error(), 200)
 			} else if res, _ := v.(*obj); res == nil || len(res.list("paths")) == 0 {
@@ -2000,7 +2000,7 @@ func cmdTest(root string, a *cliArgs) {
 			}
 			check("library server starts", up, "")
 			if up {
-				body, _ := httpGet(fmt.Sprintf("http://%s:%d/", lib, kport), 0, "")
+				body, _ := localGet(fmt.Sprintf("http://%s:%d/", lib, kport), 0)
 				page := strings.ToValidUTF8(string(body), "�")
 				check("portal page served", strings.Contains(page, "Tinfoil Kit") && !strings.Contains(clip(page, 200), "{{"), "")
 				if truthy(mapsSettings(cfg).get("enabled")) {
@@ -2016,15 +2016,15 @@ func cmdTest(root string, a *cliArgs) {
 					}
 					check("map page built", avail, why)
 				}
-				body, _ = httpGet(fmt.Sprintf("http://%s:%d/catalog/v2/entries?count=-1", lib, kport), 0, "")
+				body, _ = localGet(fmt.Sprintf("http://%s:%d/catalog/v2/entries?count=-1", lib, kport), 0)
 				cat := strings.ToValidUTF8(string(body), "�")
 				entries := strings.Count(cat, "<entry>")
 				check("all books listed", entries >= len(zims), fmt.Sprintf("%d books", entries))
 				hits := 0
 				books := bookLink.FindAllStringSubmatch(cat, -1)
 				for _, b := range books[:min(5, len(books))] {
-					xml, err := httpGet(fmt.Sprintf("http://%s:%d/search?content=%s&pattern=water&format=xml&pageLength=3",
-						lib, kport, quote(b[1], "/")), 0, "")
+					xml, err := localGet(fmt.Sprintf("http://%s:%d/search?content=%s&pattern=water&format=xml&pageLength=3",
+						lib, kport, quote(b[1], "/")), 0)
 					if err == nil {
 						hits += strings.Count(string(xml), "<item>")
 					}
@@ -2039,10 +2039,10 @@ func cmdTest(root string, a *cliArgs) {
 			filepath.Join(logs, "test-data.log"), "", me, "data", "--data", dataDir(root), "--port", itoa(dport), "--library", "8888"))
 		check("notes and pins server starts", up, "")
 		if up {
-			notes, err := httpJSON(fmt.Sprintf("http://127.0.0.1:%d/notes", dport), 0)
+			notes, err := localJSON(fmt.Sprintf("http://127.0.0.1:%d/notes", dport))
 			var places any
 			if err == nil {
-				places, err = httpJSON(fmt.Sprintf("http://127.0.0.1:%d/places", dport), 0)
+				places, err = localJSON(fmt.Sprintf("http://127.0.0.1:%d/places", dport))
 			}
 			n, _ := notes.(*obj)
 			p, _ := places.(*obj)
@@ -2073,7 +2073,7 @@ func cmdTest(root string, a *cliArgs) {
 			up := waitHTTP(fmt.Sprintf("http://127.0.0.1:%d/v1/models", lport), 90*time.Second, nil)
 			check("AI server starts", up, "")
 			if up {
-				v, _ := httpJSON(fmt.Sprintf("http://127.0.0.1:%d/v1/models", lport), 0)
+				v, _ := localJSON(fmt.Sprintf("http://127.0.0.1:%d/v1/models", lport))
 				var listed []any
 				var shown []string
 				for _, m := range v.(*obj).objs("data") {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -531,9 +532,77 @@ func which(name string) bool {
 type httpError struct {
 	url, msg string
 	status   int
+	busy     bool // a publisher still busy after the kit waited
 }
 
-func (e *httpError) Error() string { return e.msg + " (" + e.url + ")" }
+func (e *httpError) Error() string {
+	if e.busy {
+		return fmt.Sprintf("%s says %s. Nothing's wrong with this computer: try again later (%s)", urlHost(e.url),
+			busyWhy[e.status], e.url)
+	}
+	return e.msg + " (" + e.url + ")"
+}
+
+// A server that's busy says so (429, 503), and may say how long to wait (Retry-After). The kit waits and asks again,
+// for up to five minutes in all, rather than give up or ask again at once: curl's own --retry asks again too soon,
+// waits out a Retry-After without a word, and skips a 429 altogether when a Mac's curl reports it as exit 56.
+var (
+	busyWhy    = map[int]string{429: "it's had too many requests", 503: "it's busy, or down for maintenance"}
+	busyWaits  = []time.Duration{15 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute}
+	busyMost   = 5 * time.Minute // the most the kit waits for one answer
+	retryWaits = []time.Duration{2 * time.Second, 2 * time.Second, 2 * time.Second}
+	busyUntil  = map[string]time.Time{} // a host still busy after all of busyWaits: asked once a time, without waiting
+	busyMu     sync.Mutex
+)
+
+// retryAfter is how long a server's answer, the last header block in a curl -D file, asks to wait: 0 when it doesn't.
+func retryAfter(headerFile string) time.Duration {
+	data, err := os.ReadFile(headerFile)
+	if err != nil {
+		return 0
+	}
+	blocks := headerBlocks(latin1(data))
+	if len(blocks) == 0 {
+		return 0
+	}
+	for _, line := range pyLines(blocks[len(blocks)-1]) {
+		k, v, ok := strings.Cut(line, ":")
+		if !ok || !strings.EqualFold(strings.TrimSpace(k), "retry-after") {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+		if t, err := http.ParseTime(v); err == nil && time.Until(t) > 0 {
+			return time.Until(t).Round(time.Second)
+		}
+	}
+	return 0
+}
+
+// fmtWait is a wait in words: "a second", "15 seconds", "2 minutes".
+func fmtWait(d time.Duration) string {
+	switch s := int(d.Round(time.Second) / time.Second); {
+	case s <= 1:
+		return "a second"
+	case s < 90:
+		return fmt.Sprintf("%d seconds", s)
+	}
+	return fmt.Sprintf("%d minutes", int(d.Round(time.Minute)/time.Minute))
+}
+
+// retries is whether curl failing this way is a hiccup worth asking again after: what curl's --retry asked again
+// after (a timeout, a name that didn't look up, a server error), and a connection that dropped.
+func retries(rc, status int) bool {
+	switch status {
+	case 0:
+		return slices.Contains([]int{5, 6, 18, 28, 52, 55, 56}, rc)
+	case 408, 500, 502, 504:
+		return true
+	}
+	return false
+}
 
 var (
 	curlHelp     string
@@ -606,31 +675,104 @@ func authHeaders(url string) [][2]string {
 
 var curlStatus = regexp.MustCompile(`error: (\d{3})`)
 
-func httpGet(url string, timeout int, saveHeaders string, headers ...[2]string) ([]byte, error) {
+// curlGet fetches url with curl once (args can have curl ask again itself), with curl's exit code and what failed.
+func curlGet(url string, timeout int, args []string, headers [][2]string) ([]byte, int, *httpError) {
 	if timeout == 0 {
 		timeout = 120
 	}
-	args := []string{"-fsSL", "--retry", "3", "--retry-delay", "2", "--connect-timeout", "20", "--max-time",
-		strconv.Itoa(timeout), "-A", userAgent}
-	if saveHeaders != "" {
-		args = append(args, "-D", saveHeaders)
-	}
+	args = append([]string{"-fsSL", "--connect-timeout", "20", "--max-time", strconv.Itoa(timeout), "-A", userAgent},
+		args...)
 	for _, h := range mergeHeaders(authHeaders(url), headers) {
 		args = append(args, "-H", h[0]+": "+h[1])
 	}
 	stdout, stderr, rc := output("curl", append(args, url)...)
-	if rc != 0 {
-		msg := strings.TrimSpace(strings.ToValidUTF8(string(stderr), "�"))
-		status := 0
-		if m := curlStatus.FindStringSubmatch(msg); m != nil {
-			status, _ = strconv.Atoi(m[1])
-		}
-		if msg == "" {
-			msg = fmt.Sprintf("curl exit %d", rc)
-		}
-		return nil, &httpError{url, msg, status}
+	if rc == 0 {
+		return stdout, 0, nil
 	}
-	return stdout, nil
+	msg := strings.TrimSpace(strings.ToValidUTF8(string(stderr), "�"))
+	status := 0
+	if m := curlStatus.FindStringSubmatch(msg); m != nil {
+		status, _ = strconv.Atoi(m[1])
+	}
+	if msg == "" {
+		msg = fmt.Sprintf("curl exit %d", rc)
+	}
+	return nil, rc, &httpError{url: url, msg: msg, status: status}
+}
+
+// httpGet fetches a file or an answer from a publisher. After a hiccup it asks again a few times, and a server that
+// says it's busy gets the wait it asks for (busyWaits).
+func httpGet(url string, timeout int, saveHeaders string, headers ...[2]string) ([]byte, error) {
+	if saveHeaders == "" {
+		if f, err := os.CreateTemp("", "kit-headers-"); err == nil {
+			saveHeaders = f.Name()
+			f.Close()
+			defer os.Remove(saveHeaders)
+		}
+	}
+	var args []string
+	if saveHeaders != "" {
+		args = []string{"-D", saveHeaders}
+	}
+	host := urlHost(url)
+	var waited time.Duration
+	for blips, waits := 0, 0; ; {
+		data, rc, err := curlGet(url, timeout, args, headers)
+		busyMu.Lock()
+		if err == nil {
+			delete(busyUntil, host)
+		}
+		gaveUp := time.Now().Before(busyUntil[host])
+		busyMu.Unlock()
+		if err == nil {
+			return data, nil
+		}
+		var wait time.Duration
+		switch why := busyWhy[err.status]; {
+		case why != "":
+			wait = busyWaits[min(waits, len(busyWaits)-1)]
+			if after := retryAfter(saveHeaders); after > 0 {
+				wait = after
+			}
+			if gaveUp || waits == len(busyWaits) || waited+wait > busyMost {
+				busyMu.Lock()
+				busyUntil[host] = time.Now().Add(10 * time.Minute)
+				busyMu.Unlock()
+				err.busy = true
+				return nil, err
+			}
+			waited += wait
+			waits++
+			if isTerminal(os.Stdout) { // over a plan's progress line
+				out("\r" + strings.Repeat(" ", 78) + "\r")
+			}
+			log(fmt.Sprintf("  %s says %s. Asking again in %s...", host, why, fmtWait(wait)))
+		case retries(rc, err.status) && blips < len(retryWaits):
+			wait = retryWaits[blips]
+			blips++
+		default:
+			return nil, err
+		}
+		sleep(wait)
+	}
+}
+
+// localGet asks one of the kit's own servers, as ./kit test does. One that's still starting answers 503 for a while,
+// and the test asks again itself, so this asks only after a hiccup, as curl does, and never waits long.
+func localGet(url string, timeout int) ([]byte, error) {
+	data, _, err := curlGet(url, timeout, []string{"--retry", "3", "--retry-delay", "2"}, nil)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func localJSON(url string) (any, error) {
+	data, err := localGet(url, 60)
+	if err != nil {
+		return nil, err
+	}
+	return parseJSON(data)
 }
 
 // mergeHeaders is {**a, **b}: b's replace a's, in a's order.
@@ -687,10 +829,14 @@ func httpHead(url string) (map[string]string, error) {
 	stdout, stderr, rc := output("curl", "-fsSIL", "--connect-timeout", "20", "--max-time", "60", "-A", userAgent, url)
 	if rc != 0 {
 		msg := strings.TrimSpace(string(stderr))
+		status := 0
+		if m := curlStatus.FindStringSubmatch(msg); m != nil {
+			status, _ = strconv.Atoi(m[1])
+		}
 		if msg == "" {
 			msg = "HEAD failed"
 		}
-		return nil, &httpError{url, msg, 0}
+		return nil, &httpError{url: url, msg: msg, status: status}
 	}
 	text := strings.ReplaceAll(strings.ReplaceAll(string(stdout), "\r\n", "\n"), "\r", "\n")
 	blocks := headerBlocks(text)
