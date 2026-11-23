@@ -412,14 +412,16 @@ with sync_playwright() as p:
             # it's the one affiliate link, with Amazon's required line
             drive_step = page.locator("#how .how-steps li").first
             pick = drive_step.locator("p a")
+            pick_href = pick.get_attribute("href") or ""
             footer = page.inner_text("footer")
             check(
                 "Buy an external SSD links the drive we like, says buying through it supports us, and the footer says so",
                 pick.inner_text() == "We like this one"
-                and pick.get_attribute("href").startswith("https://link.amazon/")
+                and pick_href.startswith("https://www.amazon.com/dp/")
+                and "tag=tudorcityvent-20" in pick_href
                 and pick.get_attribute("rel") == "sponsored nofollow"
-                and drive_step.locator("small").last.inner_text().startswith("You can support our work by buying it")
-                and "which earns us a commission" in drive_step.inner_text()
+                and drive_step.locator("small").last.inner_text().startswith("You can support our work by buying your")
+                and "through that link (it earns us a commission)." in drive_step.inner_text()
                 and "We use one Amazon affiliate link, for the drive we like in How it works" in footer
                 and "As an Amazon Associate I earn from qualifying purchases." in footer,
                 drive_step.inner_text(),
