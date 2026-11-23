@@ -32,6 +32,11 @@ export const metadata = pageMetadata({
   description: DESCRIPTION,
 });
 
+// The drive we like: an Amazon affiliate link. Its card says buying through it supports us, and the footer says it's
+// the site's one affiliate link, with Amazon's required line. It stays off the kit page, llms.txt and anything
+// printed: Amazon's rules allow no offline use.
+const DRIVE_PICK = "https://link.amazon/B0c03M7vm";
+
 const STEPS = [
   [
     "Buy an external SSD",
@@ -253,9 +258,16 @@ export default function Home() {
                 <h3>{STEPS[0][0]}</h3>
                 <p>
                   A portable USB drive with room for the kit: from about 20&nbsp;GB for just the essentials to about
-                  900&nbsp;GB for everything.
+                  900&nbsp;GB for everything.{" "}
+                  <a href={DRIVE_PICK} rel="sponsored nofollow">
+                    We like this one
+                  </a>
+                  .
                 </p>
                 <small>No drive? It can go straight on your computer instead.</small>
+                <small>
+                  You can support our work by buying it on Amazon through that link, which earns us a commission.
+                </small>
               </li>
               <li>
                 <b>02 · TELL YOUR AI</b>
@@ -604,8 +616,8 @@ tools/tinfoilkit/build.sh verify SHA256SUMS`}
             <Question q="What's the catch?">
               None. It's free and open source (MIT license), with no account, no tracking in the kit and no analytics on
               this site. It's a side project from the team behind{" "}
-              <a href="https://dotheysupportit.com">DoTheySupportIt</a>. It costs you disk space and hours of
-              downloading.
+              <a href="https://dotheysupportit.com">DoTheySupportIt</a>. If you buy the drive we link to, we earn a
+              commission. It costs you disk space and hours of downloading.
             </Question>
             <Question q="How is Tinfoil Kit different from Project NOMAD?">
               <a href="https://github.com/Crosstalk-Solutions/project-nomad">Project NOMAD</a>, from Crosstalk

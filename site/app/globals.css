@@ -568,6 +568,7 @@ html:not(.js) .fig {
   margin-top: auto;
   font: 600 15px/44px var(--mono);
 }
+.how-steps p a,
 .how-steps small a {
   margin: 0;
   font: inherit;

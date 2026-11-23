@@ -80,7 +80,9 @@ export function Footer() {
         </span>{" "}
         <span className="fine">
           Provided as is, with no warranty, and not medical advice. Not affiliated with Apple, Wikipedia, Kiwix, Project
-          NOMAD or any source named here; their names are their owners' trademarks.{" "}
+          NOMAD or any source named here; their names are their owners' trademarks. We use one Amazon affiliate link,
+          for the drive we like in <a href="/#how">How it works</a>: the kit and everything it downloads have nothing to
+          do with it. As an Amazon Associate I earn from qualifying purchases.{" "}
           <a href={LICENSES}>Third-party licenses</a>.
         </span>
       </div>
