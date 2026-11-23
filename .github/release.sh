@@ -145,7 +145,7 @@ echo "  downloads for the setup command: TinfoilKit.tar.gz (Mac, Linux), Tinfoil
 if [ -n "$app" ]; then
   echo "  and the website's Mac download: TinfoilKit-Mac.zip (the app, signed by $id and notarized)"
 else
-  echo "  no Mac app: the website's downloads stay \"coming soon\""
+  echo "  no Mac app, so the website still offers no download"
 fi
 echo "What's new:"
 sed 's/^/  /' "$NOTES"

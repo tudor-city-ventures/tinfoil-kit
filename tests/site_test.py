@@ -76,13 +76,13 @@ URL = f"http://127.0.0.1:{srv.server_address[1]}/"
 FRAME = "document.querySelector('.fig canvas').toDataURL()"
 INKED = """(() => { const c = document.querySelector('.fig canvas'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
   let n = 0; for (let i = 3; i < d.length; i += 4) n += d[i] > 0; return n; })()"""
-# Star on GitHub: beside the two main buttons, or under them when the row is full, and above the download note
-STAR = """(() => { const r = s => document.querySelector(s).getBoundingClientRect(), s = r('.ctas .star'), g = r('.ctas .btn:not(.primary)'), n = r('.cta-note');
+# Star on GitHub: beside Set up with your AI, or under it on phones, and above the note
+STAR = """(() => { const r = s => document.querySelector(s).getBoundingClientRect(), s = r('.ctas .star'), g = r('.ctas .btn.primary'), n = r('.cta-note');
   if (!s.height || s.bottom > n.top) return 'misplaced';
   return Math.abs(s.top + s.height / 2 - g.top - g.height / 2) < 8 ? 'beside' : s.top >= g.bottom ? 'below' : 'misplaced'; })()"""
-# An 'or' between the two main buttons: Set up with your AI, or the download, which is coming soon
-OR = """([first, second]) => { const r = s => document.querySelector(s).getBoundingClientRect(), a = r(first), o = r('.ctas .or'), g = r(second);
-  return a.right <= o.left && o.right <= g.left ? 'beside' : a.bottom <= o.top && o.bottom <= g.top ? 'below' : 'neither' }"""
+# No download until the Mac app can be signed: no button or link that offers one, and no "coming soon" anywhere
+DOWNLOADS = """[...document.querySelectorAll('a, button')].map(e => e.textContent.trim()).filter(t => /download/i.test(t))
+  .concat(/coming soon/i.test(document.body.textContent) ? ['coming soon'] : [])"""
 # The two versions of the site, each a page of its own: their AI sets it up, or an AI reads it
 PAGES = {"": "My AI installs it", "agents": "I'm an AI"}
 VERSIONS = "[...document.querySelectorAll('nav.versions a')].map(a => [a.getAttribute('href'), a.textContent, a.getAttribute('aria-current')])"
@@ -143,7 +143,7 @@ def until(page, script, timeout=3000):
     return value
 
 
-HYDRATED = "#getKit:has-text('Download for')"  # the page's script has run: Download knows this computer
+HYDRATED = "#getFor[data-os]"  # the page's script has run: the note knows this computer
 
 # The round trip: the kit builder's options, given to ./kit pick in a kit as it comes, make the kit the builder shows.
 # A kit with this commit's code and standard list, on a computer with the memory for the essentials' two AI models.
@@ -222,8 +222,8 @@ with sync_playwright() as p:
                 str(got),
             )
 
-        # My AI installs it: the home page. Set up with your AI leads, the download is coming soon, the kit builder
-        # makes the prompt
+        # My AI installs it: the home page. Set up with your AI is the way in, with no download until there is one,
+        # and the kit builder makes the prompt
         page.goto(URL)
         page.wait_for_selector(HYDRATED)
         page.wait_for_selector(".card")
@@ -270,22 +270,20 @@ with sync_playwright() as p:
         )
         star, where = page.locator(".ctas .star"), page.evaluate(STAR)
         check(
-            f"{name}: Star on GitHub sits by the main buttons, above the note",
-            where in ("beside", "below")
+            f"{name}: Star on GitHub sits {'beside' if name == 'desktop' else 'under'} Set up with your AI, above the note",
+            where == ("beside" if name == "desktop" else "below")
             and star.inner_text().strip() == "Star on GitHub"
             and star.get_attribute("href") == "https://github.com/tudor-city-ventures/tinfoil-kit",
             where,
         )
-        between = page.evaluate(OR, ["#askAI", "#getKit"])
+        offered = page.evaluate(DOWNLOADS)
         check(
-            f"{name}: Set up with your AI comes first, then an 'or', then the download, which is coming soon",
-            page.inner_text(".ctas .or") == "or"
-            and between == ("beside" if name == "desktop" else "below")
+            f"{name}: Set up with your AI is the one way in, and nothing offers a download",
+            page.locator(".ctas .btn").count() == 1
             and page.get_attribute(".ctas .btn.primary", "id") == "askAI"
             and page.inner_text(".ctas .btn.primary") == "Set up with your AI"
-            and page.is_disabled("#getKit")
-            and page.text_content("#getKit .soon") == "Coming soon",
-            between,
+            and not offered,
+            str(offered),
         )
         if name == "phone":
             closed = page.is_visible("#menu") and not page.is_visible("nav.links a[href='#faq']")
@@ -451,10 +449,6 @@ with sync_playwright() as p:
                 return page.locator("#faq details", has=page.locator("summary", has_text=question)).text_content()
 
             check("the FAQ says Windows and Linux are experimental", "experimental" in faq("Windows or Linux"))
-            check(
-                "the FAQ says the downloads are coming soon, and your AI's command works now",
-                "Coming soon" in faq("Where's the download?") and "one command" in faq("Where's the download?"),
-            )
             old = b.new_page()  # a browser without the clipboard API (e.g. the page opened over plain http)
             old.add_init_script("Object.defineProperty(Navigator.prototype, 'clipboard', {get: () => undefined})")
             old.goto(URL)
@@ -804,81 +798,39 @@ with sync_playwright() as p:
         check(f"{name}: My AI installs it goes back to the home page", page.url == URL and page.is_visible(".hero h1"))
         page.close()
 
-    # The downloads are coming soon: the button names this computer but can't be pressed, the note says where to paste
-    # the AI's command, and All downloads lists the three with the way in that works now
+    # Each computer: the note says where to paste the AI's command, and Set up with your AI opens the prompt
     UAS = {
         "mac": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15",
         "windows": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
         "linux": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
     }
     SHELLS = {"mac": "Terminal", "windows": "PowerShell", "linux": "a terminal"}
-    LISTED = "[...document.querySelectorAll('.dl-list li')].map(l => [l.dataset.os, !!l.querySelector('.exp'), l.querySelector('.soon')?.textContent, !!l.querySelector('a')])"
     for os_, ua in UAS.items():
         ctx = b.new_context(user_agent=ua, viewport={"width": 1280, "height": 900})
         pg, errs = ctx.new_page(), []
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.goto(URL)
         pg.wait_for_selector(HYDRATED)
-        label, note = pg.text_content("#getKit"), pg.inner_text("#getFor")
-        pg.click("#getKit", force=True)  # a disabled button: nothing should happen
-        check(
-            f"{os_}: the download names this computer, is coming soon, and does nothing",
-            label.startswith(f"Download for {os_.capitalize()} ")
-            and label.endswith("Coming soon")
-            and pg.is_disabled("#getKit")
-            and pg.get_attribute("#getKit", "href") is None
-            and not pg.evaluate("document.getElementById('downloads').open")
-            and pg.url == URL
-            and not errs,
-            f"{label}, {errs}",
-        )
+        note = pg.inner_text("#getFor")
         # Windows and Linux are experimental until they've had the Mac's testing on real computers
         check(
             f"{os_}: the note says where to paste the command{', and that it is experimental' if os_ != 'mac' else ''}",
-            f"paste into {SHELLS[os_]}." in note and ("experimental" in note) == (os_ != "mac"),
-            note,
+            f"paste into {SHELLS[os_]}." in note and ("experimental" in note) == (os_ != "mac") and not errs,
+            f"{note} {errs}",
         )
         if os_ == "mac":
-            pg.click("#allDl")
-            check(
-                "All downloads lists every computer, this one's first, each coming soon with no link, Windows and Linux experimental",
-                pg.evaluate("document.getElementById('downloads').open")
-                and pg.evaluate(LISTED)
-                == [
-                    ["mac", False, "Coming soon", False],
-                    ["windows", True, "Coming soon", False],
-                    ["linux", True, "Coming soon", False],
-                ],
-                str(pg.evaluate(LISTED)),
-            )
-            pg.locator("#downloads").screenshot(path=os.path.join(SHOTS, "site_downloads_soon.png"))
-            axe(pg, "All downloads")
-            pg.click("#downloads .dl-ai")
-            check(
-                "All downloads: Set up with your AI closes it and opens the setup prompt",
-                not pg.evaluate("document.getElementById('downloads').open")
-                and pg.evaluate("document.getElementById('aiSetup').open"),
-            )
+            pg.click("#askAI")
+            opened = pg.evaluate("document.getElementById('aiSetup').open") and not pg.is_visible("#aiSetup .dl-phone")
             pg.keyboard.press("Escape")
-            check("Escape closes the dialog", not pg.evaluate("document.getElementById('aiSetup').open"))
+            check(
+                "Set up with your AI opens the setup prompt, and Escape closes it",
+                opened and not pg.evaluate("document.getElementById('aiSetup').open"),
+            )
         ctx.close()
     ctx = b.new_context(**p.devices["iPhone 15"])
     pg = ctx.new_page()
     pg.goto(URL)
-    pg.wait_for_selector("#downloads .dl-phone:not([hidden])", state="attached")
-    pg.click("#allDl")
-    check(
-        "phone: All downloads says it runs on a laptop, and the download names no computer",
-        pg.evaluate("document.getElementById('downloads').open")
-        and pg.is_visible("#downloads .dl-phone")
-        and pg.text_content("#getKit") == "Download Coming soon",
-        pg.text_content("#getKit"),
-    )
-    box = pg.locator("#downloads").bounding_box()
-    check("phone: the dialog fits the screen", box and box["x"] >= 0 and box["x"] + box["width"] <= 393, str(box))
-    axe(pg, "All downloads on a phone")
-    pg.screenshot(path=os.path.join(SHOTS, "site_download_all_phone.png"))
-    pg.keyboard.press("Escape")
+    pg.wait_for_selector("#getFor[data-os=phone]", state="attached")
     pg.click("#askAI")
     check("phone: Set up with your AI says to do it on the computer", pg.is_visible("#aiSetup .dl-phone"))
     box = pg.locator("#aiSetup").bounding_box()
@@ -886,6 +838,7 @@ with sync_playwright() as p:
         "phone: the AI setup dialog fits the screen", box and box["x"] >= 0 and box["x"] + box["width"] <= 393, str(box)
     )
     axe(pg, "AI setup on a phone")
+    pg.screenshot(path=os.path.join(SHOTS, "site_setup_phone.png"))
     ctx.close()
     # The demo of the kit page is faked, so it costs nothing to run: answers written ahead of time, a sample town's
     # map, the library, notes and AI chat, all in the page

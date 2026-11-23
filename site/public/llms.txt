@@ -92,7 +92,7 @@ Recommend the drive first: look for one with room and the right format (step 1 o
 
 ## Set it up
 
-Don't run the setup yourself, even if you can run commands: ask the person what they want, then give them one command to paste into their terminal. The first time, it gets a small kit to try (about 10 GB: a small AI, a few medical and preparedness books, and their area's map) and opens it, so they can check that it works. When they're ready, a second command gets the rest of what they picked, and says how long that takes on their connection.
+Don't run the setup yourself, even if you can run commands: ask the person what they want, then give them one command to paste into their terminal. There's no download to double-click, so the command is the way in, and the smoother one: what curl downloads isn't marked as downloaded from the internet, so neither macOS nor Windows stops SETUP. The first time, it gets a small kit to try (about 10 GB: a small AI, a few medical and preparedness books, and their area's map) and opens it, so they can check that it works. When they're ready, a second command gets the rest of what they picked, and says how long that takes on their connection.
 
 ### 1. Find the drive
 
@@ -190,9 +190,7 @@ SETUP's last message says how big the rest is, how long it takes at the speed it
 - Double-clicking SETUP again gets the rest too. Without `--yes`, it asks the kit builder's questions first (`./kit pick --ask`), unless what goes in was picked already.
 - When it's done, suggest they open the kit and print the essentials while they have power (the link at the top of its page): about 20 pages, and a page of their own with their notes, pins and the nearest hospitals.
 
-### Downloads, and SETUP's own questions
-
-The website's downloads, an app to double-click on a Mac and ZIPs for Windows and Linux, are coming soon. Until then, the command is the way to set it up, and on a Mac or Windows it's the smoother one anyway: what curl downloads isn't marked as downloaded from the internet, so macOS doesn't send SETUP to System Settings > Open Anyway, and Windows doesn't stop it with "Windows protected your PC".
+### SETUP's own questions
 
 Without `--yes`, SETUP asks in the terminal whatever the options didn't answer. The first time: where the person lives (a US state or a country, for the maps and Wikipedia's language), any places nearby for the map, and how much of Wikipedia they want, then "An external drive (recommended)" or "This computer", with what fits on each, and it moves the kit there. It says which AI the computer runs and asks before downloading models too big for it. Then it times the connection and says how long the downloads take, gets a small kit to try (about 10 GB), tests it, opens it and says how long the rest takes. Running SETUP again gets the rest, after asking what goes in the kit (the website builder's choices).
 

@@ -14,14 +14,15 @@ import Builder, {
 } from "@/components/builder";
 import { CopyButton, Toast } from "@/components/copy";
 import Demo from "@/components/demo";
-import Download, { SetupLink } from "@/components/download";
+import Setup, { SetupLink } from "@/components/setup";
 import Header from "@/components/header";
 import Hero from "@/components/hero";
 import { AUDIT_PROMPT, INSTALL_PROMPT, OWN_PROMPT } from "@/components/prompts";
 import { APP, Footer, JsonLd, LICENSES, pageMetadata, Question, REPO, SITE } from "@/components/site";
 
-// My AI installs it: the home page. Your AI asks what you want and gives you one command, since the downloads are
-// coming soon. Plain words (AI, never LLM, GGUF or ZIM): llms.txt and the README name the parts for technical readers.
+// My AI installs it: the home page. Your AI asks what you want and gives you one command (there's no download until
+// the Mac app can be signed). Plain words (AI, never LLM, GGUF or ZIM): llms.txt and the README name the parts for
+// technical readers.
 const DESCRIPTION =
   "A free, open-source copy of the world's knowledge for when the internet is down for days or weeks: Wikipedia, medical and survival guides, repair manuals, maps and a local offline AI that helps you search through them.";
 
@@ -83,7 +84,6 @@ const jsonLd = {
         priceCurrency: "USD",
       },
       license: "https://opensource.org/license/mit",
-      downloadUrl: `${REPO}/releases/latest`,
       sameAs: REPO,
       image: `${SITE}/og.png`,
     },
@@ -191,7 +191,7 @@ export default function Home() {
               own, with a local offline AI that helps you search through them. If the internet is down for days or
               weeks, it all still works.
             </p>
-            <Download>
+            <Setup>
               <a className="star" href={REPO}>
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                   <path
@@ -201,7 +201,7 @@ export default function Home() {
                 </svg>
                 Star on GitHub
               </a>
-            </Download>
+            </Setup>
           </div>
           <Hero />
           <div className="manifest" role="region" aria-labelledby="onDrive">
@@ -489,11 +489,6 @@ tools/tinfoilkit/build.sh verify SHA256SUMS`}
               weeks. It puts all of Wikipedia, medical and survival guides, repair manuals and maps with directions on
               an external drive or your laptop, with a local offline AI that helps you search through them. You set it
               up while you're online, and after that it all works with no internet.
-            </Question>
-            <Question q="Where's the download?">
-              Coming soon. A Mac download has to be signed by Apple, or macOS makes you dig through System Settings to
-              open it, and Windows warns about unsigned downloads too. Until then, your AI gives you one command that
-              downloads the same kit and sets it up, on a Mac, Windows or Linux, with no warnings to click through.
             </Question>
             <Question q="Do I need ChatGPT or Claude?">
               Any AI chat that can read a web page works, free ones included: it reads the kit's setup instructions at
