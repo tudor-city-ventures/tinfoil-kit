@@ -29,3 +29,6 @@ site/.claude/
 
 # The kit's program, built by tools/tinfoilkit/build.sh (releases carry it; git doesn't)
 tools/tinfoilkit-*
+
+# What's new in the next release, for .github/release.sh vX.Y.Z NOTES.txt
+/NOTES.txt
