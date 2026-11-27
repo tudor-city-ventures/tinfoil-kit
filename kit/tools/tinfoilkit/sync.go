@@ -1577,7 +1577,11 @@ func dropFinderFiles(root string) {
 			}
 		}
 	}
-	for _, top := range []string{filepath.Join(dl, "models"), filepath.Join(root, ".git")} {
+	tops := []string{filepath.Join(dl, "models")}
+	if checkout(root) {
+		tops = append(tops, filepath.Join(root, ".git"), filepath.Join(filepath.Dir(root), ".git"))
+	}
+	for _, top := range tops {
 		filepath.WalkDir(top, func(p string, d fs.DirEntry, err error) error {
 			if err == nil && strings.HasPrefix(d.Name(), "._") && d.Type().IsRegular() {
 				os.Remove(p)

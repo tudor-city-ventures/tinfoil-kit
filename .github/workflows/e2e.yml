@@ -4,10 +4,12 @@ concurrency:
   cancel-in-progress: true
 on:
   pull_request:
-    paths: [tools/**, kit.json, kit, 'Open Tinfoil Kit.command', SETUP.command, tests/**, .github/workflows/e2e.yml]
+    paths: [kit/tools/**, kit/kit.json, kit/kit, 'kit/Open Tinfoil Kit.command', kit/SETUP.command, tests/**,
+      .github/workflows/e2e.yml]
   push:
     branches: [main]
-    paths: [tools/**, kit.json, kit, 'Open Tinfoil Kit.command', SETUP.command, tests/**, .github/workflows/e2e.yml]
+    paths: [kit/tools/**, kit/kit.json, kit/kit, 'kit/Open Tinfoil Kit.command', kit/SETUP.command, tests/**,
+      .github/workflows/e2e.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,7 +37,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - run: npm ci --ignore-scripts    # axe-core, for the accessibility checks, from package.json
       # The kit's own program, which the test's kit carries as a release does: ./kit and the launcher run it.
-      - run: tools/tinfoilkit/build.sh
+      - run: kit/tools/tinfoilkit/build.sh
       - run: tests/run_all.sh
         env:
           KIT_AXE: ${{ github.workspace }}/node_modules/axe-core/axe.min.js

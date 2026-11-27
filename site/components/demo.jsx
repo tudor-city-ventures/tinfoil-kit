@@ -25,7 +25,7 @@ import {
   W,
 } from "@/components/demo-data";
 
-// A demo of the kit page (tools/portal.html): its layout and words, with answers written ahead of time
+// A demo of the kit page (kit/tools/portal.html): its layout and words, with answers written ahead of time
 // (components/demo-data.js). It runs no AI, no library and no map server, and keeps nothing anyone types.
 
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -117,7 +117,7 @@ function directions(from, to, mode) {
   return { steps, pts, ms, len: edges.reduce((t, e) => t + e.len, 0), from, to, mode };
 }
 
-// Distances and times as the kit page writes them, in miles (fmtDist, fmtTime and bearing in tools/portal.html).
+// Distances and times as the kit page writes them, in miles (fmtDist, fmtTime and bearing in kit/tools/portal.html).
 function fmtDist(units) {
   const mi = units / MILE;
   return mi < 0.1 ? Math.round((mi * 5280) / 10) * 10 + " ft" : mi.toFixed(mi < 9.95 ? 1 : 0) + " mi";
@@ -1291,7 +1291,7 @@ function PrintPanel({ notes, say }) {
 }
 
 /* ------------------------------------------------------------------------------------------ share with family */
-// What Share copies for the person to text, word for word as the kit page writes it (Kit.invite in tools/portal.html)
+// What Share copies for the person to text, word for word as the kit page writes it (Kit.invite in kit/tools/portal.html)
 const invite = (address, code) =>
   "You can use my Tinfoil Kit: an AI, a library and maps that work without the internet. Join my Wi-Fi, then open " +
   address +
@@ -1485,7 +1485,7 @@ function HelpPanel({ go }) {
 }
 
 /* --------------------------------------------------------------------------------------------- the window */
-// The kit page's tabs, and the pages its More menu holds (nav and #moreMenu in tools/portal.html). In the kit, AI
+// The kit page's tabs, and the pages its More menu holds (nav and #moreMenu in kit/tools/portal.html). In the kit, AI
 // chat opens in a tab of its own; here it's a page that says so.
 const TABS = [
   ["ask", "Ask"],

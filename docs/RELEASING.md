@@ -11,13 +11,13 @@ For the maintainer. A release reaches every kit at its next SETUP (`./kit update
 | `TinfoilKit-Mac.zip` | The website's Mac download: the Tinfoil Kit app, signed with the Developer ID and notarized. Only once the Mac that makes releases can sign it (below); until then releases leave it out, and the website offers no download |
 | `SHA256SUMS` and `.sig` | The SHA-256 of every file above and of each computer's program as built, signed with the release key |
 
-Everything is built from the tag and can be rebuilt byte for byte: `tools/tinfoilkit/build.sh verify SHA256SUMS` checks the programs, and `build.sh archive tar tinfoilkit-TAG TAG | shasum -a 256` the update archive (README, "Security", has the steps for anyone).
+Everything is built from the tag and can be rebuilt byte for byte: `kit/tools/tinfoilkit/build.sh verify SHA256SUMS` checks the programs, and `build.sh archive tar tinfoilkit-TAG TAG | shasum -a 256` the update archive (README, "Security", has the steps for anyone).
 
 ## Before a release
 
 1. CI passed on the commit: `check` (a commit a workflow pushed starts no checks, so run `check` on `main` by hand then) and `e2e`.
 2. The `drive test` workflow passed on it.
-3. Run the `pin program builds` workflow, or wait for its Saturday run, so `tools/pins.json` names the newest builds.
+3. Run the `pin program builds` workflow, or wait for its Saturday run, so `kit/tools/pins.json` names the newest builds.
 4. On a Mac with a real drive, from that commit: `./kit sync && ./kit test`. This is the only run against the real downloads and Apple Silicon's GPU, and it makes the pinned builds the tested ones.
 5. Write `NOTES.txt`: a few plain lines on what's new. SETUP shows them before it installs the release.
 
@@ -29,9 +29,9 @@ Everything is built from the tag and can be rebuilt byte for byte: `tools/tinfoi
 
 It needs git, ssh-keygen, Go (`brew install go`), GitHub's `gh` signed in (`brew install gh && gh auth login`) and the release key (below). The Mac app's signing (below) is only for the Mac app: without it, the release leaves the app out and says so. Before anything goes out it:
 
-- stops unless the checkout is `main` exactly as on GitHub, with nothing uncommitted, the tag is new, `check` passed on the commit and `tools/pins.json` pins the programs;
+- stops unless the checkout is `main` exactly as on GitHub, with nothing uncommitted, the tag is new, `check` passed on the commit and `kit/tools/pins.json` pins the programs;
 - builds each computer's program and stops unless they match CI's build of the same commit (CI prints their SHA-256s);
-- builds the update archive and the downloads from the tag, signs the archive, and checks the signature against this release's `tools/release-signers` and the last release's, since kits on the last release check it with their keys;
+- builds the update archive and the downloads from the tag, signs the archive, and checks the signature against this release's `kit/tools/release-signers` and the last release's, since kits on the last release check it with their keys;
 - if this Mac can sign and notarize, builds the Mac app, has Apple notarize it, and checks that its copy of the program differs from the plain build only by Apple's signature;
 - signs `SHA256SUMS`, shows what's new and asks for the version to be typed before it pushes the tag and creates the release.
 
@@ -43,7 +43,7 @@ GitHub's own source tarballs are never installed by anything.
 .github/release.sh key
 ```
 
-It makes an Ed25519 key at `~/.ssh/tinfoilkit-release` (or `KIT_RELEASE_KEY`), asks for a passphrase, and adds the public half to `tools/release-signers`; commit and push that. Back up the key and its passphrase in a password manager, with a copy offline: without them, no kit can update again. Each release brings the next `tools/release-signers`, so changing keys is a release signed with the old key that lists the new one.
+It makes an Ed25519 key at `~/.ssh/tinfoilkit-release` (or `KIT_RELEASE_KEY`), asks for a passphrase, and adds the public half to `kit/tools/release-signers`; commit and push that. Back up the key and its passphrase in a password manager, with a copy offline: without them, no kit can update again. Each release brings the next `tools/release-signers`, so changing keys is a release signed with the old key that lists the new one.
 
 ## Signing the Mac app (once)
 
@@ -70,7 +70,7 @@ The repo and tinfoilkit.com are public. What's left, in order. Each step needs t
 
 1. Turn on the settings below, all but the `main` ruleset's pull request rules (step 4). The release protections must be on before step 3.
 2. A real `SETUP.command` run on a Mac with a real drive, and `./kit test` passes.
-3. Publish v1.0.0. Until then the setup command an AI gives people (llms.txt) can't download the kit, and `./kit update` finds nothing, so kits keep their version. The release key is made (its public half is in `tools/release-signers`): back it up as above before the first release. The Mac app's signing (above) can come later: until then releases leave the app out.
+3. Publish v1.0.0. Until then the setup command an AI gives people (llms.txt) can't download the kit, and `./kit update` finds nothing, so kits keep their version. The release key is made (its public half is in `kit/tools/release-signers`): back it up as above before the first release. The Mac app's signing (above) can come later: until then releases leave the app out.
 4. Switch to pull requests and review: add the pull request rules to the `main` ruleset (below) and update AGENTS.md's Workflow section. The ruleset ends direct pushes, including the weekly sizes and pins commits, so in the same step switch the commit jobs of `sizes.yml` and `pins.yml` to push a `bot/sizes` or `bot/pins` branch, open a pull request, run the required checks on it with `workflow_dispatch` (pull requests opened with the Actions token don't start workflows; dispatching `pr-gate.yml` skips `protected-files`, which counts as passing) and auto-merge it. That needs "Allow GitHub Actions to create and approve pull requests" and auto-merge turned on. Keep the ruleset at no required approvals while that setting is on, or a workflow could approve its own pull request.
 5. Tell search engines: add tinfoilkit.com to Google Search Console and Bing Webmaster Tools (ChatGPT search and Copilot draw on Bing's index), verify it with a DNS record on Vercel, and submit https://tinfoilkit.com/sitemap.xml. Search Console will say the app markup can't get star ratings because the site has no reviews: expected, and never fill that in with made-up ratings.
 6. GitHub build attestations for the programs: `actions/attest-build-provenance` at a verified commit SHA, in a job listed in `WRITES` in `tests/actions_test.py` (it needs `id-token` and `attestations` write).

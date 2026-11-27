@@ -3,9 +3,9 @@
   "private": true,
   "description": "Developer tools only: format and lint the kit's page, the website and the JavaScript tests, and the tests' accessibility checks. Nothing on a drive installs or runs them.",
   "scripts": {
-    "format": "prettier --write tools/portal.html \"site/**/*.{js,jsx,mjs,css}\" \"tests/*.js\" \"*.mjs\"",
-    "lint": "prettier --check tools/portal.html \"site/**/*.{js,jsx,mjs,css}\" \"tests/*.js\" \"*.mjs\" && eslint .",
-    "fix": "eslint --fix . && prettier --write tools/portal.html \"site/**/*.{js,jsx,mjs,css}\" \"tests/*.js\" \"*.mjs\""
+    "format": "prettier --write kit/tools/portal.html \"site/**/*.{js,jsx,mjs,css}\" \"tests/*.js\" \"*.mjs\"",
+    "lint": "prettier --check kit/tools/portal.html \"site/**/*.{js,jsx,mjs,css}\" \"tests/*.js\" \"*.mjs\" && eslint .",
+    "fix": "eslint --fix . && prettier --write kit/tools/portal.html \"site/**/*.{js,jsx,mjs,css}\" \"tests/*.js\" \"*.mjs\""
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

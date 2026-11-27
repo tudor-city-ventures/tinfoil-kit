@@ -247,7 +247,7 @@ def kit_json(out, maps=False):
     the model and the books, and another tiny model as its sample, which nobody picks: it goes once the rest is in."""
     tests = Path(__file__).resolve().parent
     t = json.loads((tests / "drive_kit.json").read_text(encoding="utf-8"))
-    k = json.loads((tests.parent / "kit.json").read_text(encoding="utf-8"))
+    k = json.loads((tests.parent / "kit" / "kit.json").read_text(encoding="utf-8"))
     t["runtimes"] = [r for r in k["runtimes"] if maps or not r.get("requires")]
     if (
         maps

@@ -1,5 +1,5 @@
 name: pin program builds
-# Pins the newest build of every program, with its SHA-256, in tools/pins.json (./kit pins) and commits it when it
+# Pins the newest build of every program, with its SHA-256, in kit/tools/pins.json (./kit pins) and commits it when it
 # changed, so the next release installs exactly those builds. A program whose file changed under the same version
 # fails the run, and nothing is committed until someone finds out why.
 # Only the commit job can write to the repo, and it runs none of the kit's code: the build job, which talks to
@@ -19,13 +19,13 @@ jobs:
         with:
           ref: main     # a scheduled run starts on the default branch; releases are cut from main
           persist-credentials: false
-      - run: ./kit pins
+      - run: kit/kit pins
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pins
-          path: tools/pins.json
+          path: kit/tools/pins.json
           retention-days: 1
 
   commit:
@@ -46,7 +46,7 @@ jobs:
         env:
           NEW: ${{ runner.temp }}/pins/pins.json
         run: |
-          python3 -I - "$NEW" tools/pins.json kit.json <<'PY'
+          python3 -I - "$NEW" kit/tools/pins.json kit/kit.json <<'PY'
           import json, re, sys
           new, old, kit = (json.load(open(p)) for p in sys.argv[1:4])
           # kit.json's programs, and the map viewer's three that the kit's program lists itself
@@ -60,10 +60,10 @@ jobs:
           sys.exit(0 if ok else "The new pins.json changes its note, names a program the kit doesn't download, or has an "
                    "entry that isn't a version and a SHA-256, so it isn't committed. Run ./kit pins by hand and read its diff.")
           PY
-          cp "$NEW" tools/pins.json
-          git diff --quiet tools/ && { echo "no change"; exit 0; }
+          cp "$NEW" kit/tools/pins.json
+          git diff --quiet kit/tools/ && { echo "no change"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Pin the newest program builds" tools/pins.json
+          git commit -m "Pin the newest program builds" kit/tools/pins.json
           git pull --rebase origin main
           git push origin HEAD:main

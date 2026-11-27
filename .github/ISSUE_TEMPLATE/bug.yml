@@ -6,7 +6,7 @@ body:
     id: first
     attributes:
       label: Before you start
-      description: Most setup problems are answered in the guide's [If something doesn't work](https://github.com/tudor-city-ventures/tinfoil-kit/blob/main/GUIDE.md#if-something-doesnt-work).
+      description: Most setup problems are answered in the guide's [If something doesn't work](https://github.com/tudor-city-ventures/tinfoil-kit/blob/main/kit/GUIDE.md#if-something-doesnt-work).
       options:
         - label: I searched the open and closed issues, and this isn't one of them.
           required: true

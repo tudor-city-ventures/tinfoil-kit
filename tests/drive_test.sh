@@ -57,10 +57,10 @@ stop_kit() {
 
 # The kit as Safari leaves a download: a TinfoilKit folder with the app folder in it, every file marked as from the
 # internet. Its standard list (app/kit.json) is the test kit's; with maps, a map too. Like a release's download, it
-# has the kit's own program for each computer in its tools (drive.yml builds them; else tools/tinfoilkit/build.sh).
+# has the kit's own program for each computer in its tools (drive.yml builds them; else kit/tools/tinfoilkit/build.sh).
 download_kit() { # KIT [maps]
   rm -rf "$1" && mkdir -p "$1/app"
-  git -C "$ROOT" archive HEAD | tar -xf - -C "$1/app"
+  git -C "$ROOT/kit" archive HEAD | tar -xf - -C "$1/app"
   cp "$W"/programs/tinfoilkit-* "$1/app/tools/"
   python3 "$TESTS/drive.py" kitjson "$1/app/kit.json" ${2:-}
   xattr -r -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$1"
@@ -147,7 +147,7 @@ mac() {
 
   step "the kit's own program, signed again the way Apple's signing does it: tinfoilkit compare finds only the"
   echo "signature changed (build.sh verify says so of the Mac app's copy)"
-  [ -f "$W/programs/tinfoilkit-macos-arm64" ] || "$ROOT/tools/tinfoilkit/build.sh" "$W/programs" || fail "the kit's own program didn't build"
+  [ -f "$W/programs/tinfoilkit-macos-arm64" ] || "$ROOT/kit/tools/tinfoilkit/build.sh" "$W/programs" || fail "the kit's own program didn't build"
   f="$W/programs/tinfoilkit-macos-arm64"
   chmod +x "$W"/programs/tinfoilkit-*    # an Actions artifact keeps no file modes
   cp "$f" "$W/program-signed" && codesign --force --options runtime --sign - "$W/program-signed"
@@ -161,7 +161,7 @@ mac() {
 
   step "the Mac app, built from this commit and signed ad hoc, in Applications as it puts itself"
   rm -rf "$app" "$W/app" "$W/app-kit" && mkdir -p "$W/app-kit/TinfoilKit"
-  git -C "$ROOT" archive HEAD | tar -xf - -C "$W/app-kit/TinfoilKit"
+  git -C "$ROOT/kit" archive HEAD | tar -xf - -C "$W/app-kit/TinfoilKit"
   cp "$W"/programs/tinfoilkit-* "$W/app-kit/TinfoilKit/tools/"
   tar -czf "$W/app-kit.tar.gz" -C "$W/app-kit" TinfoilKit    # a release's archive, which mac/build.sh takes
   if "$ROOT/mac/build.sh" "$W/app-kit.tar.gz" "$W/app" > "$L/mac_app_build.log" 2>&1; then

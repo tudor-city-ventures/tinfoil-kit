@@ -1,15 +1,6 @@
-# A checkout is its own app folder: what sync downloads goes in downloads/, the person's settings and the kit's
-# records in data/. The rest are where a kit from before those folders kept them.
+# What a checkout from before kit/ downloaded: the kit moves it into kit/ (kit/.gitignore) the next time it runs.
 /downloads/
 /data/
-.kit/
-logs/
-bin/
-models/
-library/
-maps/
-installers/
-INVENTORY.md
 __pycache__/
 .DS_Store
 ._*
@@ -34,9 +25,6 @@ mobile/android/
 mobile/expo-env.d.ts
 mobile/.claude/
 .claude/settings.local.json
-
-# The kit's program, built by tools/tinfoilkit/build.sh (releases carry it; git doesn't)
-tools/tinfoilkit-*
 
 # What's new in the next release, for .github/release.sh vX.Y.Z NOTES.txt
 /NOTES.txt

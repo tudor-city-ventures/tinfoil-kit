@@ -20,4 +20,4 @@ jobs:
         run: |
           set -f    # the words are search terms, never file patterns
           IFS=',' read -ra Q <<< "$WORDS"
-          for q in "${Q[@]}"; do echo "### $q"; ./kit search $q | head -25; echo; done
+          for q in "${Q[@]}"; do echo "### $q"; kit/kit search $q | head -25; echo; done

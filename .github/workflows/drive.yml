@@ -57,10 +57,10 @@ jobs:
             *) base="" ;;    # by hand: always
           esac
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2> /dev/null &&
-             git diff --quiet "$base" HEAD -- tools kit kit.cmd kit.json SETUP.command 'Open Tinfoil Kit.command' UNINSTALL.command '*.bat' mac \
-               'tests/drive*' 'tests/make_*.py' tests/build_fixtures.sh tests/env.sh tests/mock_remote.py tests/ui_test.py \
-               .github/workflows/drive.yml \
-               ':(exclude)tools/pins.json'    # the test's kits take the mock's own builds, never the pinned ones
+             git diff --quiet "$base" HEAD -- kit/tools kit/kit kit/kit.cmd kit/kit.json kit/SETUP.command \
+               'kit/Open Tinfoil Kit.command' kit/UNINSTALL.command 'kit/*.bat' mac 'tests/drive*' 'tests/make_*.py' \
+               tests/build_fixtures.sh tests/env.sh tests/mock_remote.py tests/ui_test.py .github/workflows/drive.yml \
+               ':(exclude)kit/tools/pins.json'    # the test's kits take the mock's own builds, never the pinned ones
           then
             echo "Nothing the drive test covers changed since $base, so it doesn't run."
           else
@@ -94,7 +94,7 @@ jobs:
           retention-days: 1
       # The kit's own program for each computer, built once: the kits the Mac and Windows set up carry it, as a
       # release's download does.
-      - run: tools/tinfoilkit/build.sh tests/work/programs
+      - run: kit/tools/tinfoilkit/build.sh tests/work/programs
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: programs

@@ -2,7 +2,7 @@
 # Publishes a release of Tinfoil Kit. Every drive installs it at its next SETUP (./kit update), and only if it's
 # signed with a key in that drive's tools/release-signers. Run it on the maintainer's own computer, never in CI,
 # so that the signing key never goes near GitHub.
-#   .github/release.sh key                 make the signing key and add it to tools/release-signers (once)
+#   .github/release.sh key                 make the signing key and add it to kit/tools/release-signers (once)
 #   .github/release.sh v1.2.0 NOTES.txt    sign and publish main as v1.2.0, with NOTES.txt as what's new
 #   .github/release.sh mac                 set up and try the Mac app's signing (once): it builds the app, Apple
 #                                          notarizes it, and a copy lands on the Desktop as if downloaded
@@ -34,7 +34,7 @@ if [ "${1:-}" = mac ]; then
       die "notarytool didn't save the password. Check the email and the password, then run this again"
   fi
   out=$(mktemp -d)
-  git archive --format=tar --prefix=TinfoilKit/ HEAD | gzip -n > "$out/kit.tar.gz"
+  git -C kit archive --format=tar --prefix=TinfoilKit/ HEAD | gzip -n > "$out/kit.tar.gz"
   KIT_MAC_SIGN="$id" KIT_MAC_NOTARY="$NOTARY" mac/build.sh "$out/kit.tar.gz" "$out"
   zip="$HOME/Desktop/TinfoilKit-Mac.zip"
   cp "$out/TinfoilKit-Mac.zip" "$zip"
@@ -47,10 +47,10 @@ fi
 
 if [ "${1:-}" = key ]; then
   [ -e "$KEY" ] || ssh-keygen -t ed25519 -C "Tinfoil Kit releases" -f "$KEY"
-  if ! grep -qF "$(cut -d' ' -f2 "$KEY.pub")" tools/release-signers; then
-    echo "$NS namespaces=\"$NS\" $(cut -d' ' -f1,2 "$KEY.pub")" >> tools/release-signers
+  if ! grep -qF "$(cut -d' ' -f2 "$KEY.pub")" kit/tools/release-signers; then
+    echo "$NS namespaces=\"$NS\" $(cut -d' ' -f1,2 "$KEY.pub")" >> kit/tools/release-signers
   fi
-  echo "tools/release-signers has the key. Commit and push it, then make the first release."
+  echo "kit/tools/release-signers has the key. Commit and push it, then make the first release."
   echo "Back up $KEY and its passphrase in your password manager: without them, no drive can update again."
   exit 0
 fi
@@ -76,16 +76,16 @@ sha=$(git rev-parse HEAD)
 ci=$(gh run list --commit "$sha" --workflow check.yml --json conclusion --jq '.[0].conclusion')
 run=$(gh run list --commit "$sha" --workflow check.yml --json databaseId --jq '.[0].databaseId')
 [ "$ci" = success ] || die "the quick gate (check.yml) hasn't passed on this commit (${ci:-no run yet}). A commit a workflow made starts no checks: run check on main (Actions > check > Run workflow), then try again"
-python3 -c 'import json, sys; sys.exit(len(json.load(open("tools/pins.json"))) < 2)' ||
-  die "tools/pins.json pins no programs: run the pin program builds workflow, then a real-Mac sync and test"
+python3 -c 'import json, sys; sys.exit(len(json.load(open("kit/tools/pins.json"))) < 2)' ||
+  die "kit/tools/pins.json pins no programs: run the pin program builds workflow, then a real-Mac sync and test"
 prev=$(git describe --tags --abbrev=0 2> /dev/null || true)
 
 out=$(mktemp -d)
 asset="$out/tinfoilkit-$TAG.tar.gz"
-# The kit's own program for each computer (tools/tinfoilkit), built from this commit. The same source gives the same
+# The kit's own program for each computer (kit/tools/tinfoilkit), built from this commit. The same source gives the same
 # bytes on any computer, and CI built it too and printed its SHA-256s: they must match, or something on one of the two
 # computers changed it.
-tools/tinfoilkit/build.sh "$out/programs"
+kit/tools/tinfoilkit/build.sh "$out/programs"
 (cd "$out/programs" && shasum -a 256 tinfoilkit-*) | sort > "$out/programs.sha256"
 gh run view "$run" --log 2> /dev/null | grep -Eo '[0-9a-f]{64}  tinfoilkit-[a-z0-9.-]+$' | sort -u > "$out/ci.sha256"
 [ -s "$out/ci.sha256" ] ||
@@ -94,9 +94,9 @@ cmp -s "$out/programs.sha256" "$out/ci.sha256" ||
   die "the kit's own program built here isn't the same as CI's build of this commit (see $out/programs.sha256 and $out/ci.sha256). Don't publish until you know why"
 git tag "$TAG"
 trap '[ -n "${pushed:-}" ] || git tag -d "$TAG" > /dev/null' EXIT
-# The archives are reproducible: git archive of the tag, with the programs built from it in tools/ (build.sh archive),
+# The archives are reproducible: git archive of the tag's kit/, with the programs built from it in tools/ (build.sh archive),
 # so anyone can rebuild them and compare (gzip output can vary by version, so compare the tar).
-tools/tinfoilkit/build.sh archive tar "tinfoilkit-$TAG" "$TAG" > "$out/update.tar"
+kit/tools/tinfoilkit/build.sh archive tar "tinfoilkit-$TAG" "$TAG" > "$out/update.tar"
 mkdir "$out/inside"
 tar -xf "$out/update.tar" -C "$out/inside"
 for f in "$out/programs"/tinfoilkit-*; do
@@ -108,15 +108,16 @@ ssh-keygen -Y sign -f "$KEY" -n "$NS" "$asset"
 # the app folder of a folder called TinfoilKit. The tar.gz is for a Mac and Linux, the zip for Windows, and the Mac app,
 # when there is one, holds them too. Not signed with the release key, since they're only a first install: ./kit update
 # takes the signed archive, which holds just the app folder's files. SHA256SUMS, which is signed, lists them all.
-tools/tinfoilkit/build.sh archive zip TinfoilKit/app "$TAG" > "$out/TinfoilKit-Windows.zip"
-tools/tinfoilkit/build.sh archive tar TinfoilKit/app "$TAG" > "$out/TinfoilKit.tar"
+kit/tools/tinfoilkit/build.sh archive zip TinfoilKit/app "$TAG" > "$out/TinfoilKit-Windows.zip"
+kit/tools/tinfoilkit/build.sh archive tar TinfoilKit/app "$TAG" > "$out/TinfoilKit.tar"
 gzip -n -9 < "$out/TinfoilKit.tar" > "$out/TinfoilKit.tar.gz"
 downloads=("$out/TinfoilKit.tar.gz" "$out/TinfoilKit-Windows.zip")
 # Drives on the last release check this one with that release's keys, so a key change needs both to accept it.
 for ref in "$TAG" $prev; do
-  git show "$ref:tools/release-signers" > "$out/signers" 2> /dev/null || continue
+  { git show "$ref:kit/tools/release-signers" || git show "$ref:tools/release-signers"; } > "$out/signers" 2> /dev/null ||
+    continue    # (the second: from before kit/)
   ssh-keygen -Y verify -f "$out/signers" -I "$NS" -n "$NS" -s "$asset.sig" < "$asset" > /dev/null \
-    || die "the signature doesn't match a key in $ref's tools/release-signers"
+    || die "the signature doesn't match a key in $ref's release-signers"
 done
 # The Mac app, notarized so it opens with a double-click: macOS sends a script from a browser's download to System
 # Settings first, which people miss. (A script curl downloaded carries no such mark, so the setup command needs none.)
@@ -139,7 +140,7 @@ echo
 echo "Ready: $TAG, $(git log -1 --format='%h %s' "$sha")"
 echo "  $asset and .sig"
 echo "  tar SHA-256 $(shasum -a 256 < "$out/update.tar" | cut -d' ' -f1)"
-echo "  (rebuild it: tools/tinfoilkit/build.sh archive tar tinfoilkit-$TAG $TAG | shasum -a 256)"
+echo "  (rebuild it: kit/tools/tinfoilkit/build.sh archive tar tinfoilkit-$TAG $TAG | shasum -a 256)"
 echo "  SHA256SUMS and .sig: the programs and every download"
 echo "  downloads for the setup command: TinfoilKit.tar.gz (Mac, Linux), TinfoilKit-Windows.zip"
 if [ -n "$app" ]; then

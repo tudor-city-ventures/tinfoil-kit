@@ -2,9 +2,10 @@
 # Tinfoil Kit command line:  ./kit plan | sync | verify | status | search WORDS | test  (./kit --help lists them all)
 # It runs the kit's own program for this computer, tools/tinfoilkit-*, which every download carries. A git checkout
 # or GitHub's Download ZIP has none until tools/tinfoilkit/build.sh builds it from the Go source in tools/tinfoilkit:
-# with Go installed, this builds it then, and again in a git checkout whose source is newer than its program.
+# with Go installed, this builds it then, and again in a git checkout (this folder is its kit/) whose source is newer
+# than its program.
 DIR="$(cd "$(dirname "$0")" && pwd)"
-KIT="$DIR"    # the kit folder: the app folder's, or a git checkout itself
+KIT="$DIR"    # the kit folder: the app folder's, or a git checkout's kit folder itself
 case "$(basename "$DIR" | tr '[:upper:]' '[:lower:]')" in app) [ -e "$DIR/.git" ] || KIT="$(dirname "$DIR")" ;; esac
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) TK="$DIR/tools/tinfoilkit-macos-arm64" ;;
@@ -13,7 +14,7 @@ case "$(uname -s)-$(uname -m)" in
      exit 1 ;;
 esac
 if [ -f "$DIR/tools/tinfoilkit/build.sh" ] && command -v go >/dev/null &&
-   { [ ! -f "$TK" ] || { [ -e "$DIR/.git" ] && [ -n "$(find "$DIR/tools/tinfoilkit" -type f -newer "$TK" | head -1)" ]; }; }; then
+   { [ ! -f "$TK" ] || { [ -e "$DIR/../.git" ] && [ -n "$(find "$DIR/tools/tinfoilkit" -type f -newer "$TK" | head -1)" ]; }; }; then
   echo "Building the kit's program from its source (tools/tinfoilkit/build.sh)..." >&2
   bash "$DIR/tools/tinfoilkit/build.sh" >&2 || echo "It didn't build." >&2
 fi

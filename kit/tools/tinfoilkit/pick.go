@@ -28,9 +28,10 @@ func memoryBytes() int64 {
 	return physMemory()
 }
 
-// sourcesList is the kit builder's list (site/sources.json): each source's id, title, group, size and presets.
+// sourcesList is the kit builder's list (tools/sources.json, site/build_sources.py's copy for the kit): each source's
+// id, title, group, size and presets.
 func sourcesList(root string) ([]*obj, bool) {
-	data, err := os.ReadFile(filepath.Join(appDir(root), "site", "sources.json"))
+	data, err := os.ReadFile(filepath.Join(appDir(root), "tools", "sources.json"))
 	if err != nil {
 		return nil, false
 	}
@@ -1010,7 +1011,7 @@ func presetChanges(root string, cfg *obj, key string) (ch, marks changes) {
 var yes, no = true, false
 
 // estimateBytes is about how many bytes the switched-on items need, from the sizes the kit builder lists
-// (site/sources.json), plus the programs. Needs no internet, so SETUP can say how much room the kit needs before
+// (tools/sources.json), plus the programs. Needs no internet, so SETUP can say how much room the kit needs before
 // choosing where. essentials, starter: only those (see essential() and starterPart()); nil: kit.json's
 // essentials_only and starter_only decide. left: only what isn't in the kit yet.
 func estimateBytes(root string, cfg *obj, essentials, starter *bool, left bool) float64 {

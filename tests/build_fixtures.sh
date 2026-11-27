@@ -121,7 +121,7 @@ else:
   # the builds tools/pins.json names, as kits get them: Kiwix turns away a script that reads its listings too often
   for p in "kiwix-tools-macos-arm64 macos-arm64 tar.gz" "kiwix-tools-windows-x64 win-x86_64 zip"; do
     read -r id plat ext <<< "$p"
-    v=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["version"])' "$TESTS/../tools/pins.json" "$id")
+    v=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]]["version"])' "$TESTS/../kit/tools/pins.json" "$id")
     get "https://download.kiwix.org/release/kiwix-tools/kiwix-tools_$plat-$v.$ext" "$DL/kiwix-tools_$plat-$v.$ext"
     cp "$DL/kiwix-tools_$plat-$v.$ext" "$R/release/kiwix-tools/kiwix-tools_$plat-3.8.2.$ext"
   done

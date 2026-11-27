@@ -4,15 +4,16 @@
 # Go's checksum database, and the same source builds the same bytes on any computer, so anyone can rebuild a
 # release's copies and compare them.
 #   tools/tinfoilkit/build.sh [OUT]                        into OUT (tools/ if not given)
-#   tools/tinfoilkit/build.sh archive FORMAT PREFIX REF    git archive of REF, with REF's programs in its tools/:
-#                                                          the kit as people download it (tar or zip, to stdout)
+#   tools/tinfoilkit/build.sh archive FORMAT PREFIX REF    git archive of REF's kit/, with REF's programs in its
+#                                                          tools/: the kit as people download it (tar or zip, to
+#                                                          stdout)
 #   tools/tinfoilkit/build.sh verify [SHA256SUMS]          rebuild from this source and compare with the programs in
 #                                                          tools/, and with a release's SHA256SUMS if given
 #   tools/tinfoilkit/build.sh check                        gofmt, go vet and the Go tests
 # Needs Go 1.21 or newer to start from (brew install go, or https://go.dev/dl/), and the internet the first time.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
-top="$(cd "$here/../.." && pwd)"    # the kit's code: the app folder, or a git checkout
+top="$(cd "$here/../.." && pwd)"    # the kit's code: the app folder, or a git checkout's kit/
 export GOTOOLCHAIN=go1.27.4 CGO_ENABLED=0
 TARGETS="darwin/arm64/macos-arm64 linux/amd64/linux-x64 windows/amd64/windows-x64.exe"
 command -v go > /dev/null || { echo "build.sh: needs Go: brew install go, or https://go.dev/dl/" >&2; exit 1; }
@@ -75,8 +76,13 @@ if [ "${1:-}" = archive ]; then
   trap 'rm -rf "$tmp"' EXIT
   git -C "$top" archive --format=tar "$ref" tools/tinfoilkit | tar -xf - -C "$tmp"   # REF's source, not the folder's
   build "$tmp/tools/tinfoilkit" "$tmp"
+  # Run in kit/, git archive takes kit/ alone; a release also carries REF's license, README and THIRD-PARTY.md from
+  # beside it (the GUIDE and SETUP point to it).
+  mkdir "$tmp/x"
+  git -C "$top/.." archive --format=tar "$ref" LICENSE README.md THIRD-PARTY.md | tar -xf - -C "$tmp/x"
   git -C "$top" archive --format="$fmt" --prefix="$prefix/tools/" --add-file="$tmp/tinfoilkit-macos-arm64" \
-    --add-file="$tmp/tinfoilkit-linux-x64" --add-file="$tmp/tinfoilkit-windows-x64.exe" --prefix="$prefix/" "$ref"
+    --add-file="$tmp/tinfoilkit-linux-x64" --add-file="$tmp/tinfoilkit-windows-x64.exe" --prefix="$prefix/" \
+    --add-file="$tmp/x/LICENSE" --add-file="$tmp/x/README.md" --add-file="$tmp/x/THIRD-PARTY.md" "$ref"
   exit 0
 fi
 out="${1:-$here/..}"

@@ -224,14 +224,22 @@ var logFile string
 
 // The kit folder: app/ is the code exactly as released, which ./kit update replaces and which can be deleted any time
 // for a new version's; downloads/ is everything sync downloads; data/ is the person's: their kit.json, logs, map pins
-// and notes, and the kit's own records in data/.kit. A git checkout is its own app folder, with downloads/ and data/
-// inside it. Item destinations ("models/Tiny") and state.json's paths are within downloads/.
+// and notes, and the kit's own records in data/.kit. A git checkout's kit folder, kit/ in the repository, is its own
+// app folder, with downloads/ and data/ inside it. Item destinations ("models/Tiny") and state.json's paths are within
+// downloads/.
 
 func appDir(root string) string {
-	if exists(filepath.Join(root, ".git")) {
+	if checkout(root) {
 		return root
 	}
 	return filepath.Join(root, "app")
+}
+
+// checkout says whether root is a git checkout's kit folder: the repository's kit/ (or a folder with a .git of its
+// own). Only one called kit counts, so a kit in a folder that git tracks, like a home folder, is still a kit.
+func checkout(root string) bool {
+	return exists(filepath.Join(root, ".git")) ||
+		strings.EqualFold(filepath.Base(root), "kit") && exists(filepath.Join(filepath.Dir(root), ".git"))
 }
 
 func dlDir(root string) string   { return filepath.Join(root, "downloads") }
@@ -2095,9 +2103,9 @@ func runKit(words []string) (code int) {
 	return 0
 }
 
-// kitOfCode is the kit folder a code folder belongs to: app/'s parent, or a git checkout itself.
+// kitOfCode is the kit folder a code folder belongs to: app/'s parent, or a git checkout's kit folder itself.
 func kitOfCode(code string) string {
-	if strings.EqualFold(filepath.Base(code), "app") && !exists(filepath.Join(code, ".git")) {
+	if strings.EqualFold(filepath.Base(code), "app") && !checkout(code) {
 		return filepath.Dir(code)
 	}
 	return code

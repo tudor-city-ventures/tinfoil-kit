@@ -237,8 +237,8 @@ library is missing, install that too.
 ## A home server (advanced)
 
 A computer that stays on, like a Linux box, a Mac mini or a Windows PC, can serve the kit to every phone and laptop at
-home. This is experimental for now. On Linux or a Mac it needs no screen. Over SSH, in the unzipped download (or a
-`git clone`), run:
+home. This is experimental for now. On Linux or a Mac it needs no screen. Over SSH, in the unzipped download's app
+folder (or the kit folder of a `git clone`), run:
 
 ```
 bash SETUP.command --home-server

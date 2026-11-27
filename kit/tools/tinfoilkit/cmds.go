@@ -359,13 +359,13 @@ func names(ids []string) string {
 
 var answerWords = regexp.MustCompile(`[,\s]+`)
 
-// askPicks is ./kit pick --ask: the kit builder's choices on tinfoilkit.com (site/sources.json), asked in a terminal.
+// askPicks is ./kit pick --ask: the kit builder's choices on tinfoilkit.com (tools/sources.json), asked in a terminal.
 // A preset, which it returns for cmdPick to apply (No AI is the recommended kit without the models), or each part,
 // which it switches on and off itself.
 func askPicks(root string) (preset string, noAI bool) {
 	listed, ok := sourcesList(root)
 	if !ok {
-		die("The kit builder's list (site/sources.json) isn't in this kit. Choose with ./kit pick --skip and --add.")
+		die("The kit builder's list (tools/sources.json) isn't in this kit. Choose with ./kit pick --skip and --add.")
 	}
 	cfg := rawConfig(root)
 	ids := partIDs(cfg)

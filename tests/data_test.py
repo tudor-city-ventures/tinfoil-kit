@@ -28,7 +28,7 @@ PLAT = {
     ("Darwin", "arm64"): "macos-arm64",
     ("Windows", "AMD64"): "windows-x64.exe",
 }.get((platform.system(), platform.machine()))
-PROGRAM = ROOT / "tools" / f"tinfoilkit-{PLAT}"  # the kit's own program for this computer
+PROGRAM = ROOT / "kit" / "tools" / f"tinfoilkit-{PLAT}"  # the kit's own program for this computer
 if not PLAT or not PROGRAM.exists():
     sys.exit("The tests need the kit's program for this computer: tools/tinfoilkit/build.sh builds it")
 

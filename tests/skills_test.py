@@ -16,9 +16,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SKILLS = sorted((ROOT / ".claude" / "skills").glob("*/SKILL.md"))
+CODE = ROOT / "kit"  # the kit's code
+SKILLS = sorted((CODE / ".claude" / "skills").glob("*/SKILL.md"))
 LLMS = ROOT / "site" / "public" / "llms.txt"
-DOCS = SKILLS + [LLMS, ROOT / "GUIDE.md", ROOT / "README.md", ROOT / "AGENTS.md", ROOT / ".github" / "CONTRIBUTING.md"]
+DOCS = SKILLS + [LLMS, CODE / "GUIDE.md", ROOT / "README.md", ROOT / "AGENTS.md", ROOT / ".github" / "CONTRIBUTING.md"]
 DOCS += sorted((ROOT / "docs").glob("*.md"))
 # Commands no skill needs: SETUP runs them, or the maintainer does before a release.
 INTERNAL = {"layout", "pins", "place"}
@@ -40,7 +41,7 @@ def check(name, ok, detail=""):
 PLAT = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get(
     (platform.system(), platform.machine())
 )
-PROGRAM = ROOT / "tools" / f"tinfoilkit-{PLAT}"
+PROGRAM = CODE / "tools" / f"tinfoilkit-{PLAT}"
 if not PLAT or not PROGRAM.exists():
     sys.exit("The tests need the kit's program for this computer: tools/tinfoilkit/build.sh builds it")
 KIT_LINE = [str(PROGRAM), "kit"]
@@ -78,8 +79,8 @@ def script_options(path, prefix):
 
 
 SETUP = {
-    "SETUP.command": script_options(ROOT / "SETUP.command", "#"),
-    "SETUP-Windows.bat": script_options(ROOT / "SETUP-Windows.bat", "rem"),
+    "SETUP.command": script_options(CODE / "SETUP.command", "#"),
+    "SETUP-Windows.bat": script_options(CODE / "SETUP-Windows.bat", "rem"),
 }
 LAUNCH = set(
     re.findall(
@@ -103,7 +104,7 @@ check(
 )
 UNINSTALL = {"--yes"}
 for f in ("UNINSTALL.command", "UNINSTALL-Windows.bat"):
-    check(f"{f} takes --yes", "--yes" in (ROOT / f).read_text(encoding="utf-8"))
+    check(f"{f} takes --yes", "--yes" in (CODE / f).read_text(encoding="utf-8"))
 
 
 def code(text):
@@ -159,7 +160,7 @@ check(
 )
 
 llms = LLMS.read_text(encoding="utf-8")
-for doc in (LLMS, ROOT / ".claude" / "skills" / "tinfoil-install" / "SKILL.md"):
+for doc in (LLMS, CODE / ".claude" / "skills" / "tinfoil-install" / "SKILL.md"):
     table = {
         o
         for line in doc.read_text(encoding="utf-8").splitlines()

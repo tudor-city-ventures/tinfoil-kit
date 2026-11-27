@@ -22,7 +22,7 @@ The whole kit is one folder, with three inside: `app` (the kit's code, as releas
 
 The first time, SETUP asks a few questions:
 
-- **Where you live** (a US state or a country), and any places nearby. That sets the maps' area, directions, address search and home, and Wikipedia's language (`./kit region`, from the places in `tools/regions.json`). Places nearby get street detail and directions too.
+- **Where you live** (a US state or a country), and any places nearby. That sets the maps' area, directions, address search and home, and Wikipedia's language (`./kit region`, from the places in `kit/tools/regions.json`). Places nearby get street detail and directions too.
 - **How much of Wikipedia:** all of it, or just the best 50,000 articles (`./kit region --wikipedia-size`).
 - **Where the kit goes:** an external drive (`<drive>/TinfoilKit`) or this computer (`~/TinfoilKit`, where it leaves 50 GB free; on a Mac, its downloads stay out of Time Machine). SETUP says which AI model the computer can run (`./kit fit`), lists the drives with their format (`./kit drives`), and checks that the kit fits with 10% of the computer's disk, or 5% of a drive, left free (`./kit space`). When it won't, it offers just the essentials (`./kit essentials on`: the AI, the medical, preparedness and repair books, the map, and Wikipedia's best articles as text). `./kit place` moves the kit there.
 
@@ -31,12 +31,12 @@ Then it times the connection for a few seconds and says how long the kit to try 
 Every run of SETUP, the first included, comes down to three `./kit` commands:
 
 1. **Update** (`./kit update`): installs the newest Tinfoil Kit release from GitHub into the app folder. Your `kit.json` (in `data`) keeps your changes and takes in the new version's. It installs only a release signed with the maintainer's key, and shows what's new and asks first.
-2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in `kit.json` and downloads only what changed, into `downloads`. Programs are the exception: each version of the kit names the exact build of each one it installs (`tools/pins.json`), so a new AI engine arrives with a kit update. A big book can wait for its next edition: Wikipedia (127 GB in English) keeps the one it has until it's a year old (`refresh_days` in kit.json). A big file comes over eight connections at once, which is often several times faster than one, downloads resume after a break, and the time left shows as they go. A file the kit already has is never downloaded again, even one an older version kept under another name. Every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
+2. **Download** (`./kit sync`): asks each publisher for the newest version of everything listed in `kit.json` and downloads only what changed, into `downloads`. Programs are the exception: each version of the kit names the exact build of each one it installs (`kit/tools/pins.json`), so a new AI engine arrives with a kit update. A big book can wait for its next edition: Wikipedia (127 GB in English) keeps the one it has until it's a year old (`refresh_days` in kit.json). A big file comes over eight connections at once, which is often several times faster than one, downloads resume after a break, and the time left shows as they go. A file the kit already has is never downloaded again, even one an older version kept under another name. Every file with a published checksum is checked against it, and an old version is deleted only after the new one checks out.
 3. **Check** (`./kit test`): starts every server offline and checks that each one answers.
 
 A newer download of the kit doesn't start over: its SETUP finds a kit set up before, in the home folder or on a drive (`./kit kits`), and updates that one, so nothing it has downloads again. A kit whose app folder was deleted gets the download's.
 
-Nothing needs installing first. The kit's own program (`tools/tinfoilkit-*`, one for each computer, built from the Go source in `tools/tinfoilkit/`) runs `./kit`, SETUP's steps and the servers, and only needs curl, which Macs and Windows come with. Every download of the kit carries it. A git checkout or GitHub's Download ZIP has none until `tools/tinfoilkit/build.sh` builds it, which needs Go; with Go installed, `./kit` builds it by itself.
+Nothing needs installing first. The kit's own program (`tools/tinfoilkit-*` in the app folder, one for each computer, built from the Go source in `kit/tools/tinfoilkit/`) runs `./kit`, SETUP's steps and the servers, and only needs curl, which Macs and Windows come with. Every download of the kit carries it. A git checkout or GitHub's Download ZIP has none until `kit/tools/tinfoilkit/build.sh` builds it, which needs Go; with Go installed, `./kit` builds it by itself.
 
 ### Using it (offline)
 
@@ -54,7 +54,7 @@ Nothing needs installing first. The kit's own program (`tools/tinfoilkit-*`, one
 
 Photon and GraphHopper run on a Java that's in the kit. The kit has each program for Macs, Windows PCs and Linux PCs, so a drive set up on one starts on all three.
 
-The kit page (`tools/portal.html`) is one HTML file with no build step. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
+The kit page (`kit/tools/portal.html`) is one HTML file with no build step. Each sync builds a copy with the map's code, fonts and icons inside, so the page needs nothing from the internet.
 
 - **Ask:** two buttons. **Ask the AI**: the AI turns your question into short searches, `kiwix-serve` searches every book, and the AI answers from the top articles with numbered sources. **Search** skips the AI: the question's own words over the same indexes, and the best passages in seconds, on very little power; then **Have the AI answer from these** can turn them into an answer with no second search. With the AI off, Ask the AI shows the passages too. Map questions ("nearest pharmacy", "directions to the hospital") skip the library: the AI gets three map tools (search places, find nearby, get directions), and the answer shows on the Map tab.
 - **Map:** MapLibre draws the map from `pmtiles`. Its search, directions and "nearest" buttons ask Photon and GraphHopper. Home and pins are saved in the kit (`data/places.json`).
@@ -68,7 +68,7 @@ TinfoilKit/
 ├── Open Tinfoil Kit.command      start the kit offline (Mac, Linux; the .bat on Windows)
 ├── Open Tinfoil Kit for Windows.bat
 ├── Read me first.txt             what to open, and what each folder is for
-├── app/                          the kit's code, as released: a new version replaces it
+├── app/                          the kit's code (this repo's kit/): a new version replaces it
 │   ├── SETUP.command             set up, or update whenever you like (online; Mac, Linux)
 │   ├── Open Tinfoil Kit.command  what the two at the top start (Mac, Linux)
 │   ├── UNINSTALL.command         remove the kit and everything it downloaded (Mac, Linux)
@@ -95,7 +95,7 @@ TinfoilKit/
 
 Delete `app` any time and put a new version's app folder in its place: `downloads` and `data` stay as they are, and nothing downloads again. `data/kit.json` starts as a copy of `app/kit.json`, and when a new version's list differs, its changes go into yours and your own choices stay. A kit set up before these three folders moves into them by itself the first time a newer version runs (`./kit layout`, which SETUP runs), by renaming, so nothing downloads again. SETUP and UNINSTALL never move or delete a folder that holds other things besides the kit: an app folder put on the Desktop on its own stays where it is, and they say so.
 
-The repo is the app folder, so `site/` (the website), `tests/` and `docs/` come along, but the kit doesn't use them. A git checkout keeps `downloads/` and `data/` inside it (git ignores them).
+In this repo the app folder is `kit/`. The website, the phone app, the tests and the docs sit beside it and never reach a kit. A git checkout's `kit/` keeps `downloads/` and `data/` inside it (git ignores them).
 
 ## Requirements
 
@@ -123,15 +123,15 @@ It downloads the kit from the [latest release](https://github.com/tudor-city-ven
 Or from a git checkout, on a Mac or Linux:
 
 ```sh
-git clone https://github.com/tudor-city-ventures/tinfoil-kit ~/TinfoilKit    # or /Volumes/<drive>/TinfoilKit
-cd ~/TinfoilKit
+git clone https://github.com/tudor-city-ventures/tinfoil-kit    # in the home folder, or on a drive
+cd tinfoil-kit/kit    # the kit's folder: downloads/ and data/ go in it
 tools/tinfoilkit/build.sh    # the kit's own program, from its Go source (needs Go: https://go.dev/dl)
 ./kit plan    # preview what will download, and how long it takes
 ./kit sync    # download everything (hours)
 ./kit test    # start every server offline and check it answers
 ```
 
-Then turn Wi-Fi off and double-click `Open Tinfoil Kit.command` in the kit's folder (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](GUIDE.md) is the printable guide that lives in the app folder.
+Then turn Wi-Fi off and double-click `Open Tinfoil Kit.command` in the kit's folder (`Open Tinfoil Kit for Windows.bat` on Windows). [GUIDE.md](kit/GUIDE.md) is the printable guide that lives in the app folder.
 
 ## Update
 
@@ -145,7 +145,7 @@ Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit
 
 ## Home server
 
-Experimental for now. A computer that stays on (Linux, a Mac mini or a Windows PC) can serve the kit to every phone and laptop at home. `bash SETUP.command --home-server` (`.\SETUP-Windows.bat --home-server` on Windows) sets it up as usual, then shares it on the home network behind an access code and starts it with the computer (a systemd user service on Linux, from boot; a LaunchAgent on a Mac or the Startup folder on Windows, once you log in). Phones open the address it shows and type the code, scan its QR code, or open the link that Share with family, on the kit page, copies in a message to text them. Programs can use the code as an API key for the AI's OpenAI-compatible API: `Authorization: Bearer <code>` at `http://<server>:8000/ai/v1`. Details: [GUIDE.md](GUIDE.md#a-home-server-advanced).
+Experimental for now. A computer that stays on (Linux, a Mac mini or a Windows PC) can serve the kit to every phone and laptop at home. `bash SETUP.command --home-server` (`.\SETUP-Windows.bat --home-server` on Windows) sets it up as usual, then shares it on the home network behind an access code and starts it with the computer (a systemd user service on Linux, from boot; a LaunchAgent on a Mac or the Startup folder on Windows, once you log in). Phones open the address it shows and type the code, scan its QR code, or open the link that Share with family, on the kit page, copies in a message to text them. Programs can use the code as an API key for the AI's OpenAI-compatible API: `Authorization: Bearer <code>` at `http://<server>:8000/ai/v1`. Details: [GUIDE.md](kit/GUIDE.md#a-home-server-advanced).
 
 ## Security
 
@@ -157,18 +157,18 @@ The kit downloads programs and runs them on your computer, so here is what prote
 - **No administrator password.** The kit runs as you, and starts only when you start it unless you set up a home server. UNINSTALL undoes everything setup did. The site's "What does setup change on my computer?" lists every change outside the kit folder.
 - **Servers on 127.0.0.1.** The AI, library and maps answer only this computer. A website open while the kit runs can still reach them, as browsers allow: it could read the books and maps and use the AI as the kit page does (the directions server answers any page, and DNS rebinding opens the rest). Chrome asks your permission before a website reaches your computer's own servers; other browsers may not.
 - **Sharing is off until you turn it on.** Then one gate, on port 8000 by default, stands in front of everything: it asks for an 8-digit code, stops answering a device after 10 wrong tries in 10 minutes, and refuses addresses and names outside a home network, so other websites can't reach it. It's plain HTTP, so share on your own Wi-Fi or hotspot: anyone on a public network who watches the traffic could read the code.
-- **Readable code.** Go's standard library, shell scripts and one HTML page, with no packages to install. The one built file is the kit's own program (`tools/tinfoilkit-*`, from the Go source in `tools/tinfoilkit/`), and the same source builds the same bytes on any computer, so you can check that it's the code you read (below). It's written with AI coding tools; the tests in `tests/` run it against mocks of every download source and server on every change.
+- **Readable code.** Go's standard library, shell scripts and one HTML page, with no packages to install. The one built file is the kit's own program (`tools/tinfoilkit-*`, from the Go source in `kit/tools/tinfoilkit/`), and the same source builds the same bytes on any computer, so you can check that it's the code you read (below). It's written with AI coding tools; the tests in `tests/` run it against mocks of every download source and server on every change.
 - **The repo.** Every GitHub Action is pinned to a commit and runs with a read-only token, except a few jobs that never run code from a pull request or a download. An outside pull request that touches the workflows, CODEOWNERS, the release key or the program pins fails a check that only the maintainer can merge past.
 - **What it can't protect against:** a bad file from a hacked publisher, if it's a book, model or map (its checksum comes from the same place as the file) or a program that was already bad when a release pinned it; someone with your unlocked computer or drive, since the kit isn't encrypted (use FileVault, BitLocker or an encrypted drive for that); and an AI answer that's wrong, so check its sources.
 
 To check a release before running it, download its `tinfoilkit-TAG.tar.gz` and `.sig` (the downloads the setup command gets are protected by HTTPS alone; the release's `SHA256SUMS`, signed the same way, lists them all) and run:
 
 ```sh
-ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release \
+ssh-keygen -Y verify -f kit/tools/release-signers -I tinfoilkit-release -n tinfoilkit-release \
   -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz
 # and that it's exactly the tagged code, with the kit's own program built from it, from a clone of this repo
 # (it needs Go: brew install go, or go.dev/dl):
-tools/tinfoilkit/build.sh archive tar tinfoilkit-TAG TAG | shasum -a 256
+kit/tools/tinfoilkit/build.sh archive tar tinfoilkit-TAG TAG | shasum -a 256
 gunzip -c tinfoilkit-TAG.tar.gz | shasum -a 256
 ```
 
@@ -176,7 +176,7 @@ To check the program in a kit you already have, run `tools/tinfoilkit/build.sh v
 
 ## Customize
 
-Everything the kit keeps is listed in `data/kit.json`, your copy of the standard list ([kit.json](kit.json)). Set `"enabled": false` to skip an item, or find more books with `./kit search WORDS`.
+Everything the kit keeps is listed in `data/kit.json`, your copy of the standard list ([kit.json](kit/kit.json)). Set `"enabled": false` to skip an item, or find more books with `./kit search WORDS`.
 
 ## Contributing
 

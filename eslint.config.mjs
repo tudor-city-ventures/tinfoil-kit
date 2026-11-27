@@ -14,7 +14,7 @@ const rules = {
 export default [
   { ignores: ["site/.next/", "site/out/", "tests/work/", "mobile/"] }, // the phone app lints itself (mobile/)
   {
-    files: ["tools/portal.html"],
+    files: ["kit/tools/portal.html"],
     plugins: { html },
     languageOptions: {
       sourceType: "script",

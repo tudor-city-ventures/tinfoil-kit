@@ -25,7 +25,7 @@ ROOT = TESTS.parent
 PLAT = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get(
     (platform.system(), platform.machine())
 )
-PROGRAM = ROOT / "tools" / f"tinfoilkit-{PLAT}"  # the kit's own program for this computer
+PROGRAM = ROOT / "kit" / "tools" / f"tinfoilkit-{PLAT}"  # the kit's own program for this computer
 if not PLAT or not PROGRAM.exists():
     sys.exit("The tests need the kit's program for this computer: tools/tinfoilkit/build.sh builds it")
 TRIES = 10  # wrong codes the gate takes from one address before that address waits (tries in gate.go)
@@ -411,7 +411,7 @@ try:
     k2 = work / "kit2"  # its code in app/, as a release has it
     (k2 / "app" / "tools").mkdir(parents=True)
     for f in ("kit", "kit.json", "Open Tinfoil Kit.command"):
-        shutil.copy(ROOT / f, k2 / "app" / f)
+        shutil.copy(ROOT / "kit" / f, k2 / "app" / f)
     shutil.copy(PROGRAM, k2 / "app" / "tools")
     kit_line = ["bash", str(k2 / "app" / "kit")]
     mine = k2 / "data" / "kit.json"  # the person's kit.json, a copy of app/kit.json at first

@@ -1,0 +1,15 @@
+# A checkout's kit/ is its own app folder: what sync downloads goes in downloads/, the person's settings and the
+# kit's records in data/. The rest are where a kit from before those folders kept them.
+/downloads/
+/data/
+.kit/
+logs/
+bin/
+models/
+library/
+maps/
+installers/
+INVENTORY.md
+
+# The kit's program, built by tools/tinfoilkit/build.sh (releases carry it; git doesn't)
+tools/tinfoilkit-*

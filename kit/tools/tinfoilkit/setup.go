@@ -294,8 +294,9 @@ func copyCode(src, dst string) error {
 var keepNames = []string{".git", ".kit", "bin", "installers", "library", "logs", "maps", "models", "INVENTORY.md"}
 
 // copyApp makes a copy of this kit's code as the app folder to: what a release has (no .git, downloads or data). A
-// git checkout's copy gets the checkout's commit in tools/commit, as git archive writes a release's, so ./kit update
-// there can tell whether a release is newer.
+// git checkout's copy also gets the license, README and THIRD-PARTY.md from beside its kit folder, as a release does,
+// and the checkout's commit in tools/commit, as git archive writes a release's, so ./kit update there can tell
+// whether a release is newer.
 func copyApp(root, to string) error {
 	if err := os.Mkdir(to, 0o755); err != nil {
 		return err
@@ -312,7 +313,16 @@ func copyApp(root, to string) error {
 			}
 		}
 	}
-	if exists(filepath.Join(root, ".git")) { // (only then: on a Mac without git, running it asks to install Xcode's tools)
+	if checkout(root) && !exists(filepath.Join(root, ".git")) {
+		for _, n := range []string{"LICENSE", "README.md", "THIRD-PARTY.md"} {
+			if from := filepath.Join(filepath.Dir(root), n); isFile(from) && !exists(filepath.Join(to, n)) {
+				if err := copyFileMode(from, filepath.Join(to, n)); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if checkout(root) { // (only then: on a Mac without git, running it asks to install Xcode's tools)
 		if head, _, rc := output("git", "-C", root, "rev-parse", "HEAD"); rc == 0 && commitLine.Match(bytes.TrimSpace(head)) {
 			return os.WriteFile(filepath.Join(to, "tools", "commit"), append(bytes.TrimSpace(head), '\n'), 0o644)
 		}
@@ -327,7 +337,7 @@ func copyApp(root, to string) error {
 // a running program is in. The kit placed gets its downloads folder, which tells SETUP it's been set up. A kit at dest
 // whose app folder was deleted gets a copy of this one.
 func placeKit(root, dest string) (string, string, error) {
-	git := exists(filepath.Join(root, ".git"))
+	git := checkout(root)
 	parent := filepath.Dir(dest)
 	if !isDir(parent) {
 		return "", "", fmt.Errorf("%s isn't there. If it's a drive, is it plugged in?", parent)
@@ -370,7 +380,7 @@ func placeKit(root, dest string) (string, string, error) {
 			}
 		}
 		// (a kit from before the app folder knows it's been set up by its .kit folder; its SETUP takes over)
-		if isDir(filepath.Join(dest, "tools")) && !exists(filepath.Join(dest, ".git")) {
+		if isDir(filepath.Join(dest, "tools")) && !checkout(dest) {
 			os.Mkdir(filepath.Join(dest, ".kit"), 0o755)
 		} else {
 			os.Mkdir(dlDir(dest), 0o755)
@@ -863,7 +873,7 @@ func kitCommit() string {
 
 // cmdUpdate exits 3 after installing a new version, so SETUP knows to start over on it.
 func cmdUpdate(root string, a *cliArgs) {
-	if exists(filepath.Join(root, ".git")) {
+	if checkout(root) {
 		log("This kit folder is a git checkout. Update it with:  git pull")
 		return
 	}
@@ -1474,7 +1484,14 @@ func moveInto(src, dst string) error {
 // like models, stay. Does nothing to a kit already laid out, and every command runs it first. Returns whether the code
 // moved.
 func ensureLayout(root string) bool {
-	git, app, meta := exists(filepath.Join(root, ".git")), filepath.Join(root, "app"), metaDir(root)
+	git, app, meta := checkout(root), filepath.Join(root, "app"), metaDir(root)
+	if git && !exists(filepath.Join(root, ".git")) { // a checkout from before kit/ downloaded at the repository's top
+		for _, n := range []string{"downloads", "data"} {
+			if from := filepath.Join(filepath.Dir(root), n); isDir(from) && !exists(filepath.Join(root, n)) {
+				os.Rename(from, filepath.Join(root, n))
+			}
+		}
+	}
 	// its code at the top
 	old := !git && isFile(filepath.Join(root, "kit")) && isDir(filepath.Join(root, "tools"))
 	placed := isDir(filepath.Join(root, ".kit")) // (it moves last: while it's at the top, the move isn't finished)

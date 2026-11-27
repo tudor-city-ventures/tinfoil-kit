@@ -29,6 +29,7 @@ import urllib.request
 from pathlib import Path
 
 TESTS = Path(__file__).resolve().parent
+CODE = TESTS.parent / "kit"  # the kit's code
 fails = 0
 
 
@@ -47,9 +48,9 @@ def free_port():
 PLAT = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get(
     (platform.system(), platform.machine())
 )
-PROGRAM = TESTS.parent / "tools" / f"tinfoilkit-{PLAT}"  # the kit's own program for this computer
+PROGRAM = CODE / "tools" / f"tinfoilkit-{PLAT}"  # the kit's own program for this computer
 if not PLAT or not PROGRAM.exists():
-    sys.exit("The tests need the kit's program for this computer: tools/tinfoilkit/build.sh builds it")
+    sys.exit("The tests need the kit's program for this computer: kit/tools/tinfoilkit/build.sh builds it")
 # What the program keeps at the top of a kit's own folder, beside app, downloads and data
 TOP = ["Open Tinfoil Kit for Windows.bat", "Open Tinfoil Kit.command", "Read me first.txt"]
 
@@ -64,9 +65,10 @@ def sha(p):
 
 
 def new_kit(root):
-    """A kit folder: the code in app/ with the standard list (app/kit.json), and data/ for the person's kit.json."""
-    shutil.copytree(TESTS.parent / "tools", root / "app" / "tools")
-    shutil.copy(TESTS.parent / "kit.json", root / "app" / "kit.json")
+    """A kit folder: the code in app/ with the standard list (app/kit.json), and data/ for the person's kit.json. No
+    builder's list (tools/sources.json): a test that needs one writes its own."""
+    shutil.copytree(CODE / "tools", root / "app" / "tools", ignore=shutil.ignore_patterns("sources.json"))
+    shutil.copy(CODE / "kit.json", root / "app" / "kit.json")
     (root / "data").mkdir(parents=True, exist_ok=True)
     return root
 
@@ -316,8 +318,7 @@ try:
             }
         )
     )
-    (tk / "app" / "site").mkdir()
-    (tk / "app" / "site" / "sources.json").write_text(
+    (tk / "app" / "tools" / "sources.json").write_text(
         json.dumps(
             {
                 "sources": [
@@ -423,8 +424,7 @@ try:
     for z, size in wikis.items():
         (R / "zim" / z).write_bytes(os.urandom(size))
     wk = new_kit(work / "wiki sizes")
-    (wk / "app" / "site").mkdir()
-    (wk / "app" / "site" / "sources.json").write_text(
+    (wk / "app" / "tools" / "sources.json").write_text(
         json.dumps({"sources": [{"id": "testmed_en_all_maxi", "bytes": 10**9}]})
     )
 
@@ -811,9 +811,9 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # which the try-it kit lists. The first command moves it all into the three folders, by renaming, and the sync after
     # that downloads none of it again: the model moves to its new folder, and the book stays.
     old = work / "old" / "TinfoilKit"
-    shutil.copytree(TESTS.parent / "tools", old / "tools")
+    shutil.copytree(CODE / "tools", old / "tools")
     for f in ("kit", "SETUP.command", "GUIDE.md"):
-        shutil.copy(TESTS.parent / f, old)
+        shutil.copy(CODE / f, old)
     old_std = {"settings": {}, "models": [], "library": [{"zim": "testsurvival_en"}]}  # the standard list it came with
     (old / "site").mkdir()
     (old / "site" / "kit.json").write_text(json.dumps(old_std))
@@ -958,8 +958,8 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # A new download's app folder put into a kit from before the three folders: it takes the old code's place, and
     # the kit's downloads and kit.json move into theirs.
     drop = work / "drop" / "TinfoilKit"
-    shutil.copytree(TESTS.parent / "tools", drop / "tools")
-    shutil.copy(TESTS.parent / "kit", drop)
+    shutil.copytree(CODE / "tools", drop / "tools")
+    shutil.copy(CODE / "kit", drop)
     (drop / "site").mkdir()
     (drop / "site" / "kit.json").write_text(json.dumps(old_std))
     (drop / "kit.json").write_text(json.dumps(mine))
@@ -1003,9 +1003,9 @@ pathlib.Path(str(out) + ".aria2").unlink()
         out,
     )
     flat = work / "flat"  # GitHub's Download ZIP: the code at its top, never set up
-    shutil.copytree(TESTS.parent / "tools", flat / "tools")
-    shutil.copy(TESTS.parent / "kit", flat)
-    shutil.copy(TESTS.parent / "kit.json", flat)
+    shutil.copytree(CODE / "tools", flat / "tools")
+    shutil.copy(CODE / "kit", flat)
+    shutil.copy(CODE / "kit.json", flat)
     for d in ("models", "maps"):
         (flat / d).mkdir()
     rc, out = kit("status", root=flat)
@@ -1021,13 +1021,11 @@ pathlib.Path(str(out) + ".aria2").unlink()
     )
     whole = work / "whole"  # all of a release's code at its top: every part of it is code, so nothing stays beside app
     whole.mkdir()
-    tar = shutil.which("git") and subprocess.run(
-        ["git", "-C", str(TESTS.parent), "archive", "HEAD"], capture_output=True
-    )
+    tar = shutil.which("git") and subprocess.run(["git", "-C", str(CODE), "archive", "HEAD"], capture_output=True)
     if tar and tar.returncode == 0:  # not in CI's bash 3.2 container, which has no git
         subprocess.run(["tar", "-x", "-C", str(whole)], input=tar.stdout, check=True)
         shutil.rmtree(whole / "tools")  # this code, not the last commit's
-        shutil.copytree(TESTS.parent / "tools", whole / "tools", ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(CODE / "tools", whole / "tools", ignore=shutil.ignore_patterns("__pycache__"))
         rc, out = kit("status", root=whole)
         left = sorted(p.name for p in whole.iterdir())
         check(
@@ -1118,8 +1116,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
     )
 
     # How much room the kit needs, before anything is looked up online: the builder's sizes for what's switched on.
-    (drive / "app" / "site").mkdir()
-    (drive / "app" / "site" / "sources.json").write_text(
+    (drive / "app" / "tools" / "sources.json").write_text(
         json.dumps(
             {
                 "sources": [
@@ -1138,7 +1135,7 @@ pathlib.Path(str(out) + ".aria2").unlink()
         rc == 0 and out.strip() == "10",
         out,
     )
-    shutil.rmtree(drive / "app" / "site")
+    (drive / "app" / "tools" / "sources.json").unlink()
 
     # On the computer's own disk (the one with the home folder) the kit leaves more room free than on a drive.
     (work / "home").mkdir()
@@ -1348,13 +1345,13 @@ pathlib.Path(str(out) + ".aria2").unlink()
     # published on the mock GitHub. app/kit.json is the standard list the kit's current version came with.
     up = work / "update" / "TinfoilKit"
     code = {
-        rel: (TESTS.parent / rel).read_bytes()
+        rel: (CODE / rel).read_bytes()
         for rel in ("kit", "SETUP.command", "Open Tinfoil Kit.command", "UNINSTALL.command")
     }
     code.update(
         {
-            p.relative_to(TESTS.parent).as_posix(): p.read_bytes()
-            for p in (TESTS.parent / "tools").rglob("*")
+            p.relative_to(CODE).as_posix(): p.read_bytes()
+            for p in (CODE / "tools").rglob("*")
             if p.is_file() and "__pycache__" not in p.parts
         }
     )
@@ -1619,16 +1616,16 @@ pathlib.Path(str(out) + ".aria2").unlink()
         check("kit update: ssh-keygen is here to sign a release with", False)
     else:
         print("skipped: a release ssh-keygen signed (no ssh-keygen here)")
-    checkout = work / "checkout"
-    shutil.copytree(TESTS.parent / "tools", checkout / "tools")
-    shutil.copy(TESTS.parent / "kit.json", checkout)
-    (checkout / ".git").mkdir(exist_ok=True)
+    checkout = work / "checkout" / "kit"  # the repository's kit/
+    shutil.copytree(CODE / "tools", checkout / "tools")
+    shutil.copy(CODE / "kit.json", checkout)
+    (checkout.parent / ".git").mkdir(exist_ok=True)
     rc, out = kit("update", root=checkout)
     check(
         "kit update: leaves a git checkout to git, and the checkout's kit.json as it is",
         rc == 0
         and "git pull" in out
-        and (checkout / "kit.json").read_text() == (TESTS.parent / "kit.json").read_text()
+        and (checkout / "kit.json").read_text() == (CODE / "kit.json").read_text()
         and (checkout / "data" / "kit.json").is_file(),
         out,
     )
@@ -1679,30 +1676,33 @@ PY
 esac""".replace("@PROGRAM@", str(PROGRAM))
 
     def kit_folder(path, git=False):
-        """A kit as Download ZIP leaves it, its code in app/ (a git checkout's at its top), with the stand-in ./kit."""
-        code = path if git else path / "app"
+        """A kit as Download ZIP leaves it, its code in app/, with the stand-in ./kit. git: a git checkout at path, whose
+        kit/ is its own kit folder, which this returns."""
+        code = path / "kit" if git else path / "app"
         code.mkdir(parents=True)
-        shutil.copy(TESTS.parent / "SETUP.command", code)
+        shutil.copy(CODE / "SETUP.command", code)
         (code / "kit").write_text(stand_in)
         (code / "kit").chmod(0o755)
         (code / "tools").mkdir()
         (code / "tools" / "pins.json").write_text("{}\n")
         (code / "GUIDE.md").write_text("guide\n")
-        shutil.copy(TESTS.parent / "kit.json", code)  # the standard list: data/kit.json starts as a copy
-        (code / "site").mkdir()
-        shutil.copy(TESTS.parent / "site" / "sources.json", code / "site")  # for ./kit pick --ask
-        if git:  # a developer's, with npm's packages, ruff's cache and a website build in it
+        shutil.copy(CODE / "kit.json", code)  # the standard list: data/kit.json starts as a copy
+        shutil.copy(CODE / "tools" / "sources.json", code / "tools")  # for ./kit pick --ask
+        if git:  # a developer's: the website and the license beside kit/, and npm's packages and ruff's cache in both
             (code / "tools" / "commit").write_text("$Format:%H$\n")  # (what git archive fills in)
-            for d in ("node_modules/prettier", ".ruff_cache/0.17.5", "site/node_modules/next", "site/.next"):
+            for d in ("node_modules/prettier", ".ruff_cache/0.17.5", "kit/node_modules/prettier", "kit/.ruff_cache/0"):
                 (path / d).mkdir(parents=True)
                 (path / d / "index.js").write_text("")
+            (path / "site" / ".next").mkdir(parents=True)
+            for f in ("LICENSE", "README.md", "THIRD-PARTY.md"):
+                (path / f).write_text(f + "\n")
             if shutil.which("git"):  # a real one, with a commit (not in CI's bash 3.2 container, which has no git)
                 me = ["-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false"]
                 for args in (["init", "-q"], ["add", "-A"], [*me, "commit", "-qm", "test"]):
                     subprocess.run(["git", "-C", str(path), *args], check=True, capture_output=True)
             else:
                 (path / ".git").mkdir()
-        return path
+        return code if git else path
 
     setup = kit_folder(work / "setup")
     (setup / "downloads").mkdir()  # set up before, so SETUP doesn't ask where it goes
@@ -1710,7 +1710,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     mine = setup / "data" / "kit.json"  # what goes in the kit: SETUP changes this one, never app/kit.json
 
     def run_setup(plan=0, sync=0, test=0, update=0, folder=setup, answers="\ny\nn\n\n", args=(), **env_extra):
-        shutil.copy(TESTS.parent / "SETUP.command", folder / "app")
+        shutil.copy(CODE / "SETUP.command", folder / "app")
         for log in ("calls.log", "home.log", "args.log"):
             (folder / "data" / log).write_text("")
         p = subprocess.run(
@@ -1750,7 +1750,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         and "Turn off Wi-Fi and try it" in out
         and "The rest of the kit is about 380 GB more: about 4 hours at this connection's speed (24.0 MB/s)" in out
         and f'run bash "{setup}/app/SETUP.command" again: it asks what you want in the kit, then gets that' in out
-        and (setup / "app" / "kit.json").read_text() == (TESTS.parent / "kit.json").read_text()
+        and (setup / "app" / "kit.json").read_text() == (CODE / "kit.json").read_text()
         and "Open the kit now?" in out
         and "All set" not in out
         and "where should the kit go" not in out,
@@ -1866,7 +1866,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     )
 
     def try_kit(**settings):
-        c = json.loads((TESTS.parent / "kit.json").read_text())
+        c = json.loads((CODE / "kit.json").read_text())
         c["settings"].update(starter_only=True, **settings)
         mine.write_text(json.dumps(c, indent=1))
 
@@ -1916,7 +1916,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     )
 
     def essentials_only():
-        c = json.loads((TESTS.parent / "kit.json").read_text())
+        c = json.loads((CODE / "kit.json").read_text())
         c["settings"]["essentials_only"] = True
         mine.write_text(json.dumps(c, indent=1))
 
@@ -1967,7 +1967,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         rc == 0 and "room for the rest" not in out and calls == update_calls,
         out,
     )
-    shutil.copy(TESTS.parent / "kit.json", mine)
+    shutil.copy(CODE / "kit.json", mine)
     (setup / "data" / ".kit" / "state.json").unlink()
     rc, out, calls = run_setup(update=3)
     check(
@@ -2064,7 +2064,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         and [z["zim"][:17] for z in c["library"] if z["zim"].startswith("wikipedia_")] == ["wikipedia_de_all_"],
         out,
     )
-    shutil.copy(TESTS.parent / "kit.json", mine)
+    shutil.copy(CODE / "kit.json", mine)
     rc, out, calls = run_setup(args=("--yes",), answers="")
     argv = (setup / "data" / "args.log").read_text().splitlines()
     check(
@@ -2109,7 +2109,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         and "it gets it" not in out,
         out,
     )
-    shutil.copy(TESTS.parent / "kit.json", mine)
+    shutil.copy(CODE / "kit.json", mine)
     rc, out, calls = run_setup(args=("--no-ai", "--yes"), answers="")
     argv = (setup / "data" / "args.log").read_text().splitlines()
     check(
@@ -2120,14 +2120,14 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         and "fit --restore --skip-too-big" not in argv,
         out,
     )
-    shutil.copy(TESTS.parent / "kit.json", mine)
+    shutil.copy(CODE / "kit.json", mine)
     rc, out, calls = run_setup(args=("--yes", "--skip", "wikipedia,nothing-such"), answers="")
     check(
         "SETUP --skip with a name the kit doesn't have: stops before downloading, and kit.json is as it was",
         rc == 1
         and "Nothing in the kit is called nothing-such" in out
         and calls == ["update"]
-        and mine.read_text() == (TESTS.parent / "kit.json").read_text(),
+        and mine.read_text() == (CODE / "kit.json").read_text(),
         out,
     )
     rc, out, calls = run_setup(args=("--bogus",), answers="")
@@ -2151,7 +2151,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     def wrapper(folder, build=None):
         """A copy of ./kit in folder, with a stand-in tools/tinfoilkit/build.sh whose program prints build."""
         (folder / "tools" / "tinfoilkit").mkdir(parents=True)
-        shutil.copy(TESTS.parent / "kit", folder / "kit")
+        shutil.copy(CODE / "kit", folder / "kit")
         if build:
             (folder / "tools" / "tinfoilkit" / "build.sh").write_text(
                 f"""printf '#!/bin/sh\\n[ "$1" = version ] || echo {build} "$@"\\n' > "$(dirname "$0")/../{PROGRAM.name}"\n"""
@@ -2206,8 +2206,8 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         and "Building" not in err2,
         out + err + err2,
     )
-    co = wrapper(work / "wrapper" / "checkout", build="rebuilt")
-    (co / ".git").mkdir()
+    co = wrapper(work / "wrapper" / "checkout" / "kit", build="rebuilt")  # the repository's kit/
+    (co.parent / ".git").mkdir()
     (co / "tools" / PROGRAM.name).write_text('#!/bin/sh\n[ "$1" = version ] || echo built before "$@"\n')
     then = time.time() - 60
     os.utime(co / "tools" / "tinfoilkit" / "build.sh", (then, then))
@@ -2270,7 +2270,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         tail = first[:1] + ["essentials-on" if essentials else "essentials-off"] + first[2:]
         if then_rest:
             tail += ["starter-off", "essentials-on" if essentials else "essentials-off"] + rest[2:]
-        code = where if (where / ".git").exists() else where / "app"
+        code = where if (where / ".git").exists() or (where.parent / ".git").exists() else where / "app"
         return (
             (code / "SETUP.command").exists()
             and (code / "kit").exists()
@@ -2599,17 +2599,18 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
             tk = drv / "USB DRIVE" / "TinfoilKit"
             check(
                 "SETUP first run: a git checkout's code is copied to the drive as its app folder, and the checkout "
-                "stays where it was; .git, npm's packages, ruff's cache and the website's build stay behind",
+                "stays where it was; it gets the license, README and THIRD-PARTY.md, as a release does, and .git, the "
+                "website, npm's packages and ruff's cache stay behind",
                 rc == 0
                 and placed_ok(tk)
                 and not (tk / "app" / ".git").exists()
                 and dl.exists()
                 and "Use that copy from now on" in out
-                and (tk / "app" / "site" / "sources.json").exists()
+                and (tk / "app" / "tools" / "sources.json").exists()
+                and all((tk / "app" / f).read_text() == f + "\n" for f in ("LICENSE", "README.md", "THIRD-PARTY.md"))
                 and not (tk / "app" / "node_modules").exists()
                 and not (tk / "app" / ".ruff_cache").exists()
-                and not (tk / "app" / "site" / "node_modules").exists()
-                and not (tk / "app" / "site" / ".next").exists(),
+                and not (tk / "app" / "site").exists(),
                 out,
             )
             if shutil.which("git"):
@@ -2635,7 +2636,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         (gone / "data").mkdir()
         (gone / "data" / "kit.json").write_text("{}")
         (gone / "app").mkdir()
-        shutil.copy(TESTS.parent / "UNINSTALL.command", gone / "app")
+        shutil.copy(CODE / "UNINSTALL.command", gone / "app")
         if kit_files:
             (gone / "app" / "kit").write_text(f'#!/bin/bash\necho "$*" >> "{work / "uninstall-kit.log"}"\n')
             (gone / "app" / "kit").chmod(0o755)
@@ -2729,7 +2730,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
             srv.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(300)\n")
             srv.chmod(0o755)
             procs.append(subprocess.Popen([str(srv)]))
-        shutil.copy(TESTS.parent / "UNINSTALL.command", gone / "app")
+        shutil.copy(CODE / "UNINSTALL.command", gone / "app")
         (gone / "app" / "kit").write_text("#!/bin/bash\n")
         (gone / "app" / "tools" / "pins.json").write_text("{}\n")
         time.sleep(0.5)
@@ -2786,7 +2787,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     lk = work / "launch"
     (lk / "app" / "tools").mkdir(parents=True)
     for f in ("kit", "Open Tinfoil Kit.command"):
-        shutil.copy(TESTS.parent / f, lk / "app")
+        shutil.copy(CODE / f, lk / "app")
     shutil.copy(PROGRAM, lk / "app" / "tools")
     launcher = lk / "app" / "Open Tinfoil Kit.command"
     (lk / "data").mkdir()
@@ -2950,7 +2951,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     # ./kit pick: what goes in the kit, by name (SETUP's --no-ai, --models, --skip and --add).
     pk = work / "pick"
     new_kit(pk)
-    shutil.copy(TESTS.parent / "kit.json", pk / "data" / "kit.json")
+    shutil.copy(CODE / "kit.json", pk / "data" / "kit.json")
     before = (pk / "data" / "kit.json").read_text()
     rc, out = kit(
         "pick", "--models", "gemma-4-e4b", "--skip", "stackexchange", "--add", "gutenberg_en_all Wikipedia", root=pk
@@ -2988,8 +2989,8 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
 
     # ./kit pick with a preset, as the kit builder writes it: what goes in starts over from the standard list
     # (app/kit.json), where you live and Wikipedia come with it, and what's named after it changes that.
-    shutil.copy(TESTS.parent / "kit.json", pk / "data" / "kit.json")
-    std = json.loads((TESTS.parent / "kit.json").read_text())
+    shutil.copy(CODE / "kit.json", pk / "data" / "kit.json")
+    std = json.loads((CODE / "kit.json").read_text())
     builder = ("--essentials", "--region", "texas", "--wikipedia", "en,es", "--wikipedia-size", "top-text")
     builder += ("--skip", "ifixit_en_all", "--add", "wiktionary_en_all_nopic")
     rc, out = kit("pick", *builder, root=pk)
@@ -3040,7 +3041,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         and "essentials_only" not in c["settings"],
         out,
     )
-    shutil.copy(TESTS.parent / "kit.json", pk / "data" / "kit.json")
+    shutil.copy(CODE / "kit.json", pk / "data" / "kit.json")
     rc, out = kit("pick", "--essentials", root=pk)
     c = json.loads((pk / "data" / "kit.json").read_text())
     p = subprocess.run(
@@ -3104,8 +3105,7 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
         indent=1,
     )
     (ak / "data" / "kit.json").write_text(ask_json)
-    (ak / "app" / "site").mkdir()
-    (ak / "app" / "site" / "sources.json").write_text(
+    (ak / "app" / "tools" / "sources.json").write_text(
         json.dumps(
             {
                 "sources": [
@@ -3197,8 +3197,8 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
             }
         )
     )
-    src = json.loads((ak / "app" / "site" / "sources.json").read_text())
-    (ak / "app" / "site" / "sources.json").write_text(
+    src = json.loads((ak / "app" / "tools" / "sources.json").read_text())
+    (ak / "app" / "tools" / "sources.json").write_text(
         json.dumps(
             {
                 "sources": src["sources"]
@@ -3406,8 +3406,8 @@ Server(("::1", port), Page).serve_forever()
     # Where you live: ./kit region and the list of places in tools/regions.json (the real one)
     rk = work / "region kit"
     new_kit(rk)
-    regions = json.loads((TESTS.parent / "tools" / "regions.json").read_text())
-    shutil.copy(TESTS.parent / "kit.json", rk / "data" / "kit.json")
+    regions = json.loads((CODE / "tools" / "regions.json").read_text())
+    shutil.copy(CODE / "kit.json", rk / "data" / "kit.json")
 
     def rk_cfg():
         c = json.loads((rk / "data" / "kit.json").read_text())
@@ -3464,7 +3464,7 @@ Server(("::1", port), Page).serve_forever()
         and maps["region"] == "bayern"
         and [z["zim"] for z in wiki] == ["wikipedia_de_all_maxi", "wikipedia_en_all_maxi"]
         and lib.index(wiki[0])
-        == [z["zim"] for z in json.loads((TESTS.parent / "kit.json").read_text())["library"]].index(was[0]["zim"])
+        == [z["zim"] for z in json.loads((CODE / "kit.json").read_text())["library"]].index(was[0]["zim"])
         and all(
             {k: v for k, v in z.items() if k not in ("zim", "note")}
             == {k: v for k, v in was[0].items() if k not in ("zim", "note")}

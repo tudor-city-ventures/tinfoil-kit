@@ -1,7 +1,8 @@
 name: refresh builder sizes
 # Asks every source for its current size (./kit plan --json downloads nothing), and rebuilds the places SETUP and the
-# builder offer for "Where do you live?" (site/build_regions.py), and commits site/sources.json and tools/regions.json
-# when they changed, so the website's kit builder and the kit's region list stay accurate.
+# builder offer for "Where do you live?" (site/build_regions.py), and commits site/sources.json (and the kit's copy,
+# kit/tools/sources.json) and kit/tools/regions.json when they changed, so the website's kit builder and the kit's
+# sizes and region list stay accurate.
 # Only the commit job can write to the repo, and it runs none of the kit's code: the build job, which talks to
 # every download host, has a read-only token and hands its result over as an artifact.
 on:
@@ -19,7 +20,7 @@ jobs:
         with:
           ref: main     # a scheduled run starts on the default branch; the site deploys from main
           persist-credentials: false
-      - run: ./kit plan --json > "$RUNNER_TEMP/plan.json"
+      - run: kit/kit plan --json > "$RUNNER_TEMP/plan.json"
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - name: list sources that couldn't be resolved (they would fail in a real sync too)
@@ -31,7 +32,7 @@ jobs:
           name: sizes
           path: |
             site/sources.json
-            tools/regions.json
+            kit/tools/regions.json
           retention-days: 1
 
   commit:
@@ -51,7 +52,7 @@ jobs:
       - name: commit the new sizes and places, and nothing else
         env:
           NEW: ${{ runner.temp }}/sizes/site/sources.json
-          REGIONS: ${{ runner.temp }}/sizes/tools/regions.json
+          REGIONS: ${{ runner.temp }}/sizes/kit/tools/regions.json
         run: |
           python3 -I - "$NEW" site/sources.json <<'PY'
           import json, sys
@@ -66,7 +67,7 @@ jobs:
           # names, nicknames and home towns stay as a person last committed them: SETUP prints them, the site's agent
           # prompt quotes them, and GeoNames, one of their sources, is edited by the public. What's kept back is listed
           # as warnings, so a person can rebuild the file by hand.
-          python3 -I - "$REGIONS" tools/regions.json <<'PY'
+          python3 -I - "$REGIONS" kit/tools/regions.json <<'PY'
           import json, re, sys
           new, old = (json.load(open(p, encoding="utf-8")) for p in sys.argv[1:])
           seg = r"[a-z0-9][a-z0-9_-]*"
@@ -119,8 +120,9 @@ jobs:
           open(sys.argv[2], "w", encoding="utf-8").write("\n".join(lines + [" ]", "}", ""]))
           PY
           cp "$NEW" site/sources.json
-          cp tools/regions.json site/regions.json
-          git diff --quiet site/ tools/ && { echo "no change"; exit 0; }
+          cp "$NEW" kit/tools/sources.json
+          cp kit/tools/regions.json site/regions.json
+          git diff --quiet site/ kit/tools/ && { echo "no change"; exit 0; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "Refresh kit builder sizes and places"

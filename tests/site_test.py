@@ -109,10 +109,12 @@ check("the site never mentions 2 TB", not re.search(r"\b2(\s|&nbsp;)*TB\b", site
 check("the site names no update schedule", not re.search(r"\bmonths?\b|\bquarterly\b", site_text, re.I))
 # the check-the-code prompt sends people's AIs to these files, so they have to exist
 named = re.findall(
-    r"SETUP\.command|SETUP-Windows\.bat|tools/[\w.-]+|mac/",
+    r"SETUP\.command|SETUP-Windows\.bat|(?:kit/)?tools/[\w.-]+|mac/",
     open(os.path.join(SITE, "components", "prompts.js"), encoding="utf-8").read(),
 )
-gone = [f for f in named if not os.path.exists(os.path.join(SITE, "..", f))]
+gone = [
+    f for f in named if not any(os.path.exists(os.path.join(SITE, "..", d, f)) for d in ("", "kit"))
+]  # (SETUP's in kit/)
 check("the check-the-code prompt names files that exist", len(named) >= 4 and not gone, f"{named}, gone: {gone}")
 # An AI builds the setup command from llms.txt, so it lists every id the options take
 llms = open(os.path.join(SITE, "public", "llms.txt"), encoding="utf-8").read()
@@ -160,16 +162,14 @@ REPO = os.path.join(SITE, "..")
 PLAT = {("Linux", "x86_64"): "linux-x64", ("Darwin", "arm64"): "macos-arm64"}.get(
     (platform.system(), platform.machine())
 )
-PROGRAM = os.path.join(REPO, "tools", f"tinfoilkit-{PLAT}")
+PROGRAM = os.path.join(REPO, "kit", "tools", f"tinfoilkit-{PLAT}")
 TRIP = tempfile.mkdtemp(prefix="kit site test ")
 shutil.copytree(
-    os.path.join(REPO, "tools"), os.path.join(TRIP, "app", "tools"), ignore=shutil.ignore_patterns("tinfoilkit*")
+    os.path.join(REPO, "kit", "tools"), os.path.join(TRIP, "app", "tools"), ignore=shutil.ignore_patterns("tinfoilkit*")
 )
 if os.path.exists(PROGRAM):
     shutil.copy(PROGRAM, os.path.join(TRIP, "app", "tools"))
-shutil.copy(os.path.join(REPO, "kit.json"), os.path.join(TRIP, "app", "kit.json"))
-os.makedirs(os.path.join(TRIP, "app", "site"))
-shutil.copy(os.path.join(SITE, "sources.json"), os.path.join(TRIP, "app", "site"))
+shutil.copy(os.path.join(REPO, "kit", "kit.json"), os.path.join(TRIP, "app", "kit.json"))
 # SETUP hands these to ./kit pick; the rest of what the builder writes says where the kit goes and who shares it
 PICK = ("--recommended", "--essentials", "--everything", "--region", "--wikipedia", "--wikipedia-size", "--no-ai")
 PICK += ("--models", "--skip", "--add")
@@ -182,7 +182,7 @@ def round_trip(line):
     data = os.path.join(TRIP, "data")
     shutil.rmtree(data, ignore_errors=True)
     os.makedirs(data)
-    shutil.copy(os.path.join(REPO, "kit.json"), data)
+    shutil.copy(os.path.join(REPO, "kit", "kit.json"), data)
     words, given = shlex.split(line), []
     for w in words:
         if w.startswith("--") and w not in SETUP_ONLY:
@@ -794,7 +794,9 @@ with sync_playwright() as p:
             page.click("#share")
 
             # Every option the builder writes is one SETUP takes, and ./kit pick makes the builder's kit from them
-            setup_opts = set(re.findall(r"^#\s+(--[\w-]+)", open(os.path.join(REPO, "SETUP.command")).read(), re.M))
+            setup_opts = set(
+                re.findall(r"^#\s+(--[\w-]+)", open(os.path.join(REPO, "kit", "SETUP.command")).read(), re.M)
+            )
             while page.locator("button.more", has_text="Show all").count():  # every card, to read every tick
                 page.locator("button.more", has_text="Show all").first.click()
             ticked = "[...document.querySelectorAll('.card:not(.off)')].map(c => c.dataset.id).sort()"
@@ -927,7 +929,7 @@ with sync_playwright() as p:
 
     # The demo copies the kit page (AGENTS.md, "Keep these in step"): its tabs, its More menu and the words on its
     # pages, read from tools/portal.html as it ships, with its script off so nothing fills them in
-    portal = os.path.abspath(os.path.join(SITE, "..", "tools", "portal.html"))
+    portal = os.path.abspath(os.path.join(SITE, "..", "kit", "tools", "portal.html"))
     kit = b.new_page(java_script_enabled=False)
     kit.goto("file://" + portal)
     words = lambda pg, sel: pg.eval_on_selector_all(

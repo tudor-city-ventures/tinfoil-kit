@@ -1,4 +1,4 @@
-"""Build tools/regions.json: the places SETUP and the kit builder offer for "Where do you live?".
+"""Build kit/tools/regions.json: the places SETUP and the kit builder offer for "Where do you live?".
 
 Each place is one Geofabrik extract: a US state, a country, or a part of a big country. For each it records the
 street-detail area and the road data for directions (the extract's outline and file), the address database
@@ -28,7 +28,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-# The sources as the kit's program has them (tools/tinfoilkit/kit.go), each overridable by the same KIT_* variable.
+# The sources as the kit's program has them (kit/tools/tinfoilkit/kit.go), each overridable by the same KIT_* variable.
 GEOFABRIK = os.environ.get("KIT_GEOFABRIK", "https://download.geofabrik.de").rstrip("/") + "/"
 KIWIX_CATALOG = os.environ.get("KIT_KIWIX_CATALOG", "https://library.kiwix.org/catalog/v2/entries?count=-1")
 PHOTON_DUMPS = os.environ.get("KIT_PHOTON_DUMPS", "https://download1.graphhopper.com/public/")
@@ -275,7 +275,7 @@ def parse_kiwix_catalog(data):
 
 
 def tiles_estimate(bbox, maxzoom, roads_bytes=None):
-    """The map tiles' rough size, as the kit estimates it (tilesEstimate in tools/tinfoilkit/plan.go): about 1 GB of
+    """The map tiles' rough size, as the kit estimates it (tilesEstimate in kit/tools/tinfoilkit/plan.go): about 1 GB of
     world overview, plus street detail at about 40 MB per square degree, capped at twice the area's road data."""
     w, s, e, n = (float(x) for x in bbox)
     detail = abs(e - w) * abs(n - s) * math.cos(math.radians((n + s) / 2)) * 40e6
@@ -500,7 +500,7 @@ def photon_db(cc, base, pages):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, default=ROOT / "tools" / "regions.json")
+    ap.add_argument("--out", type=Path, default=ROOT / "kit" / "tools" / "regions.json")
     ap.add_argument("--cache", type=Path)
     ap.add_argument("--print", action="store_true", help="also print the result, gzipped and base64, to stdout")
     args = ap.parse_args()

@@ -1,5 +1,5 @@
-"""Build site/sources.json (the kit builder's data), and copy kit.json and tools/regions.json (the places it offers
-for "Where do you live?") into site/.
+"""Build site/sources.json (the kit builder's data) and its copy for the kit, kit/tools/sources.json, and copy
+kit/kit.json and kit/tools/regions.json (the places it offers for "Where do you live?") into site/.
 
 usage: python3 site/build_sources.py [plan.json]
 plan.json (optional) is the output of `./kit plan --json`: live sizes for every item. Without it,
@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+KIT = ROOT / "kit"  # the kit's code
 GB = 1e9
 
 # What it is and why you'd want it. A source missing here falls back to its kit.json note.
@@ -174,7 +175,7 @@ def source_for(zim):
 
 
 def main():
-    cfg = json.loads((ROOT / "kit.json").read_text())
+    cfg = json.loads((KIT / "kit.json").read_text())
     live = load_plan(Path(sys.argv[1])) if len(sys.argv) > 1 else previous_live()
     default_model = cfg["settings"]["default_model"]
     out = []
@@ -214,7 +215,7 @@ def main():
             "https://huggingface.co/" + m["repo"] if m.get("type") == "hf" else None,
         )
     mp = cfg["maps"]
-    regions = json.loads((ROOT / "tools" / "regions.json").read_text(encoding="utf-8"))
+    regions = json.loads((KIT / "tools" / "regions.json").read_text(encoding="utf-8"))
     place = next(r for r in regions["regions"] if r["id"] == mp["region"])
     add("maps", "Maps", place["name"], mp.get("enabled", True), True, SOURCES["maps"])
     if "maps" not in live:  # the map viewer, fonts and icons, and the place's map, road data and address search
@@ -230,9 +231,11 @@ def main():
         )
 
     site = ROOT / "site"
-    (site / "sources.json").write_text(json.dumps({"default_model": default_model, "sources": out}, indent=1) + "\n")
-    (site / "kit.json").write_text((ROOT / "kit.json").read_text())
-    (site / "regions.json").write_text((ROOT / "tools" / "regions.json").read_text(encoding="utf-8"), encoding="utf-8")
+    sources = json.dumps({"default_model": default_model, "sources": out}, indent=1) + "\n"
+    (site / "sources.json").write_text(sources)
+    (KIT / "tools" / "sources.json").write_text(sources)
+    (site / "kit.json").write_text((KIT / "kit.json").read_text())
+    (site / "regions.json").write_text((KIT / "tools" / "regions.json").read_text(encoding="utf-8"), encoding="utf-8")
     print(f"wrote {len(out)} sources")
 
 

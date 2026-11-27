@@ -858,6 +858,7 @@ rem Remove the download the kit was copied from: only a fresh one, never a git c
 set "OLD=%~1"
 set "OLD_APP=%OLD%\app"
 if exist "%OLD%\.git\" goto :eof
+if exist "%OLD%\..\.git\" goto :eof
 if not exist "%OLD_APP%\kit.cmd" goto :eof
 if not exist "%OLD_APP%\SETUP-Windows.bat" goto :eof
 if "%OLD:~3%"=="" goto :eof

@@ -1,6 +1,6 @@
 import { useColorScheme } from "react-native";
 
-// The kit page's paper, ink and signal orange (tools/portal.html), on iOS's grouped lists: orange is the only accent.
+// The kit page's paper, ink and signal orange (kit/tools/portal.html), on iOS's grouped lists: orange is the only accent.
 const light = {
   background: "#F3F0E6",
   cell: "#FFFDF7",

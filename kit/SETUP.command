@@ -69,8 +69,11 @@ while [ $# -gt 0 ]; do
   shift
 done
 CODE="$(pwd)"    # the kit's code: the app folder, the copy of it a new version replaces
-KIT="$CODE"      # the kit folder, with app, downloads (what sync downloads) and data (the person's): or a git checkout
+KIT="$CODE"      # the kit folder, with app, downloads (what sync downloads) and data (the person's): or a git checkout's
 case "$(basename "$CODE" | tr '[:upper:]' '[:lower:]')" in app) [ -e .git ] || KIT="$(dirname "$CODE")" ;; esac
+GIT=""    # a git checkout's kit folder: the repository's kit/
+case "$(basename "$CODE" | tr '[:upper:]' '[:lower:]')" in kit) [ -e ../.git ] && GIT=1 ;; esac
+[ -e .git ] && GIT=1
 MINE="$KIT/data/kit.json"    # what goes in the kit, and its settings
 NAME=TinfoilKit    # the kit's folder: at the top of a drive, or in the home folder
 MAC=0; [ "$(uname -s)" = Darwin ] && MAC=1
@@ -544,7 +547,7 @@ home_server() {
 # A kit from before the app, downloads and data folders, with this version's code at its top (its old ./kit update put
 # it there and started this script): ./kit layout moves it into them, by renaming, and the copy of this script in app/
 # carries on. At the top of a kit with an app folder, that folder's copy takes over.
-if [ "$CODE" = "$KIT" ] && [ ! -e .git ]; then
+if [ "$CODE" = "$KIT" ] && [ -z "$GIT" ]; then
   if [ -d tools ]; then
     need_tools
     ./kit layout || finish 1

@@ -188,10 +188,26 @@ func TestLayout(t *testing.T) {
 	if kitOf(filepath.Join(kit, "app")) != kit || kitOf(filepath.Join(kit, "App")) != kit || kitOf(kit) != kit {
 		t.Error("an app folder's kit is its parent")
 	}
-	checkout := filepath.Join(top, "app") // a git checkout called app is its own kit folder
-	os.MkdirAll(filepath.Join(checkout, ".git"), 0o755)
-	if kitOf(checkout) != checkout {
+	own := filepath.Join(top, "app") // a folder with a .git of its own, even one called app, is its own kit folder
+	os.MkdirAll(filepath.Join(own, ".git"), 0o755)
+	if kitOf(own) != own {
 		t.Error("a git checkout is its own kit folder")
+	}
+	repo := filepath.Join(top, "repo") // the repository: its kit/ is its own kit folder
+	code := filepath.Join(repo, "kit")
+	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
+	os.MkdirAll(filepath.Join(code, "tools"), 0o755)
+	if !checkout(code) || kitOf(code) != code || kitOfCode(code) != code || appDir(code) != code {
+		t.Error("a git checkout's kit/ is its own kit folder")
+	}
+	if tracked := filepath.Join(repo, "TinfoilKit"); checkout(tracked) || appDir(tracked) != filepath.Join(tracked, "app") {
+		t.Error("a kit in a folder that git tracks is a kit, not a checkout")
+	}
+	os.MkdirAll(filepath.Join(repo, "downloads", "models"), 0o755) // where a checkout downloaded before kit/
+	os.MkdirAll(filepath.Join(repo, "data"), 0o755)
+	if ensureLayout(code); !isDir(filepath.Join(code, "downloads", "models")) || !isDir(filepath.Join(code, "data")) ||
+		exists(filepath.Join(repo, "downloads")) {
+		t.Error("a checkout's downloads and data from before kit/ move into kit/")
 	}
 	old := filepath.Join(top, "old") // from before the three folders
 	os.MkdirAll(filepath.Join(old, "bin"), 0o755)
@@ -887,9 +903,11 @@ func TestRoom(t *testing.T) {
 }
 
 func TestFinderFiles(t *testing.T) {
-	kit := t.TempDir()
-	junk := filepath.Join(kit, ".git", "objects", "pack", "._pack-1.idx")
+	repo := t.TempDir()
+	kit := filepath.Join(repo, "kit")
+	junk := filepath.Join(repo, ".git", "objects", "pack", "._pack-1.idx")
 	os.MkdirAll(filepath.Dir(junk), 0o755)
+	os.MkdirAll(filepath.Join(kit, "tools"), 0o755)
 	os.WriteFile(junk, []byte{0, 5, 22, 7}, 0o644)
 	if dropFinderFiles(kit); exists(junk) {
 		t.Error("macOS's ._ files go from a checkout's .git too")
@@ -906,7 +924,7 @@ func TestPinsFile(t *testing.T) {
 	if fmt.Sprint(pins.get("_readme")) != fmt.Sprint(pinsReadme) {
 		t.Error("tools/pins.json's note isn't the one ./kit pins writes")
 	}
-	yml, _ := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "pins.yml"))
+	yml, _ := os.ReadFile(filepath.Join("..", "..", "..", ".github", "workflows", "pins.yml"))
 	viewer := 0
 	for _, m := range mapsItems(newObj("maps", newObj("enabled", true))) {
 		if contains(pinnedTypes, pyStr(m.get("type"))) {

@@ -182,7 +182,7 @@ GATE_BAD = {
 
 
 def regions_check():
-    """Runs sizes.yml's merge of a new tools/regions.json, one change at a time: sizes and checked downloads come
+    """Runs sizes.yml's merge of a new kit/tools/regions.json, one change at a time: sizes and checked downloads come
     through, ids, names and anything else don't."""
     import copy
     import json
@@ -193,9 +193,12 @@ def regions_check():
 
     root = WORKFLOWS.parent.parent
     code = textwrap.dedent(
-        (WORKFLOWS / "sizes.yml").read_text().split("tools/regions.json <<'PY'\n", 1)[1].split("\n          PY\n", 1)[0]
+        (WORKFLOWS / "sizes.yml")
+        .read_text()
+        .split("kit/tools/regions.json <<'PY'\n", 1)[1]
+        .split("\n          PY\n", 1)[0]
     )
-    committed = root / "tools" / "regions.json"
+    committed = root / "kit" / "tools" / "regions.json"
     base = json.loads(committed.read_text(encoding="utf-8"))
 
     def first(d):
@@ -259,7 +262,7 @@ def regions_check():
 
 
 def pins_check():
-    """Runs pins.yml's check on tools/pins.json with one change each: new builds pass, nothing else does."""
+    """Runs pins.yml's check on kit/tools/pins.json with one change each: new builds pass, nothing else does."""
     import copy
     import json
     import subprocess
@@ -270,10 +273,10 @@ def pins_check():
     code = textwrap.dedent(
         (WORKFLOWS / "pins.yml")
         .read_text()
-        .split("tools/pins.json kit.json <<'PY'\n", 1)[1]
+        .split("kit/tools/pins.json kit/kit.json <<'PY'\n", 1)[1]
         .split("\n          PY\n", 1)[0]
     )
-    committed = root / "tools" / "pins.json"
+    committed = root / "kit" / "tools" / "pins.json"
     base = {
         "_readme": json.loads(committed.read_text(encoding="utf-8"))["_readme"],
         "llama.cpp-macos-arm64": {"version": "b1", "sha256": "a" * 64},
@@ -297,7 +300,7 @@ def pins_check():
             new.write_text(json.dumps(d), encoding="utf-8")
             got = (
                 subprocess.run(
-                    [sys.executable, "-I", "-c", code, str(new), str(committed), str(root / "kit.json")],
+                    [sys.executable, "-I", "-c", code, str(new), str(committed), str(root / "kit" / "kit.json")],
                     capture_output=True,
                 ).returncode
                 == 0

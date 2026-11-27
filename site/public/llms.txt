@@ -218,7 +218,7 @@ For developers, or to look at each step. In the kit's app folder (`.\kit.cmd` fo
 - `./kit sync` exits 0 when everything finished, 1 when something failed or couldn't be looked up, and 130 after Ctrl-C. On 1, run it again: it resumes and names what's left. The kit already works with what it has.
 - Before a kit's first big download, `./kit plan` times the connection for a few seconds on its biggest book or model (`download_speed` in data/.kit/state.json, which each sync updates), so the plan says how long it takes. Sync shows the time left as it goes, for each big file and for everything.
 - Sync fetches the most important items first, each big file over eight connections at once, resumes broken downloads, checks every file against its published checksum when there is one, and deletes an old version only after the new one checks out. Building the directions network takes 10 to 40 minutes after the map downloads.
-- Developers can `git clone https://github.com/tudor-city-ventures/tinfoil-kit` straight into the chosen place instead, and update with `git pull`. A checkout is its own app folder: downloads and data go inside it.
+- Developers can `git clone https://github.com/tudor-city-ventures/tinfoil-kit` straight into the chosen place instead, and update with `git pull`. The checkout's kit folder is its app folder: run `./kit` there, and downloads and data go inside it.
 
 ## Use it
 
@@ -272,7 +272,7 @@ Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's a
 
 ## When something goes wrong
 
-- The setup command stops with curl's error 404: GitHub has no release of the kit to download right now (https://github.com/tudor-city-ventures/tinfoil-kit/releases). On a Mac or Linux with git and Go (`git --version` and `go version` both answer; Go is at https://go.dev/dl), the kit can come from its source instead, with the same options: `git clone --depth 1 https://github.com/tudor-city-ventures/tinfoil-kit ~/Downloads/tinfoil-kit && bash ~/Downloads/tinfoil-kit/SETUP.command --region texas --drive /Volumes/Kit --yes`. SETUP builds the kit's program first, then copies the code to the drive. For this computer, clone it to ~/TinfoilKit and run the SETUP.command there with `--this-computer`. Otherwise, and on Windows, tell the person to try again later.
+- The setup command stops with curl's error 404: GitHub has no release of the kit to download right now (https://github.com/tudor-city-ventures/tinfoil-kit/releases). On a Mac or Linux with git and Go (`git --version` and `go version` both answer; Go is at https://go.dev/dl), the kit can come from its source instead, with the same options: `git clone --depth 1 https://github.com/tudor-city-ventures/tinfoil-kit ~/Downloads/tinfoil-kit && bash ~/Downloads/tinfoil-kit/kit/SETUP.command --region texas --drive /Volumes/Kit --yes`. SETUP builds the kit's program first, then copies the code to the drive. For this computer, clone it to ~/TinfoilKit and run kit/SETUP.command there with `--this-computer`: the kit stays in the checkout's kit folder. Otherwise, and on Windows, tell the person to try again later.
 - "Apple could not verify..." on a double-click: System Settings > Privacy & Security > Open Anyway, once. `bash "Open Tinfoil Kit.command"` in Terminal always works.
 - "Windows protected your PC" on a double-click: More info, then Run anyway, once.
 - "Operation not permitted" in Terminal: macOS is keeping Terminal off the drive. System Settings > Privacy & Security > Files and Folders > Terminal: turn on Removable Volumes, then start again.
@@ -309,7 +309,7 @@ Project NOMAD (Crosstalk Solutions, Apache-2.0, https://github.com/Crosstalk-Sol
 - `./kit update` installs new kit code only if the maintainer's release key signed it, checked against tools/release-signers in the copy already there. The key never touches GitHub.
 - Every download comes straight from its publisher over HTTPS. Each release names the exact build of every program, with its SHA-256, in tools/pins.json, signed with the rest. Books, models and map data are checked against the publisher's checksum wherever one is posted (the map tiles and fonts have none). Nothing is hosted or mirrored by this project.
 - The servers listen on 127.0.0.1. Sharing is off until the person turns it on; then a gate, on port 8000 by default, asks for an 8-digit code. It's plain HTTP, so share on the person's own Wi-Fi or hotspot, not a public network.
-- To check a release before running it, download tinfoilkit-TAG.tar.gz and its .sig from the release, then run `ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz`.
+- To check a release before running it, download tinfoilkit-TAG.tar.gz and its .sig from the release, then run in a kit's app folder (or a clone's kit folder) `ssh-keygen -Y verify -f tools/release-signers -I tinfoilkit-release -n tinfoilkit-release -s tinfoilkit-TAG.tar.gz.sig < tinfoilkit-TAG.tar.gz`.
 - Security problems go to https://github.com/tudor-city-ventures/tinfoil-kit/security/advisories/new, never a public issue.
 
 ## Rules
@@ -327,6 +327,6 @@ Project NOMAD (Crosstalk Solutions, Apache-2.0, https://github.com/Crosstalk-Sol
 - README: https://github.com/tudor-city-ventures/tinfoil-kit#readme
 - GUIDE.md: the printable guide, in the kit's app folder
 - THIRD-PARTY.md: every model, book, map and program, and its license
-- Skills for AI agents, one for each job, with the exact commands: tinfoil-install, tinfoil-update, tinfoil-data, tinfoil-status, tinfoil-home-server and tinfoil-uninstall, in .claude/skills in the kit's app folder and at https://github.com/tudor-city-ventures/tinfoil-kit/tree/main/.claude/skills
+- Skills for AI agents, one for each job, with the exact commands: tinfoil-install, tinfoil-update, tinfoil-data, tinfoil-status, tinfoil-home-server and tinfoil-uninstall, in .claude/skills in the kit's app folder and at https://github.com/tudor-city-ventures/tinfoil-kit/tree/main/kit/.claude/skills
 - AGENTS.md: rules for changing the kit's own code
 - Bugs and ideas: https://github.com/tudor-city-ventures/tinfoil-kit/issues

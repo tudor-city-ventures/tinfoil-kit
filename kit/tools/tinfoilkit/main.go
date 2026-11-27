@@ -87,9 +87,9 @@ func main() {
 }
 
 // The kit folder holds three: app (the code, with this program in app/tools), downloads (what sync gets) and data
-// (the person's own: kit.json, logs, and the kit's records in data/.kit). A git checkout is its own app folder, with
-// downloads/ and data/ inside it. A kit from before those folders keeps everything at its top until its next SETUP
-// moves it.
+// (the person's own: kit.json, logs, and the kit's records in data/.kit). A git checkout's kit folder, kit/ in the
+// repository, is its own app folder, with downloads/ and data/ inside it. A kit from before those folders keeps
+// everything at its top until its next SETUP moves it.
 type layout struct {
 	app, kit, dl, data, conf string
 }
@@ -129,9 +129,9 @@ func kitLayout(root string) layout {
 	return l
 }
 
-// kitOf is the kit folder an app folder belongs to: its parent, or a git checkout itself (even one called app).
+// kitOf is the kit folder an app folder belongs to: its parent, or a git checkout's kit folder itself.
 func kitOf(app string) string {
-	if _, err := os.Stat(filepath.Join(app, ".git")); err != nil && strings.EqualFold(filepath.Base(app), "app") {
+	if !checkout(app) && strings.EqualFold(filepath.Base(app), "app") {
 		return filepath.Dir(app)
 	}
 	return app

@@ -20,7 +20,7 @@ Not in scope: bugs in llama.cpp, Kiwix, Photon, GraphHopper or the other program
 
 ## Check what you run
 
-The kit's code is plain text you can read, except for one built file: the kit's own program, `tools/tinfoilkit-*`, built from the Go source in `tools/tinfoilkit/`. The same source always builds the same bytes, so you can rebuild it and compare. With Go installed (`brew install go`, or [go.dev/dl](https://go.dev/dl/)), run this in a kit's app folder or a clone of this repo:
+The kit's code is plain text you can read, except for one built file: the kit's own program, `tools/tinfoilkit-*`, built from the Go source in `tools/tinfoilkit/`. The same source always builds the same bytes, so you can rebuild it and compare. With Go installed (`brew install go`, or [go.dev/dl](https://go.dev/dl/)), run this in a kit's app folder, or in `kit/` in a clone of this repo:
 
 ```sh
 tools/tinfoilkit/build.sh verify               # compares with the program in tools/

@@ -7,9 +7,9 @@
 # SETUP --updated (what an old SETUP runs after kit update) must move back into them, and --home-server, which must
 # share it on the home network, behind the access code, and set it to start as you sign in. UNINSTALL-Windows.bat in
 # an app folder with other things beside it must delete nothing. SETUP in GitHub's Download ZIP, which has no program
-# to run on, must say where to get the kit. Then onto an exFAT drive from that Download ZIP (all in one folder) with
-# the kit's program built into it, and onto the drive again with the one command an AI hands over (--drive, --yes and
-# more) and the same again for the rest, which must ask nothing.
+# to run on, must say where to get the kit. Then onto an exFAT drive from that Download ZIP (its code all in one
+# folder, kit) with the kit's program built into it, and onto the drive again with the one command an AI hands over
+# (--drive, --yes and more) and the same again for the rest, which must ask nothing.
 # Each time Open Tinfoil Kit for Windows.bat must serve the library, the AI and any map, and UNINSTALL-Windows.bat
 # must remove it all. Last, Open Tinfoil Kit for Windows.bat --share on a kit that kit.cmd sync got, with no SETUP.
 # With -Drive, it plugs in the drive the Mac made (tests\work\drive.vhd) instead, starts the kit on it with a
@@ -44,13 +44,14 @@ if (-not $Drive) {
 
 # The kit as a browser leaves a download that File Explorer unzipped: in Downloads, every file marked as from the
 # internet. The website's has the code in TinfoilKit\app, with the kit's own program for each computer in its tools
-# (drive.yml builds them); GitHub's Download ZIP has the code all in one folder (-Flat), and no program (-Bare) until
-# someone builds it. Its kit.json is the test kit, put in the folder the way one from the website's builder goes in.
+# (drive.yml builds them); GitHub's Download ZIP has the code all in one folder, its kit folder (-Flat), and no
+# program (-Bare) until someone builds it. Its kit.json is the test kit, put in the folder the way one from the
+# website's builder goes in.
 function Get-Kit($dir, [switch]$Maps, [switch]$Flat, [switch]$Bare) {
   if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
   New-Item -ItemType Directory -Force (Split-Path $dir) | Out-Null
-  $prefix = (Split-Path -Leaf $dir) + $(if ($Flat) { "/" } else { "/app/" })
-  git -C $root archive --format=zip "--prefix=$prefix" -o "$work\kit.zip" HEAD
+  if ($Flat) { git -C $root archive --format=zip "--prefix=$(Split-Path -Leaf $dir)/" -o "$work\kit.zip" HEAD }
+  else { git -C "$root\kit" archive --format=zip "--prefix=$(Split-Path -Leaf $dir)/app/" -o "$work\kit.zip" HEAD }
   Expand-Archive "$work\kit.zip" (Split-Path $dir)
   if (-not $Bare) { Copy-Item "$work\programs\tinfoilkit-*" "$(Get-Code $dir)\tools" }
   $kitjson = @("$tests\drive.py", "kitjson", "$(Get-Code $dir)\kit.json") + @(if ($Maps) { "maps" })
@@ -60,8 +61,10 @@ function Get-Kit($dir, [switch]$Maps, [switch]$Flat, [switch]$Bare) {
   }
 }
 
-# The folder with a kit's code: its app folder, or the top of one that's all in one folder.
-function Get-Code($dir) { if (Test-Path "$dir\app") { "$dir\app" } else { $dir } }
+# The folder with a kit's code: its app folder, Download ZIP's kit folder, or the top of one that's all in one folder.
+function Get-Code($dir) {
+  if (Test-Path "$dir\app") { "$dir\app" } elseif (Test-Path "$dir\kit\kit.cmd") { "$dir\kit" } else { $dir }
+}
 
 # A kit's three folders, the launchers and Read me first.txt beside them, and nothing else at its top: the code in
 # app, what sync got in downloads, the person's own (their kit.json, logs and .kit) in data.
@@ -333,7 +336,7 @@ Set-Content "${letter}:\keep-me.txt" "mine"
 
 Step "SETUP-Windows.bat in GitHub's Download ZIP as it comes, all in one folder with no program: it says where to get the kit"
 Get-Kit $flat -Flat -Bare
-$out = Invoke-Cmd "`"$flat\SETUP-Windows.bat`"" "setup-windows-bare.log" @("")
+$out = Invoke-Cmd "`"$flat\kit\SETUP-Windows.bat`"" "setup-windows-bare.log" @("")
 Test-Said "setup-windows-bare.log" "SETUP without the kit's program" "Download the kit from https://tinfoilkit.com"
 if ($out -ne "exit 1") { Fail "SETUP without the kit's program should stop with exit 1 ($out)" }
 
@@ -351,7 +354,7 @@ Remove-Item -Recurse -Force $dl
 Get-Kit $flat -Flat
 Invoke-Setup $flat "setup-windows-drive.log" $answers
 if (-not (Test-Path "$kit\downloads\models\Two")) { Fail "the try-it kit isn't on the drive, at $kit" }
-if (Test-Path $flat) { Fail "the download is still in $flat after the move" }
+if (Test-Path "$flat\kit") { Fail "the download is still in $flat\kit after the move" }
 Test-Layout $kit "the kit on the drive"
 Test-Kit $kit "the drive"
 Step "UNINSTALL-Windows.bat --yes on the drive: the kit goes, and nothing else on the drive"

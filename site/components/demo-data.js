@@ -1,10 +1,10 @@
 // What the demo of the kit page shows (components/demo.jsx): sample questions with answers written ahead of time, the
 // books, sample notes and a sample town with its streets. Nothing here comes from a model, a book or a map server.
-// Medical answers follow the kit's own rule (tools/portal.html, SYSTEM): warning signs first, no doses.
+// Medical answers follow the kit's own rule (kit/tools/portal.html, SYSTEM): warning signs first, no doses.
 
 export const MODELS = ["Inkling-2-Mini", "Qwen3.8-27B", "Gemma-4-26B-A4B", "Gemma-4-12B", "Gemma-4-E4B"];
 
-// The books, in the kit page's groups (classify in tools/portal.html), with the summaries the kit builder gives them.
+// The books, in the kit page's groups (classify in kit/tools/portal.html), with the summaries the kit builder gives them.
 export const BOOKS = [
   ["Medical", "WikiMed", "A medical encyclopedia: conditions, drugs, procedures."],
   [
@@ -209,7 +209,7 @@ If we're split up, we meet at the library on Main Street.
 Water shut-off: in the basement, by the furnace.
 Dr. Patel: (802) 555-0147`;
 
-// Print the essentials, as a kit with Ready.gov's books lists it (PRINT in tools/portal.html).
+// Print the essentials, as a kit with Ready.gov's books lists it (PRINT in kit/tools/portal.html).
 export const PRINT = [
   {
     title: "Make water safe to drink",
@@ -275,7 +275,7 @@ Back by: ____________`,
 ];
 
 // Share with family: the sample address and access code the kit's tests use, and the QR code the kit draws for
-// them (tools/tinfoilkit/qr.go), a row of modules to a string.
+// them (kit/tools/tinfoilkit/qr.go), a row of modules to a string.
 export const SHARE = {
   address: "http://192.168.1.20:8000",
   code: "4821 7736",
@@ -450,7 +450,7 @@ export const PINS = [
   { id: "aunt", name: "Aunt Rosa's", note: "Spare key under the blue pot.", xy: [742, 420], at: "ridgeHill" },
 ];
 
-// Nearest's buttons, as the kit page has them (CATEGORIES in tools/portal.html).
+// Nearest's buttons, as the kit page has them (CATEGORIES in kit/tools/portal.html).
 export const CATEGORIES = [
   ["hospital", "Hospital"],
   ["urgent_care", "Urgent care / clinic"],

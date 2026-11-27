@@ -271,7 +271,7 @@ async function expect(name, opts, closed) {
   }
   check(
     "an ordinary change passes",
-    !(await files(["tools/tinfoilkit/sync.go", "kit.json", ".github/CONTRIBUTING.md", "site/app/page.jsx"])),
+    !(await files(["kit/tools/tinfoilkit/sync.go", "kit/kit.json", ".github/CONTRIBUTING.md", "site/app/page.jsx"])),
   );
   for (const f of [
     ".github/workflows/check.yml",
@@ -280,8 +280,9 @@ async function expect(name, opts, closed) {
     ".github/dependabot.yml",
     ".github/release.sh",
     ".gitattributes",
+    "kit/tools/release-signers",
+    "kit/tools/pins.json",
     "tools/release-signers",
-    "tools/pins.json",
     "mac/build.sh",
   ]) {
     const m = await files(["README.md", f]);
@@ -293,7 +294,8 @@ async function expect(name, opts, closed) {
     !(await files([
       "tests/.github/workflows/x.yml",
       "docs/CODEOWNERS.md",
-      "tools/release-signers.md",
+      "kit/tools/release-signers.md",
+      "site/kit/tools/pins.json",
       "tests/pins.json",
       "mac/app.sh",
     ])),

@@ -14,7 +14,7 @@ A bot closes issues filed without a form (with `gh` or the API, say), feature pr
 
 ## Setting up
 
-You need Go 1.21 or newer (`tools/tinfoilkit/build.sh` then fetches the exact version it pins), Node 22, Python 3.9 or newer and curl. The quick gate also runs shellcheck and ruff 0.17.5 (`pip install ruff==0.17.5`) when they're installed; CI always does.
+You need Go 1.21 or newer (`kit/tools/tinfoilkit/build.sh` then fetches the exact version it pins), Node 22, Python 3.9 or newer and curl. The quick gate also runs shellcheck and ruff 0.17.5 (`pip install ruff==0.17.5`) when they're installed; CI always does.
 
 ```bash
 git clone https://github.com/tudor-city-ventures/tinfoil-kit.git && cd tinfoil-kit
@@ -22,11 +22,11 @@ npm ci --ignore-scripts   # Prettier, ESLint and axe-core, for the checks: nothi
 tests/check.sh            # the quick gate: builds the kit's program, then runs the quick tests against mocks
 ```
 
-A checkout is a kit too: `./kit` builds its program the first time, and `downloads/` and `data/` are git-ignored. But a real `./kit sync` downloads hundreds of GB, so the tests use mocks of every download source instead. To work on the website: `cd site && npm ci --ignore-scripts && npm run dev`.
+A checkout's `kit/` is a kit too: `kit/kit` builds its program the first time, and its `downloads/` and `data/` are git-ignored. But a real `./kit sync` downloads hundreds of GB, so the tests use mocks of every download source instead. To work on the website: `cd site && npm ci --ignore-scripts && npm run dev`.
 
 ## Where things are
 
-The kit's program is in `tools/tinfoilkit/` (Go) and its page in `tools/portal.html`; `kit.json` lists what a kit downloads; the double-click scripts (`SETUP.command` and the rest) sit at the top; `mac/` is the Mac app, `site/` the website and `tests/` the tests. [AGENTS.md](../AGENTS.md#map) has the full map, and [docs/DESIGN.md](../docs/DESIGN.md) how it all works and why.
+The kit is `kit/`: its program is in `kit/tools/tinfoilkit/` (Go) and its page in `kit/tools/portal.html`, `kit/kit.json` lists what a kit downloads, and the double-click scripts (`SETUP.command` and the rest) sit at its top. `mac/` is the Mac app, `site/` the website, `mobile/` the phone app and `tests/` the tests. [AGENTS.md](../AGENTS.md#map) has the full map, and [docs/DESIGN.md](../docs/DESIGN.md) how it all works and why.
 
 ## Good places to start
 

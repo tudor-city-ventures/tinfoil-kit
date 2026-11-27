@@ -1406,7 +1406,7 @@ pre.code {
   background: #30342c;
   color: var(--paper);
 }
-/* The demo of the kit page (components/demo.jsx), in the kit page's own styles (tools/portal.html). It answers to
+/* The demo of the kit page (components/demo.jsx), in the kit page's own styles (kit/tools/portal.html). It answers to
    its own width, so it lays out like the kit page in a window that size. */
 .kd {
   container-type: inline-size;

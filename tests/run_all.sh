@@ -20,7 +20,7 @@ pkill -f mock_remote.py; sleep 0.5; (python3 "$TESTS/mock_remote.py" 19000 > "$L
 rm -f "$R/STATE_V2"; touch "$R/FLAKY"
 touch -d "2026-11-20 12:00" "$R/geofabrik/us-northeast-latest.osm.pbf" "$R/photon/north-america/usa/photon-db-usa-1.3-latest.tar.bz2"
 rm -rf "$W/drive" && mkdir -p "$A" "$D/data"
-cp -a "$ROOT"/{kit,kit.json,"Open Tinfoil Kit.command",SETUP.command,"Open Tinfoil Kit for Windows.bat",GUIDE.md,tools} "$A/"
+cp -a "$ROOT"/kit/{kit,kit.json,"Open Tinfoil Kit.command",SETUP.command,"Open Tinfoil Kit for Windows.bat",GUIDE.md,tools} "$A/"
 cp "$TESTS/drive_kit_maps.json" "$D/data/kit.json"
 . "$TESTS/env.sh"
 cd "$A" || exit 1
