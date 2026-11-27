@@ -25,6 +25,14 @@ node_modules/
 site/.next/
 site/out/
 site/.claude/
+
+# The phone app's build, the native projects Expo generates from app.json, and its agent skills (npm run skills)
+mobile/.expo/
+mobile/dist/
+mobile/ios/
+mobile/android/
+mobile/expo-env.d.ts
+mobile/.claude/
 .claude/settings.local.json
 
 # The kit's program, built by tools/tinfoilkit/build.sh (releases carry it; git doesn't)

@@ -25,6 +25,7 @@ How it all works, and why: [docs/DESIGN.md](docs/DESIGN.md). Releases: [docs/REL
 | `.claude/skills/` | Skills for AI agents that set up or use a kit, with the exact commands, what they print and what to do when they fail: `tinfoil-install`, `tinfoil-update`, `tinfoil-data` (what goes in the kit), `tinfoil-status` (check it, fix it, open it), `tinfoil-home-server` and `tinfoil-uninstall`. They ship in releases, so an agent in a kit's app folder finds them |
 | `GUIDE.md` | The printable guide that lives in a kit |
 | `site/` | The website, tinfoilkit.com: [The website](#the-website) |
+| `mobile/` | The phone app, Tinfoil Kit for iPhone and Android: [The phone app](#the-phone-app) |
 | `tests/` | Mocks of every download source and server, and the tests that run against them (DESIGN.md, "Tests") |
 | `.github/` | The workflows, `release.sh`, and what contributors see: CONTRIBUTING, SECURITY, the code of conduct, issue and pull request templates, CODEOWNERS. `pr-gate.yml` enforces the contribution policy; Dependabot keeps the pinned actions current |
 | `docs/` | DESIGN.md, RELEASING.md and the README's pictures |
@@ -42,6 +43,7 @@ Use the cheapest check that proves the change, and paste its output in the commi
 | Quick gate | `tests/check.sh` | Before every push. CI runs it on every push |
 | End to end | `tests/build_fixtures.sh` once, then `tests/run_all.sh` (Linux x86_64; needs GitHub and download.kiwix.org, which cloud sessions can't reach) | Changes to `tools/` or `kit.json`. CI runs it on those pushes |
 | Drive | The `drive test` workflow (`drive.yml`): it sets a kit up on an exFAT disk on a Mac and on Windows, starts it on all three, and films each screen. Pushes to `main` and the nightly run start it when a file it covers changed, and Monday's always runs. By hand: Actions > drive test > Run workflow at `main` (`only: windows-setup` skips the Mac) | Once the bulk of a change to `tools/`, `kit.json`, `mac/` or a launcher is in, before calling it finished: check that its run passed, or run it by hand if a newer push cancelled it |
+| Phone app | `cd mobile && npm ci --ignore-scripts && npm run check` (types, lint, unit tests) | Changes to `mobile/`. CI runs it and builds the app on push |
 | Website | `python3 tests/site_test.py` (with `KIT_AXE=node_modules/axe-core/axe.min.js` it checks accessibility too) | Changes to `site/`. CI runs it on every push |
 | Real Mac | `./kit sync && ./kit test` on a real drive | Before a release, by the maintainer |
 
@@ -91,6 +93,16 @@ Workflows: actions pinned to a full commit SHA with the version as a comment; re
 - For search and AI answer engines: `app/robots.txt` lets every crawler in and names `app/sitemap.xml`, which lists the two pages; each page's JSON-LD describes it (the kit, how to set it up and its source, the instructions for agents), and each FAQ entry carries schema.org Question markup. A copy change that alters a fact in the JSON-LD (`jsonLd` in each page: what the kit needs or does) updates it too. New FAQ entries copy the others' markup, and "What is Tinfoil Kit?" stays first on the home page: answer engines quote it.
 - Packages are exact versions in `site/package.json`, installed with `npm ci --ignore-scripts`. Add one only when the site needs it, a release at least a week old, and list it in `THIRD-PARTY.md`.
 - To work on it: `cd site && npm ci --ignore-scripts && npm run dev`. Next.js's guides for the installed version are then in `site/node_modules/next/dist/docs/`. Also run `npm run skills` there: it installs agent skills for this stack (React and Next.js practices, web design review, shadcn/ui, answer-engine optimization, schema.org markup) from their publishers, at the commits `site/skills.py` pins, into `site/.claude/skills/`, which git ignores. Where a skill and this file disagree, this file wins. Move a pin only after reading what changed (`python3 site/skills.py --latest` prints the links).
+
+## The phone app
+
+`mobile/` is Tinfoil Kit for iPhone and Android: an Expo app (React Native, TypeScript, Expo Router) with its own releases, separate from the kit's. Its main way in is downloading from the internet, since most people have no drive; a kit on the home network is the other, behind the same access code as Share with family.
+
+- The phone gets the kit's books in their smallest editions (`src/kit/catalog.ts`, from `site/kit.json` and `site/sources.json`, which Metro reads from `../site`), its area's map, and Ask with the AI built into the phone where there is one, Search where there isn't. No accounts, nothing to pay, big downloads on Wi-Fi unless the person allows mobile data.
+- The look is the kit page's on each platform's own controls: iOS's grouped lists, large titles and tab bar (Android's own on Android), on paper with signal orange as the only accent (`src/theme.ts`). Copy follows the rules above.
+- Layout: `src/app/` holds routes only, since every file there is a screen (tabs Library, Ask, Map and Get more, and the first screen with the try-it kit); `src/screens/` the bigger screens' bodies, `src/components/` what screens share and `src/kit/` the logic, each test beside its file. `e2e/` has the Maestro tests CI runs on a simulator and an emulator.
+- Packages are exact versions in `mobile/package.json`, each a release at least a week old (`npm install --before=<a week ago> --save-exact`), installed with `npm ci --ignore-scripts`; match versions to the Expo SDK with `EXPO_OFFLINE=1 npx expo install --check`. List new ones in `THIRD-PARTY.md`.
+- To work on it: `cd mobile && npm ci --ignore-scripts && npm run skills` (Expo's, Callstack's and Vercel's guides, pinned in `mobile/skills.py`, into the git-ignored `mobile/.claude/skills/`; this file wins where they disagree), then `npm run check`. A cloud session can't run a simulator: `npx expo export --platform web` and a browser give a rough look, and CI builds and tests the real apps.
 
 ## Workflow
 

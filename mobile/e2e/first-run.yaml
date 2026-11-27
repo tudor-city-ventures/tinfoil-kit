@@ -1,0 +1,16 @@
+# The first screen, the try-it kit and Get more, on a fresh install: CI runs it on an iPhone simulator and an Android
+# emulator (.github/workflows/mobile.yml). Locally: maestro test mobile/e2e
+appId: com.tinfoilkit.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Tinfoil Kit"
+- assertVisible: "Field medicine books"
+- takeScreenshot: 1-first-screen
+- tapOn: "Get the try-it kit"
+- assertVisible: "Downloading"
+- assertVisible: "On this phone"
+- takeScreenshot: 2-library
+- tapOn: "Get more"
+- assertVisible: "Use mobile data"
+- takeScreenshot: 3-get-more

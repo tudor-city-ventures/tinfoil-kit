@@ -11,6 +11,7 @@ tools/commit export-subst
 /tests export-ignore
 /docs export-ignore
 /mac export-ignore
+/mobile export-ignore
 /.github export-ignore
 /AGENTS.md export-ignore
 /CLAUDE.md export-ignore

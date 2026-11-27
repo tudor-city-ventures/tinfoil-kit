@@ -1,7 +1,7 @@
 """Render the site's icon files and link-preview cards from site/public/icon.svg, in headless Chromium.
 usage: python3 site/build_images.py   (needs: pip install playwright && playwright install chromium)
-Writes site/public/favicon.ico, apple-touch-icon.png and og.png, docs/social-preview.png and the Mac app's icon,
-mac/AppIcon.icns.
+Writes site/public/favicon.ico, apple-touch-icon.png and og.png, docs/social-preview.png, the Mac app's icon,
+mac/AppIcon.icns, and the phone app's icons in mobile/assets/.
 GitHub can't read a repo's preview image from the repo: upload social-preview.png under Settings > General > Social preview."""
 
 import base64
@@ -120,6 +120,11 @@ with sync_playwright() as p:
     save("site/public/apple-touch-icon.png", render(icon_page(180, SIGNAL, 18), 180, 180))
     save("site/public/og.png", render(card(1200, 630), 1200, 630))
     save("docs/social-preview.png", render(card(1280, 640), 1280, 640))
+    # The phone app: iOS rounds the corners of a full square and Android crops its foreground to a circle or squircle
+    # inside the middle two thirds, so the mark sits on paper in the first and small in the middle of the second.
+    save("mobile/assets/icon.png", render(icon_page(1024, PAPER, 150), 1024, 1024))
+    save("mobile/assets/adaptive-icon.png", render(icon_page(1024, "transparent", 262), 1024, 1024, True))
+    save("mobile/assets/splash-icon.png", render(icon_page(512), 512, 512, True))
     save(
         "mac/AppIcon.icns", icns([(s, render(mac_icon_page(s), s, s, True)) for s in (16, 32, 64, 128, 256, 512, 1024)])
     )

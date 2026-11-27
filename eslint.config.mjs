@@ -12,7 +12,7 @@ const rules = {
 };
 
 export default [
-  { ignores: ["site/.next/", "site/out/", "tests/work/"] },
+  { ignores: ["site/.next/", "site/out/", "tests/work/", "mobile/"] }, // the phone app lints itself (mobile/)
   {
     files: ["tools/portal.html"],
     plugins: { html },

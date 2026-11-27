@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Tinfoil Kit",
+    "slug": "tinfoil-kit",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "tinfoilkit",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F3F0E6",
+    "ios": {
+      "bundleIdentifier": "com.tinfoilkit.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocalNetworkUsageDescription": "Tinfoil Kit looks for a kit on your home network, so you can copy books and maps from it without the internet.",
+        "NSBonjourServices": ["_tinfoilkit._tcp"]
+      }
+    },
+    "android": {
+      "package": "com.tinfoilkit.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F3F0E6"
+      }
+    },
+    "web": {
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#F3F0E6",
+          "dark": { "backgroundColor": "#1C1F1A" }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

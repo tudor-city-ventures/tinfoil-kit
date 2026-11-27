@@ -112,6 +112,13 @@ else
   echo "skipped (not installed: npm ci --ignore-scripts)"
 fi
 
+step "the phone app: types, lint and unit tests (cd mobile && npm run check)"
+if [ -x mobile/node_modules/.bin/jest ]; then
+  run npm --prefix mobile run --silent check
+else
+  echo "skipped (not installed: cd mobile && npm ci --ignore-scripts)"
+fi
+
 step "nothing the kit runs installs or runs npm's developer tools"
 run sh -c '! grep -nwE "npm|npx|node_modules" kit kit.cmd SETUP.command SETUP-Windows.bat UNINSTALL.command UNINSTALL-Windows.bat \
   "Open Tinfoil Kit.command" "Open Tinfoil Kit for Windows.bat" mac/app.sh mac/TinfoilKit.m'
