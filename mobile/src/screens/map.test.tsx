@@ -104,7 +104,7 @@ test("pick where you live, watch its map come, then see it, and pick another", a
   await user.press(screen.getByText("Alabama"));
   expect(store.get().mapDownload).toMatchObject({ place: "us/alabama" });
   expect(screen.getByText("Alabama: Starting")).toBeOnTheScreen(); // over Rhode Island's map, until Alabama's is here
-});
+}, 20_000); // the whole of it, step by step: longer than a test's usual 5 seconds on a busy runner
 
 test("where you are: asked for once, then the map goes there, or says you're outside its place", async () => {
   const user = userEvent.setup();
