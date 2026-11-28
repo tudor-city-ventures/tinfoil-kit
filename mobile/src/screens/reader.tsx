@@ -21,8 +21,9 @@ import { Icon, type icons } from "@/components/icon";
 import { address, answer, extract, host, openBook, origin, parse } from "@/kit/books";
 import { catalog } from "@/kit/catalog";
 import { libraryPath } from "@/kit/downloads";
+import { Fulltext } from "@/kit/fulltext";
 import { useKit } from "@/kit/store";
-import type { Zim } from "@/kit/zim";
+import type { Entry, Zim } from "@/kit/zim";
 import { space, useColors } from "@/theme";
 
 const byId = new Map(catalog.map((b) => [b.id, b]));
@@ -72,7 +73,28 @@ export function Reader({ id, page: first, back }: { id: string; page?: string; b
   const zim = book.zim;
   const main = useMemo(() => zim?.mainPage(), [zim]);
   const home = `${origin(id)}${zim && main ? address(zim, main) : "/"}`;
-  const found = useMemo(() => (zim && query.trim() ? zim.titles(query.trim(), 30) : []), [zim, query]);
+  const typed = query.trim();
+  const found = useMemo(() => (zim && typed ? zim.titles(typed, 30) : []), [zim, typed]);
+  const index = useMemo(() => (zim ? Fulltext.of(zim) : undefined), [zim]);
+  // Pages with the words, once typing stops
+  const [words, setWords] = useState<{ query: string; pages: Entry[] }>({ query: "", pages: [] });
+  const inside = words.query === typed ? words.pages : [];
+  const waiting = !!index && !!typed && words.query !== typed;
+
+  useEffect(() => {
+    if (!index || !typed) return;
+    const later = setTimeout(() => {
+      const titled = new Set(found.map((e) => e.index));
+      let pages: Entry[] = [];
+      try {
+        pages = index.search(typed, 20).filter((e) => !titled.has(e.index));
+      } catch {
+        // an index this phone can't read: the titles are still there
+      }
+      setWords({ query: typed, pages });
+    }, 250);
+    return () => clearTimeout(later);
+  }, [index, typed, found]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -230,7 +252,7 @@ export function Reader({ id, page: first, back }: { id: string; page?: string; b
           </View>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: insets.bottom }}>
             {found.length > 0 ? (
-              <Group label="Pages">
+              <Group label="Titles">
                 {found.map((e) => (
                   <Row
                     key={e.index}
@@ -240,12 +262,29 @@ export function Reader({ id, page: first, back }: { id: string; page?: string; b
                   />
                 ))}
               </Group>
-            ) : query.trim() ? (
+            ) : null}
+            {inside.length > 0 ? (
+              <Group label="Pages with these words">
+                {inside.map((e) => (
+                  <Row
+                    key={e.index}
+                    testID={`inside-${e.title}`}
+                    title={e.title}
+                    onPress={() => go(`${origin(id)}${address(zim, e)}`)}
+                  />
+                ))}
+              </Group>
+            ) : null}
+            {found.length || inside.length || waiting ? null : (
               <Text style={[styles.none, { color: c.mute }]}>
-                No page in this book has a title that starts that way.
+                {!typed
+                  ? index
+                    ? "Type the start of a page's title, or words in it."
+                    : "Type the start of a page's title."
+                  : index
+                    ? "No page in this book has a title that starts that way, or all of these words."
+                    : "No page in this book has a title that starts that way."}
               </Text>
-            ) : (
-              <Text style={[styles.none, { color: c.mute }]}>{"Type the start of a page's title."}</Text>
             )}
           </ScrollView>
         </View>

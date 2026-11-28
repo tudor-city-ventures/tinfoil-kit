@@ -75,7 +75,7 @@ export class Zim {
   private readonly cache = new Map<number, Uint8Array>(); // cluster: its data, most recently used last
   private cached = 0;
 
-  constructor(private readonly src: Source) {
+  constructor(readonly src: Source) {
     const v = this.view(0, 80);
     if (v.getUint32(0, true) !== 72173914) throw new Error("This isn't a ZIM book");
     const minor = v.getUint16(6, true);

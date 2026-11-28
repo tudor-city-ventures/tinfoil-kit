@@ -1,7 +1,8 @@
 // Search: the passages in this phone's books that best answer a question, picked as the kit page's Search picks them
-// (keywords, the pages they find, the paragraphs with the most of them). The kit finds pages with Kiwix's full-text
-// search; the phone finds them by their titles, which every book lists in order.
+// (keywords, the pages Kiwix's full-text search finds with them, the paragraphs with the most of them). A book without
+// a full-text index is searched by its titles, which every book lists in order.
 import { address } from "./books";
+import { Fulltext } from "./fulltext";
 import { utf8, type Entry, type Zim } from "./zim";
 
 // A book is opened when it's needed: the phone keeps only a few open at a time
@@ -125,22 +126,45 @@ function overlap(text: string, roots: Set<string>) {
   return { found: found.size, hits };
 }
 
-// Pages whose titles start with the question's words: each word alone, and each pair with the second word cut to
-// its root, so "purify water" finds "Water purification". A redirect counts by its own title: "Temperature" finds
-// the page it leads to.
-function candidates(zim: Zim, kw: string[]): { entry: Entry; matched: string }[] {
+// The kit page's searches for a question, without the AI: its first three keywords, its two longest, and each of
+// those alone. "split meet" is the same search as "meet split".
+export function queries(kw: string[]): string[] {
+  const long = [...kw].sort((a, b) => b.length - a.length);
+  const out = new Map<string, string>();
+  for (const q of [
+    kw.length >= 2 && kw.slice(0, 3).join(" "),
+    long.length >= 2 && long.slice(0, 2).join(" "),
+    ...long.slice(0, 2),
+  ])
+    if (q && !out.has(q.split(" ").sort().join(" "))) out.set(q.split(" ").sort().join(" "), q);
+  return [...out.values()];
+}
+
+type Candidate = { entry: Entry; score: number };
+
+// A book's pages for the question: each search's three best, as the kit asks Kiwix, scored by the words it found
+// them with; and pages whose titles start with the question's words, each word alone and each pair with the second
+// cut to its root, so "purify water" finds "Water purification". A redirect counts by its own title: "Temperature"
+// finds the page it leads to.
+function candidates(zim: Zim, kw: string[], roots: Set<string>): Candidate[] {
+  const seen = new Map<number, Candidate>();
+  const add = (e: Entry, extra: number) => {
+    const entry = zim.follow(e);
+    if (!entry.mime.startsWith("text/html")) return;
+    const score = overlap(e.title, roots).found * 3 + extra;
+    const known = seen.get(entry.index);
+    if (!known || known.score < score) seen.set(entry.index, { entry, score });
+  };
+  const index = Fulltext.of(zim);
+  if (index)
+    for (const q of queries(kw)) index.search(q, 3).forEach((e, rank) => add(e, q.split(" ").length + 1 / (1 + rank)));
+  const longest = [...kw].sort((a, b) => b.length - a.length).slice(0, 4); // the likeliest to be in a title
   const prefixes = new Set<string>();
-  for (const a of kw) {
+  for (const a of longest) {
     prefixes.add(a);
-    for (const b of kw) if (a !== b) prefixes.add(`${a} ${root(b)}`);
+    for (const b of longest) if (a !== b) prefixes.add(`${a} ${root(b)}`);
   }
-  const seen = new Map<number, { entry: Entry; matched: string }>();
-  for (const p of prefixes)
-    for (const e of zim.titles(p, p.includes(" ") ? 10 : 5)) {
-      const entry = zim.follow(e);
-      if (entry.mime.startsWith("text/html") && !seen.has(entry.index))
-        seen.set(entry.index, { entry, matched: e.title });
-    }
+  for (const p of prefixes) for (const e of zim.titles(p, p.includes(" ") ? 10 : 5)) add(e, 0);
   return [...seen.values()];
 }
 
@@ -149,20 +173,24 @@ export function search(question: string, books: Book[], limit = 5): Passage[] {
   const kw = keywords(question).slice(0, 6);
   if (!kw.length) return [];
   const roots = new Set(kw.map(root));
-  const longest = [...kw].sort((a, b) => b.length - a.length).slice(0, 4); // the likeliest to be in a title
-  // The pages whose titles share the most words with the question, the shortest (the most general) first
+  // The best pages, the shortest titles (the most general) first among equals, at most three from a book
+  const perBook = new Map<string, number>();
   const pages = books
     .flatMap((book) => {
       try {
-        return candidates(book.zim(), longest).map((c) => ({ book, entry: c.entry, title: overlap(c.matched, roots) }));
+        return candidates(book.zim(), kw, roots).map((c) => ({ book, ...c }));
       } catch {
         return []; // a book this phone can't open: the others still can be
       }
     })
-    .sort((a, b) => b.title.found - a.title.found || a.entry.title.length - b.entry.title.length)
+    .sort((a, b) => b.score - a.score || a.entry.title.length - b.entry.title.length)
+    .filter((p) => {
+      perBook.set(p.book.id, (perBook.get(p.book.id) ?? 0) + 1);
+      return perBook.get(p.book.id)! <= 3;
+    })
     .slice(0, 8);
   const found: (Passage & { score: number })[] = [];
-  for (const { book, entry, title } of pages) {
+  for (const { book, entry, score } of pages) {
     let html: string;
     let zim: Zim;
     try {
@@ -174,7 +202,7 @@ export function search(question: string, books: Book[], limit = 5): Passage[] {
     const best = chunks(text(html))
       .map((piece, position) => {
         const o = overlap(piece, roots);
-        return { piece, score: title.found * 2 + o.found * 3 + Math.min(o.hits, 12) * 0.5 - position * 0.15 };
+        return { piece, score: score * 0.5 + o.found * 3 + Math.min(o.hits, 12) * 0.5 - position * 0.15 };
       })
       .sort((a, b) => b.score - a.score)[0];
     if (!best) continue;

@@ -100,7 +100,7 @@ appId: com.tinfoilkit.app
 - extendedWaitUntil:
     visible: "When to seek urgent help"
     timeout: 30000
-# Search finds pages by title, and Back returns to the page before
+# Search finds pages by title, and Back returns to the page before,
 - tapOn:
     id: "search-book"
 - inputText: "Dehy"
@@ -111,6 +111,20 @@ appId: com.tinfoilkit.app
     visible: ".*Oral rehydration solution.*"
     timeout: 30000
 - takeScreenshot: 12-found
+- tapOn:
+    id: "book-back"
+- extendedWaitUntil:
+    visible: "When to seek urgent help"
+    timeout: 30000
+# and by the words in them, from the book's own index
+- tapOn:
+    id: "search-book"
+- inputText: "dark urine"
+- tapOn:
+    id: "inside-Dehydration"
+- extendedWaitUntil:
+    visible: ".*Oral rehydration solution.*"
+    timeout: 30000
 - tapOn:
     id: "book-back"
 - extendedWaitUntil:

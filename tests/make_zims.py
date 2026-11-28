@@ -1,8 +1,12 @@
-"""Build small but real ZIM files (with full-text index) to test the kit."""
+"""Build small but real ZIM files (with full-text index) to test the kit and the phone app."""
 
+import json
+import random
 import struct
 import zlib
 
+from libzim.reader import Archive
+from libzim.search import Query, Searcher
 from libzim.writer import Creator, Hint, Item, StringProvider
 
 ARTICLES = {
@@ -107,7 +111,64 @@ def build(prefix, date, extra=""):
     print("built", fname)
 
 
+ROOTS = (
+    "water fire bleach boil cook heat cold rain snow wind storm flood river well pump filter cloth bandage wound burn "
+    "bone splint fever cough sleep food grain bean rice salt sugar milk seed plant garden tool knife rope knot shelter "
+    "tent stove fuel wood radio battery light candle lamp map road bridge trail walk climb swim fish hunt trap horse "
+    "sheep goat farm field fence house roof wall door window glass metal iron copper wire nail hammer paint soap wash"
+).split()
+SUFFIXES = ["", "s", "ed", "ing", "er", "ers", "ly", "ness", "ation", "ations", "ful", "less", "able", "ment", "ize"]
+
+
+def build_words():
+    """Thousands of pages of words, so the full-text index has B-trees of more than one block and words in more pages
+    than a chunk of its lists holds. The phone app checks its own reader of the index against libzim's search, whose
+    answers to a few searches go beside the book."""
+    rng = random.Random(1)
+    words = [r + s for r in ROOTS for s in SUFFIXES]
+    rng.shuffle(words)
+    weights = [1 / (i + 1) for i in range(len(words))]  # a few words in most pages, most in a few
+    fname = "testwords_en_2026-03.zim"
+    with Creator(fname).config_indexing(True, "eng") as c:
+        c.set_mainpath("Test_words")
+        for k, v in {
+            "Name": "testwords_en",
+            "Title": "Test words",
+            "Language": "eng",
+            "Creator": "test",
+            "Publisher": "test",
+            "Date": "2026-03-01",
+            "Description": "Pages of words for testing",
+        }.items():
+            c.add_metadata(k, v)
+        pages = [("Test_words", "Test words", "Pages of words, for testing search.")]
+        for i in range(2500):
+            title = " ".join(rng.choices(words, weights, k=rng.randint(1, 3))).capitalize()
+            pages.append((f"Page_{i}", title, " ".join(rng.choices(words, weights, k=rng.randint(20, 300)))))
+        # paths too long for one item of the index, one that compresses well and one that doesn't
+        pages.append(("Long_" + "water_" * 400, "Long", "lamplighter " * 3))
+        pages.append(
+            ("Mixed_" + "".join(rng.choice("abcdefghijklmnopqrstuvwxyz") for _ in range(3000)), "Mixed", "lamplighter")
+        )
+        for path, title, body in pages:
+            c.add_item(
+                Page(
+                    path,
+                    title,
+                    f"<html><head><title>{title}</title></head><body><h1>{title}</h1><p>{body}</p></body></html>",
+                )
+            )
+    searcher = Searcher(Archive(fname))
+    queries = [words[0], words[2], words[30], words[300], f"{words[0]} {words[1]}", f"{words[3]} {words[40]}"]
+    queries += [f"{words[5]} {words[60]} {words[200]}", "lamplighters", "nowhere"]
+    answers = {q: [r.path for r in searcher.search(Query().set_query(q)).get_results(0, 20)] for q in queries}
+    with open("testwords_en_2026-03.json", "w") as f:
+        json.dump(answers, f, indent=1)
+    print("built", fname)
+
+
 if __name__ == "__main__":
     build("testmed_en_all_maxi", "2026-01")
     build("testsurvival_en", "2026-02")
     build("testsurvival_en", "2026-05", extra="<p>Updated edition.</p>")
+    build_words()
