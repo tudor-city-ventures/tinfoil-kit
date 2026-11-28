@@ -36,16 +36,16 @@
   "sha256": "fcd01ed2b93e9a68632c7863c83b9f66bf64406a66357be1df7b8b75596f3e45"
  },
  "llama.cpp-linux-x64": {
-  "version": "b12651",
-  "sha256": "0bbcf2093f15c64c8a9bf54b809c9b2c812b982992dc2fbc9b36720c1d32cf13"
+  "version": "b12833",
+  "sha256": "d2792e7cd7c3f2df02194e45479709bb893b91da56fed5de678a81e2cc1b3aba"
  },
  "llama.cpp-macos-arm64": {
-  "version": "b12651",
-  "sha256": "264fd872de61679c45ad57e1e21c2a2a54e29b35734ecf3d50f24166447ab8d2"
+  "version": "b12833",
+  "sha256": "af115e29003ba98a20b51500628dea215919b9614416abd5fd604795ef8d225c"
  },
  "llama.cpp-windows-x64": {
-  "version": "b12651",
-  "sha256": "e58fa9a137d8046c69334005ad6fb3e904ddc7e56f2a61ad1b844335826ef3f4"
+  "version": "b12833",
+  "sha256": "0f609a4763c34b3ac23058e9878f26c1f21bcd6ca60ed2af3c7ee89c4948050b"
  },
  "maplibre-gl": {
   "version": "5.24.1",
