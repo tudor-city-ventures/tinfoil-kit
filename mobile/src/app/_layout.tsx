@@ -38,7 +38,6 @@ export default function RootLayout() {
             name="book/[id]"
             options={{
               headerShown: true,
-              headerBackTitle: "Library",
               headerShadowVisible: false,
               headerStyle: { backgroundColor: c.background },
               headerTitleStyle: { color: c.ink },

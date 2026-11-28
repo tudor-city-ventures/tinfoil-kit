@@ -136,7 +136,7 @@ export function Ask() {
               key={`${p.book}${p.page}`}
               testID={`passage-${i}`}
               accessibilityRole="button"
-              onPress={() => router.push({ pathname: "/book/[id]", params: { id: p.book, page: p.page } })}
+              onPress={() => router.push({ pathname: "/book/[id]", params: { id: p.book, page: p.page, from: "ask" } })}
               android_ripple={{ color: c.line }}
               style={({ pressed }) => [styles.passage, pressed && Platform.OS === "ios" && { backgroundColor: c.line }]}
             >

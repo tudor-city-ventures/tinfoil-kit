@@ -56,7 +56,10 @@ test("a question finds the best passages in the books on this phone, and each op
   expect(screen.getByText(/^Done in \d+\.\ds\.$/)).toBeOnTheScreen();
 
   await user.press(screen.getByTestId("passage-0"));
-  expect(mockPush).toHaveBeenCalledWith({ pathname: "/book/[id]", params: { id, page: "/Water_purification" } });
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: "/book/[id]",
+    params: { id, page: "/Water_purification", from: "ask" },
+  });
 
   await user.clear(screen.getByTestId("ask-question"));
   await user.type(screen.getByTestId("ask-question"), "quantum chromodynamics");

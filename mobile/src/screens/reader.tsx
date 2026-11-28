@@ -52,8 +52,8 @@ function open(file: string | undefined): { zim?: Zim; error?: string } {
 
 // Reading a book, from its home page or the page Ask found. Its pages are in a page view that asks this screen for
 // every file it needs; search finds pages by title, and the toolbar goes back and forward in the book and to its home
-// page.
-export function Reader({ id, page: first }: { id: string; page?: string }) {
+// page. Its back button names the tab it was opened from.
+export function Reader({ id, page: first, back }: { id: string; page?: string; back: string }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const item = useKit().items[id];
@@ -88,7 +88,7 @@ export function Reader({ id, page: first }: { id: string; page?: string }) {
   if (!zim || !file || !BookView) {
     return (
       <View style={[styles.empty, { backgroundColor: c.background }]}>
-        <Stack.Screen options={{ title: name }} />
+        <Stack.Screen options={{ title: name, headerBackTitle: back }} />
         <Text style={[styles.emptyText, { color: c.mute }]}>
           {book.error ?? "Books open in the Tinfoil Kit app on a phone."}
         </Text>
@@ -153,6 +153,7 @@ export function Reader({ id, page: first }: { id: string; page?: string }) {
       <Stack.Screen
         options={{
           title: page?.title || name,
+          headerBackTitle: back,
           headerRight: () => (
             <Tool icon="search" label={`Search ${name}`} testID="search-book" onPress={() => setSearching(true)} />
           ),
