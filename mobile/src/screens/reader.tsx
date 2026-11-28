@@ -50,9 +50,10 @@ function open(file: string | undefined): { zim?: Zim; error?: string } {
   }
 }
 
-// Reading a book. Its pages are in a page view that asks this screen for every file it needs; search finds pages by
-// title, and the toolbar goes back and forward in the book and to its home page.
-export function Reader({ id }: { id: string }) {
+// Reading a book, from its home page or the page Ask found. Its pages are in a page view that asks this screen for
+// every file it needs; search finds pages by title, and the toolbar goes back and forward in the book and to its home
+// page.
+export function Reader({ id, page: first }: { id: string; page?: string }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const item = useKit().items[id];
@@ -162,7 +163,7 @@ export function Reader({ id }: { id: string }) {
         ref={view}
         style={styles.page}
         testID="book-pages"
-        start={resume ?? home}
+        start={resume ?? (first ? `${origin(id)}${first}` : home)}
         onAsk={(e) => ask(e.nativeEvent)}
         onPage={(e) => {
           if (e.nativeEvent.gone) {

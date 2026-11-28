@@ -241,9 +241,14 @@ export class Zim {
   // X/listing/titleOrdered/v1; older ones have a title list for every entry.
   titles(prefix: string, limit = 20): Entry[] {
     const listing = this.find("X", "listing/titleOrdered/v1");
+    const place = listing && this.locate(listing);
     let size: number;
     let at: (i: number) => number;
-    if (listing) {
+    if (place) {
+      // Read where it lies, a number at a time: a big book's list is tens of MB
+      size = place.length / 4;
+      at = (i) => this.view(place.offset + 4 * i, 4).getUint32(0, true);
+    } else if (listing) {
       const list = this.read(listing);
       const v = new DataView(list.buffer, list.byteOffset, list.byteLength);
       size = list.length / 4;
@@ -280,7 +285,7 @@ export class Zim {
         if (seen.has(index)) continue;
         seen.add(index);
         const e = this.entry(index);
-        if (listing || e.mime.startsWith("text/html")) out.push(e);
+        if (listing || e.mime.startsWith("text/html") || e.redirect !== undefined) out.push(e); // a redirect leads to a page
       }
     }
     return out.sort((a, b) => compare(encoder.encode(a.title), encoder.encode(b.title))).slice(0, limit);
