@@ -3,14 +3,18 @@
 # (.github/workflows/mobile.yml), with e2e/internet.py standing in for Kiwix, serving the test books tests/make_zims.py
 # makes, for Protomaps, serving a piece of the real world map around Huntsville, and for the kit at home.
 # Locally: install the app afresh, then maestro test mobile/e2e. CI installs it just before; clearState would
-# reinstall it on iOS, under another folder name.
+# reinstall it on iOS, under another folder name. CI films each run: a label is what the video's caption says from
+# that step on (tests/drive.py record).
 appId: com.tinfoilkit.app
 ---
-- launchApp
+- launchApp:
+    label: "A fresh install: the first screen"
 - assertVisible: "Tinfoil Kit"
 - assertVisible: "Field medicine books"
 - takeScreenshot: 1-first-screen
-- tapOn: "Get the try-it kit"
+- tapOn:
+    text: "Get the try-it kit"
+    label: "The try-it kit downloads and is checked"
 - assertVisible: "On this phone"
 - takeScreenshot: 2-library
 # Every book downloads in the background, is checked and moves to On this phone
@@ -20,22 +24,34 @@ appId: com.tinfoilkit.app
 - assertNotVisible: "Nothing yet"
 - takeScreenshot: 3-downloaded
 # The map of where you live: picked from the kit's places, cut from the world map on the phone, then drawn
-- tapOn: "Map"
+- tapOn:
+    text: "Map"
+    label: "Map: pick where you live"
 - assertVisible: "Where do you live.*"
 - takeScreenshot: 4-places
 - tapOn:
     id: "place-us/alabama"
+    label: "Alabama's map downloads, then draws"
 - extendedWaitUntil:
     visible: "Map of Alabama"
     timeout: 120000
 - takeScreenshot: 5-map
-- tapOn: "Get more"
+- tapOn:
+    text: "Get more"
+    label: "Get more: no mobile data unless you allow it"
+# A tab tapped as the map draws can go unnoticed on iOS: then it's tapped again
+- runFlow:
+    when:
+      notVisible: "Use mobile data"
+    commands:
+      - tapOn: "Get more"
 - assertVisible: "Use mobile data"
 - takeScreenshot: 6-get-more
 # A kit at home, typed in (the emulator can't see the Wi-Fi's Bonjour), let in with its code: a book copied from it,
 # and its map, which is from a newer world map than the phone's
 - tapOn:
     id: "kit-at-home"
+    label: "Kit at home: a kit on the home network"
 - tapOn:
     text: "Allow" # iOS asks to find devices on the local network, where it shows the question
     optional: true
@@ -47,6 +63,7 @@ appId: com.tinfoilkit.app
 - tapOn: "Address" # puts the keyboard away
 - tapOn:
     id: "kit-code"
+    label: "Let in with the kit's 8-digit code"
 - inputText: "48217736"
 - tapOn: "Access code"
 - tapOn:
@@ -58,6 +75,7 @@ appId: com.tinfoilkit.app
 - takeScreenshot: 7-kit-at-home
 - tapOn:
     id: "copy-get-ready.gov_en_all"
+    label: "Copy a book and a newer map from the kit"
 - tapOn:
     id: "copy-map-get-us/alabama"
 - extendedWaitUntil:
@@ -65,14 +83,18 @@ appId: com.tinfoilkit.app
       id: "map-ready-us/alabama"
     timeout: 120000
 - takeScreenshot: 8-kit-copied
-- tapOn: "Library"
+- tapOn:
+    text: "Library"
+    label: "The copied book, in the library"
 - extendedWaitUntil:
     visible:
       id: "ready-ready.gov_en_all"
     timeout: 120000
 - takeScreenshot: 9-copied
 # Ask: Search finds the best passages in the books on this phone, and one opens its page, read from the book's file
-- tapOn: "Ask"
+- tapOn:
+    text: "Ask"
+    label: "Ask: Search finds the best passages"
 - tapOn:
     id: "ask-question"
 - inputText: "What are the signs of dehydration?"
@@ -85,6 +107,7 @@ appId: com.tinfoilkit.app
 - takeScreenshot: 10-ask
 - tapOn:
     id: "passage-0"
+    label: "A passage opens its page in the book"
 # the book's page, not the passage's words on Ask
 - extendedWaitUntil:
     visible:
@@ -97,12 +120,14 @@ appId: com.tinfoilkit.app
 # The book's home page
 - tapOn:
     id: "book-home"
+    label: "The book's home page"
 - extendedWaitUntil:
     visible: "When to seek urgent help"
     timeout: 30000
 # Search finds pages by title, and Back returns to the page before,
 - tapOn:
     id: "search-book"
+    label: "Search the book by title"
 - inputText: "Dehy"
 # by its id: the keyboard suggests "Dehydration" too
 - tapOn:
@@ -119,6 +144,7 @@ appId: com.tinfoilkit.app
 # and by the words in them, from the book's own index
 - tapOn:
     id: "search-book"
+    label: "Search the book by the words in its pages"
 - inputText: "dark urine"
 - tapOn:
     id: "inside-Dehydration"
@@ -136,6 +162,7 @@ appId: com.tinfoilkit.app
 - tapOn: "Get more"
 - tapOn:
     id: "share-phone"
+    label: "Share with a phone, behind a code"
 - tapOn:
     text: "Allow" # iOS asks to find devices on the local network, where it shows the question
     optional: true

@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.ViewGroup
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
@@ -141,6 +142,7 @@ class BookView(context: Context, appContext: AppContext) : ExpoView(context, app
       return try {
         answer.get(30, TimeUnit.SECONDS)
       } catch (e: Exception) {
+        Log.w("KitBooks", "no answer for ${request.url} ($e)")
         response(504, "text/plain", ByteArrayInputStream(ByteArray(0)), 0, emptyMap())
       } finally {
         answers.remove(id)

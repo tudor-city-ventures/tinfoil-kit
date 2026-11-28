@@ -1,4 +1,5 @@
-"""Helpers for the drive test (tests/drive_test.sh, .github/workflows/drive.yml). Standard library only.
+"""Helpers for the drive test (tests/drive_test.sh, .github/workflows/drive.yml), and for the videos of the phone
+app's test (.github/workflows/mobile.yml). Standard library only.
 
   drive.py check LIB_PORT AI_PORT   wait for the kit's library and AI, then search a book and get an answer; and
                                     when the kit's page says it has a map, get a street-level tile and directions
@@ -8,8 +9,10 @@
   drive.py kitjson FILE [maps]      write the test kit's kit.json, as the website's builder makes one; with maps,
                                     also the map of Andorra, with every computer's real map programs
 
-For the videos of a run, which people watch to see the kit set up and used on each OS:
-  drive.py record NAME -- CMD...    run CMD while recording the screen, captioned with its "=== step" lines
+For the videos of a run, which people watch to see the kit set up and used on each OS, and the phone app used:
+  drive.py record NAME -- CMD...    run CMD while recording the screen, captioned with its "=== step" lines; as
+                                    iphone or android, a phone's screen while Maestro tests the app on it,
+                                    captioned with the labels of its steps
   drive.py type LOG ANSWERS -- CMD...
                                     run CMD in this terminal and type its answers the way a person would
   drive.py videos FOLDER            make MP4s of the recordings, and log how each step ended (the videos job;
@@ -330,7 +333,12 @@ TITLES = {
     "windows-setup": "Windows: SETUP-Windows.bat from a download, onto the PC and then onto a drive, and uninstall",
     "linux": "Linux: the drive the Mac made, started on Ubuntu, then Ubuntu 24.04 and 22.04, Debian 12 and Fedora; "
     "the page in Chrome; then a home server, and uninstall",
+    "iphone": "iPhone (the simulator): the try-it kit, the map, a kit at home, Ask, reading a book, and sharing "
+    "with a phone",
+    "android": "Android (the emulator): the try-it kit, the map, a kit at home, Ask, reading a book, and sharing "
+    "with a phone",
 }
+PHONES = ("iphone", "android")  # filmed by the phone app's test, not the drive test
 # How the scripts' questions end, so `type` knows when to answer: "[Y/n] ", "[y/N] ", "then press Return: ", "press
 # Enter to close this window. ", "Type where you live: ". A line that names no key ("Right now: ", with the place
 # still to come) is news, not a question.
@@ -355,7 +363,26 @@ def record(name, cmd):
     log = open(VIDEO / f"{name}.recorder.log", "wb")
     rec, screen = None, None
     try:
-        if sys.platform == "darwin":
+        if name == "iphone":
+            # The simulator's own recorder. Control-C stops it and finishes the file.
+            rec = subprocess.Popen(
+                [
+                    "xcrun",
+                    "simctl",
+                    "io",
+                    "booted",
+                    "recordVideo",
+                    "--codec=h264",
+                    "--force",
+                    str(VIDEO / "iphone.mov"),
+                ],
+                stdin=subprocess.PIPE,
+                stdout=log,
+                stderr=log,
+            )
+        elif name == "android":
+            rec = Parts(VIDEO / "android", log)
+        elif sys.platform == "darwin":
             # The Mac's own recorder. Control-C stops it and finishes the file (it ignores keys typed to it).
             rec = subprocess.Popen(
                 ["screencapture", "-v", "-C", "-k", str(VIDEO / f"{name}.mov")],
@@ -420,12 +447,17 @@ def record(name, cmd):
         reader.start()
         code = p.wait()
         reader.join(10)  # not until the pipe closes: something CMD left running may hold it open
+        if name in PHONES:
+            with steps.open("a", encoding="utf-8") as f:
+                f.write(maestro_steps(started))
         return code
     finally:
         time.sleep(2)  # the last screen, for a moment
         if rec:
             try:
-                if sys.platform == "darwin":
+                if name == "android":
+                    rec.stop()
+                elif sys.platform == "darwin":
                     rec.send_signal(signal.SIGINT)
                 else:
                     rec.stdin.write(b"q")  # ffmpeg finishes the file
@@ -435,8 +467,79 @@ def record(name, cmd):
                 rec.kill()
         if screen:
             screen.terminate()
-        made = [f"{f.name} ({f.stat().st_size // 1024} KB)" for f in VIDEO.glob(f"{name}.m*")]
+        files = sorted([*VIDEO.glob(f"{name}.m*"), *VIDEO.glob(f"{name}-[0-9]*.mp4")])
+        made = [f"{f.name} ({f.stat().st_size // 1024} KB)" for f in files]
         print(f"(screen recording: {', '.join(made) or 'none. The recorder said: ' + said(log)})", flush=True)
+
+
+class Parts:
+    """Android's own screen recorder, which stops after 3 minutes, run part after part until stopped; then the parts
+    are copied off the phone as PREFIX-NNN.mp4 (the videos job joins them). Stands in for the recorder's Popen."""
+
+    def __init__(self, prefix, log):
+        self.prefix, self.log, self.done, self.returncode = prefix, log, threading.Event(), None
+        self.thread = threading.Thread(target=self.film, daemon=True)
+        self.thread.start()
+
+    def adb(self, *args):
+        return subprocess.run(["adb", *args], stdout=self.log, stderr=self.log).returncode
+
+    def film(self):
+        for n in range(100, 1000):
+            if self.done.is_set():
+                return
+            # The phone's screen at half size, a multiple of 16 its encoder takes
+            code = self.adb(
+                "shell", "screenrecord", "--size", "576x1280", "--bit-rate", "2000000", f"/sdcard/film-{n}.mp4"
+            )
+            if code:
+                self.returncode = code
+                return
+
+    def poll(self):
+        return None if self.thread.is_alive() else (self.returncode or 0)
+
+    def stop(self):
+        self.done.set()
+        for _ in range(5):  # again, if a part started as it was stopped
+            self.adb("shell", "pkill", "-INT", "screenrecord")  # finishes the file
+            self.thread.join(10)
+            if not self.thread.is_alive():
+                break
+        listed = subprocess.run(["adb", "shell", "ls", "/sdcard"], capture_output=True, text=True).stdout.split()
+        for f in sorted(x for x in listed if re.fullmatch(r"film-\d+\.mp4", x)):
+            self.adb("pull", f"/sdcard/{f}", f"{self.prefix}-{f[5:]}")
+
+    def wait(self, timeout=None):
+        self.thread.join(timeout)
+
+    def kill(self):
+        self.done.set()
+
+
+def maestro_steps(since):
+    """When each labeled step of the Maestro flows run since SINCE started, from the reports Maestro keeps (its debug
+    output, not the screenshots of --test-output-dir), as lines of a recording's steps: the label is the caption."""
+
+    def label(node):
+        if not isinstance(node, dict):
+            return None
+        if isinstance(node.get("label"), str):
+            return node["label"]
+        return next(filter(None, map(label, node.values())), None)
+
+    rows = []
+    for report in (Path.home() / ".maestro" / "tests").rglob("commands-*.json"):
+        try:
+            if report.stat().st_mtime < since:
+                continue
+            for c in json.loads(report.read_text(encoding="utf-8")):
+                text, at = label(c.get("command")), (c.get("metadata") or {}).get("timestamp")
+                if text and at:
+                    rows.append((at / 1000, text))
+        except (OSError, ValueError, AttributeError) as e:  # the captions can't fail the test
+            print(f"(no captions from {report}: {e})", flush=True)
+    return "".join(f"{at:.2f}\t{text}\n" for at, text in sorted(rows))
 
 
 def said(log):
@@ -633,7 +736,7 @@ def screen_text(path, at):
     return "\n".join(line.rstrip() for line in text.splitlines() if len(line.strip()) > 2)
 
 
-def ascii_frame(path, at, width=110):
+def ascii_frame(path, at, width=110, rows=33):
     """A frame as text, for the job log: whoever can read the log but not download the video can still check
     that windows were on screen."""
     raw = subprocess.run(
@@ -648,7 +751,7 @@ def ascii_frame(path, at, width=110):
             "-frames:v",
             "1",
             "-vf",
-            f"scale={width}:{width * 3 // 10},format=gray",
+            f"scale={width}:{rows},format=gray",
             "-f",
             "rawvideo",
             "-",
@@ -656,16 +759,28 @@ def ascii_frame(path, at, width=110):
         capture_output=True,
     ).stdout
     ramp = " .:-=+*#%@"
+    if raw and sum(raw) > 128 * len(raw):  # a light screen, like a phone's: dark ink drawn, not the paper
+        ramp = ramp[::-1]
     return "\n".join(
         "".join(ramp[b * len(ramp) // 256] for b in raw[i : i + width]).rstrip() for i in range(0, len(raw), width)
     )
 
 
 def make_videos(folder):
-    """NAME.mp4 from each recording in FOLDER: captioned with its steps, at most 1280 wide, 10 frames a second,
-    and small enough to download in a moment. Also NAME.chapters, the steps with their times."""
+    """NAME.mp4 from each recording in FOLDER: captioned with its steps, at most 1280 wide or tall, 10 frames a second
+    (a phone's 20, its screens move quickly), and small enough to download in a moment. Also NAME.chapters, the steps
+    with their times."""
     folder = Path(folder)
     for steps in sorted(folder.rglob("*.steps")):
+        parts = sorted(steps.parent.glob(f"{steps.stem}-[0-9]*.mp4"))
+        if parts:  # an Android phone's, in parts: joined as they were recorded
+            joined = steps.with_suffix(".parts")
+            joined.write_text("".join(f"file '{p.name}'\n" for p in parts), encoding="utf-8")
+            subprocess.run(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-i", joined.name]
+                + ["-c", "copy", f"{steps.stem}.mkv"],
+                cwd=steps.parent,
+            )
         name, raw = (
             steps.stem,
             next((p for p in (steps.with_suffix(".mov"), steps.with_suffix(".mkv")) if p.exists()), None),
@@ -678,10 +793,11 @@ def make_videos(folder):
         start = float(rows[0][0])
         marks = [(min(max(0.0, float(t) - start), length), text) for t, text in rows[1:] if text]
         run = " ".join(x for x in (os.environ.get("GITHUB_SHA", "")[:7], time.strftime("%Y-%m-%d")) if x)
+        phone = name in PHONES
         # What it is, at the top for the first seconds; then each step at the bottom until the next.
         srt = [
             f"1\n{srt_time(0)} --> {srt_time(min(8.0, length))}\n"
-            f"{{\\an8}}Tinfoil Kit drive test, {run}: {TITLES.get(name, name)}\n"
+            f"{{\\an8}}Tinfoil Kit {'phone app test' if phone else 'drive test'}, {run}: {TITLES.get(name, name)}\n"
         ]
         for i, (t, text) in enumerate(marks):
             end = marks[i + 1][0] if i + 1 < len(marks) else length
@@ -692,9 +808,10 @@ def make_videos(folder):
             "".join(f"{clock(t)}  {text}\n" for t, text in marks), encoding="utf-8"
         )
         style = (
-            "FontName=DejaVu Sans,FontSize=9,PrimaryColour=&H00FFFFFF,BackColour=&H30000000,BorderStyle=4,"
-            "Outline=0,Shadow=0,MarginV=6,MarginL=8,MarginR=8"
+            f"FontName=DejaVu Sans,FontSize={6 if phone else 9},PrimaryColour=&H00FFFFFF,BackColour=&H30000000,"
+            "BorderStyle=4,Outline=0,Shadow=0,MarginV=6,MarginL=8,MarginR=8"
         )
+        fit = "scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
         subprocess.run(
             [
                 "ffmpeg",
@@ -706,7 +823,7 @@ def make_videos(folder):
                 raw.name,
                 "-an",
                 "-vf",
-                f"fps=10,scale='min(1280,iw)':-2:flags=lanczos,subtitles={name}.srt:force_style='{style}'",
+                f"fps={20 if phone else 10},{fit}:flags=lanczos,subtitles={name}.srt:force_style='{style}'",
                 "-c:v",
                 "libx264",
                 "-preset",
@@ -728,7 +845,8 @@ def make_videos(folder):
         for i, (t, text) in enumerate(shown[:40]):
             end = shown[i + 1][0] if i + 1 < len(shown) else length
             at = min(max(t + 1, end - 1.5), max(length - 0.5, 0))  # how the step ended
-            print(f"\n---- {clock(at)}, the end of: {text}\n{ascii_frame(mp4, at)}\n{screen_text(raw, at)}")
+            frame = ascii_frame(mp4, at, 60, 64) if phone else ascii_frame(mp4, at)
+            print(f"\n---- {clock(at)}, the end of: {text}\n{frame}\n{screen_text(raw, at)}")
 
 
 def srt_time(t):
@@ -738,10 +856,16 @@ def srt_time(t):
 
 def summary(pairs):
     """The run page's list of videos: each one's link, what it shows, and its chapters."""
+    phones = all(pair.split("=", 1)[0] in PHONES for pair in pairs)
     out = [
         "## Videos of this run",
         "",
-        "Each video is the screen of one machine while the drive test ran on it, captioned with what it was "
+        "Each video is a phone's screen while the phone app's test ran on it, captioned with what it was doing. "
+        "Click one to download it; it plays in QuickTime or a browser. The books are short test books, and the kit "
+        "at home is a stand-in the test serves, typed in because the test phones can't look on the Wi-Fi; the map "
+        "is a real piece of Protomaps' world map."
+        if phones
+        else "Each video is the screen of one machine while the drive test ran on it, captioned with what it was "
         "doing. Click one to download it; it plays in QuickTime or a browser. The AI in them is a tiny test "
         "model that gives the same answer to every question.",
         "",

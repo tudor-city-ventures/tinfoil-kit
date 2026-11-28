@@ -1,13 +1,13 @@
 name: phone app
 # The phone app (mobile/): its checks, then a build of each app with a test on an iPhone simulator and an Android
-# emulator. GitHub's runners cost nothing for a public repo. Signing and the stores come later, from a workflow of
-# their own.
+# emulator, filmed: the videos job links the videos from the run's page. GitHub's runners cost nothing for a public
+# repo. Signing and the stores come later, from a workflow of their own.
 on:
   pull_request:
-    paths: ["mobile/**", "site/kit.json", "site/sources.json", "tests/make_zims.py", ".github/workflows/mobile.yml"]
+    paths: ["mobile/**", "site/kit.json", "site/sources.json", "tests/make_zims.py", "tests/drive.py", ".github/workflows/mobile.yml"]
   push:
     branches: [main]
-    paths: ["mobile/**", "site/kit.json", "site/sources.json", "tests/make_zims.py", ".github/workflows/mobile.yml"]
+    paths: ["mobile/**", "site/kit.json", "site/sources.json", "tests/make_zims.py", "tests/drive.py", ".github/workflows/mobile.yml"]
   workflow_dispatch:
     inputs:
       map_sizes:
@@ -186,12 +186,13 @@ jobs:
       - name: Make a piece of the world map
         working-directory: mobile
         run: &map E2E_MAP="$RUNNER_TEMP/protomaps" npx jest src/kit/protomaps.test.ts
+      # Filmed, for the videos job, captioned with the labels of the test's steps
       - name: Test the app
         run: |
           python3 mobile/e2e/internet.py 19100 "$RUNNER_TEMP/zim" "$RUNNER_TEMP/protomaps" > "$RUNNER_TEMP/internet.log" 2>&1 &
           adb reverse tcp:19100 tcp:19100    # the emulator's localhost:19100 is the runner's
           adb forward tcp:8000 tcp:8000      # and the runner's localhost:8000 the emulator's: the phone, shared
-          maestro test mobile/e2e --test-output-dir e2e-output
+          python3 tests/drive.py record android -- maestro test mobile/e2e --test-output-dir e2e-output
       # What was on screen when a test failed, what the app asked of the stand-in internet, and the app's log
       - name: Show what went wrong
         if: failure()
@@ -214,8 +215,8 @@ jobs:
             adb logcat -d | grep -E "ReactNativeJS|KitBooks|DownloadManager|AndroidRuntime|tinfoilkit" | tail -n 100
           fi
           # Last, so the end of the job's log has them
-          echo "== The step that failed"
-          find e2e-output -name 'commands-*.json' -exec python3 -c '
+          echo "== The step that failed"    # from Maestro's reports, which --test-output-dir leaves where they were
+          find ~/.maestro/tests -name 'commands-*.json' -exec python3 -c '
           import json, sys
           for c in json.load(open(sys.argv[1])):
               m = c.get("metadata") or {}
@@ -240,6 +241,13 @@ jobs:
         with:
           name: android-screens
           path: e2e-output
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: raw-video-android
+          path: tests/work/video
+          retention-days: 1
           if-no-files-found: ignore
 
   ios:
@@ -385,7 +393,7 @@ jobs:
       - name: Test the app
         run: |
           python3 mobile/e2e/internet.py 19100 "$RUNNER_TEMP/zim" "$RUNNER_TEMP/protomaps" > "$RUNNER_TEMP/internet.log" 2>&1 &
-          maestro test mobile/e2e --test-output-dir e2e-output
+          python3 tests/drive.py record iphone -- maestro test mobile/e2e --test-output-dir e2e-output
       - name: Show what went wrong
         if: failure()
         run: *why
@@ -395,3 +403,49 @@ jobs:
           name: iphone-screens
           path: e2e-output
           if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: raw-video-iphone
+          path: tests/work/video
+          retention-days: 1
+          if-no-files-found: ignore
+
+  videos: # the test's recordings as captioned MP4s, each a link on the run's page that downloads it
+    needs: [android, ios]
+    if: ${{ !cancelled() && (needs.android.result == 'success' || needs.android.result == 'failure' || needs.ios.result == 'success' || needs.ios.result == 'failure') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: raw-video-*
+          path: tests/work/video
+          merge-multiple: true
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core tesseract-ocr > /dev/null
+      - run: python3 tests/drive.py videos tests/work/video
+      # One file each, not zipped (archive: false), so the link on the run's page downloads the video itself.
+      - id: iphone
+        if: hashFiles('tests/work/video/iphone.mp4') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: tests/work/video/iphone.mp4
+          archive: false
+          retention-days: 7
+          overwrite: true
+      - id: android
+        if: hashFiles('tests/work/video/android.mp4') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: tests/work/video/android.mp4
+          archive: false
+          retention-days: 7
+          overwrite: true
+      - name: List the videos on the run's page
+        env:
+          IPHONE: ${{ steps.iphone.outputs.artifact-url }}
+          ANDROID: ${{ steps.android.outputs.artifact-url }}
+        run: python3 tests/drive.py summary "iphone=$IPHONE" "android=$ANDROID" >> "$GITHUB_STEP_SUMMARY"
