@@ -129,18 +129,28 @@ jobs:
               for c in n.get("children", []):
                   walk(c)
           walk(tree)' || true
+          echo "== The step that failed"
+          find e2e-output -name 'commands-*.json' -exec python3 -c '
+          import json, sys
+          for c in json.load(open(sys.argv[1])):
+              m = c.get("metadata") or {}
+              if m.get("status") == "FAILED":
+                  print(json.dumps(c.get("command"))[:400])
+                  print((m.get("error") or {}).get("message"))' {} \; || true
           echo "== Asked of the stand-in Kiwix"
           cat "$RUNNER_TEMP/kiwix.log" || true
           echo "== The app's log"
           if command -v xcrun > /dev/null; then
-            xcrun simctl spawn booted log show --last 10m --style compact --info --predicate \
-              'process == "TinfoilKit" AND (eventMessage CONTAINS "RNBD" OR eventMessage CONTAINS "RNBackgroundDownloader" OR eventMessage CONTAINS[c] "exception")' |
-              tail -n 150
+            logs() { xcrun simctl spawn booted log show --last 10m --style compact --info --predicate "$1" | tail -n "$2"; }
+            logs 'process == "TinfoilKit" AND (eventMessage CONTAINS "RNBD" OR eventMessage CONTAINS[c] "exception")' 60
+            echo "== The app's networking"
+            logs 'process == "TinfoilKit" AND subsystem == "com.apple.CFNetwork"' 80
             echo "== iOS's downloader"
-            xcrun simctl spawn booted log show --last 10m --style compact --predicate \
-              'process == "nsurlsessiond" AND eventMessage CONTAINS "tinfoilkit"' | tail -n 50
+            logs 'process == "nsurlsessiond" AND NOT subsystem BEGINSWITH "com.apple.launchservices" AND NOT subsystem == "com.apple.appinstallation"' 80
           else
-            adb logcat -d | grep -E "ReactNativeJS|BackgroundDownload|AndroidRuntime" | tail -n 100
+            adb shell pm list packages com.tinfoilkit.app || true
+            adb logcat -d -b crash | tail -n 60
+            adb logcat -d | grep -E "ReactNativeJS|BackgroundDownload|AndroidRuntime|tinfoilkit" | tail -n 100
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -177,6 +187,11 @@ jobs:
           cd ios && pod install
           xcodebuild -workspace TinfoilKit.xcworkspace -scheme TinfoilKit -configuration Release -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO -quiet build
+          # Signed ad hoc, as Xcode signs for the simulator: iOS takes background downloads only from an app its
+          # signature names (the linker's own signature names the program, not the app)
+          app=build/Build/Products/Release-iphonesimulator/TinfoilKit.app
+          codesign --force --deep --sign - --timestamp=none "$app"
+          codesign --display --verbose "$app" 2>&1 | grep -E "^(Identifier|Signature)"
       - name: Start an iPhone simulator
         run: |
           udid=$(xcrun simctl list devices available -j | python3 -c 'import json, sys
