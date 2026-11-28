@@ -770,9 +770,11 @@ def recorded_frames(raw, folder):
             times.append(float(guess) if re.fullmatch(r"-?[0-9.]+", guess) else times[-1] if times else 0.0)
     shutil.rmtree(folder, ignore_errors=True)
     folder.mkdir()
+    # Every frame, a second apart: the times are ffprobe's, and two frames at the same time (Android's recordings have
+    # some) would stop the JPEG encoder
     subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", str(raw), "-map", "0:v:0", "-fps_mode", "passthrough", "-q:v", "2"]
-        + [str(folder / "%05d.jpg")],
+        ["ffmpeg", "-v", "error", "-i", str(raw), "-map", "0:v:0", "-vf", "setpts=N/TB", "-fps_mode", "passthrough"]
+        + ["-q:v", "2", str(folder / "%05d.jpg")],
         check=True,
     )
     pictures = sorted(folder.glob("*.jpg"))
@@ -866,8 +868,7 @@ def make_videos(folder):
         print(
             f"{name}: the recording ran {ended - began:.0f} s and the video is {length:.0f} s, with {len(frames)} frames"
             + (f", {guessed} of which ffmpeg alone would have timed otherwise" if guessed else "")
-            + "; the screen stayed the same from "
-            + (", ".join(still) or "nowhere for 10 s")
+            + (f"; the screen stayed the same from {', '.join(still)}" if still else "; no screen stayed 10 s or more")
         )
         if shots:
             ends = [t for t, _ in shots[1:]] + [length]
