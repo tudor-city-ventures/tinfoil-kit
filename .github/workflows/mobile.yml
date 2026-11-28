@@ -186,10 +186,12 @@ jobs:
           if command -v xcrun > /dev/null; then
             logs() { xcrun simctl spawn booted log show --last 10m --style compact --info --predicate "$1" | tail -n "$2"; }
             logs 'process == "TinfoilKit" AND (eventMessage CONTAINS "RNBD" OR eventMessage CONTAINS[c] "exception")' 60
-            echo "== The app's networking"
-            logs 'process == "TinfoilKit" AND subsystem == "com.apple.CFNetwork"' 80
-            echo "== iOS's downloader"
-            logs 'process == "nsurlsessiond" AND NOT subsystem BEGINSWITH "com.apple.launchservices" AND NOT subsystem == "com.apple.appinstallation"' 80
+            echo "== The app's networking errors"
+            logs 'process == "TinfoilKit" AND subsystem == "com.apple.CFNetwork" AND (messageType == error OR messageType == fault)' 30
+            echo "== iOS's downloader, on this app and its errors"
+            logs 'process == "nsurlsessiond" AND (eventMessage CONTAINS[c] "tinfoil" OR messageType == error OR messageType == fault)' 80
+            echo "== Crash reports"
+            ls -t ~/Library/Logs/DiagnosticReports 2> /dev/null | head -n 5 || true
           else
             adb shell pm list packages com.tinfoilkit.app || true
             adb logcat -d -b crash | tail -n 60

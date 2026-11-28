@@ -1,10 +1,10 @@
 # The first screen, the try-it kit, Get more and reading a book, on a fresh install: CI runs it on an iPhone simulator
 # and an Android emulator (.github/workflows/mobile.yml), with e2e/kiwix.py standing in for Kiwix and serving the test
-# books tests/make_zims.py makes. Locally: maestro test mobile/e2e
+# books tests/make_zims.py makes. Locally: install the app afresh, then maestro test mobile/e2e. CI installs it just
+# before; clearState would reinstall it on iOS, under another folder name.
 appId: com.tinfoilkit.app
 ---
-- launchApp:
-    clearState: true
+- launchApp
 - assertVisible: "Tinfoil Kit"
 - assertVisible: "Field medicine books"
 - takeScreenshot: 1-first-screen
