@@ -20,6 +20,7 @@ For the videos of a run, which people watch to see the kit set up and used on ea
   drive.py summary NAME=URL...      the run page's list of videos, in Markdown
 """
 
+import bisect
 import codecs
 import http.client
 import json
@@ -364,7 +365,6 @@ def record(name, cmd):
     rec, screen = None, None
     try:
         if name == "iphone":
-            status_bar(log, "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100")
             # The simulator's own recorder. Control-C stops it and finishes the file.
             rec = subprocess.Popen(
                 [
@@ -449,20 +449,15 @@ def record(name, cmd):
         code = p.wait()
         reader.join(10)  # not until the pipe closes: something CMD left running may hold it open
         if name in PHONES:
+            rows, actions = maestro_steps(started, cmd)
             with steps.open("a", encoding="utf-8") as f:
-                f.write(maestro_steps(started, cmd))
+                f.write("".join(f"{at:.2f}\t{text}\n" for at, text in rows))
+            steps.with_suffix(".actions").write_text("".join(f"{a:.2f}\t{b:.2f}\n" for a, b in actions), "utf-8")
         return code
     finally:
         time.sleep(2)  # the last screen, for a moment
-        end = time.time()
-        if name == "iphone" and rec:
-            # The simulator's recorder writes a frame only when the screen changes, so its first can come long after it
-            # starts. Its last is the clock's tick to 9:42, now: the videos job counts the start back from it.
-            status_bar(log, "--time", "9:42")
-            end = time.time()
-            time.sleep(0.5)
         with steps.open("a", encoding="utf-8") as f:
-            f.write(f"{end:.2f}\t\n")  # when the recording ends, to check the video's length against
+            f.write(f"{time.time():.2f}\t\n")  # when the recording ends, to check the video's length against
         if rec:
             try:
                 if name == "android":
@@ -480,12 +475,6 @@ def record(name, cmd):
         files = sorted([*VIDEO.glob(f"{name}.m*"), *VIDEO.glob(f"{name}-[0-9]*.mp4")])
         made = [f"{f.name} ({f.stat().st_size // 1024} KB)" for f in files]
         print(f"(screen recording: {', '.join(made) or 'none. The recorder said: ' + said(log)})", flush=True)
-
-
-def status_bar(log, *how):
-    """What the iPhone simulator's status bar shows: in the videos, 9:41 and a full battery, as in Apple's own pictures,
-    and nothing that changes by itself."""
-    subprocess.run(["xcrun", "simctl", "status_bar", "booted", "override", *how], stdout=log, stderr=log)
 
 
 class Parts:
@@ -537,9 +526,9 @@ class Parts:
 
 
 def maestro_steps(since, cmd):
-    """When each labeled step of the Maestro flows that CMD ran since SINCE started, from Maestro's reports of them
-    (commands.json, in the folder its --test-output-dir names, or its own), as lines of a recording's steps: the label
-    is the caption."""
+    """When each labeled step of the Maestro flows that CMD ran since SINCE started, with its label, the caption; and
+    when each tap, typing or launch began and ended, which change the screen. From Maestro's reports of them
+    (commands.json, in the folder its --test-output-dir names, or its own)."""
 
     def label(node):
         if not isinstance(node, dict):
@@ -550,7 +539,7 @@ def maestro_steps(since, cmd):
 
     folders = [Path.home() / ".maestro" / "tests"]
     folders += [Path(b) for a, b in zip(cmd, cmd[1:]) if a == "--test-output-dir"]
-    rows = []
+    rows, actions = [], []
     for report in (r for folder in folders for r in folder.rglob("commands*.json")):
         try:
             if report.stat().st_mtime < since:
@@ -564,9 +553,29 @@ def maestro_steps(since, cmd):
             if commands and not found:  # Maestro's reports changed shape: show one, to read the captions from it
                 print(f"(no captions in {report}: {json.dumps(commands[0])[:300]})", flush=True)
             rows += found
+            for c in commands:
+                m, kind = c.get("metadata") or c, next(iter(c.get("command") or {}), "")
+                if m.get("timestamp") and re.match(r"tapOn|inputText|launchApp|backPress|swipe|scroll|pressKey", kind):
+                    actions.append((m["timestamp"] / 1000, (m["timestamp"] + (m.get("duration") or 0)) / 1000))
         except (OSError, ValueError, AttributeError) as e:  # the captions can't fail the test
             print(f"(no captions from {report}: {e})", flush=True)
-    return "".join(f"{at:.2f}\t{text}\n" for at, text in sorted(rows))
+    return sorted(rows), sorted(actions)
+
+
+def lined_up(frames, actions):
+    """How long after its recorder started a video begins, and how sure that is: the lag that puts the most changes
+    of screen (FRAMES, the video's times) during the taps and typing that make them (ACTIONS, from the recorder's
+    start), and the fewest in the second before each. The iPhone's recorder writes nothing until the screen changes."""
+
+    def seen(a, b):  # a frame after A, up to B
+        i = bisect.bisect_right(frames, a)
+        return i < len(frames) and frames[i] <= b
+
+    best = max(
+        (sum(seen(a - lag, b - lag + 0.5) - seen(a - lag - 1, a - lag) for a, b in actions), -lag)
+        for lag in (x / 10 for x in range(1200))
+    )
+    return -best[1], best[0]
 
 
 def said(log):
@@ -837,15 +846,24 @@ def make_videos(folder):
             continue
         rows = [line.split("\t", 1) for line in steps.read_text(encoding="utf-8").splitlines() if "\t" in line]
         began, ended = float(rows[0][0]), float(rows[-1][0])
-        # The captions are placed by the clock, from the recorder's start: the iPhone's video starts at the first
-        # change of screen instead, and ends at the clock's tick that record makes, so its start is counted back
-        frames = sorted(packet_times(raw))
-        start = ended - frames[-1] if name == "iphone" and frames and not rows[-1][1] else began
+        # The captions are placed by the clock, from the recorder's start. The iPhone's video begins at the first
+        # change of screen instead, which the test's taps tell (lined_up).
+        packets = packet_times(raw)
+        frames = sorted(packets)
+        listed = steps.with_suffix(".actions")
+        listed = listed.read_text(encoding="utf-8") if listed.exists() else ""
+        acts = [[float(x) - began for x in line.split()] for line in listed.splitlines()]
+        lag, score = lined_up(frames, acts) if acts and frames else (0.0, 0)
+        start = began + lag if name == "iphone" else began
         marks = [(min(max(0.0, float(t) - start), length), text) for t, text in rows[1:] if text]
         gaps = sorted((b - a for a, b in zip(frames, frames[1:])), reverse=True)[:3]
+        back = sum(b < a - 1 for a, b in zip(packets, packets[1:]))
         print(
-            f"{name}: the recording ran {ended - began:.0f} s and the video is {length:.0f} s from {start - began:.1f} s"
-            f" on, with {len(frames)} frames, the longest gaps between them " + ", ".join(f"{g:.1f} s" for g in gaps)
+            f"{name}: the recording ran {ended - began:.0f} s and the video is {length:.0f} s, with {len(frames)} "
+            f"frames ({back} out of order), the longest gaps between them "
+            + ", ".join(f"{g:.1f} s" for g in gaps)
+            + f"; its taps line up best with its changes of screen {lag:.1f} s after the recorder started"
+            f" ({score} of {len(acts)}), and the captions count from {start - began:.1f} s"
         )
         run = " ".join(x for x in (os.environ.get("GITHUB_SHA", "")[:7], time.strftime("%Y-%m-%d")) if x)
         phone = name in PHONES
