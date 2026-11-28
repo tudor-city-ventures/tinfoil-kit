@@ -236,7 +236,10 @@ export function startDownloads() {
   if (started || Platform.OS === "web") return;
   started = true;
   const p = phone();
-  setConfig({ allowsCellularAccess: false }); // each download says for itself; this is the default
+  setConfig({
+    allowsCellularAccess: false, // each download says for itself; this is the default
+    isLogsEnabled: process.env.EXPO_PUBLIC_DOWNLOAD_LOGS === "1", // the downloader's own log, for CI
+  });
   new Directory(`file://${p.library}/incoming`).create({ intermediates: true, idempotent: true });
   excludeFromBackup(p.library);
   const downloads = createDownloads(kitStore, p);

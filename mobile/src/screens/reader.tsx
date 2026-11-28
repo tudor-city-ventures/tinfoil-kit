@@ -230,7 +230,12 @@ export function Reader({ id }: { id: string }) {
             {found.length > 0 ? (
               <Group label="Pages">
                 {found.map((e) => (
-                  <Row key={e.index} title={e.title} onPress={() => go(`${origin(id)}${address(zim, e)}`)} />
+                  <Row
+                    key={e.index}
+                    testID={`found-${e.title}`}
+                    title={e.title}
+                    onPress={() => go(`${origin(id)}${address(zim, e)}`)}
+                  />
                 ))}
               </Group>
             ) : query.trim() ? (

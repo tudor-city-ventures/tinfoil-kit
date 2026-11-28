@@ -71,6 +71,7 @@ jobs:
         working-directory: mobile
         env:
           EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
+          EXPO_PUBLIC_DOWNLOAD_LOGS: "1" # the downloader logs what it does, for Show what went wrong
         run: |
           npx expo prebuild --platform android --no-install
           cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --console=plain
@@ -132,7 +133,12 @@ jobs:
           cat "$RUNNER_TEMP/kiwix.log" || true
           echo "== The app's log"
           if command -v xcrun > /dev/null; then
-            xcrun simctl spawn booted log show --last 10m --style compact --predicate 'process == "TinfoilKit"' | tail -n 100
+            xcrun simctl spawn booted log show --last 10m --style compact --info --predicate \
+              'process == "TinfoilKit" AND (eventMessage CONTAINS "RNBD" OR eventMessage CONTAINS "RNBackgroundDownloader" OR eventMessage CONTAINS[c] "exception")' |
+              tail -n 150
+            echo "== iOS's downloader"
+            xcrun simctl spawn booted log show --last 10m --style compact --predicate \
+              'process == "nsurlsessiond" AND eventMessage CONTAINS "tinfoilkit"' | tail -n 50
           else
             adb logcat -d | grep -E "ReactNativeJS|BackgroundDownload|AndroidRuntime" | tail -n 100
           fi
@@ -165,6 +171,7 @@ jobs:
         working-directory: mobile
         env:
           EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
+          EXPO_PUBLIC_DOWNLOAD_LOGS: "1" # the downloader logs what it does, for Show what went wrong
         run: |
           npx expo prebuild --platform ios --no-install
           cd ios && pod install

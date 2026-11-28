@@ -31,7 +31,9 @@ appId: com.tinfoilkit.app
 - tapOn:
     id: "search-book"
 - inputText: "Dehy"
-- tapOn: "Dehydration"
+# by its id: the keyboard suggests "Dehydration" too
+- tapOn:
+    id: "found-Dehydration"
 - extendedWaitUntil:
     visible: ".*Oral rehydration solution.*"
     timeout: 30000
