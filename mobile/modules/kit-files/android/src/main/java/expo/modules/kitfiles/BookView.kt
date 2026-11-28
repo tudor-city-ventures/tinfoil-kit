@@ -165,6 +165,7 @@ class BookView(context: Context, appContext: AppContext) : ExpoView(context, app
 
     // Android ended the page's process (low on memory): the app stays up, and the reader opens the book again
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+      Log.w("KitBooks", "the page's process ended (crashed: ${detail.didCrash()})")
       onPage(mapOf("url" to "", "title" to "", "back" to false, "forward" to false, "loading" to false, "gone" to true))
       return true
     }

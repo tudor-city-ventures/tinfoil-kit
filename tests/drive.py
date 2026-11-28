@@ -449,7 +449,7 @@ def record(name, cmd):
         reader.join(10)  # not until the pipe closes: something CMD left running may hold it open
         if name in PHONES:
             with steps.open("a", encoding="utf-8") as f:
-                f.write(maestro_steps(started))
+                f.write(maestro_steps(started, cmd))
         return code
     finally:
         time.sleep(2)  # the last screen, for a moment
@@ -517,9 +517,10 @@ class Parts:
         self.done.set()
 
 
-def maestro_steps(since):
-    """When each labeled step of the Maestro flows run since SINCE started, from the reports Maestro keeps (its debug
-    output, not the screenshots of --test-output-dir), as lines of a recording's steps: the label is the caption."""
+def maestro_steps(since, cmd):
+    """When each labeled step of the Maestro flows that CMD ran since SINCE started, from Maestro's reports of them
+    (commands.json, in the folder its --test-output-dir names, or its own), as lines of a recording's steps: the label
+    is the caption."""
 
     def label(node):
         if not isinstance(node, dict):
@@ -528,15 +529,22 @@ def maestro_steps(since):
             return node["label"]
         return next(filter(None, map(label, node.values())), None)
 
+    folders = [Path.home() / ".maestro" / "tests"]
+    folders += [Path(b) for a, b in zip(cmd, cmd[1:]) if a == "--test-output-dir"]
     rows = []
-    for report in (Path.home() / ".maestro" / "tests").rglob("commands-*.json"):
+    for report in (r for folder in folders for r in folder.rglob("commands*.json")):
         try:
             if report.stat().st_mtime < since:
                 continue
-            for c in json.loads(report.read_text(encoding="utf-8")):
-                text, at = label(c.get("command")), (c.get("metadata") or {}).get("timestamp")
-                if text and at:
-                    rows.append((at / 1000, text))
+            commands = json.loads(report.read_text(encoding="utf-8"))
+            found = [
+                (at / 1000, text)
+                for c in commands
+                if (text := label(c.get("command"))) and (at := (c.get("metadata") or c).get("timestamp"))
+            ]
+            if commands and not found:  # Maestro's reports changed shape: show one, to read the captions from it
+                print(f"(no captions in {report}: {json.dumps(commands[0])[:300]})", flush=True)
+            rows += found
         except (OSError, ValueError, AttributeError) as e:  # the captions can't fail the test
             print(f"(no captions from {report}: {e})", flush=True)
     return "".join(f"{at:.2f}\t{text}\n" for at, text in sorted(rows))

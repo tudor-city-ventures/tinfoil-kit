@@ -212,16 +212,18 @@ jobs:
           else
             adb shell pm list packages com.tinfoilkit.app || true
             adb logcat -d -b crash | tail -n 60
-            adb logcat -d | grep -E "ReactNativeJS|KitBooks|DownloadManager|AndroidRuntime|tinfoilkit" | tail -n 100
+            adb logcat -d | grep -E "ReactNativeJS|KitBooks|DownloadManager|AndroidRuntime|tinfoilkit|chromium" | tail -n 100
           fi
           # Last, so the end of the job's log has them
-          echo "== The step that failed"    # from Maestro's reports, which --test-output-dir leaves where they were
-          find ~/.maestro/tests -name 'commands-*.json' -exec python3 -c '
+          echo "== The last steps, and the one that failed"    # from Maestro's reports of each flow (commands.json)
+          find e2e-output ~/.maestro/tests -name 'commands*.json' -exec python3 -c '
           import json, sys
-          for c in json.load(open(sys.argv[1])):
-              m = c.get("metadata") or {}
+          steps = [(c.get("metadata") or c, c.get("command")) for c in json.load(open(sys.argv[1]))]
+          done = [i for i, (m, _) in enumerate(steps) if m.get("status")]
+          end = next((i for i in done if steps[i][0]["status"] == "FAILED"), done[-1] if done else 0)
+          for m, command in steps[max(0, end - 8) : end + 1]:
+              print(m.get("status"), json.dumps(command)[:300])
               if m.get("status") == "FAILED":
-                  print(json.dumps(c.get("command"))[:400])
                   print((m.get("error") or {}).get("message"))' {} \; || true
           echo "== On screen"
           maestro hierarchy 2> /dev/null | python3 -c '

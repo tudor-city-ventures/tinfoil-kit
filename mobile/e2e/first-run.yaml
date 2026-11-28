@@ -136,10 +136,13 @@ appId: com.tinfoilkit.app
     visible: ".*Oral rehydration solution.*"
     timeout: 30000
 - takeScreenshot: 12-found
+# From here, the page's title (in the header, from the page itself) shows which page is open: Android's web view
+# doesn't always tell the accessibility tree, which Maestro reads, what's on a page it went back to or opened from a
+# search, though it shows it
 - tapOn:
     id: "book-back"
 - extendedWaitUntil:
-    visible: "When to seek urgent help"
+    visible: "Fever"
     timeout: 30000
 # and by the words in them, from the book's own index
 - tapOn:
@@ -149,12 +152,12 @@ appId: com.tinfoilkit.app
 - tapOn:
     id: "inside-Dehydration"
 - extendedWaitUntil:
-    visible: ".*Oral rehydration solution.*"
+    visible: "Dehydration"
     timeout: 30000
 - tapOn:
     id: "book-back"
 - extendedWaitUntil:
-    visible: "When to seek urgent help"
+    visible: "Fever"
     timeout: 30000
 # Share with a phone: this phone shared like a kit at home, as another phone on its Wi-Fi sees it (e2e/share.js). The
 # app starts again, so Get more opens at its own screen.
