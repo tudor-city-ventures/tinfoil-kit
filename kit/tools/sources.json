@@ -74,7 +74,7 @@
    "title": "Offline maps",
    "why": "Street maps, address search and driving or walking directions for your region.",
    "source": "https://www.openstreetmap.org/",
-   "bytes": 16911300523,
+   "bytes": 16803553193,
    "estimated": false,
    "presets": [
     "essentials",
@@ -237,8 +237,8 @@
    "title": "Urban Prepper",
    "why": "Getting through an emergency in a city.",
    "source": null,
-   "bytes": 2245235712,
-   "estimated": false,
+   "bytes": 2200000000,
+   "estimated": true,
    "presets": [
     "recommended",
     "no-ai",
