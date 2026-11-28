@@ -115,10 +115,14 @@ const zoom = (id: number) => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(`${dir}/${build}`, map);
     writeFileSync(`${dir}/builds.json`, JSON.stringify([{ key: build }]));
-    for (const f of STYLE_FILES) {
-      mkdirSync(dirname(`${dir}/assets/${f}`), { recursive: true });
-      writeFileSync(`${dir}/assets/${f}`, await get(`${ASSETS}/${encodeURI(f)}`));
-    }
+    const files = [...STYLE_FILES]; // hundreds of small ones, so several at a time
+    const worker = async () => {
+      for (let f = files.shift(); f; f = files.shift()) {
+        mkdirSync(dirname(`${dir}/assets/${f}`), { recursive: true });
+        writeFileSync(`${dir}/assets/${f}`, await get(`${ASSETS}/${encodeURI(f)}`));
+      }
+    };
+    await Promise.all(Array.from({ length: 16 }, worker));
     console.log(`${build}: ${p.tiles.n} tiles, ${Math.round(map.length / 1e3)} KB`);
     expect(p.tiles.n).toBeGreaterThan(20);
   },

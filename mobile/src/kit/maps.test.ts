@@ -332,6 +332,32 @@ test("not enough free space: it says how much the map needs, and downloads none 
   expect(leftovers(t.files)).toEqual([]);
 });
 
+test("fonts and icons: one that fails is tried again, and one that's gone stops the map until it's back", async () => {
+  const { phone, t } = fakePhone();
+  const font = STYLE_FILES[300];
+  const url = `${ASSETS}/${encodeURI(font)}`;
+  const download = phone.download;
+  let fails = 1;
+  phone.download = (o) => (o.url === url && fails-- > 0 ? Promise.reject(coded("ERR_HTTP_500")) : download(o));
+  const { store } = await newStore();
+  createMaps(store, phone, OPTIONS).start();
+  store.getMap("us/rhode-island");
+  await until(() => !store.get().mapDownload);
+  expect(fails).toBe(-1);
+  expect(strFromU8(t.files.get(`/maps/style/${font}`)!)).toBe(font);
+
+  t.files.delete(`/maps/style/${font}`);
+  t.sources.delete(url);
+  store.getMap("us/alabama");
+  await until(() => store.get().mapDownload?.status === "failed");
+  expect(store.get().mapDownload?.error).toBe("ERR_HTTP_404");
+  t.sources.set(url, strToU8(font));
+  store.getMap("us/alabama");
+  await until(() => !store.get().mapDownload);
+  expectMap(t.files.get("/maps/us-alabama-20261127.pmtiles"), "us/alabama");
+  expect(leftovers(t.files)).toEqual([]);
+});
+
 test("the newest world map of the layers the kit page's style is for", () => {
   expect(
     latest([

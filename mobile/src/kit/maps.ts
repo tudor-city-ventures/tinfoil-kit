@@ -26,11 +26,11 @@ export const BUILDS = process.env.EXPO_PUBLIC_PROTOMAPS_BUILDS || "https://build
 export const BUILD_BASE = process.env.EXPO_PUBLIC_PROTOMAPS_BUILD_BASE || "https://build.protomaps.com";
 export const ASSETS = process.env.EXPO_PUBLIC_BASEMAPS_ASSETS || "https://protomaps.github.io/basemaps-assets";
 
-// The kit page's: fonts for its labels, with the letters most languages written in Latin script use, and its icons
+// The kit page's: fonts for its labels and its icons. Every range of each font, as the kit has, since a place's
+// labels can be in any script: most ranges are empty, and all of them come to about 11 MB.
 export const FONTS = ["Noto Sans Regular", "Noto Sans Medium", "Noto Sans Italic"];
-const RANGES = ["0-255", "256-511", "8192-8447"];
 export const STYLE_FILES = [
-  ...FONTS.flatMap((f) => RANGES.map((r) => `fonts/${f}/${r}.pbf`)),
+  ...FONTS.flatMap((f) => Array.from({ length: 256 }, (_, i) => `fonts/${f}/${i * 256}-${i * 256 + 255}.pbf`)),
   ...["light.json", "light.png", "light@2x.json", "light@2x.png"].map((s) => `sprites/v4/${s}`),
 ];
 
@@ -184,39 +184,16 @@ export function createMaps(
     return next;
   }
 
-  // The kit page's fonts and icons, once
-  async function style(cellular: boolean, live: () => boolean) {
-    for (const f of STYLE_FILES) {
-      const to = path(`style/${f}`);
-      if (phone.size(to) > 0) continue;
-      await phone.download({ url: `${ASSETS}/${encodeURI(f)}`, path: `${to}.part`, cellular });
-      if (!live()) return;
-      phone.move(`${to}.part`, to);
-    }
-  }
-
-  async function parts(next: Next, cellular: boolean, live: () => boolean) {
-    const at = positions(next);
-    const done = new Set(next.done);
-    const todo = next.parts.map((_, i) => i).filter((i) => !done.has(i));
-    let received = next.done.reduce((n, i) => n + next.parts[i][1], next.head);
-    let saved = Date.now();
+  // Each job, a few at a time, each tried again a little later unless that can't help. The first that still fails
+  // stops the rest, and is thrown once they have.
+  async function each<T>(jobs: T[], live: () => boolean, job: (j: T) => Promise<void>) {
     let failure: unknown;
     const worker = async () => {
-      for (let i = todo.shift(); i !== undefined; i = todo.shift()) {
-        const [offset, length] = next.parts[i];
+      for (let j = jobs.shift(); j !== undefined; j = jobs.shift())
         for (let tries = 1; ; tries++) {
           if (failure !== undefined || !live()) return;
           try {
-            const n = await phone.download({
-              url: next.url,
-              path: path(next.partial),
-              cellular,
-              offset,
-              length,
-              at: at[i],
-            });
-            if (n !== length) throw new Error("Part of the map came through short");
+            await job(j);
             break;
           } catch (e) {
             if (failure !== undefined || !live()) return;
@@ -225,6 +202,39 @@ export function createMaps(
             await wait(1000 * 2 ** tries);
           }
         }
+    };
+    await Promise.all(Array.from({ length: AT_ONCE }, worker));
+    if (failure !== undefined) throw failure;
+  }
+
+  // The kit page's fonts and icons, once
+  async function style(cellular: boolean, live: () => boolean) {
+    const todo = STYLE_FILES.map((f) => path(`style/${f}`)).filter((to) => phone.size(to) <= 0);
+    await each(todo, live, async (to) => {
+      const f = to.slice(path("style/").length);
+      await phone.download({ url: `${ASSETS}/${encodeURI(f)}`, path: `${to}.part`, cellular });
+      if (live()) phone.move(`${to}.part`, to);
+    });
+  }
+
+  async function parts(next: Next, cellular: boolean, live: () => boolean) {
+    const at = positions(next);
+    const done = new Set(next.done);
+    let received = next.done.reduce((n, i) => n + next.parts[i][1], next.head);
+    let saved = Date.now();
+    const todo = next.parts.map((_, i) => i).filter((i) => !done.has(i));
+    try {
+      await each(todo, live, async (i) => {
+        const [offset, length] = next.parts[i];
+        const n = await phone.download({
+          url: next.url,
+          path: path(next.partial),
+          cellular,
+          offset,
+          length,
+          at: at[i],
+        });
+        if (n !== length) throw new Error("Part of the map came through short");
         if (!live()) return;
         next.done.push(i);
         received += length;
@@ -233,12 +243,11 @@ export function createMaps(
           phone.save(nextFile, JSON.stringify(next));
           store.updateMap({ received });
         }
-      }
-    };
-    await Promise.all(Array.from({ length: AT_ONCE }, worker));
-    if (current()?.place === next.place) phone.save(nextFile, JSON.stringify(next));
-    if (live()) store.updateMap({ received });
-    if (failure !== undefined) throw failure;
+      });
+    } finally {
+      if (current()?.place === next.place) phone.save(nextFile, JSON.stringify(next));
+      if (live()) store.updateMap({ received });
+    }
   }
 
   // Parts that didn't land whole: each part starts with a tile, and each tile with gzip's two bytes
@@ -285,8 +294,8 @@ export function createMaps(
       for (;;) {
         if (!live()) return;
         store.updateMap({ status: "downloading", waiting: undefined, error: undefined, total: total(next) });
+        await style(cellular, live); // outside: a missing font isn't the world map gone
         try {
-          await style(cellular, live);
           await parts(next, cellular, live);
         } catch (e) {
           if (newest || !GONE.test(code(e))) throw e;
