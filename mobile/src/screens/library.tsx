@@ -53,7 +53,7 @@ function offer(id: string, it: Item) {
     ]);
 }
 
-// The books on this phone and the ones on their way, and a Tinfoil Kit nearby
+// The books on this phone and the ones on their way
 export function Library() {
   const { items, cellular } = useKit();
   const net = useNetworkState().type;
@@ -98,15 +98,8 @@ export function Library() {
             />
           ))
         ) : (
-          <Row title="Nothing yet" detail="Books you get show up here, ready without the internet." />
+          <Row title="Nothing yet" detail="Books you get in Get more show up here, ready without the internet." />
         )}
-      </Group>
-      <Group label="Nearby" footer="A Tinfoil Kit on this Wi-Fi can share its books and maps with your phone.">
-        <Row
-          icon="drive"
-          title="No kit found on this Wi-Fi"
-          detail="Turn on Share with family on the kit's computer."
-        />
       </Group>
     </ScrollView>
   );
