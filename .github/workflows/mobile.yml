@@ -272,7 +272,7 @@ jobs:
           path: |
             mobile/ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
             mobile/ios/build/hermesc
-          key: ios-app-4-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/ios/**', 'mobile/modules/*/expo-module.config.json') }}
+          key: ios-app-5-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/ios/**', 'mobile/modules/*/expo-module.config.json') }}
       # npm ci takes 5 minutes on a Mac. The same lock file installs the same packages, so they're kept, as npm ci left
       # them: saved before the build adds its own files to them.
       - name: Reuse the packages, if the lock file is the same
@@ -290,35 +290,48 @@ jobs:
           path: mobile/node_modules
           key: ${{ steps.modules.outputs.cache-primary-key }}
       # Most of a full build is compiling the same libraries as the last one. ccache keeps what each of their files
-      # compiled to, so a build whose packages are the same compiles only what changed.
-      - name: Reuse what the last full build compiled
-        id: ccache
+      # compiled to, so a build whose packages are the same compiles only what changed. React Native keeps the builds
+      # of itself that pod install downloads beside it.
+      - name: Reuse what the last full build compiled and downloaded
+        id: compiled
         if: steps.app.outputs.cache-hit != 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/Library/Caches/ccache
-          key: ios-ccache-1-${{ hashFiles('mobile/package-lock.json') }}
-          restore-keys: ios-ccache-1-
+          path: |
+            ~/Library/Caches/ccache
+            ~/Library/Caches/ReactNative
+          key: ios-compiled-1-${{ hashFiles('mobile/package-lock.json') }}
+          restore-keys: ios-compiled-1-
       # Signed to run locally, as Xcode signs for the simulator: that puts the app's entitlements in its program, and
       # iOS's downloader takes background downloads only from an app with them (built unsigned, it refuses the app's
       # connection). Built for the simulator on this Mac's processor alone, without an index or separate debug symbols,
-      # which a test doesn't use; React Native puts ccache in front of the compiler when pod install sees USE_CCACHE.
-      # The Hermes compiler the build used is kept with the app, for the next run's new JavaScript. The build's own log
-      # is too long to read: the job's gets its errors, and where the time went.
+      # which a test doesn't use. ccache stands in front of the compiler through wrappers that name both by their paths,
+      # with React Native's settings for it in its own config file: React Native's switch for it (USE_CCACHE) ran
+      # nothing through it, as its wrapper needs a variable Xcode doesn't pass on. The Hermes compiler the build used is
+      # kept with the app, for the next run's new JavaScript. The build's own log is too long to read: the job's gets
+      # its errors, and where the time went.
       - name: Build the app
         if: steps.app.outputs.cache-hit != 'true'
         working-directory: mobile
         env: *internet
         run: |
           command -v ccache > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install --quiet ccache
+          ccache --set-config sloppiness=clang_index_store,file_stat_matches,include_file_ctime,include_file_mtime,ivfsoverlay,pch_defines,modules,system_headers,time_macros
+          ccache --set-config depend_mode=true
+          ccache --set-config file_clone=true
+          ccache --set-config inode_cache=true
           ccache --zero-stats > /dev/null
+          for c in clang clang++; do
+            printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$(command -v ccache)" "$(xcrun --find "$c")" > "$RUNNER_TEMP/ccache-$c"
+            chmod +x "$RUNNER_TEMP/ccache-$c"
+          done
           time npx expo prebuild --platform ios --no-install
-          export USE_CCACHE=1
           cd ios && time pod install
           log="$RUNNER_TEMP/xcodebuild.log"
           time xcodebuild -workspace TinfoilKit.xcworkspace -scheme TinfoilKit -configuration Release -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build ARCHS=arm64 \
             COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf \
+            CC="$RUNNER_TEMP/ccache-clang" CXX="$RUNNER_TEMP/ccache-clang++" \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= -showBuildTimingSummary build > "$log" 2>&1 ||
             { grep -E -A 3 '(^| )error: ' "$log" | head -n 200; tail -n 40 "$log"; exit 1; }
           sed -n '/Build Timing Summary/,$p' "$log" | grep -v '^note: ' || true
@@ -334,10 +347,12 @@ jobs:
             mobile/ios/build/hermesc
           key: ${{ steps.app.outputs.cache-primary-key }}
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        if: steps.app.outputs.cache-hit != 'true' && steps.ccache.outputs.cache-hit != 'true'
+        if: steps.app.outputs.cache-hit != 'true' && steps.compiled.outputs.cache-hit != 'true'
         with:
-          path: ~/Library/Caches/ccache
-          key: ${{ steps.ccache.outputs.cache-primary-key }}
+          path: |
+            ~/Library/Caches/ccache
+            ~/Library/Caches/ReactNative
+          key: ${{ steps.compiled.outputs.cache-primary-key }}
       - name: Put the new JavaScript in the app
         if: steps.app.outputs.cache-hit == 'true'
         working-directory: mobile
