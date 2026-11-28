@@ -94,7 +94,7 @@ def run(server, server_cmd, work, data):
     check(
         "it answers the kit's page, and says what it is",
         s == 200
-        and got == {"name": "Tinfoil Kit", "notes": "/notes", "places": "/places"}
+        and got == {"name": "Tinfoil Kit", "notes": "/notes", "places": "/places", "files": "/files"}
         and h.get("access-control-allow-origin") == PAGE,
         f"{s} {got} {h}",
     )
