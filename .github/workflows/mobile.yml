@@ -50,6 +50,8 @@ jobs:
       - run: npm run check
         env:
           ZIM_FIXTURES: ${{ runner.temp }}/zim
+      # A minute, where the Android build below takes 13 to find a mistake in its Kotlin
+      - run: npm run check:android
 
   map-sizes:
     if: ${{ inputs.map_sizes }}

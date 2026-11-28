@@ -3,6 +3,7 @@
 // phone's. It reads a few MB of the world map's directories over the internet, so it runs only when asked: the
 // phone app workflow's "map sizes" run sets MAP_SIZES.
 import { expect, test } from "@jest/globals";
+import { appendFileSync } from "node:fs";
 import * as http from "node:http";
 import * as https from "node:https";
 
@@ -82,10 +83,7 @@ const zoom = (id: number) => {
     lines.push("", `Read ${mb(read)} MB of directories.`);
     const table = lines.join("\n");
     console.log(table);
-    if (process.env.GITHUB_STEP_SUMMARY) {
-      const { appendFileSync } = await import("node:fs");
-      appendFileSync(process.env.GITHUB_STEP_SUMMARY, table + "\n");
-    }
+    if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, table + "\n");
     expect(world[0]).toBeGreaterThan(0);
   },
   15 * 60_000,

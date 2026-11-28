@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "check": "npm run typecheck && npm run lint && npm test -- --ci",
+    "check:android": "./check-android.sh",
     "skills": "python3 skills.py"
   },
   "prettier": {
