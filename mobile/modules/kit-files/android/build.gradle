@@ -11,6 +11,8 @@ android {
   defaultConfig {
     versionCode 1
     versionName "1.0.0"
+    // The app's release build shrinks and renames its code (R8): proguard-rules.pro keeps what zstd-jni needs
+    consumerProguardFiles 'proguard-rules.pro'
   }
 }
 
