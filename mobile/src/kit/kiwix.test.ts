@@ -44,14 +44,26 @@ test("the catalog gives each book's newest file", () => {
 test("a book comes in its smallest published edition", async () => {
   const cat = "https://library.kiwix.org/catalog/v2/entries?name=";
   const { get, asked } = server({
+    [`${cat}wikipedia_en_medicine`]: feed(),
     [`${cat}wikipedia_en_medicine_mini`]: feed(),
     [`${cat}wikipedia_en_medicine_nopic`]: feed("wikipedia_en_medicine_nopic_2026-10.zim"),
   });
   const file = await findFile(["wikipedia_en_medicine_mini", "wikipedia_en_medicine_nopic"], get);
   expect(file?.file).toBe("wikipedia_en_medicine_nopic_2026-10.zim");
-  expect(asked).toHaveLength(2);
+  expect(asked).toHaveLength(3);
   await expect(findFile(["wikipedia_en_medicine_mini"], get)).resolves.toBeUndefined();
   await expect(findFile(["gone"], get)).rejects.toThrow("Kiwix's catalog answered 404");
+
+  // A catalog that names books without their edition answers for all of them at once
+  const all = server({
+    [`${cat}wikipedia_en_medicine`]: feed(
+      "wikipedia_en_medicine_maxi_2026-10.zim",
+      "wikipedia_en_medicine_nopic_2026-10.zim",
+    ),
+  });
+  const editions = ["wikipedia_en_medicine_mini", "wikipedia_en_medicine_nopic", "wikipedia_en_medicine_maxi"];
+  expect((await findFile(editions, all.get))?.file).toBe("wikipedia_en_medicine_nopic_2026-10.zim");
+  expect(all.asked).toEqual([`${cat}wikipedia_en_medicine`]);
 });
 
 test("the SHA-256 comes from the .sha256, else the .meta4", async () => {

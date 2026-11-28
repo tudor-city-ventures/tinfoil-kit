@@ -34,13 +34,17 @@ export function parseCatalog(xml: string): Map<string, ZimFile> {
   return newest;
 }
 
-// The first of a book's editions that Kiwix publishes, or undefined when it publishes none of them. Throws when the
-// catalog can't be reached, so the book waits rather than fails.
+// The first of a book's editions that Kiwix publishes, or undefined when it publishes none of them. A book's name in
+// the catalog can leave out its edition (wikipedia_en_all, in its maxi, nopic and mini flavours), so the catalog is
+// asked for that first, then for each edition. Throws when the catalog can't be reached, so the book waits rather
+// than fails.
 export async function findFile(editions: string[], get: Get = fetch): Promise<ZimFile | undefined> {
-  for (const name of editions) {
+  const base = editions[0].replace(/_(maxi|nopic|mini)$/, "");
+  for (const name of base === editions[0] ? editions : [base, ...editions]) {
     const res = await get(`${CATALOG}${CATALOG.includes("?") ? "&" : "?"}name=${encodeURIComponent(name)}`);
     if (!res.ok) throw new Error(`Kiwix's catalog answered ${res.status}`);
-    const file = parseCatalog(await res.text()).get(name);
+    const found = parseCatalog(await res.text());
+    const file = editions.map((e) => found.get(e)).find((f) => f);
     if (file) return file;
   }
   return undefined;
