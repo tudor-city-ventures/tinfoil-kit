@@ -1,7 +1,9 @@
 import { expect, jest, test } from "@jest/globals";
 import { act, render, screen, userEvent } from "@testing-library/react-native";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode, Ref } from "react";
+import { Linking } from "react-native";
 
+import { place } from "@/kit/places";
 import { store } from "@/kit/store";
 
 import { MapScreen } from "./map";
@@ -12,18 +14,40 @@ type Options = {
   headerRight?: () => ReactElement<{ onPress(): void }>;
 };
 let mockOptions: Options = {};
+type MockFix = { coords: { longitude: number; latitude: number } };
+type MockMapProps = {
+  testID: string;
+  mapStyle: { sources: { protomaps: { url: string } } };
+  onDidFailLoadingMap(): void;
+  children?: ReactNode;
+};
+let mockGranted = true; // what the person answers when asked for their location
+let mockListener: ((at: MockFix) => void) | undefined; // waiting for the phone's next fix
+const mockFly = jest.fn();
 
-// The stack's header, as the screen sets it, and the map as a plain view that says which file it shows
+// The stack's header, as the screen sets it; the map as a plain view that says which file it shows, the camera as
+// where it was sent, and the person's dot as a word
 jest.mock("expo-router", () => ({
   Stack: { Screen: ({ options }: { options: Options }) => ((mockOptions = options), null) },
 }));
 jest.mock("@maplibre/maplibre-react-native", () => {
-  const { createElement } = jest.requireActual<typeof import("react")>("react");
+  const { createElement, Fragment, useImperativeHandle } = jest.requireActual<typeof import("react")>("react");
   const { Text } = jest.requireActual<typeof import("react-native")>("react-native");
   return {
-    Map: (p: { testID: string; mapStyle: { sources: { protomaps: { url: string } } }; onDidFailLoadingMap(): void }) =>
-      createElement(Text, { testID: p.testID, onPress: p.onDidFailLoadingMap }, p.mapStyle.sources.protomaps.url),
-    Camera: () => null,
+    Map: (p: MockMapProps) =>
+      createElement(
+        Fragment,
+        null,
+        createElement(Text, { testID: p.testID, onPress: p.onDidFailLoadingMap }, p.mapStyle.sources.protomaps.url),
+        p.children,
+      ),
+    Camera: ({ ref }: { ref: Ref<unknown> }) => (useImperativeHandle(ref, () => ({ flyTo: mockFly })), null),
+    NativeUserLocation: () => createElement(Text, null, "(you)"),
+    LocationManager: {
+      requestPermissions: async () => mockGranted,
+      addListener: (f: (at: MockFix) => void) => void (mockListener = f),
+      removeListener: () => void (mockListener = undefined),
+    },
   };
 });
 jest.mock(
@@ -70,4 +94,35 @@ test("pick where you live, watch its map come, then see it, and pick another", a
   await user.press(screen.getByText("Alabama"));
   expect(store.get().mapDownload).toMatchObject({ place: "us/alabama" });
   expect(screen.getByText("Alabama: Starting")).toBeOnTheScreen(); // over Rhode Island's map, until Alabama's is here
+});
+
+test("where you are: asked for once, then the map goes there, or says you're outside its place", async () => {
+  const user = userEvent.setup();
+  await act(() => store.stopMap());
+  await render(<MapScreen />);
+  const locate = () => user.press(screen.getByRole("button", { name: "Show where I am" }));
+
+  mockGranted = false;
+  const settings = jest.spyOn(Linking, "openSettings").mockResolvedValue();
+  await locate();
+  expect(screen.queryByText("(you)")).toBeNull();
+  await user.press(screen.getByText("Location is off for Tinfoil Kit. Tap to turn it on in Settings."));
+  expect(settings).toHaveBeenCalled();
+
+  mockGranted = true;
+  await locate();
+  expect(screen.getByText("Finding where you are")).toBeOnTheScreen();
+  expect(screen.getByText("(you)")).toBeOnTheScreen();
+  const { home } = place("us/rhode-island")!;
+  await act(() => mockListener!({ coords: { longitude: home.lon, latitude: home.lat } }));
+  expect(mockFly).toHaveBeenLastCalledWith({ center: [home.lon, home.lat], zoom: 15 });
+  expect(screen.queryByText("Finding where you are")).toBeNull();
+  expect(mockListener).toBeUndefined(); // one fix is enough: the dot follows on its own
+
+  await locate();
+  expect(screen.queryByText("Finding where you are")).toBeNull();
+  await act(() => mockListener!({ coords: { longitude: -0.12, latitude: 51.5 } })); // London
+  expect(mockFly).toHaveBeenLastCalledWith({ center: [-0.12, 51.5], zoom: 7 });
+  await user.press(screen.getByText("You're outside Rhode Island's map. Tap to pick another place."));
+  expect(screen.getByText(/^Where do you live\?/)).toBeOnTheScreen();
 });

@@ -1,15 +1,23 @@
 // The Map tab: the map of where the person lives, on their phone. Until there is one, the places to pick from and how
 // its download is going.
-import { Camera, Map as MapView } from "@maplibre/maplibre-react-native";
+import {
+  Camera,
+  LocationManager,
+  Map as MapView,
+  NativeUserLocation,
+  type CameraRef,
+  type GeolocationPosition,
+} from "@maplibre/maplibre-react-native";
 import { Stack } from "expo-router";
-import { useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, Linking, PermissionsAndroid, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Group, Pill, Row } from "@/components/group";
 import { Icon } from "@/components/icon";
-import { mapsPath, mapStyle } from "@/kit/maps";
+import { mapsPath, mapStyle, WORLD } from "@/kit/maps";
 import { findPlaces, place, type Place } from "@/kit/places";
+import { type Box } from "@/kit/pmtiles";
 import { mapLine } from "@/kit/status";
 import { store, useKit, type MapDownload } from "@/kit/store";
 import { radius, space, useColors } from "@/theme";
@@ -118,6 +126,16 @@ function Downloading({ d }: { d: MapDownload }) {
   );
 }
 
+// Asked the first time the person wants to see where they are. On Android an approximate location is enough.
+async function allowed(): Promise<boolean> {
+  if (Platform.OS !== "android") return LocationManager.requestPermissions();
+  const { ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION } = PermissionsAndroid.PERMISSIONS;
+  const got = await PermissionsAndroid.requestMultiple([ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION]);
+  return Object.values(got).includes(PermissionsAndroid.RESULTS.GRANTED);
+}
+
+const inside = ([w, s, e, n]: Box, [lon, lat]: [number, number]) => lon >= w && lon <= e && lat >= s && lat <= n;
+
 function Shown({
   id,
   file,
@@ -136,6 +154,26 @@ function Shown({
   const style = useMemo(() => mapStyle(mapsPath(), file, p?.langs ?? []), [file, p]);
   const [drawn, setDrawn] = useState<{ file: string; ok: boolean }>(); // how the map's last try at drawing went
   const ok = drawn?.file === file ? drawn.ok : undefined;
+  const camera = useRef<CameraRef>(null);
+  const [me, setMe] = useState<"finding" | "here" | "outside" | "off">(); // where the person is, once they ask
+  const waiting = useRef<(at: GeolocationPosition) => void>(undefined);
+  const unwait = () => waiting.current && LocationManager.removeListener(waiting.current);
+  useEffect(() => unwait, []);
+
+  // Flies to the person's first fix; the dot then follows them on its own
+  const locate = async () => {
+    if (!(await allowed())) return setMe("off");
+    unwait();
+    setMe((m) => (m === "here" || m === "outside" ? m : "finding")); // a dot already there stays while it asks again
+    waiting.current = (at) => {
+      unwait();
+      const here: [number, number] = [at.coords.longitude, at.coords.latitude];
+      const near = !!p && inside(p.bbox, here);
+      camera.current?.flyTo({ center: here, zoom: near ? 15 : WORLD });
+      setMe(near ? "here" : "outside");
+    };
+    LocationManager.addListener(waiting.current);
+  };
   return (
     <View style={styles.fill}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -153,20 +191,50 @@ function Shown({
           onDidFinishLoadingMap={() => setDrawn({ file, ok: true })}
           onDidFailLoadingMap={() => setDrawn({ file, ok: false })}
         >
-          {p ? <Camera initialViewState={{ center: [p.home.lon, p.home.lat], zoom: 12 }} maxZoom={18} /> : null}
+          {p ? (
+            <Camera ref={camera} initialViewState={{ center: [p.home.lon, p.home.lat], zoom: 12 }} maxZoom={18} />
+          ) : null}
+          {me && me !== "off" ? <NativeUserLocation /> : null}
         </MapView>
       </View>
       <View style={[styles.over, { top }]} pointerEvents="box-none">
-        <Pressable
-          testID="map-place"
-          accessibilityRole="button"
-          accessibilityHint="Pick another place"
-          onPress={onChange}
-          style={[styles.chip, { backgroundColor: c.cell }]}
-        >
-          <Text style={[styles.chipText, { color: c.ink }]}>{name}</Text>
-          <Icon name="down" color={c.accent} size={14} />
-        </Pressable>
+        <View style={styles.bar} pointerEvents="box-none">
+          <Pressable
+            testID="map-place"
+            accessibilityRole="button"
+            accessibilityHint="Pick another place"
+            onPress={onChange}
+            style={[styles.chip, { backgroundColor: c.cell }]}
+          >
+            <Text style={[styles.chipText, { color: c.ink }]}>{name}</Text>
+            <Icon name="down" color={c.accent} size={14} />
+          </Pressable>
+          <Pressable
+            testID="map-locate"
+            accessibilityRole="button"
+            accessibilityLabel="Show where I am"
+            onPress={locate}
+            hitSlop={space.s}
+            style={[styles.round, { backgroundColor: c.cell }]}
+          >
+            <Icon name="locate" color={c.accent} size={18} />
+          </Pressable>
+        </View>
+        {me === "finding" ? (
+          <View style={[styles.note, { backgroundColor: c.cell }]}>
+            <Text style={{ color: c.ink }}>Finding where you are</Text>
+          </View>
+        ) : null}
+        {me === "outside" ? (
+          <Pressable onPress={onChange} style={[styles.note, { backgroundColor: c.cell }]}>
+            <Text style={{ color: c.ink }}>You&apos;re outside {name}&apos;s map. Tap to pick another place.</Text>
+          </Pressable>
+        ) : null}
+        {me === "off" ? (
+          <Pressable onPress={() => Linking.openSettings()} style={[styles.note, { backgroundColor: c.cell }]}>
+            <Text style={{ color: c.ink }}>Location is off for Tinfoil Kit. Tap to turn it on in Settings.</Text>
+          </Pressable>
+        ) : null}
         {ok === false && !download ? (
           <Pressable onPress={() => store.getMap(id)} style={[styles.note, { backgroundColor: c.cell }]}>
             <Text style={{ color: c.ink }}>This map can&apos;t be shown. Tap to get it again.</Text>
@@ -193,6 +261,8 @@ const styles = StyleSheet.create({
   intro: { fontSize: 15, lineHeight: 21, marginHorizontal: space.xl, marginBottom: space.xl },
   headerButton: { fontSize: 17 },
   over: { position: "absolute", left: space.l, right: space.l, alignItems: "flex-start", gap: space.s },
+  bar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", alignSelf: "stretch" },
+  round: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   chip: {
     flexDirection: "row",
     alignItems: "center",
