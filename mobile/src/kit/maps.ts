@@ -5,6 +5,8 @@
 // phones' background downloaders ask for the rest of the file from where they stopped: here, the rest of the world.
 // So the app asks for each part itself, a few at a time, over Wi-Fi unless the person allows mobile data, and picks
 // up where it left off when it's next open.
+import type { StyleSpecification } from "@maplibre/maplibre-react-native";
+import { language_script_pairs, layers, namedFlavor } from "@protomaps/basemaps";
 import { Directory, File, FileMode, Paths } from "expo-file-system";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { addNetworkStateListener } from "expo-network";
@@ -31,6 +33,24 @@ export const STYLE_FILES = [
   ...FONTS.flatMap((f) => RANGES.map((r) => `fonts/${f}/${r}.pbf`)),
   ...["light.json", "light.png", "light@2x.json", "light@2x.png"].map((s) => `sprites/v4/${s}`),
 ];
+
+// The kit page's style for the map on this phone, with its labels in the place's own language where Protomaps has it
+export function mapStyle(dir: string, file: string, langs: string[]): StyleSpecification {
+  const known = new Set(language_script_pairs.map((p) => p.lang));
+  return {
+    version: 8,
+    glyphs: `file://${dir}/style/fonts/{fontstack}/{range}.pbf`,
+    sprite: `file://${dir}/style/sprites/v4/light`,
+    sources: {
+      protomaps: {
+        type: "vector",
+        url: `pmtiles://file://${dir}/${file}`,
+        attribution: "© OpenStreetMap contributors, Protomaps",
+      },
+    },
+    layers: layers("protomaps", namedFlavor("light"), { lang: langs.find((l) => known.has(l)) ?? "en" }),
+  };
+}
 
 // The phone's errors
 export const NOT_ON_WIFI = "ERR_NOT_ON_WIFI"; // only mobile data is there, and it isn't allowed

@@ -204,8 +204,7 @@ let started = false;
 export function startDownloads() {
   if (started || Platform.OS === "web") return;
   started = true;
-  const p = phone();
-  new Directory(`file://${p.library}/incoming`).create({ intermediates: true, idempotent: true });
+  const p = phone(); // its library is there by now: the native code makes it
   excludeFromBackup(p.library);
   const downloads = createDownloads(kitStore, p);
   void downloads.start();

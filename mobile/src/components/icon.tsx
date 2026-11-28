@@ -16,6 +16,7 @@ export const icons = {
   phone: { ios: "iphone", android: "smartphone", web: "smartphone" },
   back: { ios: "chevron.left", android: "chevron_left", web: "chevron_left" },
   forward: { ios: "chevron.right", android: "chevron_right", web: "chevron_right" },
+  down: { ios: "chevron.down", android: "expand_more", web: "expand_more" },
   home: { ios: "house", android: "home", web: "home" },
   search: { ios: "magnifyingglass", android: "search", web: "search" },
   find: { ios: "text.magnifyingglass", android: "find_in_page", web: "find_in_page" },

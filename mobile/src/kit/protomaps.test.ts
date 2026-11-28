@@ -1,15 +1,19 @@
 /// <reference types="node" />
-// The phone map's real sizes for a few places, from Protomaps' newest world map, at the zooms that could be the
-// phone's. It reads a few MB of the world map's directories over the internet, so it runs only when asked: the
-// phone app workflow's "map sizes" run sets MAP_SIZES.
+// Protomaps' newest world map, read over the internet, so these run only when asked:
+// - MAP_SIZES: the phone map's real sizes for a few places, at the zooms that could be the phone's. The phone app
+//   workflow's "map sizes" run sets it.
+// - E2E_MAP=folder: a small piece of the world map around Alabama's home, with the kit page's fonts and icons, for
+//   e2e/internet.py to serve in the end-to-end test, so the simulators show a real map.
 import { expect, test } from "@jest/globals";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import * as http from "node:http";
 import * as https from "node:https";
+import { dirname } from "node:path";
 
-import { BUILD_BASE, BUILDS, latest } from "./maps";
+import { ASSETS, BUILD_BASE, BUILDS, latest, STYLE_FILES } from "./maps";
 import { place } from "./places";
-import { plan, type Area } from "./pmtiles";
+import { head, plan, type Area } from "./pmtiles";
+import { concat } from "./test-map";
 
 const PLACES = ["us/rhode-island", "us/new-jersey", "us/alabama", "us/new-york", "us/texas", "us/california", "italy"];
 const WORLDS = [5, 6, 7];
@@ -87,4 +91,36 @@ const zoom = (id: number) => {
     expect(world[0]).toBeGreaterThan(0);
   },
   15 * 60_000,
+);
+
+(process.env.E2E_MAP ? test : test.skip)(
+  "a piece of the world map for the end-to-end test",
+  async () => {
+    const dir = process.env.E2E_MAP!;
+    const build = latest(JSON.parse((await get(BUILDS)).toString()));
+    const url = `${BUILD_BASE}/${build}`;
+    const range = async (offset: number, length: number) =>
+      new Uint8Array(await get(url, { Range: `bytes=${offset}-${offset + length - 1}` }));
+    // Wider than a phone's screen at the zoom the map opens at, around where it opens
+    const { home } = place("us/alabama")!;
+    const area: Area = {
+      world: 0,
+      detail: 13,
+      boxes: [[home.lon - 0.05, home.lat - 0.07, home.lon + 0.05, home.lat + 0.07]],
+    };
+    const p = await plan(range, area);
+    const parts: Uint8Array[] = [head(p, area, { ...home, zoom: 12 })];
+    for (const q of p.parts) parts.push(await range(p.header.dataOffset + q.offset, q.length));
+    const map = concat(parts);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(`${dir}/${build}`, map);
+    writeFileSync(`${dir}/builds.json`, JSON.stringify([{ key: build }]));
+    for (const f of STYLE_FILES) {
+      mkdirSync(dirname(`${dir}/assets/${f}`), { recursive: true });
+      writeFileSync(`${dir}/assets/${f}`, await get(`${ASSETS}/${encodeURI(f)}`));
+    }
+    console.log(`${build}: ${p.tiles.n} tiles, ${Math.round(map.length / 1e3)} KB`);
+    expect(p.tiles.n).toBeGreaterThan(20);
+  },
+  5 * 60_000,
 );

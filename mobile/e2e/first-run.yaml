@@ -1,7 +1,8 @@
-# The first screen, the try-it kit, Get more and reading a book, on a fresh install: CI runs it on an iPhone simulator
-# and an Android emulator (.github/workflows/mobile.yml), with e2e/kiwix.py standing in for Kiwix and serving the test
-# books tests/make_zims.py makes. Locally: install the app afresh, then maestro test mobile/e2e. CI installs it just
-# before; clearState would reinstall it on iOS, under another folder name.
+# The first screen, the try-it kit, Get more, the map and reading a book, on a fresh install: CI runs it on an iPhone
+# simulator and an Android emulator (.github/workflows/mobile.yml), with e2e/internet.py standing in for Kiwix, serving
+# the test books tests/make_zims.py makes, and for Protomaps, serving a piece of the real world map around Huntsville.
+# Locally: install the app afresh, then maestro test mobile/e2e. CI installs it just before; clearState would
+# reinstall it on iOS, under another folder name.
 appId: com.tinfoilkit.app
 ---
 - launchApp
@@ -20,6 +21,16 @@ appId: com.tinfoilkit.app
 - tapOn: "Get more"
 - assertVisible: "Use mobile data"
 - takeScreenshot: 4-get-more
+# The map of where you live: picked from the kit's places, cut from the world map on the phone, then drawn
+- tapOn: "Map"
+- assertVisible: "Where do you live.*"
+- takeScreenshot: 5-places
+- tapOn:
+    id: "place-us/alabama"
+- extendedWaitUntil:
+    visible: "Map of Alabama"
+    timeout: 120000
+- takeScreenshot: 6-map
 # A book opens at its home page, read from its file on the phone
 - tapOn: "Library"
 # iOS reads the row as one: its icon, title and status
@@ -27,7 +38,7 @@ appId: com.tinfoilkit.app
 - extendedWaitUntil:
     visible: "When to seek urgent help"
     timeout: 30000
-- takeScreenshot: 5-reading
+- takeScreenshot: 7-reading
 # Search finds pages by title, and Back returns to the page before
 - tapOn:
     id: "search-book"
@@ -38,7 +49,7 @@ appId: com.tinfoilkit.app
 - extendedWaitUntil:
     visible: ".*Oral rehydration solution.*"
     timeout: 30000
-- takeScreenshot: 6-found
+- takeScreenshot: 8-found
 - tapOn:
     id: "book-back"
 - extendedWaitUntil:

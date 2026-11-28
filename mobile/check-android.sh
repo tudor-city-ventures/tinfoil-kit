@@ -27,6 +27,9 @@ repositories { $repos }
 dependencies { compileOnly($android) }
 sourceSets["main"].kotlin.setSrcDirs(listOf("stubs", "$here/modules"))
 sourceSets["main"].kotlin.exclude("**/KitFilesModule.kt", "**/BookView.kt")
+// Android's target, whatever JDK runs this: Java and Kotlin must agree, and this Kotlin can't target the newest JDKs
+java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 EOF
 cat > "$expo/Promise.kt" << 'EOF'
 package expo.modules.kotlin

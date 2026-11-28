@@ -7,6 +7,7 @@ import {
   BUILDS,
   createMaps,
   latest,
+  mapStyle,
   NOT_ON_WIFI,
   OFFLINE,
   STYLE_FILES,
@@ -341,4 +342,17 @@ test("the newest world map of the layers the kit page's style is for", () => {
     ]),
   ).toBe("20261127.pmtiles");
   expect(() => latest({ error: "busy" })).toThrow("Protomaps lists no world map at the moment");
+});
+
+test("the map's style: the file on the phone, the fonts and icons beside it, labels in the place's own language", () => {
+  const style = mapStyle("/docs/maps", "italy-20261127.pmtiles", ["xx", "it"]);
+  expect(style.sources.protomaps).toMatchObject({
+    type: "vector",
+    url: "pmtiles://file:///docs/maps/italy-20261127.pmtiles",
+  });
+  expect(style.glyphs).toBe("file:///docs/maps/style/fonts/{fontstack}/{range}.pbf");
+  expect(style.sprite).toBe("file:///docs/maps/style/sprites/v4/light");
+  expect(STYLE_FILES).toContain("sprites/v4/light@2x.png");
+  expect(JSON.stringify(style.layers)).toContain('"name:it"');
+  expect(JSON.stringify(mapStyle("/d", "x.pmtiles", ["xx"]).layers)).not.toContain('"name:xx"'); // one Protomaps lacks
 });

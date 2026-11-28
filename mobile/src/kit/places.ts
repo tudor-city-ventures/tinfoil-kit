@@ -11,18 +11,20 @@ export type Place = {
   bbox: Box;
   home: { label: string; lat: number; lon: number };
   also: string[]; // other names people know it by
+  langs: string[]; // its languages, the most spoken first
 };
 
-type Region = Omit<Place, "bbox" | "also"> & { bbox: number[]; also?: string[] };
+type Region = Omit<Place, "bbox" | "also" | "langs"> & { bbox: number[]; also?: string[]; langs?: string[] };
 
 export const places: Place[] = (regionsJson.regions as Region[]).map(
-  ({ id, name, group, bbox: [w, s, e, n], home, also }) => ({
+  ({ id, name, group, bbox: [w, s, e, n], home, also, langs }) => ({
     id,
     name,
     group,
     bbox: [w, s, e, n],
     home,
     also: also ?? [],
+    langs: langs ?? [],
   }),
 );
 

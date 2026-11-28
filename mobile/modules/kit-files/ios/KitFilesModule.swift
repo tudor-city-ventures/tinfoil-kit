@@ -35,7 +35,9 @@ public class KitFilesModule: Module {
 
     Function("libraryPath") { () -> String in
       let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-      return documents.appendingPathComponent("library", isDirectory: true).path
+      let library = documents.appendingPathComponent("library", isDirectory: true)
+      try? FileManager.default.createDirectory(at: library, withIntermediateDirectories: true)
+      return library.path
     }
 
     AsyncFunction("startBook") { (o: BookOptions) in

@@ -22,8 +22,9 @@ class KitFilesModule : Module() {
     }
 
     // Books download with the app closed, and are checked and filed in the library as they land: see Books.kt
+    // Made here: outside the app's private folders, Expo's file system writes only where something already is
     Function("libraryPath") {
-      books().library.path
+      books().library.apply { mkdirs() }.path
     }
 
     AsyncFunction("startBook") { o: BookOptions ->

@@ -10,8 +10,12 @@ import { useColors } from "@/theme";
 
 SplashScreen.preventAutoHideAsync();
 store.load().then(() => {
-  startDownloads();
-  startMaps();
+  for (const start of [startDownloads, startMaps])
+    try {
+      start();
+    } catch (e) {
+      console.error(e); // in the phone's log, and the other still starts
+    }
 });
 
 export default function RootLayout() {

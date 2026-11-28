@@ -50,6 +50,11 @@ jobs:
       - run: npm run check
         env:
           ZIM_FIXTURES: ${{ runner.temp }}/zim
+      # The Android build's Java: the runner's own is newer than its Kotlin knows
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: 17
       # A minute, where the Android build below takes 13 to find a mistake in its Kotlin
       - run: npm run check:android
 
@@ -68,7 +73,7 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --ignore-scripts
-      - run: npx jest src/kit/map-sizes.test.ts
+      - run: npx jest src/kit/protomaps.test.ts
         env:
           MAP_SIZES: "1"
 
@@ -110,8 +115,11 @@ jobs:
       - name: Build the app
         if: steps.app.outputs.cache-hit != 'true'
         working-directory: mobile
-        env:
-          EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
+        env: &internet # e2e/internet.py stands in for Kiwix and Protomaps
+          EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries
+          EXPO_PUBLIC_PROTOMAPS_BUILDS: http://localhost:19100/protomaps/builds.json
+          EXPO_PUBLIC_PROTOMAPS_BUILD_BASE: http://localhost:19100/protomaps
+          EXPO_PUBLIC_BASEMAPS_ASSETS: http://localhost:19100/assets
         run: |
           npx expo prebuild --platform android --no-install
           cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --console=plain
@@ -128,8 +136,7 @@ jobs:
       - name: Put the new JavaScript in the app
         if: steps.app.outputs.cache-hit == 'true'
         working-directory: mobile
-        env:
-          EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries
+        env: *internet
         run: |
           apk=android/app/build/outputs/apk/release/app-release.apk
           w="$RUNNER_TEMP/js" && mkdir -p "$w/assets"
@@ -175,12 +182,16 @@ jobs:
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
       - name: Make test books with libzim
         run: *books
+      # A few MB of Protomaps' newest world map, so the test's map is a real one
+      - name: Make a piece of the world map
+        working-directory: mobile
+        run: &map E2E_MAP="$RUNNER_TEMP/protomaps" npx jest src/kit/protomaps.test.ts
       - name: Test the app
         run: |
-          python3 mobile/e2e/kiwix.py 19100 "$RUNNER_TEMP/zim" > "$RUNNER_TEMP/kiwix.log" 2>&1 &
+          python3 mobile/e2e/internet.py 19100 "$RUNNER_TEMP/zim" "$RUNNER_TEMP/protomaps" > "$RUNNER_TEMP/internet.log" 2>&1 &
           adb reverse tcp:19100 tcp:19100    # the emulator's localhost:19100 is the runner's
           maestro test mobile/e2e --test-output-dir e2e-output
-      # What was on screen when a test failed, what the app asked of the stand-in Kiwix, and the app's log
+      # What was on screen when a test failed, what the app asked of the stand-in internet, and the app's log
       - name: Show what went wrong
         if: failure()
         run: &why |
@@ -205,8 +216,8 @@ jobs:
               if m.get("status") == "FAILED":
                   print(json.dumps(c.get("command"))[:400])
                   print((m.get("error") or {}).get("message"))' {} \; || true
-          echo "== Asked of the stand-in Kiwix"
-          cat "$RUNNER_TEMP/kiwix.log" || true
+          echo "== Asked of the stand-in internet"
+          cat "$RUNNER_TEMP/internet.log" || true
           echo "== The app's log"
           if command -v xcrun > /dev/null; then
             logs() { xcrun simctl spawn booted log show --last 10m --style compact --info --predicate "$1" | tail -n "$2"; }
@@ -269,8 +280,7 @@ jobs:
       - name: Build the app
         if: steps.app.outputs.cache-hit != 'true'
         working-directory: mobile
-        env:
-          EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
+        env: *internet
         run: |
           npx expo prebuild --platform ios --no-install
           cd ios && pod install
@@ -289,8 +299,7 @@ jobs:
       - name: Put the new JavaScript in the app
         if: steps.app.outputs.cache-hit == 'true'
         working-directory: mobile
-        env:
-          EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries
+        env: *internet
         run: |
           app=ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
           rm -rf "$app/assets"
@@ -312,9 +321,12 @@ jobs:
         run: *maestro
       - name: Make test books with libzim
         run: *books
+      - name: Make a piece of the world map
+        working-directory: mobile
+        run: *map
       - name: Test the app
         run: |
-          python3 mobile/e2e/kiwix.py 19100 "$RUNNER_TEMP/zim" > "$RUNNER_TEMP/kiwix.log" 2>&1 &
+          python3 mobile/e2e/internet.py 19100 "$RUNNER_TEMP/zim" "$RUNNER_TEMP/protomaps" > "$RUNNER_TEMP/internet.log" 2>&1 &
           maestro test mobile/e2e --test-output-dir e2e-output
       - name: Show what went wrong
         if: failure()
