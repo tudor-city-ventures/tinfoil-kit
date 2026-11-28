@@ -1,15 +1,37 @@
 import { NetworkStateType, useNetworkState } from "expo-network";
 import { router } from "expo-router";
-import { ScrollView } from "react-native";
+import { Alert, ScrollView } from "react-native";
 
 import { Group, Pill, Row } from "@/components/group";
 import { catalog } from "@/kit/catalog";
+import { removeBook } from "@/kit/downloads";
+import { size } from "@/kit/format";
 import { percent, statusLine } from "@/kit/status";
-import { store, useKit } from "@/kit/store";
+import { store, useKit, type Item } from "@/kit/store";
 
 const byId = new Map(catalog.map((b) => [b.id, b]));
 
-export default function Library() {
+// Touch and hold: a book comes off the phone, or stops downloading
+function offer(id: string, it: Item) {
+  const title = byId.get(id)!.title;
+  if (it.status === "ready")
+    Alert.alert(
+      `Remove ${title}?`,
+      `It comes off this phone, freeing ${size(it.total)}. You can get it again in Get more.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Remove", style: "destructive", onPress: () => removeBook(id) },
+      ],
+    );
+  else
+    Alert.alert(`Stop downloading ${title}?`, "What has downloaded so far is deleted.", [
+      { text: "Keep downloading", style: "cancel" },
+      { text: "Stop", style: "destructive", onPress: () => removeBook(id) },
+    ]);
+}
+
+// The books on this phone and the ones on their way, and a Tinfoil Kit nearby
+export function Library() {
   const { items, cellular } = useKit();
   const net = useNetworkState().type;
   const onWifi = net === NetworkStateType.WIFI || net === NetworkStateType.ETHERNET;
@@ -31,11 +53,12 @@ export default function Library() {
               detail={statusLine(it, onWifi, cellular)}
               right={it.status === "downloading" ? <Pill text={`${percent(it)}%`} /> : undefined}
               onPress={it.status === "failed" ? () => store.retry(id) : undefined}
+              onLongPress={() => offer(id, it)}
             />
           ))}
         </Group>
       ) : null}
-      <Group label="On this phone">
+      <Group label="On this phone" footer={ready.length > 0 ? "Touch and hold a book to remove it." : undefined}>
         {ready.length > 0 ? (
           ready.map(([id, it]) => (
             <Row
@@ -45,6 +68,7 @@ export default function Library() {
               title={byId.get(id)!.title}
               detail={statusLine(it, onWifi, cellular)}
               onPress={() => router.push({ pathname: "/book/[id]", params: { id } })}
+              onLongPress={() => offer(id, it)}
             />
           ))
         ) : (

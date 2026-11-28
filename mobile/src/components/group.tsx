@@ -31,10 +31,11 @@ type RowProps = {
   accent?: boolean; // an orange tile, for what's happening now
   right?: ReactNode;
   onPress?: () => void;
+  onLongPress?: () => void;
   testID?: string;
 };
 
-export function Row({ title, detail, icon, accent, right, onPress, testID }: RowProps) {
+export function Row({ title, detail, icon, accent, right, onPress, onLongPress, testID }: RowProps) {
   const c = useColors();
   const body = (
     <View style={styles.row}>
@@ -50,12 +51,13 @@ export function Row({ title, detail, icon, accent, right, onPress, testID }: Row
       {right}
     </View>
   );
-  if (!onPress) return <View testID={testID}>{body}</View>;
+  if (!onPress && !onLongPress) return <View testID={testID}>{body}</View>;
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
       onPress={onPress}
+      onLongPress={onLongPress}
       android_ripple={{ color: c.line }}
       style={({ pressed }) => (pressed && Platform.OS === "ios" ? { backgroundColor: c.line } : null)}
     >

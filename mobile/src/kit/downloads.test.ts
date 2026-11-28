@@ -47,6 +47,7 @@ function fakePhone() {
     checksum: async () => SUM,
     free: () => phone.space,
     exists: (p: string) => phone.files.has(p),
+    delete: (p: string) => void phone.files.delete(p),
   };
   return phone;
 }
@@ -220,4 +221,26 @@ test("on the next start: what finished while the app was closed is taken in, los
   expect(phone.stopped).toEqual(["x@1"]);
   expect(phone.started.map((o) => o.book)).toEqual([b.id]); // b's download was lost: it starts over
   expect(store.get().items[b.id]).toMatchObject({ status: "downloading", task: phone.started[0].id });
+});
+
+test("a book comes off the phone with its file, and one still downloading stops", async () => {
+  const { store, phone, downloads } = await setup();
+  await downloads.start();
+  store.queue(a.id);
+  store.queue(b.id);
+  await settle();
+  const [oa, ob] = phone.started;
+  set(phone, oa.id, { state: "ready" });
+  phone.files.add(`/docs/library/${zim(a.id)}`);
+  await later();
+  expect(store.get().items[a.id].status).toBe("ready");
+
+  downloads.remove(a.id);
+  expect(store.get().items[a.id]).toBeUndefined();
+  expect(phone.files.has(`/docs/library/${zim(a.id)}`)).toBe(false);
+
+  downloads.remove(b.id);
+  await later();
+  expect(store.get().items[b.id]).toBeUndefined();
+  expect(phone.stopped).toEqual([ob.id]);
 });

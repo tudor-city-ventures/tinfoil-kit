@@ -17,6 +17,7 @@ import {
   type BookState,
 } from "../../modules/kit-files";
 
+import { closeBook } from "@/kit/books";
 import { catalog } from "@/kit/catalog";
 import { size } from "@/kit/format";
 import { checksum, findFile, type ZimFile } from "@/kit/kiwix";
@@ -33,6 +34,7 @@ export type Phone = {
   checksum(url: string): Promise<string | undefined>;
   free(): number;
   exists(path: string): boolean;
+  delete(path: string): void; // a file, if it's there
 };
 
 const AGAIN = 60_000; // when Kiwix's catalog couldn't be reached, ask again after this long
@@ -161,6 +163,13 @@ export function createDownloads(store: Store, phone: Phone) {
       ready = true;
       pump();
     },
+    // A book off the phone: out of the list, its file deleted, and its download, if it has one, stopped at the next look
+    remove(id: string) {
+      const it = store.get().items[id];
+      if (!it) return;
+      store.remove(id);
+      if (it.file) phone.delete(`${phone.library}/${it.file}`);
+    },
     // Back in the app, or on another network: books that couldn't reach Kiwix ask again now, and the downloads are
     // looked at at once, since the phone may have finished some meanwhile.
     wake() {
@@ -195,19 +204,29 @@ function phone(): Phone {
     checksum,
     free: () => Paths.availableDiskSpace,
     exists: (path) => new File(`file://${path}`).exists,
+    delete(path) {
+      closeBook(path);
+      const f = new File(`file://${path}`);
+      if (f.exists) f.delete();
+    },
   };
 }
 
-let started = false;
+let running: ReturnType<typeof createDownloads> | undefined;
 
 // Called once the store has loaded.
 export function startDownloads() {
-  if (started || Platform.OS === "web") return;
-  started = true;
+  if (running || Platform.OS === "web") return;
   const p = phone(); // its library is there by now: the native code makes it
   excludeFromBackup(p.library);
-  const downloads = createDownloads(kitStore, p);
+  const downloads = (running = createDownloads(kitStore, p));
   void downloads.start();
   AppState.addEventListener("change", (s) => s === "active" && downloads.wake());
   addNetworkStateListener(() => downloads.wake());
+}
+
+// Takes a book off the phone, or stops its download
+export function removeBook(id: string) {
+  if (running) running.remove(id);
+  else kitStore.remove(id);
 }
