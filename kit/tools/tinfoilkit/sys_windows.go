@@ -196,3 +196,25 @@ func startFile(p string) error {
 // writable is whether this user may save in a folder. Windows' read-only mark means nothing on a folder, so any
 // folder there is is one (as Python's os.access says too).
 func writable(p string) bool { return isDir(p) }
+
+// noCache is for a Mac: Windows can't write past its memory without writing whole sectors.
+func noCache(*os.File) {}
+
+// dropCache saves what's been written to f on the drive itself.
+func dropCache(f *os.File) error { return f.Sync() }
+
+// openFresh opens a file to read straight from its drive, not from what Windows remembers of it
+// (FILE_FLAG_NO_BUFFERING), which reads only whole sectors into memory aligned to them: copier's buffer is.
+func openFresh(p string) (*os.File, error) {
+	name, err := syscall.UTF16PtrFromString(p)
+	if err != nil {
+		return nil, err
+	}
+	h, err := syscall.CreateFile(name, syscall.GENERIC_READ,
+		syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE|syscall.FILE_SHARE_DELETE, nil, syscall.OPEN_EXISTING,
+		syscall.FILE_ATTRIBUTE_NORMAL|0x20000000|0x08000000, 0) // FILE_FLAG_NO_BUFFERING, FILE_FLAG_SEQUENTIAL_SCAN
+	if err != nil {
+		return nil, &os.PathError{Op: "open", Path: p, Err: err}
+	}
+	return os.NewFile(uintptr(h), p), nil
+}

@@ -1783,7 +1783,8 @@ func startServer(servers *[]*server, logPath, dir string, prog string, args ...s
 func itoa(n int) string { return strconv.Itoa(n) }
 
 // testMaps checks the map's servers. starter: a try-it kit, which gets address search and directions with the rest.
-func testMaps(root string, m *obj, check func(string, bool, string), servers *[]*server, logs string, starter bool) {
+// off: kit.json switches address search off (a copy that left it out does).
+func testMaps(root string, m *obj, check func(string, bool, string), servers *[]*server, logs string, starter, off bool) {
 	home := m.child("home")
 	pm := runtimeBinary(root, "pmtiles", "pmtiles")
 	tiles := filepath.Join(dlDir(root), "maps", "tiles", "basemap.pmtiles")
@@ -1809,6 +1810,8 @@ func testMaps(root string, m *obj, check func(string, bool, string), servers *[]
 	gdir := filepath.Join(dlDir(root), "maps", "geocoder")
 	have := java != "" && photon != "" && isDir(filepath.Join(gdir, "photon_data"))
 	switch {
+	case !have && off:
+		log("  SKIP  address search: not in this kit")
 	case !have && !truthy(m.get("geocoder_country")):
 		log("  SKIP  address search: nobody publishes one for this map's area")
 	case !have && starter:
@@ -2126,7 +2129,9 @@ func cmdTest(root string, a *cliArgs) {
 			}
 		}
 		if m := mapsSettings(cfg); truthy(m.get("enabled")) {
-			testMaps(root, m, check, &servers, logs, isTrue(cfg.child("settings").get("starter_only")))
+			user := cfg.child("maps")
+			off := user != nil && user.has("geocoder_country") && !truthy(user.get("geocoder_country"))
+			testMaps(root, m, check, &servers, logs, isTrue(cfg.child("settings").get("starter_only")), off)
 		}
 	}()
 	failed := 0

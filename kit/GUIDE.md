@@ -234,6 +234,23 @@ at the top of this page. Without a good graphics card the AI is slow: use `Gemma
 extra package for the AI: run `sudo dnf install openssl3-libs` while you still have internet. If the window says another
 library is missing, install that too.
 
+## Make a copy for someone
+
+A copy goes on another drive and starts on its own on any Mac, Windows PC or Linux PC, with no internet: one to give
+to family or friends, or a spare. It takes as much of this kit as fits, and nothing downloads, so you can make one in an
+outage. Plug in both drives, and in the app folder run `./kit copy` (`.\kit.cmd copy` on Windows). It asks:
+
+- which drive;
+- what goes on it: the essentials (the programs and the most important books), the essentials and the map, everything
+  that fits, or each part, with the size of each;
+- whether to add the AI (without it, Ask finds answers in the books), and whether to bring your notes and map pins.
+
+It erases a drive only if it must, once you type the drive's name: one that isn't exFAT, or is too full, and a kit
+already on it is replaced. A Mac erases it for you. On Windows, format it yourself first (in File Explorer, right-click
+the drive, Format, exFAT); on Linux, use the Disks app. Then it reads every file back to check the drive, starts the
+copy once to be sure it works, and opens a card to print and keep with the drive. If it stops partway, run it again: it
+carries on.
+
 ## A home server (advanced)
 
 A computer that stays on, like a Linux box, a Mac mini or a Windows PC, can serve the kit to every phone and laptop at

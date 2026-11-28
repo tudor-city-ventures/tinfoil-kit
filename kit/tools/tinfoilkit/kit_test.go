@@ -1081,7 +1081,7 @@ func TestMapsSettings(t *testing.T) {
 		var servers []*server
 		said := captured(t, func() {
 			testMaps(noMap, mapsSettings(newObj("maps", newObj("enabled", true, "region", place))),
-				func(name string, ok bool, detail string) { seen = append(seen, name) }, &servers, noMap, false)
+				func(name string, ok bool, detail string) { seen = append(seen, name) }, &servers, noMap, false, false)
 		})
 		return seen, said
 	}
@@ -1703,5 +1703,147 @@ func TestRoadsFromBefore(t *testing.T) {
 	if sha := roadsFromBefore(dest, old, one, one.files[0], sum("new jersey's roads")); sha == "" ||
 		!exists(filepath.Join(dest, "region.osm.pbf")) || !exists(filepath.Join(dest, "new-york-latest.osm.pbf")) {
 		t.Errorf("going back to one place didn't reuse its road data: %q", sha)
+	}
+}
+
+// What a copy takes as a drive's room runs out: each preset's parts in order, the programs whatever the room, and
+// address search only with the map.
+func TestCopyFill(t *testing.T) {
+	part := func(id, group string, mb int64, essential bool, priority int64) *copyPart {
+		return &copyPart{id: id, title: id, group: group, bytes: mb * 1_000_000, essential: essential, priority: priority}
+	}
+	parts := []*copyPart{part("programs", "Programs", 900, false, 0), part("map", "Maps", 9000, false, 1),
+		part("addresses", "Maps", 12000, false, 3), part("Small", "AI models", 5000, false, 1),
+		part("med", "Medical", 2000, true, 1), part("wiki", "Reference", 127000, false, 2),
+		part("diy", "Repair", 2000, false, 2), part("crafts", "Repair", 1000, false, 3), part("ollama", "Extras", 500, false, 3)}
+	ids := func(took []*copyPart) string {
+		var out []string
+		for _, p := range took {
+			out = append(out, p.id)
+		}
+		return strings.Join(out, " ")
+	}
+	for _, c := range []struct {
+		preset string
+		ai     []string
+		gb     int64
+		want   string
+	}{
+		{"essentials", nil, 0, "programs"},
+		{"essentials", nil, 100, "programs med"},
+		{"essentials", []string{"Small"}, 100, "programs Small med"},
+		{"maps", nil, 15, "programs med map"},
+		{"maps", nil, 100, "programs med map addresses"},
+		{"maps", nil, 5, "programs med"},
+		{"everything", nil, 100, "programs med map diy addresses crafts ollama"},
+		{"everything", nil, 200, "programs med map wiki diy addresses crafts ollama"},
+	} {
+		if took, _ := copyFill(parts, copyWishes(parts, c.preset, c.ai), c.gb*GB); ids(took) != c.want {
+			t.Errorf("%s with %v in %d GB: %s, not %s", c.preset, c.ai, c.gb, ids(took), c.want)
+		}
+	}
+	if took, _ := copyFill(parts, []string{"addresses", "med"}, 100*GB); ids(took) != "med" {
+		t.Errorf("address search went without the map: %s", ids(took))
+	}
+
+	d := &copyDrive{name: "LITTLE", room: 20 * GB, erasedRoom: 110 * GB}
+	ch, err := copyChoose(parts, d, "maps", nil, nil, nil, nil, false)
+	if err != nil || ids(ch.parts) != "programs med map" || ch.erase || ch.replace || ids(ch.left) != "addresses" {
+		t.Errorf("a drive with room for some of it: %s, left %s, erase %v, %v", ids(ch.parts), ids(ch.left), ch.erase, err)
+	}
+	if ch, err = copyChoose(parts, d, "maps", nil, nil, nil, nil, true); err != nil || !ch.erase || ch.left != nil {
+		t.Errorf("allowed to erase, what doesn't fit as it is erases it: erase %v, left %s, %v", ch.erase, ids(ch.left), err)
+	}
+	d.kit = true
+	if ch, err = copyChoose(parts, d, "essentials", nil, nil, []string{"diy"}, nil, true); err != nil || ch.erase ||
+		!ch.replace || ids(ch.parts) != "programs med diy" {
+		t.Errorf("what fits as it is replaces the kit there, and erases nothing: %s, erase %v, %v", ids(ch.parts), ch.erase, err)
+	}
+	if ch, _ = copyChoose(parts, d, "maps", nil, []string{"addresses"}, nil, nil, false); ids(ch.parts) != "programs map addresses" {
+		t.Errorf("--only address search brings the map: %s", ids(ch.parts))
+	}
+	d.mustErase = "it's formatted as FAT32"
+	if ch, err = copyChoose(parts, d, "everything", nil, nil, []string{"wiki"}, nil, false); err == nil ||
+		!strings.Contains(err.Error(), "has room for 110.0 GB, even erased") {
+		t.Errorf("more than fits even erased: %v", err)
+	}
+}
+
+// What names in --only, --add and --skip mean.
+func TestCopyWords(t *testing.T) {
+	var parts []*copyPart
+	for _, p := range [][2]string{{"programs", "Programs"}, {"map", "Maps"}, {"addresses", "Maps"}, {"Small", "AI models"},
+		{"Big", "AI models"}, {"wikipedia_en_all_maxi", "Reference"}, {"wikipedia_es_top_maxi", "Reference"},
+		{"diy.stackexchange.com_en_all", "Repair"}, {"zimgit-water_en", "Preparedness"}, {"Ollama-macOS", "Extras"}} {
+		parts = append(parts, &copyPart{id: p[0], group: p[1]})
+	}
+	for said, want := range map[string]string{
+		"maps":                 "map",
+		"map, addresses":       "map addresses",
+		"ai":                   "Small Big",
+		"small":                "Small",
+		"wikipedia":            "wikipedia_en_all_maxi wikipedia_es_top_maxi",
+		"stackexchange":        "diy.stackexchange.com_en_all",
+		"zimgit-water_en  big": "zimgit-water_en Big",
+		"books":                "wikipedia_en_all_maxi wikipedia_es_top_maxi diy.stackexchange.com_en_all zimgit-water_en",
+		"extras":               "Ollama-macOS",
+	} {
+		if got, err := copyWords(parts, said); err != nil || strings.Join(got, " ") != want {
+			t.Errorf("%q: %v, not %s (%v)", said, got, want, err)
+		}
+	}
+	if _, err := copyWords(parts, "water, atlantis"); err == nil || !strings.Contains(err.Error(), "no atlantis") {
+		t.Errorf("a name this kit doesn't have: %v", err)
+	}
+}
+
+// Which drive formats a copy can stay in, and the names exFAT takes.
+func TestCopyDriveFormat(t *testing.T) {
+	for format, ok := range map[string]bool{"ExFAT": true, "exfat": true, "MS-DOS (FAT32)": false, "vfat": false,
+		"APFS": false, "Mac OS Extended (Journaled)": false, "NTFS": false, "Windows NT File System (NTFS)": false} {
+		if p := copyFormatProblem(format); (p == "") != ok {
+			t.Errorf("%s: %q", format, p)
+		}
+	}
+	for name, want := range map[string]string{"LITTLE ONE": "LITTLE ONE", "Samsung T7 Shield": "Samsung T7",
+		"Grandma's drive": "Grandmas dr", "Ünï": "n", "": "TINFOILKIT", "...": "TINFOILKIT"} {
+		if got := exfatLabel(name); got != want {
+			t.Errorf("%q: %q, not %q", name, got, want)
+		}
+	}
+}
+
+// The disk a drive is on, as diskutil lists it: an APFS volume's is the disk under its container, and every volume
+// mounted from that disk counts, so erasing never takes another volume with it.
+func TestMacDisk(t *testing.T) {
+	list, _ := plist([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>AllDisksAndPartitions</key><array>
+<dict><key>Content</key><string>GUID_partition_scheme</string><key>DeviceIdentifier</key><string>disk4</string>
+ <key>Partitions</key><array>
+  <dict><key>Content</key><string>EFI</string><key>DeviceIdentifier</key><string>disk4s1</string></dict>
+  <dict><key>Content</key><string>Apple_APFS</string><key>DeviceIdentifier</key><string>disk4s2</string></dict>
+ </array><key>Size</key><integer>128000000000</integer></dict>
+<dict><key>APFSPhysicalStores</key><array><dict><key>DeviceIdentifier</key><string>disk4s2</string></dict></array>
+ <key>APFSVolumes</key><array>
+  <dict><key>DeviceIdentifier</key><string>disk5s1</string><key>MountPoint</key><string>/Volumes/LITTLE</string></dict>
+  <dict><key>DeviceIdentifier</key><string>disk5s2</string><key>MountPoint</key><string>/Volumes/Backups</string></dict>
+ </array><key>DeviceIdentifier</key><string>disk5</string><key>OSInternal</key><false/></dict>
+<dict><key>Content</key><string>FDisk_partition_scheme</string><key>DeviceIdentifier</key><string>disk6</string>
+ <key>Partitions</key><array><dict><key>DeviceIdentifier</key><string>disk6s1</string>
+  <key>MountPoint</key><string>/Volumes/NO NAME</string></dict></array></dict>
+<dict><key>DeviceIdentifier</key><string>disk7</string><key>MountPoint</key><string>/Volumes/WHOLE</string></dict>
+</array></dict></plist>`)).(map[string]any)
+	for dev, want := range map[string]string{"disk5s1": "disk4 /Volumes/LITTLE /Volumes/Backups",
+		"disk6s1": "disk6 /Volumes/NO NAME", "disk7": "disk7 /Volumes/WHOLE", "": ""} {
+		disk, mounts := macDiskIn(dev, list)
+		if got := strings.TrimSpace(disk + " " + strings.Join(mounts, " ")); got != want {
+			t.Errorf("%s: %q, not %q", dev, got, want)
+		}
+	}
+	info, _ := plist([]byte(`<plist version="1.0"><dict><key>Internal</key><false/><key>Ejectable</key><true/>
+<key>Size</key><integer>64000000000</integer></dict></plist>`)).(map[string]any)
+	if info["Internal"] != false || info["Ejectable"] != true || info["Size"] != "64000000000" {
+		t.Errorf("diskutil info: %v", info)
 	}
 }

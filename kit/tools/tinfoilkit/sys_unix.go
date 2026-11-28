@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -109,3 +110,40 @@ func startFile(string) error { return errors.ErrUnsupported }
 
 // writable is whether this user may save in a folder.
 func writable(p string) bool { return syscall.Access(p, 2) == nil }
+
+// noCache keeps what's written to f out of the computer's memory: a Mac's F_NOCACHE (an argument that isn't 0 turns
+// caching off). Linux has no such switch: dropCache has it forget the file once it's saved.
+func noCache(f *os.File) {
+	if mac {
+		syscall.FcntlFlock(f.Fd(), 48, &syscall.Flock_t{})
+	}
+}
+
+// dropCache saves what's been written to f on the drive itself, and has the computer forget it, so that reading it
+// back reads the drive.
+func dropCache(f *os.File) error {
+	if err := f.Sync(); err != nil { // on a Mac, F_FULLFSYNC: past the drive's own cache too
+		return err
+	}
+	forget(f)
+	return nil
+}
+
+// openFresh opens a file to read straight from its drive, not from what the computer remembers of it.
+func openFresh(p string) (*os.File, error) {
+	f, err := os.Open(p)
+	if err == nil {
+		noCache(f)
+		forget(f)
+	}
+	return f, err
+}
+
+// forget has Linux drop what it remembers of a file (posix_fadvise POSIX_FADV_DONTNEED), which it does at once for
+// what's saved.
+func forget(f *os.File) {
+	nr := map[string]uintptr{"amd64": 221, "arm64": 223}[runtime.GOARCH]
+	if runtime.GOOS == "linux" && nr != 0 {
+		syscall.Syscall6(nr, f.Fd(), 0, 0, 4, 0, 0)
+	}
+}

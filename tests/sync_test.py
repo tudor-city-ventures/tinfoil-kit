@@ -1,8 +1,8 @@
 """Sync engine test: runs the kit's own program (tools/tinfoilkit-*, which tools/tinfoilkit/build.sh builds)
 against the mock internet (tests/mock_remote.py) with tiny made-up books and models. Covers downloads, resume,
 checksums, updates, leftover partial downloads, verify --fix, adopting files already on the drive, offline runs, exit
-codes, which release of a program is taken, ./kit update, the ./kit wrapper, SETUP.command's choices, UNINSTALL, and
-the launcher's first model and ports.
+codes, which release of a program is taken, ./kit update, the ./kit wrapper, SETUP.command's choices, UNINSTALL, the
+launcher's first model and ports, and ./kit copy.
 Needs python3, curl and the built program, so it runs in the quick gate and in cloud sessions.
 usage: python3 tests/sync_test.py
 """
@@ -3592,6 +3592,475 @@ Server(("::1", port), Page).serve_forever()
     check("region --languages: where you live's, the first place's", rc == 0 and out.startswith("de\t"), out)
     rc, out = kit("region", "US Northeast (CT, MA, ME, NH, NJ, NY, PA, RI, VT)", root=rk)
     check("region: a place whose name has commas in it", rc == 0 and rk_cfg()[0]["region"] == "us-northeast", out)
+
+    # ./kit copy: a copy of a kit on another drive, as much as fits. The kit is made here as a sync leaves one: the
+    # programs for each computer (this one's are stand-ins that run the mocks, so the copy's own test passes), the map
+    # with directions and address search, two AI models and five books. KIT_DRIVES holds the drives plugged in, both
+    # KIT_DRIVE_BYTES big and formatted as KIT_DRIVE_FORMAT says.
+    drives = work / "Volumes"
+    big = new_kit(drives / "BIG ONE" / "TinfoilKit")
+    items = {}
+
+    def put(key, dest, tree, **record):
+        """An item as a sync leaves it: its files in downloads/dest (a number makes a file that big with nothing in it,
+        which takes no room here), and its record."""
+        for rel, data in tree.items():
+            p = big / "downloads" / dest / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            if isinstance(data, int):
+                with open(p, "wb") as f:
+                    f.truncate(data)
+            else:
+                p.write_bytes(data)
+                p.chmod(0o755 if data.startswith(b"#!") else 0o644)
+        items[key] = {"version": "1", "dest": dest, "updated": "2026-11-20T10:00:00Z", **record}
+
+    def files(key, dest, tree):
+        sums = {n: "0" * 64 if isinstance(d, int) else hashlib.sha256(d).hexdigest() for n, d in tree.items()}
+        put(
+            key,
+            dest,
+            tree,
+            files={n: {"size": d if isinstance(d, int) else len(d), "sha256": sums[n]} for n, d in tree.items()},
+        )
+
+    def program(key, dest, tree, version="1.0"):
+        """A program unpacked: the version in use, which CURRENT names, beside the one before it."""
+        tree = {
+            "CURRENT": f"{version}\n".encode(),
+            "0.9/old": b"the version before",
+            **{f"{version}/{r}": d for r, d in tree.items()},
+        }
+        put(
+            key,
+            dest,
+            tree,
+            current=version,
+            versions=[version, "0.9"],
+            archive="program.tar.gz",
+            archive_sha256="0" * 64,
+        )
+
+    stand_in = (
+        f"#!{sys.executable}\nimport http.server, os, re, sys\na = sys.argv[1:]\nport = int(a[a.index('--port') + 1])\n"
+    )
+    kiwix = (
+        stand_in
+        + """page = open(a[a.index("--customIndex") + 1], "rb").read().replace(b"{{=<% %>=}}", b"")
+books = [os.path.basename(z)[:-4] for z in a if z.endswith(".zim")]
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path.startswith("/catalog"):
+            body = "".join(f'<entry><link type="text/html" href="/content/{b}"/></entry>' for b in books).encode()
+        else:
+            body = b"<item>Water</item>" if self.path.startswith("/search") else page
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(body)
+    def log_message(self, *a):
+        pass
+http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
+"""
+    )
+    llama = (
+        stand_in
+        + """ids = re.findall(r"^\\[(.+)\\]$", open(a[a.index("--models-preset") + 1]).read(), re.M)
+class H(http.server.BaseHTTPRequestHandler):
+    def reply(self, body):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body.encode())
+    def do_GET(self):
+        self.reply('{"data": [' + ", ".join('{"id": "%s"}' % i for i in ids) + "]}")
+    def do_POST(self):
+        self.reply('{"choices": [{"message": {"content": "OK"}}]}')
+    def do_OPTIONS(self):
+        self.reply("")
+    def log_message(self, *a):
+        pass
+http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
+"""
+    )
+    for computer, exe in (("macos-arm64", ""), ("windows-x64", ".exe"), ("linux-x64", "")):
+        me = computer == PLAT
+        program(
+            f"runtimes/llama.cpp-{computer}",
+            f"bin/llama.cpp-{computer}",
+            {f"build/bin/llama-server{exe}": llama.encode() if me else b"llama", "build/bin/libggml.so": b"lib" * 900},
+        )
+        program(
+            f"runtimes/kiwix-tools-{computer}",
+            f"bin/kiwix-tools-{computer}",
+            {f"kiwix-serve{exe}": kiwix.encode() if me else b"kiwix"},
+        )
+        java = (TESTS / "fakes" / "java").read_bytes() if me else b"java"
+        program(f"runtimes/java-{computer}", f"bin/java-{computer}", {f"jdk-21.0.9+10-jre/bin/java{exe}": java})
+        pmtiles = (TESTS / "fakes" / "pmtiles").read_bytes() if me else b"pmtiles"
+        program(f"runtimes/pmtiles-{computer}", f"bin/pmtiles-{computer}", {f"pmtiles{exe}": pmtiles})
+    files("runtimes/graphhopper", "bin/graphhopper", {"graphhopper-web-11.0.jar": b"jar" * 1000})
+    files("runtimes/photon", "bin/photon", {"photon-1.3.0.jar": b"jar" * 1000})
+    program(
+        "maps/maplibre-gl",
+        "maps/viewer/maplibre-gl",
+        {"package/dist/maplibre-gl.js": b"//", "package/dist/maplibre-gl.css": b"/**/"},
+    )
+    program("maps/protomaps-basemaps", "maps/viewer/protomaps-basemaps", {"package/dist/basemaps.js": b"// style"})
+    program(
+        "maps/basemaps-assets",
+        "maps/viewer/basemaps-assets",
+        {
+            "a/fonts/Noto Sans Regular/0-255.pbf": b"font",
+            "a/sprites/v4/light.json": b"{}",
+            "a/sprites/v4/light.png": b"png",
+        },
+    )
+    files("maps/basemap", "maps/tiles", {"basemap.pmtiles": os.urandom(150_000)})
+    roads = os.urandom(5000)
+    put(
+        "maps/routing",
+        "maps/routing",
+        {
+            "ny.osm.pbf": roads,
+            "graph-cache/properties": b"graph",
+            "gh-serve.yml": b"x: 1\n",
+            "graph-cache.old/edges": b"old",
+        },
+        files={"ny.osm.pbf": {"size": 5000, "sha256": hashlib.sha256(roads).hexdigest()}},
+        unpacked_size=5,
+    )
+    put("maps/geocoder", "maps/geocoder", {"photon_data/node_1/index": os.urandom(400_000)}, unpacked_size=400_000)
+    files("models/Small", "models/Small", {"Small-Q4_K_M.gguf": os.urandom(250_000)})
+    files("models/Big", "models/Big", {"Big-Q4_K_M.gguf": 3 * 10**9})
+    books = {"medicine_en_all": 90_000, "water_en": 50_000, "wikipedia_en_top_nopic": 120_000, "crafts_en": 60_000}
+    for zim, size in {**books, "wikipedia_en_all_maxi": 4 * 10**9}.items():
+        files(f"library/{zim}", "library", {f"{zim}_2026-11.zim": os.urandom(size) if size < 10**9 else size})
+    (big / "downloads" / "library" / "crafts_en_2026-12.zim.partial").write_bytes(b"a newer one, partway")
+    (big / "data" / ".kit").mkdir(parents=True)
+    (big / "data" / ".kit" / "state.json").write_text(json.dumps({"last_sync": "2026-11-20T10:00:00Z", "items": items}))
+    (big / "data" / "kit.json").write_text(
+        json.dumps(
+            {
+                "settings": {"default_model": "Big", "share_on_network": True},
+                "models": [{"id": "Big", "priority": 1}, {"id": "Small", "priority": 1}],
+                "maps": {"enabled": True, "region": "us/new-york"},
+                "library": [
+                    {"zim": "medicine_en_all", "priority": 1},
+                    {"zim": "water_en", "priority": 1},
+                    {"zim": "wikipedia_en_top_nopic"},
+                    {"zim": "crafts_en", "priority": 3},
+                    {"zim": "wikipedia_en_all_maxi"},
+                ],
+            },
+            indent=2,
+        )
+    )
+    (big / "app" / "tools" / "sources.json").write_text(
+        json.dumps(
+            {
+                "sources": [
+                    {
+                        "id": "medicine_en_all",
+                        "title": "Medicine",
+                        "group": "Health",
+                        "why": "For when there's no doctor.",
+                    },
+                    {"id": "water_en", "title": "Water", "group": "Survival", "why": "Finding it and making it safe."},
+                    {"id": "Small", "title": "Small AI", "why": "Runs on any laptop."},
+                ]
+            }
+        )
+    )
+    notes = "Water shutoff is behind the boiler.\n"
+    (big / "data" / "notes.txt").write_text(notes)
+    (big / "data" / "places.json").write_text(json.dumps({"pins": [{"lat": 40.7, "lon": -74, "label": "Aunt Sue"}]}))
+    kit("layout", root=big)  # (every command keeps the launchers beside its three folders)
+
+    small = drives / "LITTLE ONE"
+    (small / "photos").mkdir(parents=True)
+    (small / "photos" / "beach.jpg").write_bytes(b"jpg")
+    copied = small / "TinfoilKit"
+    job = big / "data" / ".kit" / "copy.json"
+    copy_env = {**env, "KIT_DRIVES": str(drives), "KIT_DRIVE_BYTES": str(2 * 10**9), "KIT_DRIVE_FORMAT": "ExFAT"}
+    copy_env.update(KIT_TEST_DIR=str(TESTS), KIT_TEST_WORK=str(work))  # for the stand-ins for Java and pmtiles
+
+    def copy(*args, **e):
+        return kit("copy", *args, env={**copy_env, **e}, root=big)
+
+    def in_copy(rel):
+        return (copied / rel).exists()
+
+    def copy_cfg():
+        return json.loads((copied / "data" / "kit.json").read_text())
+
+    rc, out = copy("--json")
+    info = json.loads(out) if rc == 0 else {}
+    parts = {p["id"]: p for p in info.get("parts", [])}
+    check(
+        "copy --json: what the kit has, the programs first, and the drives it could go on, but not its own",
+        rc == 0
+        and list(parts)[:3] == ["programs", "map", "addresses"]
+        and parts["map"]["title"] == "Map with directions"
+        and parts["programs"]["why"].endswith("for Mac, Windows and Linux.")
+        and parts["medicine_en_all"]["title"] == "Medicine"
+        and parts["wikipedia_en_top_nopic"]["title"] == "Wikipedia"
+        and parts["wikipedia_en_top_nopic"]["essential"]
+        and not parts["crafts_en"]["essential"]
+        and parts["Big"]["bytes"] > 3 * 10**9
+        and info["ai"] == "Small"
+        and info["notes"]
+        and [(d["name"], d["mustErase"], d["kit"]) for d in info["drives"]] == [("LITTLE ONE", None, False)],
+        out,
+    )
+
+    rc, out = copy("LITTLE ONE", "--essentials", "--ai", "--yes")
+    state_copy = (
+        json.loads((copied / "data" / ".kit" / "state.json").read_text()) if in_copy("data/.kit/state.json") else {}
+    )
+    check(
+        "copy --essentials --ai: the programs, the essential books and the smallest AI, then it reads them back and starts it",
+        rc == 0
+        and "3 books: Medicine, Water, Wikipedia" in out
+        and "Small AI" in out
+        and "All " in out
+        and "files read back right" in out
+        and "PASS  model answers" in out
+        and "FAIL" not in out
+        and "Done: LITTLE ONE has a Tinfoil Kit of its own, for Mac, Windows and Linux." in out,
+        out,
+    )
+    check(
+        "the copy: every computer's programs, in the version in use, the books and the AI, and none of the rest",
+        all(in_copy(f"downloads/bin/llama.cpp-{c}/1.0") for c in ("macos-arm64", "windows-x64", "linux-x64"))
+        and not in_copy("downloads/bin/llama.cpp-linux-x64/0.9")
+        and in_copy("app/tools/tinfoilkit-windows-x64.exe")
+        and (copied / "downloads/library/water_en_2026-11.zim").read_bytes()
+        == (big / "downloads/library/water_en_2026-11.zim").read_bytes()
+        and in_copy("downloads/models/Small/Small-Q4_K_M.gguf")
+        and not in_copy("downloads/models/Big")
+        and not in_copy("downloads/maps")
+        and not in_copy("downloads/library/crafts_en_2026-11.zim")
+        and not in_copy("downloads/library/crafts_en_2026-12.zim.partial")
+        and not in_copy("data/notes.txt")
+        and sorted(p.name for p in copied.iterdir()) == [*TOP, "app", "data", "downloads"]
+        and (small / "photos" / "beach.jpg").exists()
+        and not (small / "TinfoilKit.partial").exists(),
+        sorted(str(p.relative_to(copied)) for p in copied.rglob("*") if "downloads" in str(p)),
+    )
+    c = copy_cfg()
+    check(
+        "the copy's kit.json switches on just what it has, its records list just that, and it's someone else's home network",
+        [m.get("enabled", True) for m in c["models"]] == [False, True]
+        and [z.get("enabled", True) for z in c["library"]] == [True, True, True, False, False]
+        and c["maps"]["enabled"] is False
+        and c["settings"]["default_model"] == "Small"
+        and c["settings"]["share_on_network"] is False
+        and c["settings"]["picked"] is True
+        and sorted(state_copy.get("items", {}))
+        == [
+            "library/medicine_en_all",
+            "library/water_en",
+            "library/wikipedia_en_top_nopic",
+            "models/Small",
+            *(
+                f"runtimes/{p}-{c}"
+                for p in ("kiwix-tools", "llama.cpp")
+                for c in ("linux-x64", "macos-arm64", "windows-x64")
+            ),
+        ]
+        and state_copy["items"]["runtimes/llama.cpp-linux-x64"]["versions"] == ["1.0"],
+        json.dumps(c) + json.dumps(sorted(state_copy.get("items", {}))),
+    )
+    card = (copied / "data" / ".kit" / "card.html").read_text() if in_copy("data/.kit/card.html") else ""
+    check(
+        "the copy has a card to print, and this kit keeps one for its page, with how to start it on each computer",
+        "Open Tinfoil Kit for Windows" in card
+        and "Ask and AI chat, with the AI Small AI" in card
+        and "3 books: Medicine, Water, Wikipedia" in card
+        and (big / "data" / ".kit" / "card.html").read_text() == card
+        and json.loads(job.read_text())["step"] == "done"
+        and json.loads(job.read_text())["works"] is True,
+        card,
+    )
+
+    before = sorted(str(f.relative_to(copied)) for f in copied.rglob("*"))
+    rc, out = copy("LITTLE ONE", "--maps", "--notes", "--json")
+    plan = json.loads(out) if rc == 0 else {}
+    check(
+        "copy DRIVE --json: what that copy would be and what it does to the drive, without copying",
+        plan.get("drive") == "LITTLE ONE"
+        and plan.get("parts", [])[:1] == ["programs"]
+        and "map" in plan.get("parts", [])
+        and plan.get("replace") is True
+        and plan.get("erase") is False
+        and plan.get("notes") is True
+        and "The copy replaces it" in plan.get("warning", "")
+        and plan.get("bytes", 0) > 0
+        and sorted(str(f.relative_to(copied)) for f in copied.rglob("*")) == before,
+        out,
+    )
+    rc, out = copy("LITTLE ONE", "--maps", "--notes")
+    check(
+        "copy to a drive with a kit: says it replaces it, and doesn't without the drive's name",
+        rc == 1
+        and "LITTLE ONE has a Tinfoil Kit already. The copy replaces it" in out
+        and 'To go ahead, add --erase "LITTLE ONE".' in out
+        and in_copy("downloads/models/Small"),
+        out,
+    )
+    rc, out = copy("LITTLE ONE", "--maps", "--notes", "--erase", "little one")
+    c = copy_cfg()
+    check(
+        "copy --maps --notes --erase NAME: replaces the kit there with the map, its address search and the notes, and tests the map",
+        rc == 0
+        and "Map with directions" in out
+        and "Address search" in out
+        and "PASS  directions work" in out
+        and "PASS  address search works" in out
+        and "FAIL" not in out
+        and not in_copy("downloads/models/Small")
+        and in_copy("downloads/maps/geocoder/photon_data/node_1/index")
+        and in_copy("downloads/maps/routing/graph-cache/properties")
+        and not in_copy("downloads/maps/routing/graph-cache.old")
+        and not in_copy("downloads/maps/viewer/maplibre-gl/0.9")
+        and (copied / "data" / "notes.txt").read_text() == notes
+        and c["maps"]["enabled"] is True
+        and "geocoder_country" not in c["maps"]
+        and [m.get("enabled", True) for m in c["models"]] == [False, False]
+        and (small / "photos" / "beach.jpg").exists(),
+        out,
+    )
+    (big / "data" / "notes.txt").write_text("changed since")
+    rc, out = copy("LITTLE ONE", "--essentials", "--notes", "--erase", "LITTLE ONE")
+    check(
+        "a copy never overwrites the notes on a kit it replaces",
+        rc == 0 and (copied / "data" / "notes.txt").read_text() == notes and not in_copy("downloads/maps"),
+        out,
+    )
+    (big / "data" / "notes.txt").write_text(notes)
+
+    # Stopped partway: a copy carries on, and a file that reads back wrong is copied again
+    os.rename(copied, small / "TinfoilKit.partial")
+    water = small / "TinfoilKit.partial" / "downloads" / "library" / "water_en_2026-11.zim"
+    water.write_bytes(b"x" * water.stat().st_size)
+    rc, out = copy("--json")
+    info = json.loads(out) if rc == 0 else {}
+    rc, out = copy("LITTLE ONE", "--essentials", "--yes")
+    check(
+        "a copy that stopped partway carries on, and a file that reads back wrong is copied again",
+        rc == 0
+        and info["drives"][0]["partial"] is True
+        and "1 of them didn't read back as they went in. Copying those again..." in out
+        and (copied / "downloads/library/water_en_2026-11.zim").read_bytes()
+        == (big / "downloads/library/water_en_2026-11.zim").read_bytes()
+        and not (small / "TinfoilKit.partial").exists(),
+        out,
+    )
+
+    # A drive too full for the copy: it must be erased first
+    (small / "movie.mp4").write_bytes(b"m")
+    os.truncate(small / "movie.mp4", 1_500_000_000)
+    rc, out = copy("LITTLE ONE", "--maps", "--yes")
+    check(
+        "a drive too full for the copy: it needs erasing first, and says everything on it goes",
+        rc == 1
+        and "LITTLE ONE has" in out
+        and "so it needs erasing first. Everything on LITTLE ONE goes." in out
+        and 'To go ahead, add --erase "LITTLE ONE".' in out
+        and (small / "photos" / "beach.jpg").exists(),
+        out,
+    )
+    rc, out = copy("LITTLE ONE", "--maps", "--erase", "LITTLE ONE")
+    check(
+        "erased, it takes the copy",
+        rc == 0
+        and "Erasing LITTLE ONE as exFAT..." in out
+        and not (small / "photos").exists()
+        and not (small / "movie.mp4").exists()
+        and in_copy("downloads/maps/tiles/basemap.pmtiles"),
+        out,
+    )
+
+    rc, out = copy("LITTLE ONE", "--everything", "--add", "Big", "--yes", KIT_DRIVE_FORMAT="MS-DOS (FAT32)")
+    check(
+        "a drive that can't hold big files: it needs erasing; and what doesn't fit even then says so",
+        rc == 1 and "That's 3.0 GB" in out and "has room for" in out and "Pick less." in out,
+        out,
+    )
+    rc, out = copy("LITTLE ONE", "--essentials", "--yes", KIT_DRIVE_FORMAT="MS-DOS (FAT32)")
+    check(
+        "a drive that can't hold big files: it needs erasing first",
+        rc == 1 and "LITTLE ONE needs erasing first: it's formatted as MS-DOS (FAT32), which can't hold" in out,
+        out,
+    )
+    rc, out = copy("LITTLE ONE", "--only", "water,maps", "--yes", "--erase", "LITTLE ONE")
+    c = copy_cfg()
+    check(
+        "copy --only: just those, and the programs",
+        rc == 0
+        and "1 book: Water" in out
+        and "Map with directions" in out
+        and "Address search" not in out
+        and c["maps"]["geocoder_country"] == ""
+        and not in_copy("downloads/maps/geocoder")
+        and "SKIP  address search" in out,
+        out,
+    )
+    rc, out = copy("LITTLE ONE", "--only", "atlantis", "--yes")
+    check(
+        "copy --only: a name the kit doesn't have says so", rc == 1 and "This kit has no atlantis to copy." in out, out
+    )
+
+    # At a keyboard: it asks which drive, what goes on it, the AI and the notes, then for the drive's name
+    import pty
+
+    keyboard, tty = pty.openpty()
+    os.write(keyboard, b"1\n1\ny\ny\nlittle one\n")
+    try:
+        p = subprocess.run(
+            kit_cmd(big / "app", big, "copy"), env=copy_env, stdin=tty, capture_output=True, text=True, timeout=180
+        )
+    finally:
+        os.close(keyboard)
+        os.close(tty)
+    out = p.stdout + p.stderr
+    check(
+        "copy at a keyboard: which drive, what goes on it, the AI and the notes, then the drive's name to replace its kit",
+        p.returncode == 0
+        and "Add the AI too? Small AI" in out
+        and "What goes on LITTLE ONE?" in out
+        and "Copy your notes and map pins too?" in out
+        and "Type LITTLE ONE to go ahead" in out
+        and in_copy("downloads/models/Small")
+        and (copied / "data" / "notes.txt").exists(),
+        out,
+    )
+
+    # A TinfoilKit folder with other things in it is never replaced
+    (copied / "my letters").mkdir()
+    rc, out = copy("--json")
+    info = json.loads(out) if rc == 0 else {}
+    check(
+        "a TinfoilKit folder with other things in it is never replaced: only erasing the drive, once asked",
+        rc == 0 and info["drives"][0]["mustErase"] == "its TinfoilKit folder has other things in it besides the kit",
+        out,
+    )
+    (copied / "my letters").rmdir()
+
+    # Damaged on this kit: it says which, and how to fix it
+    w = big / "downloads" / "library" / "crafts_en_2026-11.zim"
+    good = w.read_bytes()
+    w.write_bytes(b"y" * len(good))
+    rc, out = copy("LITTLE ONE", "--only", "crafts", "--yes", "--erase", "LITTLE ONE")
+    check(
+        "a file this kit has that isn't what it downloaded: the copy stops and says how to fix it",
+        rc == 1
+        and "This kit's own copy of crafts_en is damaged: downloads/library/crafts_en_2026-11.zim" in out
+        and "verify --fix" in out
+        and not in_copy("downloads/library/crafts_en_2026-11.zim"),
+        out,
+    )
+    w.write_bytes(good)
 finally:
     mock.terminate()
     shutil.rmtree(work, ignore_errors=True)

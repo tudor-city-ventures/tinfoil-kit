@@ -21,12 +21,13 @@
 //	cmds.go      pick, remove, fit, plan, pins, sync, verify, status, search and test
 //	pick.go      where you live and Wikipedia's languages (region), what fits (estimate, space), essentials, starter
 //	setup.go     drives, place, kits, layout, update (signed releases), share and autostart
+//	copy.go      a copy of the kit on another drive, as much as fits (copy), and its card to print
 //	open.go      starting the servers and opening the page (open)
 //	gate.go      sharing on the home network behind the access code (gate, banner), with qr.go's QR code
 //	data.go      the page's notes and the map's home and pins (data)
 //	pbf.go       merging places nearby's road data into one file for directions
 //	json.go      kit.json and the kit's records, read and written in the layout people see
-//	sys_*.go     what Windows does differently: memory, disk space, processes, locks
+//	sys_*.go     what Windows does differently: memory, disk space, processes, locks, reading straight from a drive
 package main
 
 import (

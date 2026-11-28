@@ -64,7 +64,7 @@ What's in the folder:
     │   ├── Open Tinfoil Kit for Windows.bat
     │   ├── UNINSTALL-Windows.bat
     │   ├── GUIDE.md                  the printable guide
-    │   ├── .claude/skills/           how-tos for AI agents: set up, update, change, check, share, remove
+    │   ├── .claude/skills/           how-tos for AI agents: set up, update, change, check, share, copy, remove
     │   ├── kit, kit.cmd              the kit's command line (kit.cmd on Windows)
     │   └── kit.json, tools/          the standard list of downloads, and the code
     ├── downloads/                    everything sync downloads
@@ -266,6 +266,19 @@ There's no schedule. Whenever the person wants the newest models, books and maps
 - It's safe to stop at any point and run it again: it picks up where it left off, and the old files keep working until the new ones check out.
 - `./kit status` shows what's installed and when it was last updated. downloads/INVENTORY.md lists every item with its version and size.
 
+## Copy it
+
+To give a kit to family or friends, or keep a spare, the kit copies itself onto another drive plugged in, as much as fits: the programs for Macs, Windows and Linux always, then the essentials, the map too (the default), or everything that fits, with the smallest AI and the person's notes if they want them. Nothing downloads, so it works in an outage, and the copy is a kit of its own. In the kit's app folder:
+
+    ./kit copy                             # at a keyboard: which drive, what goes on it, the AI and the notes
+    ./kit copy --json                      # what the kit has, each part's size, and the drives a copy can go on
+    ./kit copy "LITTLE ONE" --maps --json  # what that copy would be, and whether it erases the drive, without copying
+    ./kit copy "LITTLE ONE" --maps --yes   # as much as fits of the essentials, then the map, on the drive LITTLE ONE
+
+- `--essentials`, `--maps` or `--everything`; `--ai` adds the smallest AI; `--only`, `--add` and `--skip` take names as `./kit copy --json` lists them; `--notes` brings the notes and pins.
+- It erases a drive only if it must: one that isn't exFAT, or is too full. A kit on the drive is replaced, keeping its notes. Either needs the drive's name typed, or `--erase NAME`: pass that only once the person has said yes for that drive. On a Mac the kit erases the drive itself; Windows and Linux need an administrator, so it says how to format it as exFAT.
+- It reads every file back from the drive, starts the copy once to be sure it works, and writes a card to print and keep with the drive. A copy that stopped carries on when run again. The tinfoil-copy skill has the rest.
+
 ## Remove it
 
 Double-click UNINSTALL.command (UNINSTALL-Windows.bat on Windows) in the kit's app folder. Once the person types "delete", it removes the kit folder and everything the kit downloaded, the person's notes and pins too (offer to copy data/notes.txt somewhere first). On a drive it leaves the rest of the drive alone. If the app folder sits in a folder with other things in it, it deletes nothing and says so. As an agent, give them `bash UNINSTALL.command --yes` (`.\UNINSTALL-Windows.bat --yes` on Windows), which skips the question, only once they've said yes to deleting all of it.
@@ -327,6 +340,6 @@ Project NOMAD (Crosstalk Solutions, Apache-2.0, https://github.com/Crosstalk-Sol
 - README: https://github.com/tudor-city-ventures/tinfoil-kit#readme
 - GUIDE.md: the printable guide, in the kit's app folder
 - THIRD-PARTY.md: every model, book, map and program, and its license
-- Skills for AI agents, one for each job, with the exact commands: tinfoil-install, tinfoil-update, tinfoil-data, tinfoil-status, tinfoil-home-server and tinfoil-uninstall, in .claude/skills in the kit's app folder and at https://github.com/tudor-city-ventures/tinfoil-kit/tree/main/kit/.claude/skills
+- Skills for AI agents, one for each job, with the exact commands: tinfoil-install, tinfoil-update, tinfoil-data, tinfoil-status, tinfoil-home-server, tinfoil-copy and tinfoil-uninstall, in .claude/skills in the kit's app folder and at https://github.com/tudor-city-ventures/tinfoil-kit/tree/main/kit/.claude/skills
 - AGENTS.md: rules for changing the kit's own code
 - Bugs and ideas: https://github.com/tudor-city-ventures/tinfoil-kit/issues

@@ -139,6 +139,10 @@ Double-click SETUP again whenever you want the newest models, books and maps, or
 
 Or replace the app folder yourself: delete it, put a new download's app folder in its place and run its SETUP. Or run a new download's SETUP from wherever you unzipped it: it finds your kit, puts its own app folder there and carries on. Either way `downloads` and `data` stay as they are.
 
+## Copy it
+
+To give a kit to family or friends, or keep a spare, `./kit copy` (`.\kit.cmd copy` on Windows) copies as much of it as fits onto another drive plugged in: the programs for all three kinds of computer, then the essentials, the map, or everything that fits, and the AI and your notes if you want them. Nothing downloads, so it works in an outage, and the copy is a kit of its own that starts anywhere. It erases a drive only if it must (one that isn't exFAT, or is too full) and only once you type the drive's name. Then it reads every file back from the drive, starts the copy once, and makes a card to print and keep with it. Details: [GUIDE.md](kit/GUIDE.md#make-a-copy-for-someone).
+
 ## Remove
 
 Double-click `UNINSTALL.command` (`UNINSTALL-Windows.bat` on Windows) in the kit's app folder. It says what it will delete and how much space that frees, and deletes the kit and everything it downloaded only after you type `delete`. On a drive, nothing else is touched. `--yes` skips the question.

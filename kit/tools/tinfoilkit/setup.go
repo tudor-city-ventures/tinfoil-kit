@@ -54,6 +54,9 @@ var plistString = regexp.MustCompile(`<key>(FilesystemUserVisibleName|Filesystem
 // driveFormat is a drive's format as the system names it ("ExFAT", "MS-DOS (FAT32)", "exfat", "vfat"...), or "" if
 // unknown.
 func driveFormat(p string) string {
+	if f := os.Getenv("KIT_DRIVE_FORMAT"); f != "" && os.Getenv("KIT_DRIVES") != "" { // each test drive's
+		return f
+	}
 	if windows {
 		_, fs := winVolume(p)
 		return fs

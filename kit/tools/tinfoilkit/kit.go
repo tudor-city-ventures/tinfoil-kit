@@ -84,6 +84,13 @@ Commands (run from the kit's app folder, e.g.  ./kit sync):
                      on, its size, and the time to download it.
   remove NAME...     Delete what these downloaded (names as pick takes them), for the space, and switch
                      them off so sync doesn't get them again. Asks first; --yes doesn't.
+  copy [DRIVE]       Copy this kit to another drive plugged in, as much as fits, to give someone or keep
+                     as a spare: a kit of its own, for Macs, Windows and Linux. --essentials, --maps (the
+                     default) or --everything; --ai adds the smallest AI; --only, --add and --skip IDS pick
+                     by name, as pick takes them; --notes copies your notes and map pins. Erases the drive
+                     first only if it must, once you type its name (--erase NAME). Reads every file back,
+                     starts the copy once, and makes a card to print. --json: what this kit has, and the
+                     drives a copy can go on.
   layout             Move a kit from before its app, downloads and data folders into them, by
                      renaming: nothing downloads again. Every command does it first; SETUP runs it.
 
@@ -1998,6 +2005,20 @@ func init() {
 		{name: "remove", help: "delete what these downloaded, for the space, and switch them off", run: cmdRemove, args: []cliArg{
 			{dest: "names", kind: "+", metavar: "NAME", help: "an AI model, a book (or its name up to an underscore, like wikipedia), maps, or a whole part (models, library, extras)"},
 			flagArg("-y --yes", "don't ask first")}},
+		{name: "copy", help: "copy this kit to another drive, as much as fits: to give someone, or keep as a spare", run: cmdCopy, args: []cliArg{
+			posArg("drive", "?", "the drive to copy to: its name or folder (without it, a list to pick from)"),
+			flagArg("--essentials", "the programs and the most important books"),
+			flagArg("--maps", "the essentials, the map with directions, and its address search if there's room (the default)"),
+			flagArg("--everything", "the most important first, until the drive is full"),
+			flagArg("--ai", "add the smallest AI model"),
+			valueArg("--models", "IDS", "add these AI models instead (ids, comma-separated)"),
+			valueArg("--only", "IDS", "just these, and the programs: AI models, books (a name, or its start up to an underscore, like wikipedia), map, addresses"),
+			valueArg("--add", "IDS", "add these, which must fit"),
+			valueArg("--skip", "IDS", "leave these out"),
+			flagArg("--notes", "copy your notes, home and map pins too"),
+			valueArg("--erase", "NAME", "the drive's name: yes to erasing it, or replacing the kit on it, if the copy needs that"),
+			flagArg("-y --yes", "ask nothing: copy what the options say"),
+			flagArg("--json", "what this kit has, the presets, and the drives a copy can go on; with a drive, what the copy would be, without making it")}},
 		{name: "fit", help: "which AI model this computer runs, and the ones too big for its memory", run: cmdFit, args: []cliArg{
 			flagArg("--ask", "ask whether to download the models it can't run (SETUP)"),
 			flagArg("--skip-too-big", "switch off the models it can't run, in kit.json"),
@@ -2090,7 +2111,7 @@ func runKit(words []string) (code int) {
 		die(fmt.Sprintf("The kit can't use %s as its folder. Make a folder called %s there, put the app folder in "+
 			"it, and run SETUP again", root, kitFolder))
 	}
-	if !contains([]string{"share", "autostart", "layout"}, cmd.name) && !which("curl") {
+	if !contains([]string{"share", "autostart", "layout", "copy"}, cmd.name) && !which("curl") {
 		die("curl is required")
 	}
 	if ensureLayout(root) && !isDir(filepath.Join(codeRoot, "tools")) { // this code just moved into app/
