@@ -499,6 +499,63 @@ func wikiStandIns(cfg, state *obj, tier string) []*obj {
 	return out
 }
 
+// wikiCompanion is a smaller Wikipedia a kit keeps beside kit.json's (main), as a kit.json entry.
+type wikiCompanion struct {
+	main  string
+	entry *obj
+}
+
+// wikiCompanions is what a kit keeps beside each Wikipedia kit.json switches on in full (all of it, in any form): the
+// best articles in the same form, so a copy on a small drive can carry Wikipedia (./kit copy). English's with pictures
+// is 7 GB, beside 127. The library serves the bigger one only (servedZims).
+func wikiCompanions(cfg *obj) []wikiCompanion {
+	listed := map[string]bool{}
+	for _, z := range cfg.objs("library") {
+		listed[z.str("zim")] = true
+	}
+	var out []wikiCompanion
+	for _, z := range cfg.objs("library") {
+		m := wikipediaRE.FindStringSubmatch(z.str("zim"))
+		if m == nil || !z.on() || !strings.HasPrefix(m[2], "all_") {
+			continue
+		}
+		e := wikiEdition(m[1], "top_"+strings.TrimPrefix(m[2], "all_"))
+		if zim := "wikipedia_" + m[1] + "_" + e; strings.HasPrefix(e, "top_") && !listed[zim] {
+			s := cloneObj(z)
+			s.set("zim", zim)
+			s.set("note", wikiNote(m[1], e)+", kept for copies")
+			out = append(out, wikiCompanion{z.str("zim"), s})
+		}
+	}
+	return out
+}
+
+// servedZims is the books the library serves: every one, but one Wikipedia in each language, the biggest edition the
+// kit has (a smaller one is kept for copies, or stands in until the big one is in).
+func servedZims(paths []string) []string {
+	edition := func(p string) (string, int) {
+		if m := zimRE.FindStringSubmatch(filepath.Base(p)); m != nil {
+			if w := wikipediaRE.FindStringSubmatch(m[1]); w != nil {
+				return w[1], editionIndex(w[2])
+			}
+		}
+		return "", -1
+	}
+	biggest := map[string]int{}
+	for _, p := range paths {
+		if lang, i := edition(p); lang != "" && (i > biggest[lang] || !hasKey(biggest, lang)) {
+			biggest[lang] = i
+		}
+	}
+	var out []string
+	for _, p := range paths {
+		if lang, i := edition(p); lang == "" || i == biggest[lang] {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 type sizeChoice struct {
 	name, label string
 	mb          float64
@@ -1116,6 +1173,14 @@ func estimateItems(root string, cfg *obj, essentials, starter *bool, left bool) 
 		}
 		for _, z := range wikiStandIns(cfg, state, t) {
 			on = append(on, part{"library/" + z.str("zim"), z.str("zim")})
+		}
+	}
+	for _, c := range wikiCompanions(cfg) {
+		for _, p := range on {
+			if p.key == "library/"+c.main {
+				on = append(on, part{"library/" + c.entry.str("zim"), c.entry.str("zim")})
+				break
+			}
 		}
 	}
 	if truthy(mapsSettings(cfg).get("enabled")) {

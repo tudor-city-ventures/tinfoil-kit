@@ -244,8 +244,9 @@ outage. Plug in both drives, open the kit and choose **More**, then **Make a cop
 Or in the app folder run `./kit copy` (`.\kit.cmd copy` on Windows). Either asks:
 
 - which drive;
-- what goes on it: the essentials (the programs and the most important books), the essentials and the map, everything
-  that fits, or each part, with the size of each;
+- what goes on it: the essentials (the programs and the most important books, with Wikipedia's best articles, which a
+  kit with all of Wikipedia keeps for copies), the essentials and the map, everything that fits, or each part, with the
+  size of each;
 - whether to add the AI (without it, Ask finds answers in the books), and whether to bring your notes and map pins.
 
 It erases a drive only if it must, once you type the drive's name: one that isn't exFAT, or is too full, and a kit

@@ -95,25 +95,30 @@ function wikiCard(regions, code, size, like) {
   const e = edition(regions, code, SIZES.find((s) => s[0] === size)[1]);
   const of = l.name + " Wikipedia" + (l.native && l.native !== l.name ? " (" + l.native + ")" : "");
   const live = like.id === "wikipedia_" + code + "_" + e; // the builder measures kit.json's own
+  // Beside all of it, the kit keeps its best articles in the same form, for copies (wikiCompanions in the kit's program)
+  const kept = e.startsWith("all_") ? edition(regions, code, "top_" + e.split("_")[1]) : "";
+  const extra = kept.startsWith("top_") ? editions(regions, code)[kept] * 1e6 : 0;
+  const bytes = live ? like.bytes : editions(regions, code)[e] * 1e6;
   return {
     id: "wikipedia_" + code + "_" + e,
     group: like.group,
     presets: like.presets,
     estimated: live ? like.estimated : true,
-    bytes: live ? like.bytes : Math.round(editions(regions, code)[e] * 1e6),
+    bytes: bytes == null ? bytes : Math.round(bytes + extra),
     source: `https://${code === "nb" ? "no" : code}.wikipedia.org/`,
     title:
       (e.startsWith("top") ? "Best of Wikipedia" : "Wikipedia") +
       (code === "en" ? "" : " in " + l.name) +
       { maxi: ", with images", nopic: ", text only", mini: ", opening paragraphs" }[e.split("_")[1]],
-    why: {
-      all_maxi: "All of " + of + ". The reference for nearly any question.",
-      all_nopic: "All of " + of + ", without the pictures. The reference for nearly any question.",
-      all_mini: "The opening paragraphs of every article in " + of + ".",
-      top_maxi: "The best 50,000 articles of " + of + ", with pictures.",
-      top_nopic: "The best 50,000 articles of " + of + ", without the pictures.",
-      top_mini: "The opening paragraphs of the best 50,000 articles of " + of + ".",
-    }[e],
+    why:
+      {
+        all_maxi: "All of " + of + ". The reference for nearly any question.",
+        all_nopic: "All of " + of + ", without the pictures. The reference for nearly any question.",
+        all_mini: "The opening paragraphs of every article in " + of + ".",
+        top_maxi: "The best 50,000 articles of " + of + ", with pictures.",
+        top_nopic: "The best 50,000 articles of " + of + ", without the pictures.",
+        top_mini: "The opening paragraphs of the best 50,000 articles of " + of + ".",
+      }[e] + (extra ? " Its best articles come too, for copies on small drives." : ""),
   };
 }
 

@@ -1592,6 +1592,9 @@ func dropSamples(root string, state, cfg *obj, items []*item) {
 			on[i.key()] = true
 		}
 	}
+	for _, c := range wikiCompanions(cfg) {
+		on["library/"+c.entry.str("zim")] = true
+	}
 	for _, i := range items {
 		if i.enabled() {
 			planned[i.key()] = true
@@ -1664,6 +1667,17 @@ func buildPlan(root string, cfg, state *obj, only []string, essentials, starter 
 		for _, e := range wikiStandIns(cfg, state, t) {
 			if zim := e.str("zim"); !have["library/"+zim] {
 				items = append(items, newItem("library", zim, with(newObj("type", "zim"), kvs(e)...)))
+			}
+		}
+	}
+	if !starter { // the best articles kept for copies come with all of Wikipedia
+		have := map[string]bool{}
+		for _, i := range items {
+			have[i.key()] = true
+		}
+		for _, c := range wikiCompanions(cfg) {
+			if zim := c.entry.str("zim"); have["library/"+c.main] && !have["library/"+zim] {
+				items = append(items, newItem("library", zim, with(newObj("type", "zim"), kvs(c.entry)...)))
 			}
 		}
 	}

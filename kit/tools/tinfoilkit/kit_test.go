@@ -1172,6 +1172,23 @@ func TestWikipediaSizes(t *testing.T) {
 		t.Error("wikiStandIns: a Wikipedia that small comes itself: ", s)
 	}
 
+	// Beside all of a Wikipedia, its best articles in the same form, kept for copies; the library serves the biggest.
+	var beside []string
+	for _, c := range wikiCompanions(lib(newObj("zim", "wikipedia_en_all_maxi"), newObj("zim", "wikipedia_de_all_nopic"),
+		newObj("zim", "wikipedia_fr_top_maxi"), newObj("zim", "wikipedia_es_all_maxi", "enabled", false))) {
+		beside = append(beside, c.main+": "+c.entry.str("zim"))
+	}
+	if fmt.Sprint(beside) != "[wikipedia_en_all_maxi: wikipedia_en_top_maxi wikipedia_de_all_nopic: wikipedia_de_top_nopic]" ||
+		len(wikiCompanions(lib(newObj("zim", "wikipedia_en_all_maxi"), newObj("zim", "wikipedia_en_top_maxi")))) > 0 {
+		t.Error("wikiCompanions: the best articles in the same form beside all of each Wikipedia switched on: ", beside)
+	}
+	served := servedZims([]string{"a/wikipedia_en_top_maxi_2026-01.zim", "a/testmed_en_all_maxi_2026-01.zim",
+		"a/wikipedia_en_all_maxi_2026-02.zim", "a/wikipedia_de_top_nopic_2026-01.zim"})
+	if fmt.Sprint(served) != "[a/testmed_en_all_maxi_2026-01.zim a/wikipedia_en_all_maxi_2026-02.zim "+
+		"a/wikipedia_de_top_nopic_2026-01.zim]" {
+		t.Error("servedZims: every book, but one Wikipedia in each language, the biggest: ", served)
+	}
+
 	// A Wikipedia in the old language goes once the new one is in.
 	root := t.TempDir()
 	old := filepath.Join(root, "downloads", "zim", "wikipedia_en_all_maxi_2026-01.zim")
@@ -1215,12 +1232,22 @@ func TestWikipediaSizes(t *testing.T) {
 	if keys(st) != "[library/wikipedia_en_all_maxi]" {
 		t.Error("Wikipedia sizes: once it's in, the one standing in for it goes, even in a plan without either: ", keys(st))
 	}
+	st = state("library/wikipedia_en_all_maxi", "library/wikipedia_en_top_maxi", "library/wikipedia_en_top_nopic")
+	quiet(func() { dropReplacedWikipedias(root, st, nil, mine) })
+	if keys(st) != "[library/wikipedia_en_all_maxi library/wikipedia_en_top_maxi]" {
+		t.Error("Wikipedia sizes: the best articles kept for copies stay: ", keys(st))
+	}
 	st = newObj("items", newObj("library/wikipedia_en_top_mini", newObj("dest", "zim", "files", newObj(), "sample", true)))
 	quiet(func() { dropSamples(root, st, mine, itemsFromConfig(lib(newObj("zim", "wikipedia_en_top_mini")))) })
 	kept := st.child("items").has("library/wikipedia_en_top_mini")
 	quiet(func() { dropSamples(root, st, mine, nil) })
 	if !kept || st.child("items").has("library/wikipedia_en_top_mini") {
 		t.Error("dropSamples: a try-it kit's Wikipedia stays while it stands in for kit.json's, then goes")
+	}
+	st = newObj("items", newObj("library/wikipedia_en_top_mini", newObj("dest", "zim", "files", newObj(), "sample", true)))
+	quiet(func() { dropSamples(root, st, lib(newObj("zim", "wikipedia_en_all_mini")), nil) })
+	if rec := st.child("items").child("library/wikipedia_en_top_mini"); rec == nil || rec.has("sample") {
+		t.Error("dropSamples: a try-it kit's Wikipedia that's kept for copies stays for good")
 	}
 }
 

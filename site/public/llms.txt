@@ -277,6 +277,7 @@ To give a kit to family or friends, or keep a spare, the kit copies itself onto 
 
 - `--essentials`, `--maps` or `--everything`; `--ai` adds the smallest AI; `--only`, `--add` and `--skip` take names as `./kit copy --json` lists them; `--notes` brings the notes and pins.
 - It erases a drive only if it must: one that isn't exFAT, or is too full. A kit on the drive is replaced, keeping its notes. Either needs the drive's name typed, or `--erase NAME`: pass that only once the person has said yes for that drive. On a Mac the kit erases the drive itself; Windows and Linux need an administrator, so it says how to format it as exFAT.
+- All of Wikipedia (127 GB in English) rarely fits a small drive, so a kit with all of it also keeps its best articles (7 GB in English), and a copy takes those instead.
 - It reads every file back from the drive, starts the copy once to be sure it works, and writes a card to print and keep with the drive. A copy that stopped carries on when run again. The tinfoil-copy skill has the rest.
 
 ## Remove it

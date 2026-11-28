@@ -1028,7 +1028,8 @@ func dropUnlisted(root string, state *obj, items []*item) {
 }
 
 // dropReplacedWikipedias: a Wikipedia in a language or size ./kit region switched away from (up to 130 GB) goes once
-// kit.json's are in, and so does a smaller one that stood in for them (wikiStandIns). items: this sync's plan.
+// kit.json's are in, and so does a smaller one that stood in for them (wikiStandIns), unless it's kept for copies
+// (wikiCompanions). items: this sync's plan.
 func dropReplacedWikipedias(root string, state *obj, items []*item, cfg *obj) {
 	var listed, wanted []*item
 	for _, i := range itemsFromConfig(cfg) {
@@ -1051,6 +1052,9 @@ func dropReplacedWikipedias(root string, state *obj, items []*item, cfg *obj) {
 	keep := map[string]bool{}
 	for _, i := range listed {
 		keep[i.key()] = true
+	}
+	for _, c := range wikiCompanions(cfg) {
+		keep["library/"+c.entry.str("zim")] = true
 	}
 	for _, i := range items {
 		if i.enabled() {

@@ -219,9 +219,17 @@ func copyParts(root string, state, cfg *obj) []*copyPart {
 	}
 	conf := map[string]*obj{}
 	var order []string
+	kept := map[string]*obj{}
+	for _, c := range wikiCompanions(cfg) {
+		kept["library/"+c.main] = c.entry
+	}
 	for _, it := range itemsFromConfig(cfg) {
 		conf[it.key()] = it.cfg
 		order = append(order, it.key())
+		if e := kept[it.key()]; e != nil { // the best articles kept for copies, after all of Wikipedia
+			conf["library/"+e.str("zim")] = e
+			order = append(order, "library/"+e.str("zim"))
+		}
 	}
 	items := stateItems(state)
 	for _, k := range sortedKeys(items) {
@@ -1264,6 +1272,7 @@ func copyData(root string, cfg *obj, work string, ch *copyChoice, c *copier, d *
 	if len(sw) > 0 {
 		switchParts(work, sw, nil)
 	}
+	copyWikipedia(work, in)
 	if mapOn && !in["maps/geocoder"] && truthy(mapsSettings(cfg).get("geocoder_country")) {
 		if err := mapsSetting(work, "geocoder_country", ""); err != nil { // no address search
 			return err
@@ -1352,6 +1361,42 @@ func topNames() []string {
 		out = append(out, f.name)
 	}
 	return out
+}
+
+// copyWikipedia points the copy's kit.json at the Wikipedia it has in each language: when kit.json's own didn't go,
+// the smaller one that did (the best articles kept for copies, or one standing in), switched on.
+func copyWikipedia(work string, in map[string]bool) {
+	raw := rawConfig(work)
+	lib, _ := raw.getOr("library", []any{}).([]any)
+	listed := map[string]bool{}
+	for _, v := range lib {
+		if z, ok := v.(*obj); ok {
+			listed[z.str("zim")] = true
+		}
+	}
+	changed := false
+	for _, v := range lib {
+		z, ok := v.(*obj)
+		if !ok {
+			continue
+		}
+		m := wikipediaRE.FindStringSubmatch(z.str("zim"))
+		if m == nil || in["library/"+z.str("zim")] {
+			continue
+		}
+		for i := len(editions) - 1; i >= 0; i-- {
+			if zim := "wikipedia_" + m[1] + "_" + editions[i]; in["library/"+zim] && !listed[zim] {
+				z.set("zim", zim)
+				z.set("note", wikiNote(m[1], editions[i]))
+				z.del("enabled")
+				listed[zim], changed = true, true
+				break
+			}
+		}
+	}
+	if changed {
+		saveConfig(work, raw)
+	}
 }
 
 // mapsSetting sets one of kit.json's map settings, keeping the rest of the file as it is.

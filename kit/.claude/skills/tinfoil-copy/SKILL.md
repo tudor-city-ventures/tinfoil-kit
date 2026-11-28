@@ -20,7 +20,7 @@ In the kit's app folder, with the other drive plugged in (`.\kit.cmd` for `./kit
 
 What goes on it, the most important first, until the drive is full:
 
-- `--essentials`: the programs and the most important books: medicine, preparedness, water, food and repair.
+- `--essentials`: the programs and the most important books: medicine, preparedness, water, food and repair, and Wikipedia's best articles, which a kit with all of Wikipedia keeps for copies (7 GB in English, beside 127).
 - `--maps` (the default): the essentials, then the map with directions, then its address search.
 - `--everything`: the most important first, until the drive is full.
 - `--ai` adds the smallest AI model. It's off unless asked for: without it, Ask finds answers in the books. `--models IDS` adds those models instead.

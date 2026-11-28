@@ -113,7 +113,7 @@ func (l *launcher) open(o openOptions) int {
 			return nil
 		})
 	}
-	zims := filesWithSuffix(filepath.Join(l.dl, "library"), ".zim")
+	zims := servedZims(filesWithSuffix(filepath.Join(l.dl, "library"), ".zim"))
 	models := modelFolders(filepath.Join(l.dl, "models"))
 
 	say("", "  TINFOIL KIT", "  ===========")

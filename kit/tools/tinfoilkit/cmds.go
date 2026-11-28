@@ -1956,7 +1956,7 @@ func cmdTest(root string, a *cliArgs) {
 	kiwix := runtimeBinary(root, "kiwix-tools", "kiwix-serve")
 	llama := runtimeBinary(root, "llama.cpp", "llama-server")
 	dropFinderFiles(root)
-	zims := filesIn(filepath.Join(dlDir(root), "library"), "*.zim")
+	zims := servedZims(filesIn(filepath.Join(dlDir(root), "library"), "*.zim"))
 	models := modelFolders(filepath.Join(dlDir(root), "models"))
 	orSync := func(p string) string {
 		if p == "" {

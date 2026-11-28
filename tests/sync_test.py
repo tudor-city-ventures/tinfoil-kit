@@ -415,7 +415,8 @@ try:
     )
 
     # Wikipedia in sizes: until kit.json's Wikipedia is in, the try-it kit gets its best articles' opening paragraphs and
-    # the essentials their text; once it's in, those go. (The mock's catalog lists any Wikipedia in remote/zim.)
+    # the essentials their text; once it's in, those go, and its best articles with pictures stay beside it for copies.
+    # (The mock's catalog lists any Wikipedia in remote/zim.)
     wikis = {
         "wikipedia_en_top_mini_2026-01.zim": 20_000,
         "wikipedia_en_top_nopic_2026-01.zim": 30_000,
@@ -449,8 +450,9 @@ try:
     wk_cfg()
     sizes = [kit("estimate", *a, root=wk)[1].strip() for a in (("--starter",), ("--essentials",), ())]
     check(
-        "estimate: the try-it kit and the essentials count the smaller Wikipedia standing in for kit.json's",
-        sizes == ["2", "5", "130"],
+        "estimate: the try-it kit and the essentials count the smaller Wikipedia standing in for kit.json's, and all of"
+        " it the best articles kept beside it",
+        sizes == ["2", "5", "137"],
         str(sizes),
     )
     wk_cfg(starter_only=True)
@@ -470,10 +472,16 @@ try:
     wk_cfg()
     rc, out = kit("sync", "-y", root=wk)
     check(
-        "Wikipedia sizes: all of it comes, then the one standing in for it goes",
+        "Wikipedia sizes: all of it comes with its best articles, kept for copies, then the one standing in for it goes",
         rc == 0
-        and wk_has() == ["wikipedia_en_all_maxi"]
+        and wk_has() == ["wikipedia_en_all_maxi", "wikipedia_en_top_maxi"]
         and "Removed wikipedia_en_top_nopic: kit.json has wikipedia_en_all_maxi instead." in out,
+        out,
+    )
+    rc, out = kit("test", root=wk)
+    check(
+        "Wikipedia sizes: the library serves all of it, not the best articles kept beside it",
+        "library files present: 2 .zim files" in out,
         out,
     )
     rc, out = kit("region", "--wikipedia-size", "top", root=wk)
@@ -3217,13 +3225,14 @@ esac""".replace("@PROGRAM@", str(PROGRAM))
     )
     rc, out, on, settings = ask("2\n")
     check(
-        "kit pick --ask: Essentials gets just the essentials, Wikipedia's best articles among them, sized that way",
+        "kit pick --ask: Essentials gets just the essentials, Wikipedia's best articles among them, sized that way; all"
+        " of it counts the best articles kept beside it for copies",
         rc == 0
-        and "Recommended: what we'd take. About 134 GB." in out
+        and "Recommended: what we'd take. About 141 GB." in out
         and "and Wikipedia's best articles. About 10 GB." in out
         and on == ["Tiny", "testmed_en_all_maxi", "wikipedia_en_all_maxi"]
         and settings.get("essentials_only") is True
-        and "Just the essentials: about 10 GB, of 134 GB in all" in out,
+        and "Just the essentials: about 10 GB, of 141 GB in all" in out,
         out,
     )
     c = json.loads((ak / "data" / "kit.json").read_text())
@@ -4065,6 +4074,31 @@ http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
         out,
     )
     w.write_bytes(good)
+
+    # All of Wikipedia doesn't fit: a copy takes its best articles, kept beside it for copies, and its kit.json says so
+    kit_json, state_json = big / "data" / "kit.json", big / "data" / ".kit" / "state.json"
+    saved, saved_items = {p: p.read_text() for p in (kit_json, state_json)}, dict(items)
+    c = json.loads(saved[kit_json])
+    c["library"] = [z for z in c["library"] if z["zim"] != "wikipedia_en_top_nopic"]
+    kit_json.write_text(json.dumps(c, indent=2))
+    files("library/wikipedia_en_top_maxi", "library", {"wikipedia_en_top_maxi_2026-11.zim": os.urandom(70_000)})
+    del items["library/wikipedia_en_top_nopic"]
+    state_json.write_text(json.dumps({"last_sync": "2026-11-20T10:00:00Z", "items": items}))
+    rc, out = copy("LITTLE ONE", "--essentials", "--yes", "--erase", "LITTLE ONE")
+    wiki = [z for z in copy_cfg()["library"] if z["zim"].startswith("wikipedia_")] if rc == 0 else []
+    check(
+        "all of Wikipedia doesn't fit: the copy takes the best articles kept beside it, and its kit.json switches them on",
+        rc == 0
+        and in_copy("downloads/library/wikipedia_en_top_maxi_2026-11.zim")
+        and not in_copy("downloads/library/wikipedia_en_all_maxi_2026-11.zim")
+        and [(z["zim"], z.get("enabled", True)) for z in wiki] == [("wikipedia_en_top_maxi", True)],
+        out,
+    )
+    for p, text in saved.items():
+        p.write_text(text)
+    items.clear()
+    items.update(saved_items)
+    (big / "downloads" / "library" / "wikipedia_en_top_maxi_2026-11.zim").unlink()
 
     # Make a copy, on the kit page: its page asks the notes server, on that server's own address, which runs ./kit
     # copy and follows copy.json

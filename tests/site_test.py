@@ -202,7 +202,11 @@ def round_trip(line):
         return None, picked.stdout + picked.stderr
     items = json.loads(run([program, "--root", TRIP, "estimate", "--json"]).stdout)["items"]
     region = json.load(open(os.path.join(data, "kit.json")))["maps"].get("region")
-    return sorted({"maps" if i.startswith("maps/") else i.split("/", 1)[1] for i in items}), region
+    ids = {"maps" if i.startswith("maps/") else i.split("/", 1)[1] for i in items}
+    whole = {i.split("_")[1] for i in ids if re.match(r"wikipedia_[a-z-]+_all_", i)}
+    # the best articles kept beside all of a Wikipedia, for copies, are in that Wikipedia's card
+    kept = {i for i in ids if re.match(r"wikipedia_[a-z-]+_top_", i) and i.split("_")[1] in whole}
+    return sorted(ids - kept), region
 
 
 with sync_playwright() as p:

@@ -141,7 +141,7 @@ Or replace the app folder yourself: delete it, put a new download's app folder i
 
 ## Copy it
 
-To give a kit to family or friends, or keep a spare, Make a copy (under More on the kit page, or `./kit copy`) copies as much of it as fits onto another drive plugged in: the programs for all three kinds of computer, then the essentials, the map, or everything that fits, and the AI and your notes if you want them. Nothing downloads, so it works in an outage, and the copy is a kit of its own that starts anywhere. It erases a drive only if it must (one that isn't exFAT, or is too full) and only once you type the drive's name. Then it reads every file back from the drive, starts the copy once, and makes a card to print and keep with it. Details: [GUIDE.md](kit/GUIDE.md#make-a-copy-for-someone).
+To give a kit to family or friends, or keep a spare, Make a copy (under More on the kit page, or `./kit copy`) copies as much of it as fits onto another drive plugged in: the programs for all three kinds of computer, then the essentials (with Wikipedia's best articles, which a kit with all of Wikipedia keeps for copies), the map, or everything that fits, and the AI and your notes if you want them. Nothing downloads, so it works in an outage, and the copy is a kit of its own that starts anywhere. It erases a drive only if it must (one that isn't exFAT, or is too full) and only once you type the drive's name. Then it reads every file back from the drive, starts the copy once, and makes a card to print and keep with it. Details: [GUIDE.md](kit/GUIDE.md#make-a-copy-for-someone).
 
 ## Remove
 
