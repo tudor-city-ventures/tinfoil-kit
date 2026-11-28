@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { aiAnswer, aiState } from "../../modules/kit-files";
 import { Button } from "@/components/button";
@@ -51,6 +51,7 @@ export function Ask() {
     const q = question.trim();
     if (!q || busy) return;
     const started = Date.now();
+    Keyboard.dismiss(); // out of the way of what's found
     setBusy("searching");
     // After "Searching" shows: the search itself holds up the screen while it reads
     setTimeout(() => {
