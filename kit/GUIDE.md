@@ -180,7 +180,7 @@ new in the kit's own list (`app/kit.json`).
    works. It also says how big the rest is and how long it takes on your connection.
 5. When you're ready for the rest, start SETUP again: run the command its last message gave, or double-click it in the
    kit's app folder. Unless you picked already, it asks what you want in the kit, the same choices as the kit builder on
-   tinfoilkit.com. Then it shows what that comes to and how long it takes, gets it (about 200 to 300 GB for the
+   tinfoilkit.com. Then it shows what that comes to and how long it takes, gets it (about 270 to 310 GB for the
    recommended kit; from about 20 GB for just the essentials to about 900 GB for everything), showing the time left as
    it goes, and checks again. Then it removes the try-it files you didn't pick. Leave the laptop plugged in; it stays
    awake while this runs, and the kit works the whole time. If you stop it, start SETUP in the kit's app folder again

@@ -73,7 +73,7 @@ const jsonLd = {
       memoryRequirements:
         "32 GB or more runs the default AI, Inkling 2 Mini; 16 to 24 GB runs Gemma 4 12B; 8 GB runs Gemma 4 E4B",
       storageRequirements:
-        "From about 20 GB for just the essentials to about 900 GB for everything; about 200 to 300 GB for the recommended kit",
+        "From about 20 GB for just the essentials to about 900 GB for everything; about 270 to 310 GB for the recommended kit",
       featureList: [
         "Plain-word answers from the offline library, with numbered sources you can open",
         "An AI chat that runs on your laptop and can read photos",
@@ -529,9 +529,9 @@ tools/tinfoilkit/build.sh verify SHA256SUMS`}
               experimental for now. 32&nbsp;GB of memory runs the full-size AI; with less, you get a lighter one. On
               your laptop or an external SSD, the kit takes from about 20&nbsp;GB for just the essentials (the AI, the
               map, the medical, preparedness and repair books, and Wikipedia's best articles) to about 900&nbsp;GB for
-              everything. The recommended kit is about 200 to 300&nbsp;GB. Setup checks that it fits, and says how long
+              everything. The recommended kit is about 270 to 310&nbsp;GB. Setup checks that it fits, and says how long
               it takes to download, before it starts: on a 100&nbsp;Mbps connection, about an hour for the essentials
-              and 4 to 7 hours for the recommended kit.
+              and 6 to 7 hours for the recommended kit.
             </Question>
             <Question q="Which AI will my laptop run?" block>
               <p>It depends on your laptop's memory. The kit picks for you, and you can switch any time.</p>
