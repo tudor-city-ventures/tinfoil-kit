@@ -8,7 +8,7 @@ An offline kit for when the internet goes down. One folder, on your computer or 
 - **An offline library** (Kiwix): Wikipedia, medical references, repair guides, preparedness manuals.
 - **Offline maps** with address search, driving and walking directions, and "nearest hospital".
 
-Open the kit's folder, `TinfoilKit` (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, Map and Library tabs, and Notes, Share with family, Print the essentials, AI chat and Help under More. No internet, account or install needed.
+Open the kit's folder, `TinfoilKit` (on your computer, or on the drive it's on), double-click `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat` on Windows), and a browser page opens with Ask, Map and Library tabs, and Notes, Share with family, Print the essentials, Make a copy, AI chat and Help under More. No internet, account or install needed.
 
 ![The Ask tab: a question about making water safe with bleach, the Ask the AI and Search buttons, the AI's answer with numbered citations, and the three library articles it came from](docs/ask.png)
 
@@ -49,7 +49,7 @@ Nothing needs installing first. The kit's own program (`tools/tinfoilkit-*` in t
 | Map | `pmtiles` | 8090 | Serves the map: street detail where you live (a US state, a country, or part of a big one) and a low-detail world |
 | Addresses | Photon | 2322 | Finds addresses, places and the nearest hospital or pharmacy (the whole US by default) |
 | Directions | GraphHopper | 8989 | Plans driving and walking routes in your region |
-| Notes and pins | the kit's program | 8095 | Keeps Notes and the map's home and pins in `data`, so a new version keeps them and every browser on the kit sees the same ones |
+| Notes and pins | the kit's program | 8095 | Keeps Notes and the map's home and pins in `data`, so a new version keeps them and every browser on the kit sees the same ones. Make a copy runs here too, on the computer the kit runs on only |
 | Sharing (off by default) | the kit's program | 8000 | Lets phones and laptops on your home network in once they type the access code, and passes their requests to the servers above. Share with family on the kit page turns it on and off, as does `./kit share on` (`.\kit.cmd share on` on Windows); `--share` for one run |
 
 Photon and GraphHopper run on a Java that's in the kit. The kit has each program for Macs, Windows PCs and Linux PCs, so a drive set up on one starts on all three.
@@ -141,7 +141,7 @@ Or replace the app folder yourself: delete it, put a new download's app folder i
 
 ## Copy it
 
-To give a kit to family or friends, or keep a spare, `./kit copy` (`.\kit.cmd copy` on Windows) copies as much of it as fits onto another drive plugged in: the programs for all three kinds of computer, then the essentials, the map, or everything that fits, and the AI and your notes if you want them. Nothing downloads, so it works in an outage, and the copy is a kit of its own that starts anywhere. It erases a drive only if it must (one that isn't exFAT, or is too full) and only once you type the drive's name. Then it reads every file back from the drive, starts the copy once, and makes a card to print and keep with it. Details: [GUIDE.md](kit/GUIDE.md#make-a-copy-for-someone).
+To give a kit to family or friends, or keep a spare, Make a copy (under More on the kit page, or `./kit copy`) copies as much of it as fits onto another drive plugged in: the programs for all three kinds of computer, then the essentials, the map, or everything that fits, and the AI and your notes if you want them. Nothing downloads, so it works in an outage, and the copy is a kit of its own that starts anywhere. It erases a drive only if it must (one that isn't exFAT, or is too full) and only once you type the drive's name. Then it reads every file back from the drive, starts the copy once, and makes a card to print and keep with it. Details: [GUIDE.md](kit/GUIDE.md#make-a-copy-for-someone).
 
 ## Remove
 

@@ -21,6 +21,8 @@ import (
 	"html"
 	"io"
 	"io/fs"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -29,6 +31,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 )
@@ -380,6 +383,14 @@ func copySpace(p string) (free, total int64) {
 	return diskUsage(p)
 }
 
+// fsName is a drive's format as people write it: a Mac says ExFAT, Linux exfat.
+func fsName(format string) string {
+	if strings.EqualFold(format, "exfat") {
+		return "exFAT"
+	}
+	return format
+}
+
 // copyFormatProblem is why a copy can't stay in a drive's format: it must work on Macs, Windows and Linux.
 func copyFormatProblem(format string) string {
 	f := strings.ToLower(format)
@@ -404,7 +415,7 @@ func copyDrives(root string) []*copyDrive {
 			continue
 		}
 		free, total := copySpace(p)
-		c := &copyDrive{path: p, name: d.str("name"), format: d.str("format"), free: free, total: total}
+		c := &copyDrive{path: p, name: d.str("name"), format: fsName(d.str("format")), free: free, total: total}
 		kit, partial := filepath.Join(p, kitFolder), filepath.Join(p, kitFolder+".partial")
 		c.kit, c.partial = isKit(kit) && alone(kit), isDir(filepath.Join(partial, "data", ".kit"))
 		var have int64
@@ -575,7 +586,7 @@ func copyChoose(parts []*copyPart, d *copyDrive, preset string, ai, only, add, s
 	return ch, nil
 }
 
-// copyLines is what goes in a copy, in words: a line for each part, and the books on one line.
+// copyLines is what goes in a copy, in words: a line for each part, the books on one line, then the notes.
 func copyLines(ch *copyChoice) []string {
 	var lines, books []string
 	for _, p := range ch.parts {
@@ -593,21 +604,45 @@ func copyLines(ch *copyChoice) []string {
 	} else if len(books) > 1 {
 		lines = append(lines, fmt.Sprintf("%d books: %s", len(books), strings.Join(books, ", ")))
 	}
+	if ch.notes && ch.replace {
+		lines = append(lines, "Your notes, home and map pins, if it has none of its own")
+	} else if ch.notes {
+		lines = append(lines, "Your notes, home and map pins")
+	}
 	return lines
 }
 
 // copyWarning is what a copy deletes on its drive, said before it does.
 func copyWarning(d *copyDrive, ch *copyChoice) string {
-	switch {
-	case !ch.erase:
+	if !ch.erase {
 		return d.name + " has a Tinfoil Kit already. The copy replaces it: what's the same stays, and so do its notes " +
 			"and map pins."
-	case d.mustErase != "":
-		return d.name + " needs erasing first: " + d.mustErase + ". Erasing it makes it exFAT, which Macs, Windows " +
-			"and Linux all use. Everything on " + d.name + " goes."
 	}
-	return fmt.Sprintf("%s has %s of room as it is, so it needs erasing first. Everything on %s goes.", d.name,
-		fmtBytes(d.room), d.name)
+	why := fmt.Sprintf("%s has %s of room as it is, so it needs erasing first.", d.name, fmtBytes(d.room))
+	if d.mustErase != "" {
+		why = d.name + " needs erasing first: " + d.mustErase + ". Erasing it makes it exFAT, which Macs, Windows " +
+			"and Linux all use."
+	}
+	goes := " Everything on " + d.name + " goes"
+	if held := driveHolds(d.path); len(held) > 4 {
+		goes += fmt.Sprintf(", including %s and %d more", strings.Join(held[:3], ", "), len(held)-3)
+	} else if len(held) > 0 {
+		goes += ", including " + names(held)
+	}
+	return why + goes + "."
+}
+
+// driveHolds is what's on a drive as a person sees it, for the warning before it's erased: not the system's hidden
+// files and folders.
+func driveHolds(path string) []string {
+	entries, _ := os.ReadDir(path)
+	var held []string
+	for _, e := range entries {
+		if n := e.Name(); !strings.HasPrefix(n, ".") && !strings.HasPrefix(n, "$") && n != "System Volume Information" {
+			held = append(held, n)
+		}
+	}
+	return held
 }
 
 // ----------------------------------------------------------------------------- erasing a drive
@@ -1433,6 +1468,25 @@ func copyCard(drive string, ch *copyChoice) string {
 	for _, s := range systems {
 		rows.WriteString("<dt>" + s + "</dt><dd>" + start[s] + "</dd>\n")
 	}
+	var kinds []string // what's on it, for the line under the name: just what this copy has
+	if ai != "" {
+		kinds = append(kinds, "an AI")
+	}
+	if len(books) > 0 {
+		kinds = append(kinds, "a library")
+	}
+	if maps != "" {
+		kinds = append(kinds, "maps")
+	}
+	lead := "A Tinfoil Kit that works without the internet"
+	if len(kinds) > 0 {
+		verb := " that work"
+		if len(kinds) == 1 && kinds[0] != "maps" {
+			verb = " that works"
+		}
+		lead = names(kinds)
+		lead = strings.ToUpper(lead[:1]) + lead[1:] + verb + " without the internet"
+	}
 	return `<!doctype html>
 <html lang="en">
 <head>
@@ -1462,7 +1516,7 @@ func copyCard(drive string, ch *copyChoice) string {
 <body>
 <p class="print"><button onclick="print()">Print this card</button> and keep it with the drive.</p>
 <h1>Tinfoil Kit</h1>
-<p>An AI, a library and maps that work without the internet, all on the drive <b>` + html.EscapeString(drive) + `</b>.</p>
+<p>` + lead + `, all on the drive <b>` + html.EscapeString(drive) + `</b>.</p>
 <div class="bar"></div>
 <h2>Start it</h2>
 <dl>
@@ -1681,7 +1735,7 @@ func cmdCopy(root string, a *cliArgs) {
 		if err != nil {
 			die(err.Error())
 		}
-		return ids
+		return append([]string{}, ids...) // --only with nothing in it: just the programs
 	}
 	preset, only := "", words("only")
 	for _, p := range copyPresets {
@@ -1777,6 +1831,15 @@ func cmdCopy(root string, a *cliArgs) {
 	logEnd("", fmt.Sprintf("\n=== %s: copying to %s (%s)\n", nowISO(), d.name, d.path))
 	j := newCopyJob(root)
 	j.set("drive", d.name, "path", d.path, "bytes", ch.bytes)
+	stop := filepath.Join(metaDir(root), "copy.stop") // Stop, on Make a copy's page: as Ctrl-C
+	os.Remove(stop)
+	go func() {
+		for ; !stopped(); time.Sleep(time.Second) {
+			if isFile(stop) {
+				stopOnce.Do(func() { close(stopping) })
+			}
+		}
+	}()
 	defer func() {
 		if r := recover(); r != nil {
 			if _, stop := r.(interrupted); stop {
@@ -1802,16 +1865,340 @@ func cmdCopy(root string, a *cliArgs) {
 		log("\n" + msg)
 		exit(1)
 	}
-	msg := fmt.Sprintf("Done: %s has a Tinfoil Kit of its own, for %s. Eject it before you unplug it.", d.name, names(systems))
+	msg := fmt.Sprintf("%s has a Tinfoil Kit of its own, for %s. Eject it before you unplug it.", d.name, names(systems))
 	if len(systems) == 0 {
-		msg = fmt.Sprintf("Done: %s has a Tinfoil Kit of its own. Eject it before you unplug it.", d.name)
+		msg = fmt.Sprintf("%s has a Tinfoil Kit of its own. Eject it before you unplug it.", d.name)
 	}
 	j.set("step", "done", "works", true, "message", msg, "folder", final, "systems", anyList(systems))
-	log("\n" + msg)
+	log("\nDone: " + msg)
 	if j.tty {
 		log("The card to print and keep with it is open in your browser: " + card)
 		openBrowser(card)
 	} else {
 		log("The card to print and keep with it: " + card)
 	}
+}
+
+// ----------------------------------------------------------------------------- Make a copy, from the kit page
+
+// Make a copy, under More on the kit page, opens a page of its own: the notes server serves it at /copy, on its own
+// address. The kit page's address also serves the books, whose pages can run scripts, and none of those may start a
+// copy, let alone erase a drive. So /copy answers only its own page and programs on this computer: never the kit page's
+// address, a page that frames it, or a device through the gate. The page is the kit page's own file, which sees where
+// it is and shows just Make a copy. It runs ./kit copy, which does it all, and follows data/.kit/copy.json.
+
+const copyHereOnly = "Only the computer the kit runs on can make a copy, with the drive plugged into it."
+
+// copyRunning: the steps of a copy that's being made.
+var copyRunning = []string{"starting", "erasing", "copying", "checking", "testing"}
+
+// copyRun is the copy the page started, while it runs, and the end of what it printed.
+type copyRun struct {
+	mu   sync.Mutex
+	cmd  *exec.Cmd
+	tail *tailWriter
+}
+
+// tailWriter keeps the end of what a program prints, to say why it stopped before copy.json could.
+type tailWriter struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+func (t *tailWriter) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.buf = append(t.buf, p...); len(t.buf) > 8192 {
+		t.buf = t.buf[len(t.buf)-8192:]
+	}
+	return len(p), nil
+}
+
+func (t *tailWriter) last() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return strings.TrimPrefix(lastLine(string(t.buf)), "ERROR: ")
+}
+
+// copyAsked turns away what a page sends from another address on its own (Sec-Fetch-Site), like a book's page at
+// the kit page's: only following the link to Make a copy may come from there.
+func copyAsked(r *http.Request, path string) bool {
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "", "same-origin", "none":
+		return r.Header.Get("Sec-Fetch-Dest") != "iframe"
+	}
+	return path == "/copy" && r.Header.Get("Sec-Fetch-Mode") == "navigate" && r.Header.Get("Sec-Fetch-Dest") == "document"
+}
+
+// copyPage serves Make a copy's page (/copy, the kit page's file) and the card to print (/copy/card), which may not
+// be framed, load anything, or reach anything but this server. False: it's not one of those.
+func (n *notesServer) copyPage(w http.ResponseWriter, r *http.Request, path string) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead || path != "/copy" && path != "/copy/card" {
+		return false
+	}
+	if n.kit == "" {
+		n.reply(w, r, 404, map[string]any{"error": "Make a copy works in a kit opened with its launcher."}, "")
+		return true
+	}
+	file := filepath.Join(appDir(n.kit), "tools", "portal.html")
+	if path == "/copy/card" {
+		file = filepath.Join(metaDir(n.kit), "card.html")
+	}
+	b, err := os.ReadFile(file)
+	if err != nil {
+		n.reply(w, r, 404, map[string]any{"error": "There's no card yet: make a copy first."}, "")
+		return true
+	}
+	h := w.Header()
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Content-Length", strconv.Itoa(len(b)))
+	h.Set("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "+
+		"img-src data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("Cache-Control", "no-store")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Server", "TinfoilKit-notes")
+	w.WriteHeader(200)
+	if r.Method != http.MethodHead {
+		w.Write(b)
+	}
+	return true
+}
+
+var copyID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$`)
+
+// copyArgs is ./kit copy's options for what the page asks: drive, preset (essentials, maps, everything), ai,
+// models and only (lists of ids, only even if empty: just the programs), notes, and erase (the drive's name, typed).
+func copyArgs(ask map[string]any) ([]string, error) {
+	text := func(k string) (string, error) {
+		s, _ := ask[k].(string)
+		if len(s) > 4096 || strings.ContainsAny(s, "\x00\r\n") {
+			return "", &turnedDown{400, "That " + k + " can't be right.", nil}
+		}
+		return s, nil
+	}
+	drive, err := text("drive")
+	if err != nil || drive == "" {
+		return nil, &turnedDown{400, "Pick the drive the copy goes on.", nil}
+	}
+	var args []string
+	switch p, _ := ask["preset"].(string); p {
+	case "":
+	case "essentials", "maps", "everything":
+		args = append(args, "--"+p)
+	default:
+		return nil, &turnedDown{400, "There's no preset called " + p + ".", nil}
+	}
+	if b, _ := ask["ai"].(bool); b {
+		args = append(args, "--ai")
+	}
+	for _, k := range []string{"models", "only"} {
+		list, given := ask[k].([]any)
+		if !given || k == "models" && len(list) == 0 {
+			continue
+		}
+		var ids []string
+		for _, v := range list {
+			id, _ := v.(string)
+			if !copyID.MatchString(id) {
+				return nil, &turnedDown{400, "This kit has nothing called " + fmt.Sprint(v) + " to copy.", nil}
+			}
+			ids = append(ids, id)
+		}
+		args = append(args, "--"+k+"="+strings.Join(ids, ","))
+	}
+	if b, _ := ask["notes"].(bool); b {
+		args = append(args, "--notes")
+	}
+	if name, err := text("erase"); err != nil {
+		return nil, err
+	} else if name != "" {
+		args = append(args, "--erase="+name)
+	}
+	return append(args, "--", drive), nil
+}
+
+// kitRun runs this program's ./kit copy on this kit, and what it printed; an error says what it said went wrong.
+func (n *notesServer) kitRun(args ...string) ([]byte, error) {
+	if n.kit == "" {
+		return nil, &turnedDown{404, "Make a copy works in a kit opened with its launcher.", nil}
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(self, append([]string{"--root=" + n.kit, "copy"}, args...)...)
+	var stdout bytes.Buffer
+	tail := &tailWriter{}
+	cmd.Stdout, cmd.Stderr = io.MultiWriter(&stdout, tail), tail
+	done := make(chan error, 1)
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err = <-done:
+	case <-time.After(2 * time.Minute):
+		cmd.Process.Kill()
+		<-done
+		return nil, &turnedDown{504, "The kit took too long to look at the drives. Try again.", nil}
+	}
+	if err != nil {
+		return nil, &turnedDown{400, tail.last(), nil}
+	}
+	return stdout.Bytes(), nil
+}
+
+// copyAnswer is ./kit copy --json for the page: what this kit has and the drives (/copy/info, with the copy being
+// made, if there is one, and the kit page's address), or what a copy on one drive would be (/copy/plan).
+func (n *notesServer) copyAnswer(q url.Values, plan bool) (int, any, error) {
+	args := []string{"--json"}
+	if plan {
+		ask := map[string]any{"drive": q.Get("drive"), "preset": q.Get("preset"), "ai": q.Get("ai") == "1",
+			"notes": q.Get("notes") == "1"}
+		for _, k := range []string{"models", "only"} {
+			if q.Has(k) {
+				list := []any{}
+				for _, id := range strings.Split(q.Get(k), ",") {
+					if id != "" {
+						list = append(list, id)
+					}
+				}
+				ask[k] = list
+			}
+		}
+		more, err := copyArgs(ask)
+		if err != nil {
+			return 0, nil, err
+		}
+		args = append(args, more...)
+	}
+	b, err := n.kitRun(args...)
+	if err != nil {
+		return 0, nil, err
+	}
+	v, _ := decodeJSON(b)
+	m, ok := v.(map[string]any)
+	if !ok {
+		return 0, nil, &turnedDown{500, "The kit's answer about its drives didn't make sense.", nil}
+	}
+	if !plan {
+		m["job"] = n.copyJob()
+		for o := range n.origins {
+			if strings.HasPrefix(o, "http://127.0.0.1:") {
+				m["kitPage"] = o + "/"
+			}
+		}
+	}
+	return 200, m, nil
+}
+
+func (n *notesServer) copyFile(name string) string { return filepath.Join(metaDir(n.kit), name) }
+
+// copyJob is the copy being made, or the last one (copy.json), with running: whether it still is, even when a
+// terminal started it. A copy whose program has gone without saying how it ended stopped.
+func (n *notesServer) copyJob() map[string]any {
+	n.copying.mu.Lock()
+	defer n.copying.mu.Unlock()
+	return n.copyJobLocked()
+}
+
+// copySaid is copy.json as ./kit copy last saved it.
+func (n *notesServer) copySaid() map[string]any {
+	if n.kit != "" {
+		if b, err := os.ReadFile(n.copyFile("copy.json")); err == nil {
+			if v, _ := decodeJSON(b); v != nil {
+				if m, ok := v.(map[string]any); ok {
+					return m
+				}
+			}
+		}
+	}
+	return map[string]any{}
+}
+
+func (n *notesServer) copyJobLocked() map[string]any {
+	job := n.copySaid()
+	if n.kit == "" {
+		return job
+	}
+	step, _ := job["step"].(string)
+	going := contains(copyRunning, step)
+	alive := n.copying.cmd != nil
+	if pid, _ := strconv.Atoi(fmt.Sprint(job["pid"])); going && !alive && pid > 0 { // a copy started in a terminal
+		alive = pidAlive(pid)
+	}
+	if going && !alive {
+		job["step"], job["message"] = "stopped", "The copy stopped before it was done. Make it again to carry on "+
+			"where it left off."
+	}
+	job["running"] = going && alive
+	job["stopping"] = going && alive && isFile(n.copyFile("copy.stop"))
+	job["card"] = isFile(n.copyFile("card.html"))
+	return job
+}
+
+// startCopy starts ./kit copy with what the page asked for (copyArgs), unless a copy is being made already.
+func (n *notesServer) startCopy(ask map[string]any) (map[string]any, error) {
+	args, err := copyArgs(ask)
+	if err != nil {
+		return nil, err
+	}
+	if n.kit == "" {
+		return nil, &turnedDown{404, "Make a copy works in a kit opened with its launcher.", nil}
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	n.copying.mu.Lock()
+	defer n.copying.mu.Unlock()
+	if running, _ := n.copyJobLocked()["running"].(bool); running {
+		return nil, &turnedDown{409, "A copy is being made already. One at a time: wait for it to finish, or stop it.", nil}
+	}
+	os.Remove(n.copyFile("copy.stop"))
+	drive, _ := ask["drive"].(string)
+	if err := writeWhole(n.copyFile("copy.json"), encodeJSON(map[string]any{"step": "starting", "path": drive,
+		"started": nowISO()}, "  ")); err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(self, append([]string{"--root=" + n.kit, "copy", "--yes"}, args...)...)
+	tail := &tailWriter{}
+	cmd.Stdout, cmd.Stderr = tail, tail
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	n.copying.cmd, n.copying.tail = cmd, tail
+	go func() {
+		cmd.Wait()
+		n.copying.mu.Lock()
+		defer n.copying.mu.Unlock()
+		n.copying.cmd = nil
+		// a copy that ended before saying how in copy.json: what it printed last says why
+		if job := n.copySaid(); contains(copyRunning, fmt.Sprint(job["step"])) {
+			msg, step := tail.last(), "failed"
+			if isFile(n.copyFile("copy.stop")) {
+				msg, step = "Stopped. Make the copy again to carry on where it left off.", "stopped"
+			}
+			job["step"], job["message"] = step, msg
+			writeWhole(n.copyFile("copy.json"), encodeJSON(job, "  "))
+		}
+		os.Remove(n.copyFile("copy.stop"))
+	}()
+	return n.copyJobLocked(), nil
+}
+
+// stopCopy asks the copy being made to stop, whoever started it: it notices copy.stop within a second, keeps what
+// it copied, and carries on from there next time.
+func (n *notesServer) stopCopy() (map[string]any, error) {
+	n.copying.mu.Lock()
+	defer n.copying.mu.Unlock()
+	if running, _ := n.copyJobLocked()["running"].(bool); !running {
+		return nil, &turnedDown{409, "No copy is being made.", nil}
+	}
+	if err := writeWhole(n.copyFile("copy.stop"), []byte(nowISO()+"\n")); err != nil {
+		return nil, err
+	}
+	return n.copyJobLocked(), nil
 }

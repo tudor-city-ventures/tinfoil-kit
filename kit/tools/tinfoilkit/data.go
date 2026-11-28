@@ -8,7 +8,8 @@ package main
 // but this computer's own (a website pointing a name of its own at 127.0.0.1) by its Host. Through the gate, the
 // devices at home that have the access code reach it at /data/. It also tells the kit page on this computer how
 // others get in when the kit is shared (/share), which only the gate knows otherwise, and turns sharing on and off for
-// that page and ./kit share, never for a device through the gate.
+// that page and ./kit share, never for a device through the gate. On its own address, never the kit page's, it serves
+// Make a copy's page and makes copies for it (/copy, copy.go).
 
 import (
 	"bytes"
@@ -294,10 +295,12 @@ func (s *notesStore) deletePin(id string) (map[string]any, error) {
 
 type notesServer struct {
 	store   *notesStore
-	origins map[string]bool
+	origins map[string]bool // the kit page's address
+	home    map[string]bool // this server's own, where Make a copy's page is
 	port    int
 	ln      net.Listener
 	log     *stdlog.Logger
+	copying copyRun // a copy Make a copy started
 
 	kit       string                 // for /share: the kit folder, with the access code
 	sharePort int                    // and share_port, where the gate answers if the kit is shared
@@ -309,11 +312,13 @@ func newNotesServer(data string, port, library int, logTo io.Writer) (*notesServ
 	if err != nil {
 		return nil, err
 	}
-	page := strconv.Itoa(library)
+	page, port := strconv.Itoa(library), ln.Addr().(*net.TCPAddr).Port
+	own := strconv.Itoa(port)
 	return &notesServer{
 		store:   &notesStore{notes: filepath.Join(data, "notes.txt"), places: filepath.Join(data, "places.json")},
 		origins: map[string]bool{"http://127.0.0.1:" + page: true, "http://localhost:" + page: true},
-		port:    ln.Addr().(*net.TCPAddr).Port, ln: ln, log: stdlog.New(logTo, "", stdlog.LstdFlags),
+		home:    map[string]bool{"http://127.0.0.1:" + own: true, "http://localhost:" + own: true},
+		port:    port, ln: ln, log: stdlog.New(logTo, "", stdlog.LstdFlags),
 	}, nil
 }
 
@@ -335,20 +340,35 @@ func hostOK(host string) bool {
 }
 
 func (n *notesServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.EscapedPath()
+	copying, allowed := path == "/copy" || strings.HasPrefix(path, "/copy/"), n.origins
+	if copying {
+		allowed = n.home
+	}
 	// "" for a request with no Origin: a program on this computer, or the gate, which drops it
 	origin, ok := "", true
 	if o, has := r.Header["Origin"]; has && len(o) > 0 {
-		origin, ok = o[0], n.origins[o[0]]
+		origin, ok = o[0], allowed[o[0]]
+	}
+	if copying && ok {
+		ok = copyAsked(r, path)
 	}
 	if !hostOK(r.Host) || !ok {
 		n.reply(w, r, 403, map[string]any{"error": "This answers the kit's own page only."}, "")
+		return
+	}
+	if copying && r.Header.Get(viaGate) != "" { // (the gate refuses these itself, too)
+		n.reply(w, r, 403, map[string]any{"error": copyHereOnly}, "")
 		return
 	}
 	if r.Method == http.MethodOptions {
 		n.reply(w, r, 204, nil, origin)
 		return
 	}
-	status, obj, err := n.answer(r, r.URL.EscapedPath())
+	if copying && n.copyPage(w, r, path) {
+		return
+	}
+	status, obj, err := n.answer(r, path)
 	var no *turnedDown
 	switch {
 	case errors.As(err, &no):
@@ -399,6 +419,17 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 			return 0, nil, &turnedDown{403, "Only the computer the kit runs on can change sharing.", nil}
 		}
 		return withBody(n.setShare)
+	case path == "/copy/info" && reading:
+		return n.copyAnswer(r.URL.Query(), false)
+	case path == "/copy/plan" && reading:
+		return n.copyAnswer(r.URL.Query(), true)
+	case path == "/copy/job" && reading:
+		return 200, n.copyJob(), nil
+	case path == "/copy/job" && put:
+		return withBody(n.startCopy)
+	case path == "/copy/job" && r.Method == http.MethodDelete:
+		v, err := n.stopCopy()
+		return 200, v, err
 	}
 	id, isPin := strings.CutPrefix(path, "/places/pins/")
 	if isPin && !pinID.MatchString(id) {
@@ -410,7 +441,8 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 	case isPin && r.Method == http.MethodDelete:
 		v, err := st.deletePin(id)
 		return 200, v, err
-	case isPin || path == "/" || path == "/notes" || path == "/places" || path == "/places/home" || path == "/share":
+	case isPin || path == "/" || path == "/notes" || path == "/places" || path == "/places/home" || path == "/share" ||
+		path == "/copy/info" || path == "/copy/plan" || path == "/copy/job":
 		return 405, map[string]any{"error": "Not that way."}, nil
 	}
 	return 404, map[string]any{"error": "Nothing here."}, nil
@@ -582,6 +614,9 @@ func runData(args []string) int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't keep notes and pins on port %d: %s\n", *port, errText(err))
 		return 1
+	}
+	if kit := filepath.Dir(filepath.Clean(*data)); isKit(kit) {
+		n.kit = kit // for Make a copy
 	}
 	fmt.Printf("Notes and pins on port %d, in %s\n", n.port, *data)
 	if err := n.serve(); err != nil {

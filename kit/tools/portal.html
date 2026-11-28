@@ -713,6 +713,135 @@
         background: #fff;
       }
 
+      /* Make a copy: a page of its own (the notes server's /copy), where the header shows just the kit's name */
+      body.copy-page .status-wrap,
+      body.copy-page nav,
+      body.copy-page #moreMenu {
+        display: none;
+      }
+      #copyHome {
+        margin-left: auto;
+        font-size: 15px;
+      }
+      #copy .lead {
+        margin: 0 0 8px;
+        font-size: 17px;
+        color: var(--ink2);
+      }
+      #copy .label {
+        margin: 26px 0 10px;
+      }
+      .copy-choices {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .copy-choice {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 2px solid var(--line);
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .copy-choice:has(input:checked) {
+        border-color: var(--signal);
+        background: var(--panel);
+      }
+      #copy input[type="radio"],
+      #copy input[type="checkbox"] {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        min-height: 0;
+        margin: 2px 0 0;
+        padding: 0;
+        accent-color: var(--signal);
+        -webkit-appearance: auto;
+        appearance: auto;
+      }
+      .copy-choice > span {
+        flex: 1;
+        min-width: 0;
+      }
+      .copy-choice small {
+        display: block;
+        font-size: 14px;
+        color: var(--ink2);
+      }
+      .copy-choice .copy-size {
+        flex: none;
+        font: 500 13px/1.9 var(--mono);
+        color: var(--ink2);
+        white-space: nowrap;
+      }
+      .copy-parts {
+        margin: 12px 0 0;
+        padding: 0;
+        list-style: none;
+        columns: 2 18rem;
+      }
+      .copy-parts li {
+        padding: 5px 0;
+        break-inside: avoid;
+      }
+      .copy-parts .copy-check {
+        margin: 0;
+      }
+      .copy-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin: 10px 0;
+        cursor: pointer;
+      }
+      .copy-check > span {
+        flex: 1;
+      }
+      .copy-meter {
+        height: 14px;
+        margin: 20px 0 6px;
+        border: 2px solid var(--line);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .copy-meter div {
+        width: 0;
+        height: 100%;
+        background: var(--olive);
+      }
+      .copy-meter.over div {
+        background: var(--signal);
+      }
+      .copy-warn {
+        padding: 12px 14px;
+        border: 2px solid var(--signal);
+        border-radius: 4px;
+      }
+      #copy ul:not(.copy-parts) {
+        margin: 0 0 16px;
+        padding-left: 22px;
+      }
+      #copy .row {
+        margin-top: 16px;
+      }
+      #copyNameLabel {
+        display: block;
+        margin: 8px 0 6px;
+        font-weight: 600;
+      }
+      #copyName {
+        display: block;
+        max-width: 24rem;
+      }
+      #copyJobSay {
+        overflow-wrap: anywhere;
+      }
+      #copySay:empty {
+        display: none;
+      }
+
       /* Print the essentials: what to print, numbered on across both lists in the site's step circles, then the
          household's own page as it prints */
       #print {
@@ -1268,9 +1397,11 @@
         <a href="#notes" data-tab="notes">Notes</a>
         <a href="#share" data-tab="share">Share with family</a>
         <a href="#print" data-tab="print">Print the essentials</a>
+        <a id="copyLink" target="_blank" rel="noopener">Make a copy &#8599;</a>
         <a id="chatLink" target="_blank" rel="noopener">AI chat &#8599;</a>
         <a href="#help" data-tab="help">Help</a>
       </div>
+      <a id="copyHome" hidden>Back to the kit</a>
     </header>
     <main>
       <section id="ask" class="on">
@@ -1459,6 +1590,65 @@
         <p id="shareSay" class="note" role="status"></p>
       </section>
 
+      <section id="copy">
+        <h2>Make a copy</h2>
+        <p class="lead">
+          Copy this kit onto another drive, as much as fits, to give to family or friends or keep as a spare. The copy
+          works on its own on a Mac, Windows or Linux computer, with no internet.
+        </p>
+        <div id="copyChoose" hidden>
+          <p class="label">The drive</p>
+          <div id="copyDrives" class="copy-choices"></div>
+          <p id="copyNoDrive" class="note" hidden>
+            Plug in the drive the copy goes on, then press Look again. The drive this kit is on can't take a copy of it.
+          </p>
+          <div class="row">
+            <button id="copyLook" type="button" class="secondary">Look again</button>
+          </div>
+          <p class="label">What goes on it</p>
+          <div id="copyPresets" class="copy-choices"></div>
+          <ul id="copyParts" class="copy-parts" hidden></ul>
+          <label id="copyAIRow" class="copy-check" hidden>
+            <input id="copyAI" type="checkbox" />
+            <span>Add the AI, <b id="copyAIName"></b>. Without it, Ask finds answers in the books.</span>
+          </label>
+          <label id="copyNotesRow" class="copy-check" hidden>
+            <input id="copyNotes" type="checkbox" />
+            <span>Bring your notes, home and map pins. Without them, the copy starts clean.</span>
+          </label>
+          <div id="copyMeter" class="copy-meter"><div></div></div>
+          <p id="copyFits" class="note"></p>
+          <div class="row">
+            <button id="copyNext" type="button">Next</button>
+          </div>
+        </div>
+        <div id="copySure" hidden>
+          <p id="copySummary"></p>
+          <ul id="copyLines"></ul>
+          <p id="copyWarn" class="copy-warn" hidden></p>
+          <div id="copyNameRow" hidden>
+            <label for="copyName" id="copyNameLabel"></label>
+            <input id="copyName" type="text" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="row">
+            <button id="copyGo" type="button">Make the copy</button>
+            <button id="copyBack" type="button" class="secondary">Back</button>
+          </div>
+        </div>
+        <div id="copyJob" hidden>
+          <p id="copyStep" class="label"></p>
+          <div id="copyJobMeter" class="copy-meter"><div></div></div>
+          <p id="copyJobLine" class="note"></p>
+          <p id="copyJobSay"></p>
+          <div class="row">
+            <button id="copyStop" type="button" class="secondary">Stop</button>
+            <button id="copyCard" type="button" hidden>Print the card</button>
+            <button id="copyAgain" type="button" class="secondary" hidden>Make another copy</button>
+          </div>
+        </div>
+        <p id="copySay" class="note" role="status"></p>
+      </section>
+
       <section id="print">
         <h2>Print the essentials</h2>
         <p class="lead">
@@ -1530,6 +1720,10 @@
           </li>
           <li>
             <b><a href="#share">Share with family</a></b> lets the phones and laptops on your Wi-Fi use the kit too.
+          </li>
+          <li>
+            <b>Make a copy</b>, under <b>More</b>, puts this kit on another drive, as much as fits, to give to family or
+            friends. The copy works on its own, with no internet.
           </li>
           <li>
             The button beside the name says how the kit is: <b>Ready</b>, <b>Starting</b> while the AI loads, or
@@ -2895,6 +3089,52 @@
           );
         }
 
+        // Make a copy: what a preset takes on a drive, worked out as ./kit copy does (copyFill and copyChoose in
+        // copy.go), so the page shows each one's size as the person picks. ./kit copy decides, when it's made.
+        function copySize(n) {
+          var units = [
+            ["TB", 1e12],
+            ["GB", 1e9],
+            ["MB", 1e6],
+            ["KB", 1e3],
+          ];
+          for (var i = 0; i < units.length; i++) {
+            if (n >= units[i][1]) return (n / units[i][1]).toFixed(1) + " " + units[i][0];
+          }
+          return Math.round(n) + " B";
+        }
+        // a preset's wishes, from ./kit copy --json, with the AI models after the programs when they go
+        function copyWishes(wishes, ai) {
+          return wishes.slice(0, 1).concat(ai || [], wishes.slice(1));
+        }
+        // each wish that still fits in room, in order: the programs whatever the room, address search only with the map
+        function copyFill(parts, wishes, room) {
+          var by = {},
+            ids = [],
+            bytes = 0;
+          parts.forEach(function (p) {
+            by[p.id] = p;
+          });
+          wishes.forEach(function (id) {
+            var p = by[id];
+            if (!p || ids.indexOf(id) >= 0 || (id === "addresses" && ids.indexOf("map") < 0)) return;
+            if (id === "programs" || bytes + p.bytes <= room) {
+              ids.push(id);
+              bytes += p.bytes;
+            }
+          });
+          return { ids: ids, bytes: bytes };
+        }
+        // the room a preset fills on drive d: as it is, or all of it when it must be erased anyway
+        function copyRoom(d) {
+          return d.mustErase ? Math.max(d.room, d.erasedRoom) : d.room;
+        }
+        // what bytes of copy does to drive d: fits as it is, or once erased (erase), or not even then
+        function copyFit(d, bytes) {
+          var erase = Boolean(d.mustErase) || bytes > d.room;
+          return { erase: erase, fits: bytes <= (erase ? d.erasedRoom : d.room), room: erase ? d.erasedRoom : d.room };
+        }
+
         return {
           invite: invite,
           keywords: keywords,
@@ -2940,6 +3180,11 @@
           runMapTool: runMapTool,
           mapAgent: mapAgent,
           guessMapIntent: guessMapIntent,
+          copySize: copySize,
+          copyWishes: copyWishes,
+          copyFill: copyFill,
+          copyRoom: copyRoom,
+          copyFit: copyFit,
         };
       })();
       if (typeof module !== "undefined" && module.exports) {
@@ -2989,6 +3234,11 @@
             aiUp = false,
             running = null;
 
+          // Make a copy runs on a page of its own: this file, which the notes server serves at /copy on its own
+          // address, away from the books, whose pages can run scripts. Only this computer has the drives.
+          if (location.pathname === "/copy" && !GATE) return copyPage();
+          $("copyLink").href = DATA + "/copy";
+          $("copyLink").hidden = Boolean(GATE);
           $("chatLink").href = AI + "/";
           if (window.KIT_REFRESHED) {
             // the last complete ./kit sync, written into the page by the kit
@@ -3000,6 +3250,381 @@
                 day: "numeric",
               });
             $("refreshed").hidden = false;
+          }
+          // Make a copy: pick the drive and what goes on it, then ./kit copy (through the notes server) makes it, and
+          // this follows data/.kit/copy.json until it's done. The drive's name, typed, says yes to erasing it or
+          // replacing the kit on it.
+          function copyPage() {
+            document.body.classList.add("copy-page");
+            document.title = "Make a copy - Tinfoil Kit";
+            document.querySelectorAll("main section").forEach(function (s) {
+              s.classList.toggle("on", s.id === "copy");
+            });
+            var info = null,
+              drive = null,
+              preset = "maps",
+              picked = [],
+              plan = null,
+              timer = null,
+              busy = false;
+            var STEPS = {
+              starting: "Getting ready...",
+              erasing: "Erasing the drive...",
+              copying: "Copying",
+              checking: "Reading it all back from the drive, to check it",
+              testing: "Starting the copy once, to be sure it works...",
+            };
+            function api(method, path, body) {
+              var c = new AbortController(),
+                t = setTimeout(function () {
+                  c.abort();
+                }, 150000);
+              return fetch(path, {
+                method: method,
+                signal: c.signal,
+                cache: "no-store",
+                headers: body ? { "Content-Type": "application/json" } : {},
+                body: body ? JSON.stringify(body) : undefined,
+              })
+                .then(function (r) {
+                  return r
+                    .json()
+                    .catch(function () {
+                      return null;
+                    })
+                    .then(function (j) {
+                      if (r.ok) return j;
+                      var e = new Error((j && j.error) || "The kit answered " + r.status + ".");
+                      e.status = r.status;
+                      throw e;
+                    });
+                })
+                .finally(function () {
+                  clearTimeout(t);
+                });
+            }
+            function say(t) {
+              $("copySay").textContent = t || "";
+            }
+            function failed(e) {
+              say(e.status ? e.message : "The kit didn't answer. Close its window and open it again.");
+            }
+            function show(id) {
+              ["copyChoose", "copySure", "copyJob"].forEach(function (x) {
+                $(x).hidden = x !== id;
+              });
+            }
+            function load() {
+              say("Looking at the drives...");
+              clearTimeout(timer);
+              api("GET", "/copy/info").then(function (i) {
+                info = i;
+                say("");
+                if (i.kitPage) {
+                  $("copyHome").href = i.kitPage;
+                  $("copyHome").hidden = false;
+                }
+                var j = i.job || {},
+                  recent = j.updated && Date.now() - new Date(j.updated).getTime() < 30 * 60000;
+                if (j.running || (recent && j.step === "done")) follow(j);
+                else choose();
+              }, failed);
+            }
+            // a radio button with its name, a line under it and a size beside it
+            function option(group, title, line, checked, onPick) {
+              var l = document.createElement("label"),
+                r = document.createElement("input"),
+                s = document.createElement("span"),
+                b = document.createElement("b"),
+                sm = document.createElement("small"),
+                size = document.createElement("span");
+              l.className = "copy-choice";
+              r.type = "radio";
+              r.name = group;
+              r.checked = checked;
+              r.addEventListener("change", onPick);
+              b.textContent = title;
+              sm.textContent = line;
+              size.className = "copy-size";
+              s.append(b, sm);
+              l.append(r, s, size);
+              return l;
+            }
+            function partsBy() {
+              var by = {};
+              info.parts.forEach(function (p) {
+                by[p.id] = p;
+              });
+              return by;
+            }
+            function aiIds() {
+              return info.ai && $("copyAI").checked ? [info.ai] : null;
+            }
+            // what goes, for the preset or the parts picked: ids and bytes
+            function selection(p) {
+              if (p === "pick") {
+                var by = partsBy(),
+                  ids = ["programs"].concat(picked),
+                  bytes = 0;
+                ids.forEach(function (id) {
+                  bytes += by[id] ? by[id].bytes : 0;
+                });
+                return { ids: ids, bytes: bytes };
+              }
+              var pr = info.presets.filter(function (x) {
+                return x.id === p;
+              })[0];
+              return Kit.copyFill(info.parts, Kit.copyWishes(pr.wishes, aiIds()), Kit.copyRoom(drive));
+            }
+            function choose() {
+              show("copyChoose");
+              var drives = info.drives || [];
+              drive =
+                drives.filter(function (d) {
+                  return drive && d.path === drive.path;
+                })[0] ||
+                drives[0] ||
+                null;
+              $("copyNoDrive").hidden = drives.length > 0;
+              $("copyDrives").textContent = "";
+              drives.forEach(function (d) {
+                var line =
+                  Kit.copySize(d.room) +
+                  " of room" +
+                  (d.format ? ", " + d.format : "") +
+                  (d.mustErase
+                    ? ". Needs erasing first: " + d.mustErase + "."
+                    : d.kit
+                      ? ". Has a Tinfoil Kit, which the copy replaces, keeping its notes."
+                      : d.partial
+                        ? ". Has a copy that stopped partway: this carries on from there."
+                        : "");
+                $("copyDrives").appendChild(
+                  option("copyDrive", d.name, line, d === drive, function () {
+                    drive = d;
+                    update();
+                  }),
+                );
+              });
+              $("copyPresets").textContent = "";
+              info.presets
+                .concat([{ id: "pick", name: "Pick each part", about: "Each book, the map and the AI, one by one." }])
+                .forEach(function (pr) {
+                  var o = option("copyPreset", pr.name, pr.about, pr.id === preset, function () {
+                    if (pr.id === "pick" && preset !== "pick") picked = drive ? selection(preset).ids.slice(1) : [];
+                    preset = pr.id;
+                    update();
+                  });
+                  o.dataset.preset = pr.id;
+                  $("copyPresets").appendChild(o);
+                });
+              $("copyParts").textContent = "";
+              info.parts.forEach(function (p) {
+                var li = document.createElement("li"),
+                  l = document.createElement("label"),
+                  c = document.createElement("input"),
+                  s = document.createElement("span");
+                l.className = "copy-check";
+                c.type = "checkbox";
+                c.value = p.id;
+                c.disabled = p.id === "programs"; // they always go
+                s.textContent = p.title + ", " + Kit.copySize(p.bytes);
+                c.addEventListener("change", function () {
+                  picked = picked.filter(function (id) {
+                    return id !== p.id;
+                  });
+                  if (c.checked) picked.push(p.id);
+                  if (c.checked && p.id === "addresses" && picked.indexOf("map") < 0) picked.push("map");
+                  if (!c.checked && p.id === "map")
+                    picked = picked.filter(function (id) {
+                      return id !== "addresses";
+                    });
+                  update();
+                });
+                l.append(c, s);
+                li.appendChild(l);
+                $("copyParts").appendChild(li);
+              });
+              $("copyAIRow").hidden = !info.ai;
+              if (info.ai)
+                $("copyAIName").textContent = partsBy()[info.ai].title + ", " + Kit.copySize(partsBy()[info.ai].bytes);
+              $("copyNotesRow").hidden = !info.notes;
+              update();
+            }
+            function update() {
+              document.querySelectorAll("#copyPresets .copy-choice").forEach(function (o) {
+                var id = o.dataset.preset;
+                o.querySelector(".copy-size").textContent =
+                  drive && id !== "pick" ? Kit.copySize(selection(id).bytes) : "";
+              });
+              var pick = preset === "pick";
+              $("copyParts").hidden = !pick;
+              $("copyAIRow").hidden = !info.ai || pick;
+              document.querySelectorAll("#copyParts input").forEach(function (c) {
+                c.checked = c.value === "programs" || picked.indexOf(c.value) >= 0;
+              });
+              var s = drive && selection(preset),
+                fit = s && Kit.copyFit(drive, s.bytes),
+                size = s && Kit.copySize(s.bytes);
+              $("copyMeter").hidden = !s;
+              if (s) {
+                $("copyMeter").firstChild.style.width = Math.min(100, (100 * s.bytes) / Math.max(fit.room, 1)) + "%";
+                $("copyMeter").classList.toggle("over", !fit.fits);
+              }
+              $("copyFits").textContent = !s
+                ? ""
+                : !fit.fits
+                  ? "That's " +
+                    size +
+                    ", and " +
+                    drive.name +
+                    " has room for " +
+                    Kit.copySize(drive.erasedRoom) +
+                    ", even erased. Pick less."
+                  : fit.erase
+                    ? size + ". " + drive.name + " needs erasing first, so everything on it goes."
+                    : size + " of the " + Kit.copySize(drive.room) + " of room on " + drive.name + ".";
+            }
+            function asked() {
+              var a = { drive: drive.path, notes: Boolean(info.notes) && $("copyNotes").checked };
+              if (preset === "pick") a.only = picked.slice();
+              else {
+                a.preset = preset;
+                a.ai = Boolean(aiIds());
+              }
+              return a;
+            }
+            $("copyNext").addEventListener("click", function () {
+              if (busy) return;
+              if (!drive) return say("Plug in the drive the copy goes on, then press Look again.");
+              var s = selection(preset);
+              if (!Kit.copyFit(drive, s.bytes).fits) return say($("copyFits").textContent);
+              var a = asked(),
+                q = new URLSearchParams({ drive: a.drive });
+              if (a.preset) q.set("preset", a.preset);
+              if (a.ai) q.set("ai", "1");
+              if (a.only) q.set("only", a.only.join(","));
+              if (a.notes) q.set("notes", "1");
+              busy = true;
+              say("Working it out...");
+              api("GET", "/copy/plan?" + q)
+                .then(function (p) {
+                  plan = p;
+                  plan.asked = a;
+                  say("");
+                  sure();
+                }, failed)
+                .finally(function () {
+                  busy = false;
+                });
+            });
+            function sure() {
+              show("copySure");
+              var named = plan.erase || plan.replace;
+              $("copySummary").textContent = "The copy: " + Kit.copySize(plan.bytes) + " on " + plan.drive + ".";
+              $("copyLines").textContent = "";
+              plan.lines.forEach(function (t) {
+                var li = document.createElement("li");
+                li.textContent = t;
+                $("copyLines").appendChild(li);
+              });
+              $("copyWarn").textContent = plan.eraseHow || plan.warning || "";
+              $("copyWarn").hidden = !$("copyWarn").textContent;
+              $("copyNameRow").hidden = !named || Boolean(plan.eraseHow);
+              $("copyNameLabel").textContent = "Type " + plan.drive + " to go ahead";
+              $("copyName").value = "";
+              $("copyGo").hidden = Boolean(plan.eraseHow);
+              $("copyGo").textContent = plan.erase
+                ? "Erase and copy"
+                : plan.replace
+                  ? "Replace and copy"
+                  : "Make the copy";
+              (named && !plan.eraseHow ? $("copyName") : $("copyGo").hidden ? $("copyBack") : $("copyGo")).focus();
+            }
+            function go() {
+              if (busy) return;
+              var a = Object.assign({}, plan.asked);
+              if (plan.erase || plan.replace) {
+                a.erase = $("copyName").value.trim();
+                if (a.erase.toLowerCase() !== plan.drive.toLowerCase()) {
+                  say("Type " + plan.drive + " to go ahead.");
+                  return $("copyName").focus();
+                }
+              }
+              busy = true;
+              say("");
+              api("PUT", "/copy/job", a)
+                .then(follow, failed)
+                .finally(function () {
+                  busy = false;
+                });
+            }
+            $("copyGo").addEventListener("click", go);
+            $("copyName").addEventListener("keydown", function (ev) {
+              if (ev.key === "Enter") go();
+            });
+            $("copyBack").addEventListener("click", function () {
+              say("");
+              choose();
+            });
+            $("copyLook").addEventListener("click", load);
+            // the copy being made: its step, how far it's got, and how it ended
+            function follow(j) {
+              show("copyJob");
+              showJob(j);
+              clearTimeout(timer);
+              (function poll() {
+                api("GET", "/copy/job").then(
+                  function (now) {
+                    showJob(now);
+                    if (now.running) timer = setTimeout(poll, 1000);
+                  },
+                  function () {
+                    timer = setTimeout(poll, 3000);
+                  },
+                );
+              })();
+            }
+            function showJob(j) {
+              var going = Boolean(j.running),
+                done = j.step === "done";
+              $("copyStep").textContent = going
+                ? (STEPS[j.step] || "Copying").replace("the drive", j.drive || "the drive")
+                : done
+                  ? j.works === false
+                    ? "Copied, but it didn't start"
+                    : "Done"
+                  : j.step === "stopped"
+                    ? "Stopped"
+                    : "It didn't work";
+              var frac = j.total ? Math.min(1, j.done / j.total) : 0;
+              $("copyJobMeter").firstChild.style.width = (done ? 100 : 100 * frac) + "%";
+              $("copyJobMeter").classList.toggle("over", !going && !done);
+              $("copyJobLine").textContent =
+                going && j.total
+                  ? Kit.copySize(j.done) +
+                    " of " +
+                    Kit.copySize(j.total) +
+                    (j.rate ? ", " + Kit.copySize(j.rate) + " a second" : "") +
+                    (j.left ? ", " + j.left + " left" : "")
+                  : "";
+              $("copyJobSay").textContent = going
+                ? j.stopping
+                  ? "Stopping..."
+                  : (j.file || "").split(/[\\/]/).pop()
+                : j.message || "";
+              $("copyStop").hidden = !going;
+              $("copyCard").hidden = going || !done || !j.card;
+              $("copyAgain").hidden = going;
+            }
+            $("copyStop").addEventListener("click", function () {
+              api("DELETE", "/copy/job").then(showJob, failed);
+            });
+            $("copyCard").addEventListener("click", function () {
+              window.open("/copy/card", "_blank", "noopener");
+            });
+            $("copyAgain").addEventListener("click", load);
+            load();
           }
           // Sharing on the home network: how others get in. Through the gate, the gate told the page (KIT_GATE); on
           // this computer, the kit's notes server says, and turns sharing on and off. Only this computer gets the

@@ -21,7 +21,7 @@
 //	cmds.go      pick, remove, fit, plan, pins, sync, verify, status, search and test
 //	pick.go      where you live and Wikipedia's languages (region), what fits (estimate, space), essentials, starter
 //	setup.go     drives, place, kits, layout, update (signed releases), share and autostart
-//	copy.go      a copy of the kit on another drive, as much as fits (copy), and its card to print
+//	copy.go      a copy of the kit on another drive, as much as fits (copy), its card to print, and Make a copy's page
 //	open.go      starting the servers and opening the page (open)
 //	gate.go      sharing on the home network behind the access code (gate, banner), with qr.go's QR code
 //	data.go      the page's notes and the map's home and pins (data)

@@ -7,6 +7,8 @@ description: Copy a Tinfoil Kit onto another drive, as much as fits, so the copy
 
 A copy is a kit of its own: plug its drive into a Mac, Windows PC or Linux PC and double-click Open Tinfoil Kit there, with no internet. It takes as much of this kit as fits on the other drive: the programs for all three kinds of computer always, then a preset, or each part picked. Nothing downloads, so it works in an outage. To find the kit, see the tinfoil-update skill.
 
+The kit page has the same under More: Make a copy opens a page of its own, on the computer the kit runs on (not through Share with family), with the drives, the presets and each part with their sizes, then the copy as it goes, with Stop. A copy started with `./kit copy` shows there too. For a person who'd rather click, point them there.
+
 ## The command
 
 In the kit's app folder, with the other drive plugged in (`.\kit.cmd` for `./kit` in PowerShell on Windows):

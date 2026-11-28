@@ -1390,6 +1390,102 @@ function SharePanel({ shared, setShared, say }) {
   );
 }
 
+/* ------------------------------------------------------------------------------------------------ make a copy */
+// Make a copy needs a drive plugged in, so the demo has a made-up one, with the sizes the kit page would show for it
+const COPY = {
+  drive: "FAMILY",
+  room: 125.7,
+  presets: [
+    ["Essentials", "The programs and the most important books: medicine, preparedness, water, food and repair.", 9.4],
+    ["Essentials plus maps", "The essentials, the map with directions, and its address search if there's room.", 28.6],
+    ["Everything that fits", "The most important first, until the drive is full.", 37.9],
+  ],
+  ai: ["Gemma 4 E4B", 5.2],
+};
+
+function CopyPanel({ say }) {
+  const [preset, setPreset] = useState(1);
+  const [ai, setAI] = useState(false);
+  const gb = (n) => n.toFixed(1) + " GB";
+  const pick = preset === COPY.presets.length,
+    size = pick ? 0 : COPY.presets[preset][2] + (ai ? COPY.ai[1] : 0);
+  return (
+    <>
+      <p className="kd-note kd-first">
+        In the kit, Make a copy opens in a tab of its own, with the drives plugged into your laptop. This demo has a
+        made-up one.
+      </p>
+      <h3 className="kd-h">Make a copy</h3>
+      <p className="kd-lead">
+        Copy this kit onto another drive, as much as fits, to give to family or friends or keep as a spare. The copy
+        works on its own on a Mac, Windows or Linux computer, with no internet.
+      </p>
+      <p className="kd-label">The drive</p>
+      <div className="kd-choices">
+        <label className="kd-choice">
+          <input type="radio" name="kd-copy-drive" defaultChecked />
+          <span>
+            <b>{COPY.drive}</b>
+            <small>{gb(COPY.room)} of room, exFAT</small>
+          </span>
+        </label>
+      </div>
+      <p className="kd-label">What goes on it</p>
+      <div className="kd-choices">
+        {COPY.presets
+          .concat([["Pick each part", "Each book, the map and the AI, one by one."]])
+          .map(([name, about, size], i) => (
+            <label key={name} className="kd-choice">
+              <input type="radio" name="kd-copy-preset" checked={preset === i} onChange={() => setPreset(i)} />
+              <span>
+                <b>{name}</b>
+                <small>{about}</small>
+              </span>
+              <span className="kd-size">{size ? gb(size + (ai ? COPY.ai[1] : 0)) : ""}</span>
+            </label>
+          ))}
+      </div>
+      {pick ? (
+        <p className="kd-note kd-tight">
+          In the kit, each book, the map and the AI are here, with their sizes, to tick.
+        </p>
+      ) : (
+        <label className="kd-check">
+          <input type="checkbox" checked={ai} onChange={(e) => setAI(e.target.checked)} />
+          <span>
+            Add the AI,{" "}
+            <b>
+              {COPY.ai[0]}, {gb(COPY.ai[1])}
+            </b>
+            . Without it, Ask finds answers in the books.
+          </span>
+        </label>
+      )}
+      <label className="kd-check">
+        <input type="checkbox" />
+        <span>Bring your notes, home and map pins. Without them, the copy starts clean.</span>
+      </label>
+      <div className="kd-meter">
+        <div style={{ width: (100 * size) / COPY.room + "%" }} />
+      </div>
+      <p className="kd-note kd-tight">{pick ? "" : `${gb(size)} of the ${gb(COPY.room)} of room on ${COPY.drive}.`}</p>
+      <div className="kd-row kd-copynext">
+        <button
+          type="button"
+          className="kd-btn"
+          onClick={() =>
+            say(
+              "In the kit, Next shows what goes on the drive, then it copies it and reads every file back to check it.",
+            )
+          }
+        >
+          Next
+        </button>
+      </div>
+    </>
+  );
+}
+
 /* ------------------------------------------------------------------------------------------------------ help */
 function HelpPanel({ go }) {
   const to = (id, text) => (
@@ -1438,6 +1534,10 @@ function HelpPanel({ go }) {
         </li>
         <li>
           <b>{to("share", "Share with family")}</b> lets the phones and laptops on your Wi-Fi use the kit too.
+        </li>
+        <li>
+          <b>Make a copy</b>, under <b>More</b>, puts this kit on another drive, as much as fits, to give to family or
+          friends. The copy works on its own, with no internet.
         </li>
         <li>
           The button beside the name says how the kit is: <b>Ready</b>, <b>Starting</b> while the AI loads, or{" "}
@@ -1496,6 +1596,7 @@ const MORE = [
   ["notes", "Notes"],
   ["share", "Share with family"],
   ["print", "Print the essentials"],
+  ["copy", "Make a copy ↗"],
   ["chat", "AI chat ↗"],
   ["help", "Help"],
 ];
@@ -1679,6 +1780,9 @@ export default function Demo() {
       </div>
       <div {...show("print")} className="kd-page">
         {page === "print" && <PrintPanel notes={notes} say={say} />}
+      </div>
+      <div {...show("copy")} className="kd-page kd-copy">
+        <CopyPanel say={say} />
       </div>
       <div {...show("chat")} className="kd-page">
         <ChatPanel />

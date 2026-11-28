@@ -27,6 +27,45 @@ const check = (name, ok, detail) => {
       "You can use my Tinfoil Kit: an AI, a library and maps that work without the internet. Join my Wi-Fi, then open http://192.168.1.20:8000/?code=48217736",
     Kit.invite("http://192.168.1.20:8000", "4821 7736"),
   );
+  // Make a copy: the sizes the page shows for each preset match what ./kit copy takes (copyFill in copy.go)
+  const parts = [
+    { id: "programs", bytes: 3e9 },
+    { id: "Small", bytes: 2e9 },
+    { id: "medicine", bytes: 1e9 },
+    { id: "water", bytes: 5e8 },
+    { id: "map", bytes: 6e9 },
+    { id: "addresses", bytes: 2e10 },
+  ];
+  const wishes = ["programs", "medicine", "water", "map", "addresses"];
+  const fill = (w, room) => JSON.stringify(Kit.copyFill(parts, w, room));
+  check(
+    "copy: a preset takes each wish that fits, the programs whatever the room, the AI after them",
+    fill(wishes, 11e9) === JSON.stringify({ ids: ["programs", "medicine", "water", "map"], bytes: 10.5e9 }) &&
+      fill(Kit.copyWishes(wishes, ["Small"]), 11e9) ===
+        JSON.stringify({ ids: ["programs", "Small", "medicine", "water"], bytes: 6.5e9 }) &&
+      fill(wishes, 1e9) === JSON.stringify({ ids: ["programs"], bytes: 3e9 }),
+    fill(wishes, 11e9),
+  );
+  check(
+    "copy: address search goes only with the map",
+    fill(["programs", "addresses", "map"], 1e12) === JSON.stringify({ ids: ["programs", "map"], bytes: 9e9 }),
+    fill(["programs", "addresses", "map"], 1e12),
+  );
+  const drive = { room: 10e9, erasedRoom: 60e9, mustErase: null };
+  check(
+    "copy: a drive takes what fits as it is, erases for more, and says when even that's too little",
+    JSON.stringify(Kit.copyFit(drive, 9e9)) === JSON.stringify({ erase: false, fits: true, room: 10e9 }) &&
+      JSON.stringify(Kit.copyFit(drive, 20e9)) === JSON.stringify({ erase: true, fits: true, room: 60e9 }) &&
+      !Kit.copyFit(drive, 70e9).fits &&
+      Kit.copyFit({ ...drive, mustErase: "it's FAT32" }, 1e9).erase &&
+      Kit.copyRoom({ ...drive, mustErase: "it's FAT32" }) === 60e9 &&
+      Kit.copyRoom(drive) === 10e9,
+  );
+  check(
+    "copy: sizes read as ./kit copy says them",
+    Kit.copySize(41.3e9) === "41.3 GB" && Kit.copySize(850e6) === "850.0 MB" && Kit.copySize(2.5e12) === "2.5 TB",
+    Kit.copySize(41.3e9),
+  );
   check(
     "keywords drop stopwords",
     JSON.stringify(Kit.keywords("How do I make water safe to drink?")) === JSON.stringify(["water", "safe", "drink"]),

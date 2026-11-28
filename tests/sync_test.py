@@ -10,6 +10,7 @@ usage: python3 tests/sync_test.py
 import base64
 import difflib
 import hashlib
+import http.client
 import http.server
 import io
 import json
@@ -3874,7 +3875,8 @@ http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
     card = (copied / "data" / ".kit" / "card.html").read_text() if in_copy("data/.kit/card.html") else ""
     check(
         "the copy has a card to print, and this kit keeps one for its page, with how to start it on each computer",
-        "Open Tinfoil Kit for Windows" in card
+        "An AI and a library that work without the internet, all on the drive <b>LITTLE ONE</b>." in card
+        and "Open Tinfoil Kit for Windows" in card
         and "Ask and AI chat, with the AI Small AI" in card
         and "3 books: Medicine, Water, Wikipedia" in card
         and (big / "data" / ".kit" / "card.html").read_text() == card
@@ -3901,8 +3903,9 @@ http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
     )
     rc, out = copy("LITTLE ONE", "--maps", "--notes")
     check(
-        "copy to a drive with a kit: says it replaces it, and doesn't without the drive's name",
+        "copy to a drive with a kit: says it replaces it, keeping its notes, and doesn't without the drive's name",
         rc == 1
+        and "  Your notes, home and map pins, if it has none of its own" in out
         and "LITTLE ONE has a Tinfoil Kit already. The copy replaces it" in out
         and 'To go ahead, add --erase "LITTLE ONE".' in out
         and in_copy("downloads/models/Small"),
@@ -3962,10 +3965,11 @@ http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
     os.truncate(small / "movie.mp4", 1_500_000_000)
     rc, out = copy("LITTLE ONE", "--maps", "--yes")
     check(
-        "a drive too full for the copy: it needs erasing first, and says everything on it goes",
+        "a drive too full for the copy: it needs erasing first, and says everything on it goes, naming what's there",
         rc == 1
         and "LITTLE ONE has" in out
-        and "so it needs erasing first. Everything on LITTLE ONE goes." in out
+        and "so it needs erasing first. Everything on LITTLE ONE goes, including TinfoilKit, movie.mp4 and photos."
+        in out
         and 'To go ahead, add --erase "LITTLE ONE".' in out
         and (small / "photos" / "beach.jpg").exists(),
         out,
@@ -4061,6 +4065,70 @@ http.server.ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
         out,
     )
     w.write_bytes(good)
+
+    # Make a copy, on the kit page: its page asks the notes server, on that server's own address, which runs ./kit
+    # copy and follows copy.json
+    (drives / "PAGE ONE").mkdir()
+    dport = free_port()
+    notes = subprocess.Popen(
+        [str(big / "app" / "tools" / PROGRAM.name), "data", "--data", str(big / "data"), "--port", str(dport)]
+        + ["--library", "18888"],
+        env=copy_env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    def page(method, path, body=None):
+        c = http.client.HTTPConnection("127.0.0.1", dport, timeout=150)
+        h = {"Origin": f"http://127.0.0.1:{dport}", **({"Content-Type": "application/json"} if body else {})}
+        c.request(method, path, body=json.dumps(body).encode() if body else None, headers=h)
+        r = c.getresponse()
+        text = r.read()
+        c.close()
+        return r.status, json.loads(text) if text.startswith(b"{") else text
+
+    try:
+        for _ in range(50):
+            try:
+                socket.create_connection(("127.0.0.1", dport), timeout=1).close()
+                break
+            except OSError:
+                time.sleep(0.1)
+        _, info = page("GET", "/copy/info")
+        _, plan = page("GET", "/copy/plan?drive=PAGE+ONE&preset=essentials&ai=1")
+        status, job = page("PUT", "/copy/job", {"drive": str(drives / "PAGE ONE"), "preset": "essentials", "ai": True})
+        for _ in range(600):
+            if status != 200 or not job.get("running"):
+                break
+            time.sleep(0.2)
+            status, job = page("GET", "/copy/job")
+        _, card = page("GET", "/copy/card")
+        check(
+            "Make a copy: the page gets the drives and a plan, then the copy it starts is followed to the end, with its card",
+            "PAGE ONE" in [d["name"] for d in info.get("drives", [])]
+            and plan.get("parts", [])[:2] == ["programs", "Small"]
+            and plan.get("erase") is False
+            and plan.get("replace") is False
+            and job.get("step") == "done"
+            and job.get("works") is True
+            and job.get("card") is True
+            and b"Open Tinfoil Kit for Windows" in card
+            and (drives / "PAGE ONE" / "TinfoilKit" / "downloads" / "models" / "Small").exists(),
+            json.dumps(plan) + json.dumps(job),
+        )
+        status, job = page("PUT", "/copy/job", {"drive": str(drives / "PAGE ONE"), "preset": "maps"})
+        for _ in range(100):
+            if status != 200 or not job.get("running"):
+                break
+            time.sleep(0.2)
+            status, job = page("GET", "/copy/job")
+        check(
+            "the kit on a drive is replaced only once the drive's name is typed",
+            job.get("step") == "failed" and 'add --erase "PAGE ONE"' in job.get("message", ""),
+            json.dumps(job),
+        )
+    finally:
+        notes.kill()
 finally:
     mock.terminate()
     shutil.rmtree(work, ignore_errors=True)

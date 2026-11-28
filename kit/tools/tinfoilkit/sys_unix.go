@@ -53,6 +53,12 @@ func openBrowser(url string) {
 
 func terminate(p *os.Process) { _ = p.Signal(syscall.SIGTERM) }
 
+// pidAlive says whether a program with this process id is running.
+func pidAlive(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
 func stopSignals() []os.Signal { return []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP} }
 
 // brokenPipe: with SIGPIPE caught, writing to a reader that stopped reading is an error the kit can notice.

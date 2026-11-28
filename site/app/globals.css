@@ -2181,6 +2181,76 @@ pre.code {
   color: var(--paper);
   font: 13px/1.5 var(--mono);
 }
+/* Make a copy: a made-up drive, and what goes on it */
+.kd-copy .kd-label {
+  margin: 24px 0 10px;
+}
+.kd-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kd-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: var(--rule);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.kd-choice:has(input:checked) {
+  border-color: var(--signal);
+  background: var(--paper2);
+}
+.kd-choice > span:not(.kd-size) {
+  flex: 1;
+  min-width: 0;
+}
+.kd-choice small {
+  display: block;
+  font-size: 14px;
+  color: var(--ink2);
+}
+.kd-size {
+  flex: none;
+  font: 500 13px/1.9 var(--mono);
+  color: var(--ink2);
+  white-space: nowrap;
+}
+.kd-copy input[type="radio"],
+.kd-copy input[type="checkbox"] {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--signal);
+  -webkit-appearance: auto;
+  appearance: auto;
+}
+.kd-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0 0;
+  cursor: pointer;
+}
+.kd-meter {
+  height: 14px;
+  margin: 20px 0 0;
+  border: var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.kd-meter div {
+  height: 100%;
+  background: var(--olive);
+}
+.kd-copynext {
+  margin-top: 16px;
+}
 /* the map tab: the panel beside the map, and on narrow windows the map above it */
 .kd-map {
   display: grid;

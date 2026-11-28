@@ -82,6 +82,17 @@ func openBrowser(url string) {
 
 func terminate(p *os.Process) { _ = p.Kill() }
 
+// pidAlive says whether a program with this process id is running.
+func pidAlive(pid int) bool {
+	h, err := syscall.OpenProcess(0x1000, false, uint32(pid)) // PROCESS_QUERY_LIMITED_INFORMATION
+	if err != nil {
+		return false
+	}
+	defer syscall.CloseHandle(h)
+	var code uint32
+	return syscall.GetExitCodeProcess(h, &code) == nil && code == 259 // STILL_ACTIVE
+}
+
 // Closing the window arrives as SIGTERM, Ctrl-C as an interrupt.
 func stopSignals() []os.Signal { return []os.Signal{os.Interrupt, syscall.SIGTERM} }
 

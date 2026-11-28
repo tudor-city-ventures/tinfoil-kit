@@ -3,7 +3,7 @@
 An offline kit for when the internet goes down, for Apple Silicon Macs and Windows and Linux PCs (x64): local AI (llama.cpp), an offline library (Kiwix) and offline maps (pmtiles, Photon, GraphHopper) in one folder, on the computer's own disk or an external SSD. A kit on an exFAT drive starts on all three.
 
 - `SETUP.command` (`SETUP-Windows.bat` on Windows) sets a kit up and brings it up to date: `./kit update`, `./kit sync`, `./kit test`, whenever the person runs it, on no schedule.
-- `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat`) runs `./kit open`, which serves it all on 127.0.0.1 and opens the kit page: Ask, Map and Library, and under More: Notes, Share with family, Print the essentials, AI chat and Help.
+- `Open Tinfoil Kit.command` (`Open Tinfoil Kit for Windows.bat`) runs `./kit open`, which serves it all on 127.0.0.1 and opens the kit page: Ask, Map and Library, and under More: Notes, Share with family, Print the essentials, Make a copy, AI chat and Help.
 - A kit is three folders. `TinfoilKit/app/` is this repo's `kit/` as released: only `./kit update` writes it, and it can be deleted any time for a new version's. `downloads/` holds everything sync gets, and `data/` the person's own files (kit.json, logs, notes and pins) with the kit's records in `data/.kit/`. Beside them, the program keeps a launcher for each computer and `Read me first.txt` (`topFiles`). In a git checkout, `kit/` is the app folder, with `downloads/` and `data/` inside it (git-ignored).
 
 How it all works, and why: [docs/DESIGN.md](docs/DESIGN.md). Releases: [docs/RELEASING.md](docs/RELEASING.md). The maintainer is @travisbloom.

@@ -4,6 +4,7 @@ input), and that a save is all or nothing. Needs the program, which tools/tinfoi
 
 import http.client
 import json
+import os
 import platform
 import shutil
 import socket
@@ -270,6 +271,118 @@ def run(server, server_cmd, work, data):
 
 
 checks([str(PROGRAM), "data"])
+
+
+def copy_checks():
+    """Make a copy's page and what it asks the notes server, on its own address: never the kit page's, where the books'
+    pages run scripts, nor through the gate. The copies themselves are sync_test.py's."""
+    global port
+    work = Path(tempfile.mkdtemp(prefix="data-test-"))
+    kit, port = work / "TinfoilKit", free_port()
+    (kit / "data" / ".kit").mkdir(parents=True)
+    (kit / "data" / ".kit" / "state.json").write_text('{"version": 1, "items": {}}')
+    (kit / "app" / "tools").mkdir(parents=True)
+    shutil.copy(ROOT / "kit" / "tools" / "portal.html", kit / "app" / "tools" / "portal.html")
+    shutil.copy(ROOT / "kit" / "kit.json", kit / "app" / "kit.json")
+    (work / "drives" / "LITTLE").mkdir(parents=True)
+    env = {"KIT_DRIVES": str(work / "drives"), "KIT_DRIVE_BYTES": str(64 * 10**9), "KIT_DRIVE_FORMAT": "ExFAT"}
+    server = subprocess.Popen(
+        [str(PROGRAM), "data", "--data", str(kit / "data"), "--port", str(port), "--library", str(lib)],
+        env={**os.environ, **env},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    own = f"http://127.0.0.1:{port}"
+    try:
+        for _ in range(50):
+            try:
+                socket.create_connection(("127.0.0.1", port), timeout=1).close()
+                break
+            except OSError:
+                time.sleep(0.1)
+        link = {"Sec-Fetch-Site": "same-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
+        s, page, h = req("GET", "/copy", headers={"Origin": None, **link})
+        check(
+            "Make a copy's page opens from the kit page's link, and may not be framed or reach anything but this server",
+            s == 200
+            and 'id="copy"' in page.decode()
+            and h.get("content-type", "").startswith("text/html")
+            and "frame-ancestors 'none'" in h.get("content-security-policy", "")
+            and "connect-src 'self'" in h.get("content-security-policy", "")
+            and h.get("x-frame-options") == "DENY",
+            f"{s} {h}",
+        )
+        s, _, _ = req("GET", "/copy", headers={"Origin": None, **link, "Sec-Fetch-Dest": "iframe"})
+        check("a page can't put it in a frame", s == 403, str(s))
+        s, _, _ = req("GET", "/copy/info", headers={"Origin": None, "Sec-Fetch-Site": "same-site"})
+        check("a page at the kit page's address, like a book's, can't load what it asks", s == 403, str(s))
+        s, _, _ = req("GET", "/copy/info")
+        check("nor ask it from the kit page's address", s == 403, str(s))
+        s, got, _ = req("GET", "/copy/info", headers={"Origin": own})
+        check(
+            "its own page gets what the kit has, the drives, the last copy and the way back to the kit page",
+            s == 200
+            and got["parts"][0]["id"] == "programs"
+            and [d["name"] for d in got["drives"]] == ["LITTLE"]
+            and got["kitPage"] == f"http://127.0.0.1:{lib}/"
+            and got["job"]["running"] is False,
+            f"{s} {got}",
+        )
+        s, got, _ = req("GET", "/copy/info", headers={"Origin": None, "tinfoilkit-gate": "1"})
+        check("a device through the gate can't", s == 403 and "Only the computer" in got["error"], f"{s} {got}")
+        s, got, _ = req("PUT", "/copy/job", {"drive": "LITTLE"})
+        check("the kit page's address can't start a copy", s == 403, f"{s} {got}")
+        s, got, _ = req("PUT", "/copy/job", {"drive": "LITTLE", "preset": "all"}, headers={"Origin": own})
+        check("a preset it doesn't know is turned away", s == 400 and "no preset called all" in got["error"], str(got))
+        s, got, _ = req("PUT", "/copy/job", {"drive": "LITTLE", "only": ["--erase"]}, headers={"Origin": own})
+        check("so is a name that isn't one", s == 400, str(got))
+        s, got, _ = req("GET", "/copy/plan?drive=LITTLE&preset=maps", headers={"Origin": own})
+        check(
+            "a plan for a kit with nothing to copy says so",
+            s == 400 and "nothing downloaded" in got["error"],
+            f"{s} {got}",
+        )
+        s, got, _ = req("PUT", "/copy/job", {"drive": "LITTLE", "preset": "maps"}, headers={"Origin": own})
+        started = s == 200 and got["step"] == "starting" and got["running"] is True
+        for _ in range(100):
+            s, got, _ = req("GET", "/copy/job", headers={"Origin": own})
+            if not got.get("running"):
+                break
+            time.sleep(0.1)
+        check(
+            "a copy that ends before it starts says why",
+            started and got["step"] == "failed" and "nothing downloaded" in got.get("message", ""),
+            str(got),
+        )
+        meta = kit / "data" / ".kit"
+        (meta / "copy.json").write_text(json.dumps({"step": "copying", "pid": os.getpid(), "done": 1, "total": 2}))
+        s, got, _ = req("GET", "/copy/job", headers={"Origin": own})
+        check("a copy started in a terminal is followed too, while it runs", got.get("running") is True, f"{s} {got}")
+        s, got, _ = req("DELETE", "/copy/job", headers={"Origin": own})
+        check(
+            "and Stop asks it to stop, as Ctrl-C would",
+            s == 200 and got["stopping"] is True and (meta / "copy.stop").is_file(),
+            f"{s} {got}",
+        )
+        gone = subprocess.Popen(["true"])
+        gone.wait()
+        (meta / "copy.json").write_text(json.dumps({"step": "copying", "pid": gone.pid}))
+        s, got, _ = req("GET", "/copy/job", headers={"Origin": own})
+        check(
+            "one whose program has gone without saying how it ended stopped",
+            got.get("running") is False and got.get("step") == "stopped",
+            str(got),
+        )
+        s, got, _ = req("DELETE", "/copy/job", headers={"Origin": own})
+        check("stopping when no copy is being made says so", s == 409, f"{s} {got}")
+        s, got, _ = req("GET", "/copy/card", headers={"Origin": None, "Sec-Fetch-Site": "same-origin"})
+        check("no card before a copy", s == 404, str(s))
+    finally:
+        server.kill()
+        shutil.rmtree(work, ignore_errors=True)
+
+
+copy_checks()
 
 print("\nALL PASSED" if not fails else f"\n{fails} FAILED")
 sys.exit(1 if fails else 0)

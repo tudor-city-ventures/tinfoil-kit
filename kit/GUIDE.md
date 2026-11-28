@@ -26,7 +26,7 @@ Nothing here needs the internet, an account, or an install.
 ## Using it
 
 The kit page has three tabs, Ask, Map and Library, and **More** for the rest: Notes, Share with family, Print the
-essentials, AI chat and Help. The button beside the name says how the kit is: **Ready**, **Starting** while the AI
+essentials, Make a copy, AI chat and Help. The button beside the name says how the kit is: **Ready**, **Starting** while the AI
 loads, or **AI off**, and **Shared** while others can use it. Click it for more.
 
 - **Ask**: type a question, then pick one of two buttons:
@@ -46,6 +46,8 @@ loads, or **AI off**, and **Shared** while others can use it. Click it for more.
 - **Print the essentials** (under More): about 20 pages of the kit's books worth having on paper, most important
   first, from making water safe to first aid, and a page of your own with your notes, your pins and the nearest
   hospitals. Print them while you have power and keep them with the kit.
+- **Make a copy** (under More, in a tab of its own): put this kit on another drive, as much as fits, for family or
+  friends. See [Make a copy for someone](#make-a-copy-for-someone).
 - **AI chat** (under More, in a tab of its own): plain chat with the AI. You can attach a photo (a broken part, a
   label). It doesn't search the library, so check anything important there, and never eat a wild plant or mushroom
   because an AI said it was safe.
@@ -238,7 +240,8 @@ library is missing, install that too.
 
 A copy goes on another drive and starts on its own on any Mac, Windows PC or Linux PC, with no internet: one to give
 to family or friends, or a spare. It takes as much of this kit as fits, and nothing downloads, so you can make one in an
-outage. Plug in both drives, and in the app folder run `./kit copy` (`.\kit.cmd copy` on Windows). It asks:
+outage. Plug in both drives, open the kit and choose **More**, then **Make a copy**, on the computer the kit runs on.
+Or in the app folder run `./kit copy` (`.\kit.cmd copy` on Windows). Either asks:
 
 - which drive;
 - what goes on it: the essentials (the programs and the most important books), the essentials and the map, everything
@@ -248,8 +251,8 @@ outage. Plug in both drives, and in the app folder run `./kit copy` (`.\kit.cmd 
 It erases a drive only if it must, once you type the drive's name: one that isn't exFAT, or is too full, and a kit
 already on it is replaced. A Mac erases it for you. On Windows, format it yourself first (in File Explorer, right-click
 the drive, Format, exFAT); on Linux, use the Disks app. Then it reads every file back to check the drive, starts the
-copy once to be sure it works, and opens a card to print and keep with the drive. If it stops partway, run it again: it
-carries on.
+copy once to be sure it works, and opens a card to print and keep with the drive. If it stops partway, make it again:
+it carries on.
 
 ## A home server (advanced)
 

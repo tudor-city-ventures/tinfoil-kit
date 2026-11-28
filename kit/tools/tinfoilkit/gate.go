@@ -337,11 +337,13 @@ const aiOffAnswer = `{"error": {"message": "this feature is disabled", "type": "
 
 const shareHereOnly = `{"error": "Only the computer the kit runs on can change sharing."}`
 
+var copyHereOnlyAnswer = `{"error": "` + copyHereOnly + `"}`
+
 var dropRequest = words("connection keep-alive proxy-authorization proxy-connection te trailer transfer-encoding " +
 	"upgrade host cookie authorization origin referer content-length expect " + viaGate)
 
 // viaGate marks each request the gate passes to the notes server, so it knows the request came from another device:
-// only the computer the kit runs on may change sharing.
+// only the computer the kit runs on may change sharing or make a copy.
 const viaGate = "tinfoilkit-gate"
 
 var dropResponse = words("connection keep-alive transfer-encoding server date trailer upgrade")
@@ -655,6 +657,10 @@ func (g *gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if name == "data" && r.Method != "GET" && r.Method != "HEAD" && cleanPath(to) == "/share" {
 		g.send(w, r, 403, "application/json", shareHereOnly, false)
+		return
+	}
+	if p := cleanPath(to); name == "data" && (p == "/copy" || strings.HasPrefix(p, "/copy/")) {
+		g.send(w, r, 403, "application/json", copyHereOnlyAnswer, false)
 		return
 	}
 	g.proxy(w, r, name, to, name == "library" && upath == "/" && r.Method == "GET", code)

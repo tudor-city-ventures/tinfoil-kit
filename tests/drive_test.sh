@@ -9,7 +9,8 @@
 #                               download's SETUP, which puts its own there, double-click Open Tinfoil Kit, check
 #                               the library, the AI and the map, check the page in WebKit, open it again with a
 #                               second address on the loopback (kiwix-serve then won't use 127.0.0.1), open the
-#                               kit with the app, eject. Leaves tests/work/drive.vhd. Then set the kit up on
+#                               kit with the app, make a copy on a second drive (FAT32, so it's erased once its
+#                               name is typed) and start that, eject. Leaves tests/work/drive.vhd. Then set the kit up on
 #                               this Mac (~/TinfoilKit) from the app, as a home server (SETUP --home-server), check
 #                               that the Mac started it and that it's shared behind the access code, and remove
 #                               it with UNINSTALL.
@@ -268,6 +269,33 @@ mac() {
     curl -s -o /dev/null -m 2 http://127.0.0.1:8888/ && fail "quitting the app left the kit running"
     [ "$(cat "$support/last-kit" 2> /dev/null)" = "$kit" ] || fail "the app didn't note the kit it opened"
   fi
+
+  step "Make a copy, in Terminal: a second drive, FAT32 as many sticks come, with a photo on it. ./kit copy says what"
+  echo "erasing it deletes, erases it as exFAT once its name is typed, copies, reads it all back and starts the copy"
+  local cimg="$W/copy.img" cdisk copied=/Volumes/LITTLE/TinfoilKit
+  hdiutil detach /Volumes/LITTLE > /dev/null 2>&1
+  rm -f "$cimg" && mkfile -n 8g "$cimg"
+  cdisk=$(hdiutil attach -imagekey diskimage-class=CRawDiskImage -nomount "$cimg" | awk 'NR == 1 {print $1}')
+  diskutil eraseDisk FAT32 LITTLE MBR "$cdisk" > /dev/null || fail "erase $cdisk as FAT32"
+  mkdir -p /Volumes/LITTLE/Photos && echo photo > /Volumes/LITTLE/Photos/beach.jpg
+  terminal "$kit/app" copy.log "LITTLE\n" ./kit copy LITTLE --everything --ai --notes
+  echo "exit $?"
+  grep -E "The copy:|erasing|Type LITTLE|Done:|ERROR|didn't" "$L/copy.log" | tail -12
+  grep -q "including Photos" "$L/copy.log" || fail "./kit copy didn't say what erasing LITTLE deletes (logs/copy.log)"
+  grep -q "Done: LITTLE has a Tinfoil Kit of its own" "$L/copy.log" || fail "./kit copy (logs/copy.log)"
+  diskutil info /Volumes/LITTLE 2> /dev/null | grep -qi exfat || fail "LITTLE isn't exFAT after the copy erased it"
+  [ -e /Volumes/LITTLE/Photos ] && fail "the photo on LITTLE is still there after the copy erased it"
+  [ -f "$copied/data/.kit/card.html" ] || fail "the copy has no card to print"
+  [ -d "$copied" ] && just_the_kit "$copied"
+
+  step "the copy on its own: double-click Open Tinfoil Kit.command on LITTLE"
+  open "$copied/Open Tinfoil Kit.command"
+  python3 "$TESTS/drive.py" check 8888 8080 || { fail "the copy, started from its drive"; kit_logs "$copied" kiwix-serve.log tiles.log; }
+  sleep 3
+  screencapture -x "$SHOTS/mac-copy.png" 2> /dev/null
+  stop_kit
+  cp -R "$copied/data/logs" "$L/mac-copy-logs" 2> /dev/null
+  hdiutil detach "$cdisk" > /dev/null || hdiutil detach -force "$cdisk" || fail "eject LITTLE"
 
   step "using it from Finder leaves ._ files beside books and models; then eject"
   for f in "$kit"/downloads/library/*.zim "$kit"/downloads/models/*/*.gguf; do xattr -w org.tinfoilkit.opened 1 "$f"; done
