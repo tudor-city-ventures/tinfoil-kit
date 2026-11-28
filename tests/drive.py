@@ -364,6 +364,7 @@ def record(name, cmd):
     rec, screen = None, None
     try:
         if name == "iphone":
+            status_bar(log, "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100")
             # The simulator's own recorder. Control-C stops it and finishes the file.
             rec = subprocess.Popen(
                 [
@@ -453,8 +454,15 @@ def record(name, cmd):
         return code
     finally:
         time.sleep(2)  # the last screen, for a moment
+        end = time.time()
+        if name == "iphone" and rec:
+            # The simulator's recorder writes a frame only when the screen changes, so its first can come long after it
+            # starts. Its last is the clock's tick to 9:42, now: the videos job counts the start back from it.
+            status_bar(log, "--time", "9:42")
+            end = time.time()
+            time.sleep(0.5)
         with steps.open("a", encoding="utf-8") as f:
-            f.write(f"{time.time():.2f}\t\n")  # when the recording ends, to check the video's length against
+            f.write(f"{end:.2f}\t\n")  # when the recording ends, to check the video's length against
         if rec:
             try:
                 if name == "android":
@@ -472,6 +480,12 @@ def record(name, cmd):
         files = sorted([*VIDEO.glob(f"{name}.m*"), *VIDEO.glob(f"{name}-[0-9]*.mp4")])
         made = [f"{f.name} ({f.stat().st_size // 1024} KB)" for f in files]
         print(f"(screen recording: {', '.join(made) or 'none. The recorder said: ' + said(log)})", flush=True)
+
+
+def status_bar(log, *how):
+    """What the iPhone simulator's status bar shows: in the videos, 9:41 and a full battery, as in Apple's own pictures,
+    and nothing that changes by itself."""
+    subprocess.run(["xcrun", "simctl", "status_bar", "booted", "override", *how], stdout=log, stderr=log)
 
 
 class Parts:
@@ -822,15 +836,16 @@ def make_videos(folder):
             print(f"{name}: no recording")
             continue
         rows = [line.split("\t", 1) for line in steps.read_text(encoding="utf-8").splitlines() if "\t" in line]
-        start = float(rows[0][0])
-        marks = [(min(max(0.0, float(t) - start), length), text) for t, text in rows[1:] if text]
-        # The captions are placed by the clock: a recorder that leaves out still moments puts them late
+        began, ended = float(rows[0][0]), float(rows[-1][0])
+        # The captions are placed by the clock, from the recorder's start: the iPhone's video starts at the first
+        # change of screen instead, and ends at the clock's tick that record makes, so its start is counted back
         frames = sorted(packet_times(raw))
+        start = ended - frames[-1] if name == "iphone" and frames and not rows[-1][1] else began
+        marks = [(min(max(0.0, float(t) - start), length), text) for t, text in rows[1:] if text]
         gaps = sorted((b - a for a, b in zip(frames, frames[1:])), reverse=True)[:3]
         print(
-            f"{name}: the recording ran {float(rows[-1][0]) - start:.0f} s and the video is {length:.0f} s, with "
-            f"{len(frames)} frames, the first at {frames[0] if frames else 0:.1f} s, the longest gaps between them "
-            + ", ".join(f"{g:.1f} s" for g in gaps)
+            f"{name}: the recording ran {ended - began:.0f} s and the video is {length:.0f} s from {start - began:.1f} s"
+            f" on, with {len(frames)} frames, the longest gaps between them " + ", ".join(f"{g:.1f} s" for g in gaps)
         )
         run = " ".join(x for x in (os.environ.get("GITHUB_SHA", "")[:7], time.strftime("%Y-%m-%d")) if x)
         phone = name in PHONES
