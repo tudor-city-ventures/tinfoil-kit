@@ -12,10 +12,21 @@ export type Item = {
   task?: string; // the phone's download of it
   error?: string;
 };
+// A map being downloaded: of a new place, or the same place from a newer world map
+export type MapDownload = {
+  place: string; // an id from places.ts
+  status: "queued" | "planning" | "downloading" | "checking" | "failed";
+  received: number;
+  total: number;
+  waiting?: "wifi" | "internet"; // until the phone is on Wi-Fi, or online again
+  error?: string;
+};
 export type State = {
   welcomed: boolean; // past the first screen
   cellular: boolean; // big downloads may use mobile data: off until the person turns it on
   items: Record<string, Item>;
+  map?: { place: string; file: string }; // the map on this phone, a file in the maps folder
+  mapDownload?: MapDownload;
 };
 
 export type Storage = { read(): Promise<string | null>; write(text: string): Promise<void> };
@@ -72,6 +83,18 @@ export function createStore(storage: Storage) {
     },
     setCellular(cellular: boolean) {
       set({ ...state, cellular });
+    },
+    getMap(place: string) {
+      set({ ...state, mapDownload: { place, status: "queued", received: 0, total: 0 } });
+    },
+    updateMap(m: Partial<MapDownload>) {
+      if (state.mapDownload) set({ ...state, mapDownload: { ...state.mapDownload, ...m } });
+    },
+    mapReady(place: string, file: string) {
+      set({ ...state, map: { place, file }, mapDownload: undefined });
+    },
+    stopMap() {
+      set({ ...state, mapDownload: undefined });
     },
   };
 }
