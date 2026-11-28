@@ -23,7 +23,7 @@ WRITES = {
     ("scorecard.yml", "analysis"): {"security-events", "id-token"},  # publishes the Scorecard results
 }
 # Actions from GitHub itself and OpenSSF's Scorecard, at a full commit SHA: a tag can be moved to new code.
-ALLOWED = re.compile(r"^(actions/[\w.-]+|github/codeql-action/[\w.-]+|ossf/scorecard-action)@[0-9a-f]{40}$")
+ALLOWED = re.compile(r"^(actions/[\w.-]+(/[\w.-]+)?|github/codeql-action/[\w.-]+|ossf/scorecard-action)@[0-9a-f]{40}$")
 # Events an outsider can fire that run this repo's workflows with a write token and secrets.
 PRIVILEGED = {
     "pull_request_target",

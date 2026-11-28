@@ -11,8 +11,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# A push to main never cancels another's run: each tests its own commit. A pull request's newer push does.
 concurrency:
-  group: mobile-${{ github.ref }}
+  group: mobile-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 env:
   CI: "1"
@@ -59,7 +60,19 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # Most changes are to the app's JavaScript alone: then the last build of the same native code is reused, with
+      # the new JavaScript in it. The key names everything the native build is made from (bump its number when the
+      # build's commands change), and the files the JavaScript uses, which Android keeps with its own resources.
+      - name: Reuse the last build, if its native code is the same
+        id: app
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+            mobile/android/app/debug.keystore
+          key: android-app-1-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/android/**', 'mobile/modules/*/expo-module.config.json', 'mobile/src/**', '!mobile/src/**/*.ts', '!mobile/src/**/*.tsx') }}
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.app.outputs.cache-hit != 'true'
         with:
           path: ~/.gradle/caches
           key: gradle-${{ hashFiles('mobile/package-lock.json') }}
@@ -68,6 +81,7 @@ jobs:
       # The native project comes from app.json each time (prebuild); the release build carries its JavaScript, signed
       # with the debug key, for the emulator's processor only.
       - name: Build the app
+        if: steps.app.outputs.cache-hit != 'true'
         working-directory: mobile
         env:
           EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
@@ -75,6 +89,35 @@ jobs:
         run: |
           npx expo prebuild --platform android --no-install
           cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --console=plain
+      # Saved now, not when the job ends, so a failing test doesn't cost the next run its build
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.app.outputs.cache-hit != 'true'
+        with:
+          path: |
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+            mobile/android/app/debug.keystore
+          key: ${{ steps.app.outputs.cache-primary-key }}
+      # As the build does it: the bundle without minifying, compiled by the Hermes compiler Gradle uses, then the app
+      # aligned and signed again with the same debug key
+      - name: Put the new JavaScript in the app
+        if: steps.app.outputs.cache-hit == 'true'
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries
+          EXPO_PUBLIC_DOWNLOAD_LOGS: "1"
+        run: |
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          w="$RUNNER_TEMP/js" && mkdir -p "$w/assets"
+          npx expo export:embed --platform android --dev false --minify false --reset-cache \
+            --bundle-output "$w/index.android.js" --assets-dest "$w/res"
+          node_modules/hermes-compiler/hermesc/linux64-bin/hermesc -emit-binary -O \
+            -out "$w/assets/index.android.bundle" "$w/index.android.js"
+          cp "$apk" "$w/app.apk"
+          (cd "$w" && zip -q -0 app.apk assets/index.android.bundle)
+          tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          "$tools/zipalign" -f -p 4 "$w/app.apk" "$w/aligned.apk"
+          "$tools/apksigner" sign --ks android/app/debug.keystore --ks-pass pass:android --key-pass pass:android \
+            --out "$apk" "$w/aligned.apk"
       - name: Start an Android emulator
         timeout-minutes: 15
         run: |
@@ -174,10 +217,20 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      - name: Reuse the last build, if its native code is the same
+        id: app
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            mobile/ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
+            mobile/ios/build/hermesc
+          key: ios-app-1-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/ios/**', 'mobile/modules/*/expo-module.config.json') }}
       - run: npm ci --ignore-scripts
         working-directory: mobile
-      # A simulator build needs no signing.
+      # Built unsigned, for the simulator; the step after next signs it. The Hermes compiler the build used is kept
+      # with it, for the next run's new JavaScript.
       - name: Build the app
+        if: steps.app.outputs.cache-hit != 'true'
         working-directory: mobile
         env:
           EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
@@ -187,11 +240,33 @@ jobs:
           cd ios && pod install
           xcodebuild -workspace TinfoilKit.xcworkspace -scheme TinfoilKit -configuration Release -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO -quiet build
-          # Signed ad hoc, as Xcode signs for the simulator: iOS takes background downloads only from an app its
-          # signature names (the linker's own signature names the program, not the app)
-          app=build/Build/Products/Release-iphonesimulator/TinfoilKit.app
-          codesign --force --deep --sign - --timestamp=none "$app"
-          codesign --display --verbose "$app" 2>&1 | grep -E "^(Identifier|Signature)"
+          cp "$(ls Pods/hermes-engine/destroot/bin/hermesc 2> /dev/null || echo ../node_modules/hermes-compiler/hermesc/osx-bin/hermesc)" build/hermesc
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.app.outputs.cache-hit != 'true'
+        with:
+          path: |
+            mobile/ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
+            mobile/ios/build/hermesc
+          key: ${{ steps.app.outputs.cache-primary-key }}
+      - name: Put the new JavaScript in the app
+        if: steps.app.outputs.cache-hit == 'true'
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries
+          EXPO_PUBLIC_DOWNLOAD_LOGS: "1"
+        run: |
+          app=ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
+          rm -rf "$app/assets"
+          npx expo export:embed --platform ios --dev false --minify false --reset-cache \
+            --bundle-output "$RUNNER_TEMP/main.js" --assets-dest "$app"
+          ios/build/hermesc -emit-binary -O -out "$app/main.jsbundle" "$RUNNER_TEMP/main.js"
+      # Signed ad hoc, as Xcode signs for the simulator: iOS takes background downloads only from an app its
+      # signature names (the linker's own signature names the program, not the app)
+      - name: Sign the app
+        working-directory: mobile/ios/build/Build/Products/Release-iphonesimulator
+        run: |
+          codesign --force --deep --sign - --timestamp=none TinfoilKit.app
+          codesign --display --verbose TinfoilKit.app 2>&1 | grep -E "^(Identifier|Signature)"
       - name: Start an iPhone simulator
         run: |
           udid=$(xcrun simctl list devices available -j | python3 -c 'import json, sys
