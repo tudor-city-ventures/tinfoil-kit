@@ -1,19 +1,27 @@
 """A stand-in for Kiwix's catalog and downloads, for the phone app's tests in CI: every book the app asks for is
-published, as a small file with its SHA-256, behind a redirect to a mirror the way download.kiwix.org answers.
+published with its SHA-256, behind a redirect to a mirror the way download.kiwix.org answers. Given a folder of the
+test books tests/make_zims.py makes, each is one of those (the medical one for medical books); otherwise a small file.
 
-python3 mobile/e2e/kiwix.py [PORT], and build the app with EXPO_PUBLIC_KIWIX_CATALOG=http://localhost:PORT/catalog/v2/entries
+python3 mobile/e2e/kiwix.py [PORT [BOOKS]], and build the app with
+EXPO_PUBLIC_KIWIX_CATALOG=http://localhost:PORT/catalog/v2/entries
 """
 
 import hashlib
 import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 19100
+BOOKS = Path(sys.argv[2]) if len(sys.argv) > 2 else None
 
 
 def content(file: str) -> bytes:
+    if BOOKS:
+        return (
+            BOOKS / ("testmed_en_all_maxi_2026-01.zim" if "medic" in file else "testsurvival_en_2026-05.zim")
+        ).read_bytes()
     return (file.encode() + b"\n") * 4000  # a few hundred KB, so the app shows some progress
 
 

@@ -196,11 +196,16 @@ export function createDownloads(store: Store, phone: Phone) {
   };
 }
 
-function phone(): Phone {
+// The folder books go in, as a path
+export function libraryPath(): string {
   const library = new Directory(Paths.document, "library");
+  return decodeURI(library.uri.replace(/^file:\/\//, "")).replace(/\/$/, "");
+}
+
+function phone(): Phone {
   const file = (path: string) => new File(`file://${path}`);
   return {
-    library: decodeURI(library.uri.replace(/^file:\/\//, "")).replace(/\/$/, ""),
+    library: libraryPath(),
     download: ({ id, url, path, book, cellular }) =>
       createDownloadTask({
         id,

@@ -26,6 +26,17 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.background } }}>
         <Stack.Protected guard={welcomed}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen
+            name="book/[id]"
+            options={{
+              headerShown: true,
+              headerBackTitle: "Library",
+              headerShadowVisible: false,
+              headerStyle: { backgroundColor: c.background },
+              headerTitleStyle: { color: c.ink },
+              headerTintColor: c.accent,
+            }}
+          />
         </Stack.Protected>
         <Stack.Protected guard={!welcomed}>
           <Stack.Screen name="welcome" />

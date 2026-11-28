@@ -115,7 +115,8 @@ fi
 
 step "the phone app: types, lint and unit tests (cd mobile && npm run check)"
 if [ -x mobile/node_modules/.bin/jest ]; then
-  run npm --prefix mobile run --silent check
+  # with the test books libzim made, when tests/build_fixtures.sh has run
+  ZIM_FIXTURES="$PWD/tests/work/remote/zim" run npm --prefix mobile run --silent check
 else
   echo "skipped (not installed: cd mobile && npm ci --ignore-scripts)"
 fi

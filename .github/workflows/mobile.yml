@@ -4,10 +4,10 @@ name: phone app
 # their own.
 on:
   pull_request:
-    paths: ["mobile/**", "site/kit.json", "site/sources.json", ".github/workflows/mobile.yml"]
+    paths: ["mobile/**", "site/kit.json", "site/sources.json", "tests/make_zims.py", ".github/workflows/mobile.yml"]
   push:
     branches: [main]
-    paths: ["mobile/**", "site/kit.json", "site/sources.json", ".github/workflows/mobile.yml"]
+    paths: ["mobile/**", "site/kit.json", "site/sources.json", "tests/make_zims.py", ".github/workflows/mobile.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,7 +35,14 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --ignore-scripts
+      # The app's ZIM reader is checked against books libzim makes, as well as its own test books
+      - name: Make test books with libzim
+        run: &books |
+          python3 -m venv "$RUNNER_TEMP/venv" && "$RUNNER_TEMP/venv/bin/pip" install -q libzim==4.1.0
+          mkdir -p "$RUNNER_TEMP/zim" && cd "$RUNNER_TEMP/zim" && "$RUNNER_TEMP/venv/bin/python" "$GITHUB_WORKSPACE/tests/make_zims.py"
       - run: npm run check
+        env:
+          ZIM_FIXTURES: ${{ runner.temp }}/zim
 
   android:
     needs: check
@@ -97,11 +104,38 @@ jobs:
           [ "$sha" = "$MAESTRO_SHA256" ] || { echo "maestro.zip isn't the one pinned"; exit 1; }
           unzip -q "$f" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
+      - name: Make test books with libzim
+        run: *books
       - name: Test the app
         run: |
-          python3 mobile/e2e/kiwix.py 19100 > "$RUNNER_TEMP/kiwix.log" 2>&1 &
+          python3 mobile/e2e/kiwix.py 19100 "$RUNNER_TEMP/zim" > "$RUNNER_TEMP/kiwix.log" 2>&1 &
           adb reverse tcp:19100 tcp:19100    # the emulator's localhost:19100 is the runner's
           maestro test mobile/e2e --test-output-dir e2e-output
+      # What was on screen when a test failed, what the app asked of the stand-in Kiwix, and the app's log
+      - name: Show what went wrong
+        if: failure()
+        run: &why |
+          echo "== On screen"
+          maestro hierarchy 2> /dev/null | python3 -c '
+          import json, sys
+          s = sys.stdin.read()
+          tree, _ = json.JSONDecoder().raw_decode(s[s.index("{"):])
+          def walk(n):
+              a = n.get("attributes", {})
+              t = (a.get("text") or a.get("accessibilityText") or "").strip()
+              if t:
+                  print(t)
+              for c in n.get("children", []):
+                  walk(c)
+          walk(tree)' || true
+          echo "== Asked of the stand-in Kiwix"
+          cat "$RUNNER_TEMP/kiwix.log" || true
+          echo "== The app's log"
+          if command -v xcrun > /dev/null; then
+            xcrun simctl spawn booted log show --last 10m --style compact --predicate 'process == "TinfoilKit"' | tail -n 100
+          else
+            adb logcat -d | grep -E "ReactNativeJS|BackgroundDownload|AndroidRuntime" | tail -n 100
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -146,10 +180,15 @@ jobs:
           xcrun simctl install "$udid" mobile/ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
       - name: Install Maestro
         run: *maestro
+      - name: Make test books with libzim
+        run: *books
       - name: Test the app
         run: |
-          python3 mobile/e2e/kiwix.py 19100 > "$RUNNER_TEMP/kiwix.log" 2>&1 &
+          python3 mobile/e2e/kiwix.py 19100 "$RUNNER_TEMP/zim" > "$RUNNER_TEMP/kiwix.log" 2>&1 &
           maestro test mobile/e2e --test-output-dir e2e-output
+      - name: Show what went wrong
+        if: failure()
+        run: *why
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

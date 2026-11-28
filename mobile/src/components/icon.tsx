@@ -14,6 +14,11 @@ export const icons = {
   wifi: { ios: "wifi", android: "wifi", web: "wifi" },
   cellular: { ios: "antenna.radiowaves.left.and.right", android: "cell_tower", web: "cell_tower" },
   phone: { ios: "iphone", android: "smartphone", web: "smartphone" },
+  back: { ios: "chevron.left", android: "chevron_left", web: "chevron_left" },
+  forward: { ios: "chevron.right", android: "chevron_right", web: "chevron_right" },
+  home: { ios: "house", android: "home", web: "home" },
+  search: { ios: "magnifyingglass", android: "search", web: "search" },
+  find: { ios: "text.magnifyingglass", android: "find_in_page", web: "find_in_page" },
 } satisfies Record<string, Names>;
 
 export function Icon({ name, color, size = 18 }: { name: keyof typeof icons; color: string; size?: number }) {

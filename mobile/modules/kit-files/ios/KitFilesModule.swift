@@ -25,5 +25,38 @@ public class KitFilesModule: Module {
       }
       return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
+
+    View(BookView.self) {
+      Events("onAsk", "onPage", "onLeave", "onOpen")
+
+      Prop("start") { (view: BookView, address: String) in
+        view.start(address)
+      }
+
+      AsyncFunction("load") { (view: BookView, address: String) in
+        if let url = URL(string: address) { view.load(url) }
+      }.runOnQueue(.main)
+
+      AsyncFunction("back") { (view: BookView) in
+        view.back()
+      }.runOnQueue(.main)
+
+      AsyncFunction("forward") { (view: BookView) in
+        view.forward()
+      }.runOnQueue(.main)
+
+      AsyncFunction("find") { (view: BookView) in
+        view.find()
+      }.runOnQueue(.main)
+
+      AsyncFunction("respond") { (view: BookView, id: Int, status: Int, mime: String, body: Data) in
+        view.files.respond(id, status: status, mime: mime, body: body)
+      }.runOnQueue(.main)
+
+      AsyncFunction("respondFile") {
+        (view: BookView, id: Int, status: Int, mime: String, path: String, offset: Double, length: Double) in
+        view.files.respondFile(id, status: status, mime: mime, path: path, offset: UInt64(offset), length: Int(length))
+      }.runOnQueue(.main)
+    }
   }
 }

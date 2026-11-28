@@ -1,4 +1,5 @@
 import { NetworkStateType, useNetworkState } from "expo-network";
+import { router } from "expo-router";
 import { ScrollView } from "react-native";
 
 import { Group, Pill, Row } from "@/components/group";
@@ -43,6 +44,7 @@ export default function Library() {
               icon="book"
               title={byId.get(id)!.title}
               detail={statusLine(it, onWifi, cellular)}
+              onPress={() => router.push({ pathname: "/book/[id]", params: { id } })}
             />
           ))
         ) : (
