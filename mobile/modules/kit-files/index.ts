@@ -1,7 +1,8 @@
 // The bits of native code Expo lacks: book downloads that are checked and filed in the library with the app closed,
-// books from a file checked the same way, keeping books out of iOS backups, downloads that take exactly the part of a
-// file asked for, the view that shows a book's pages, asking the app for each file they need and reaching nothing
-// else, finding a kit shared on the Wi-Fi, sharing this phone like one, and the AI built into the phone.
+// books from a file checked the same way, unpacking the books' pages fast, keeping books out of iOS backups, downloads
+// that take exactly the part of a file asked for, the view that shows a book's pages, asking the app for each file they
+// need and reaching nothing else, finding a kit shared on the Wi-Fi, sharing this phone like one, and the AI built into
+// the phone.
 import { requireNativeView, requireOptionalNativeModule } from "expo";
 import type { ComponentType, Ref } from "react";
 import type { ViewProps } from "react-native";
@@ -18,6 +19,7 @@ const native = requireOptionalNativeModule<{
   addBook(from: string, to: string): Promise<number>;
   adding(): { done: number; total: number };
   moveBook(from: string, to: string): void;
+  unzstd?(path: string, offset: number, length: number): Uint8Array; // missing from builds before it
   findKits(seconds: number): Promise<FoundKit[]>;
   startSharing(o: ShareOptions): Promise<number>;
   stopSharing(): void;
@@ -97,6 +99,10 @@ export function moveBook(from: string, to: string) {
   if (!native) throw new Error("Books are added in the phone app");
   native.moveBook(from, to);
 }
+
+// A cluster of a book's pages, a Zstandard frame at `offset` in its file, decompressed by zstd's own decoder: for the
+// ZIM reader, where the phone has it
+export const unzstd = native?.unzstd && native.unzstd.bind(native);
 
 export type DownloadOptions = {
   url: string;

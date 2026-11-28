@@ -13,5 +13,6 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   # Apple Intelligence's model, on iOS 26 and later only: the app still opens on older iPhones
   s.weak_frameworks = 'FoundationModels'
-  s.source_files = '**/*.swift'
+  # zstd's decoder, in C, for the books' clusters: see Clusters in Books.swift
+  s.source_files = '**/*.{swift,h,c}'
 end

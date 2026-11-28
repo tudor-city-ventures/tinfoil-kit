@@ -70,6 +70,11 @@ class KitFilesModule : Module() {
       Adding.move(from, to)
     }
 
+    // A cluster of a book's pages, decompressed: see Clusters in Books.kt
+    Function("unzstd") { path: String, offset: Double, length: Double ->
+      Clusters.unzstd(path, offset, length)
+    }
+
     // The kits shared on this Wi-Fi, and phones shared like one: see Home.kt
     AsyncFunction("findKits") { seconds: Double, promise: Promise ->
       val context = appContext.reactContext ?: return@AsyncFunction promise.resolve(emptyList<Any>())

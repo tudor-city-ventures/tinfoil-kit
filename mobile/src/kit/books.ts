@@ -4,6 +4,8 @@
 import { File, FileMode } from "expo-file-system";
 import { Platform } from "react-native";
 
+import { unzstd } from "../../modules/kit-files";
+
 import { Zim, type Entry, type Source } from "./zim";
 
 export type Answer =
@@ -126,12 +128,14 @@ export function openBook(path: string): Zim {
   }
   const handle = new File(`file://${path}`).open(FileMode.ReadOnly);
   const size = handle.size ?? 0;
+  const decoder = unzstd;
   const source: Source = {
     size,
     read(offset, length) {
       handle.offset = offset;
       return handle.readBytesSync(Math.max(0, Math.min(length, size - offset)));
     },
+    unzstd: decoder && ((offset, length) => decoder(path, offset, length)),
   };
   let zim: Zim;
   try {

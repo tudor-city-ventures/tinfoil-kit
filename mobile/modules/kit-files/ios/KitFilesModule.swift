@@ -72,6 +72,11 @@ public class KitFilesModule: Module {
       try Adding.move(from, to: to)
     }
 
+    // A cluster of a book's pages, decompressed: see Clusters in Books.swift
+    Function("unzstd") { (path: String, offset: Double, length: Double) throws -> Data in
+      try Clusters.unzstd(path, offset: offset, length: length)
+    }
+
     // The kits shared on this Wi-Fi, and phones shared like one: see Home.swift
     AsyncFunction("findKits") { (seconds: Double) async -> [[String: Any]] in
       await KitFinder.find(seconds: seconds).map {

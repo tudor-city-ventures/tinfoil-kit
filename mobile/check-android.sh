@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # Type-checks the phone app's native Android code (modules/*/android) in about a minute, without an Android build: a
-# few lines below stand in for the Expo types the code uses, and for Google's ML Kit as its reference describes it,
-# which cloud machines can't download. It only compiles, and leaves the files in Expo's module and view DSL
-# (KitFilesModule.kt, BookView.kt) to CI's build. Needs a JDK, and Gradle or the app's packages (React
-# Native's Gradle downloads itself). The first run downloads the Kotlin compiler and, without the Android SDK,
-# Robolectric's copy of Android's classes: up to 300 MB.
+# few lines below stand in for the Expo types the code uses, for Google's ML Kit as its reference describes it, which
+# cloud machines can't download, and for the one class of zstd-jni the code uses. It only compiles, and leaves the
+# files in Expo's module and view DSL (KitFilesModule.kt, BookView.kt) to CI's build. Needs a JDK, and Gradle or the
+# app's packages (React Native's Gradle downloads itself). The first run downloads the Kotlin compiler and, without the
+# Android SDK, Robolectric's copy of Android's classes: up to 300 MB.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 work="${TMPDIR:-/tmp}/tinfoilkit-check-android"
 expo="$work/stubs/expo/modules/kotlin"
 mlkit="$work/stubs/com/google/mlkit/genai"
-mkdir -p "$expo/exception" "$expo/records" "$mlkit/common" "$mlkit/prompt"
+zstd="$work/stubs/com/github/luben/zstd"
+mkdir -p "$expo/exception" "$expo/records" "$mlkit/common" "$mlkit/prompt" "$zstd"
 
 # Google's copy of Maven Central first: Maven Central itself often answers cloud machines with 429
 repos='maven("https://maven-central.storage-download.googleapis.com/maven2"); mavenCentral()'
@@ -100,6 +101,10 @@ interface GenerativeModel {
 object Generation {
   fun getClient(): GenerativeModel = throw NotImplementedError()
 }
+EOF
+cat > "$zstd/ZstdInputStreamNoFinalizer.kt" << 'EOF'
+package com.github.luben.zstd
+open class ZstdInputStreamNoFinalizer(input: java.io.InputStream) : java.io.FilterInputStream(input)
 EOF
 gradle=gradle
 command -v gradle > /dev/null || gradle="$here/node_modules/@react-native/gradle-plugin/gradlew"

@@ -3,8 +3,13 @@
 // compressed with Zstandard. Kiwix's own reader, libzim, is GPL, so the app has its own.
 import { decompress } from "fzstd";
 
-// Where the bytes come from: the file on the phone, or a test's.
-export type Source = { size: number; read(offset: number, length: number): Uint8Array };
+// Where the bytes come from: the file on the phone, or a test's. The phone's own decoder unpacks the clusters where it
+// has one, since fzstd, in JavaScript, takes a few hundred milliseconds a cluster on a phone.
+export type Source = {
+  size: number;
+  read(offset: number, length: number): Uint8Array;
+  unzstd?(offset: number, length: number): Uint8Array; // the Zstandard frame there, decompressed
+};
 
 export type Entry = {
   index: number;
@@ -224,7 +229,8 @@ export class Zim {
     if (data) {
       this.cache.delete(entry.cluster);
     } else {
-      data = decompress(this.src.read(at + 1, frameEnd(this.src, at + 1) - at - 1));
+      const length = frameEnd(this.src, at + 1) - at - 1;
+      data = this.src.unzstd ? this.src.unzstd(at + 1, length) : decompress(this.src.read(at + 1, length));
       this.cached += data.length;
     }
     this.cache.set(entry.cluster, data);

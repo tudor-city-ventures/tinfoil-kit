@@ -463,6 +463,52 @@ final class Adding {
   }
 }
 
+// A cluster of a book's pages, a Zstandard frame in its file, decompressed by zstd's own decoder (zstddeclib.c): the
+// app's JavaScript one takes a few hundred milliseconds a cluster on a phone, this a few
+enum Clusters {
+  private static let limit = 256 << 20  // far past any real cluster: a damaged or hostile book stops here
+
+  static func unzstd(_ path: String, offset: Double, length: Double) throws -> Data {
+    guard offset >= 0, length >= 0, length < Double(limit), let handle = FileHandle(forReadingAtPath: path) else {
+      throw Failure(message: "The book is missing or damaged")
+    }
+    defer { try? handle.close() }
+    try handle.seek(toOffset: UInt64(offset))
+    let frame = try handle.read(upToCount: Int(length)) ?? Data()
+    guard frame.count == Int(length), let context = ZSTD_createDCtx() else {
+      throw Failure(message: "The book is damaged")
+    }
+    defer { ZSTD_freeDCtx(context) }
+    var capacity = min(max(4 * frame.count, 1 << 20), limit)
+    guard var buffer = malloc(capacity) else { throw Failure(message: "Out of memory") }
+    var produced = 0
+    let whole = frame.withUnsafeBytes { (src: UnsafeRawBufferPointer) -> Bool in
+      var input = ZSTD_inBuffer(src: src.baseAddress, size: src.count, pos: 0)
+      var left = 1  // 0 at the end of the frame
+      while left != 0 {
+        if produced == capacity {
+          guard capacity < limit, let grown = realloc(buffer, 2 * capacity) else { return false }
+          buffer = grown
+          capacity *= 2
+        }
+        var output = ZSTD_outBuffer(dst: buffer + produced, size: capacity - produced, pos: 0)
+        let consumed = input.pos
+        left = ZSTD_decompressStream(context, &output, &input)
+        produced += output.pos
+        if ZSTD_isError(left) != 0 { return false }
+        if left != 0 && output.pos == 0 && input.pos == consumed { return false }  // cut short
+      }
+      return true
+    }
+    guard whole else {
+      free(buffer)
+      throw Failure(message: "The book is damaged")
+    }
+    if let fit = realloc(buffer, max(produced, 1)) { buffer = fit }
+    return Data(bytesNoCopy: buffer, count: produced, deallocator: .free)
+  }
+}
+
 // iOS relaunches the app in the background when a book lands, and hands it the session's events through here
 public class KitFilesAppDelegate: ExpoAppDelegateSubscriber {
   public func application(

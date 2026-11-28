@@ -11,11 +11,14 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import com.github.luben.zstd.ZstdInputStreamNoFinalizer
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -334,6 +337,34 @@ object Adding {
 
   private fun le(b: ByteArray, at: Int, bytes: Int): Long =
     (0 until bytes).fold(0L) { n, i -> n or ((b[at + i].toLong() and 0xff) shl (8 * i)) }
+}
+
+// A cluster of a book's pages, a Zstandard frame in its file, decompressed by zstd's own decoder (zstd-jni's): the
+// app's JavaScript one takes a few hundred milliseconds a cluster on a phone, this a few
+object Clusters {
+  private const val LIMIT = 256 shl 20 // far past any real cluster: a damaged or hostile book stops here
+
+  fun unzstd(path: String, offset: Double, length: Double): ByteArray {
+    if (!(offset >= 0 && length >= 0 && length < LIMIT)) throw Failure("ERR_DAMAGED", "The book is damaged")
+    val frame = ByteArray(length.toInt())
+    RandomAccessFile(path, "r").use {
+      it.seek(offset.toLong())
+      it.readFully(frame)
+    }
+    ZstdInputStreamNoFinalizer(ByteArrayInputStream(frame)).use { z ->
+      var out = ByteArray(minOf(maxOf(4 * frame.size, 1 shl 20), LIMIT))
+      var n = 0
+      while (true) {
+        if (n == out.size) {
+          if (out.size >= LIMIT) throw Failure("ERR_DAMAGED", "The book is damaged")
+          out = out.copyOf(minOf(2 * out.size, LIMIT))
+        }
+        val got = z.read(out, n, out.size - n) // a frame cut short throws
+        if (got < 0) return out.copyOf(n)
+        n += got
+      }
+    }
+  }
 }
 
 // Android's downloader says one is done, even with the app closed

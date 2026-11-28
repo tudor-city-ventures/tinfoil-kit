@@ -453,6 +453,8 @@ def record(name, cmd):
         return code
     finally:
         time.sleep(2)  # the last screen, for a moment
+        with steps.open("a", encoding="utf-8") as f:
+            f.write(f"{time.time():.2f}\t\n")  # when the recording ends, to check the video's length against
         if rec:
             try:
                 if name == "android":
@@ -713,6 +715,16 @@ def ffprobe_seconds(path):
         return 0.0
 
 
+def packet_times(path):
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time", "-of", "csv=p=0"]
+        + [str(path)],
+        capture_output=True,
+        text=True,
+    ).stdout
+    return [float(x) for x in out.split() if re.fullmatch(r"[0-9.]+", x)]
+
+
 def clock(seconds):
     return f"{int(seconds // 60)}:{int(seconds % 60):02d}"
 
@@ -800,6 +812,14 @@ def make_videos(folder):
         rows = [line.split("\t", 1) for line in steps.read_text(encoding="utf-8").splitlines() if "\t" in line]
         start = float(rows[0][0])
         marks = [(min(max(0.0, float(t) - start), length), text) for t, text in rows[1:] if text]
+        # The captions are placed by the clock: a recorder that leaves out still moments puts them late
+        frames = sorted(packet_times(raw))
+        gaps = sorted((b - a for a, b in zip(frames, frames[1:])), reverse=True)[:3]
+        print(
+            f"{name}: the recording ran {float(rows[-1][0]) - start:.0f} s and the video is {length:.0f} s, with "
+            f"{len(frames)} frames, the first at {frames[0] if frames else 0:.1f} s, the longest gaps between them "
+            + ", ".join(f"{g:.1f} s" for g in gaps)
+        )
         run = " ".join(x for x in (os.environ.get("GITHUB_SHA", "")[:7], time.strftime("%Y-%m-%d")) if x)
         phone = name in PHONES
         # What it is, at the top for the first seconds; then each step at the bottom until the next.

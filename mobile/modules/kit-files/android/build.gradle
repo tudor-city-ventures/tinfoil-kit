@@ -17,4 +17,6 @@ android {
 dependencies {
   // The AI built into the phone (Gemini Nano): see AI.kt. Its betas after this one need a newer Kotlin than Expo's
   implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
+  // zstd's decoder, for the books' clusters: see Clusters in Books.kt. Its later builds need compileSdk 37
+  implementation 'com.github.luben:zstd-jni:1.5.7-4@aar'
 }
