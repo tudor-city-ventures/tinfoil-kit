@@ -195,29 +195,8 @@ jobs:
       - name: Show what went wrong
         if: failure()
         run: &why |
-          echo "== On screen"
-          maestro hierarchy 2> /dev/null | python3 -c '
-          import json, sys
-          s = sys.stdin.read()
-          tree, _ = json.JSONDecoder().raw_decode(s[s.index("{"):])
-          def walk(n):
-              a = n.get("attributes", {})
-              t = (a.get("text") or a.get("accessibilityText") or "").strip()
-              if t:
-                  print(t)
-              for c in n.get("children", []):
-                  walk(c)
-          walk(tree)' || true
-          echo "== The step that failed"
-          find e2e-output -name 'commands-*.json' -exec python3 -c '
-          import json, sys
-          for c in json.load(open(sys.argv[1])):
-              m = c.get("metadata") or {}
-              if m.get("status") == "FAILED":
-                  print(json.dumps(c.get("command"))[:400])
-                  print((m.get("error") or {}).get("message"))' {} \; || true
-          echo "== Asked of the stand-in internet"
-          cat "$RUNNER_TEMP/internet.log" || true
+          echo "== Asked of the stand-in internet, lately"
+          tail -n 150 "$RUNNER_TEMP/internet.log" || true
           echo "== The app's log"
           if command -v xcrun > /dev/null; then
             logs() { xcrun simctl spawn booted log show --last 10m --style compact --info --predicate "$1" | tail -n "$2"; }
@@ -233,6 +212,28 @@ jobs:
             adb logcat -d -b crash | tail -n 60
             adb logcat -d | grep -E "ReactNativeJS|KitBooks|DownloadManager|AndroidRuntime|tinfoilkit" | tail -n 100
           fi
+          # Last, so the end of the job's log has them
+          echo "== The step that failed"
+          find e2e-output -name 'commands-*.json' -exec python3 -c '
+          import json, sys
+          for c in json.load(open(sys.argv[1])):
+              m = c.get("metadata") or {}
+              if m.get("status") == "FAILED":
+                  print(json.dumps(c.get("command"))[:400])
+                  print((m.get("error") or {}).get("message"))' {} \; || true
+          echo "== On screen"
+          maestro hierarchy 2> /dev/null | python3 -c '
+          import json, sys
+          s = sys.stdin.read()
+          tree, _ = json.JSONDecoder().raw_decode(s[s.index("{"):])
+          def walk(n):
+              a = n.get("attributes", {})
+              t = (a.get("text") or a.get("accessibilityText") or "").strip()
+              if t:
+                  print(t)
+              for c in n.get("children", []):
+                  walk(c)
+          walk(tree)' || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -271,27 +272,58 @@ jobs:
           path: |
             mobile/ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
             mobile/ios/build/hermesc
-          key: ios-app-3-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/ios/**', 'mobile/modules/*/expo-module.config.json') }}
+          key: ios-app-4-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/ios/**', 'mobile/modules/*/expo-module.config.json') }}
+      # npm ci takes 5 minutes on a Mac. The same lock file installs the same packages, so they're kept, as npm ci left
+      # them: saved before the build adds its own files to them.
+      - name: Reuse the packages, if the lock file is the same
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: mobile/node_modules
+          key: ios-modules-1-${{ runner.arch }}-${{ hashFiles('mobile/package-lock.json') }}
       - run: npm ci --ignore-scripts
+        if: steps.modules.outputs.cache-hit != 'true'
         working-directory: mobile
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.modules.outputs.cache-hit != 'true'
+        with:
+          path: mobile/node_modules
+          key: ${{ steps.modules.outputs.cache-primary-key }}
+      # Most of a full build is compiling the same libraries as the last one. ccache keeps what each of their files
+      # compiled to, so a build whose packages are the same compiles only what changed.
+      - name: Reuse what the last full build compiled
+        id: ccache
+        if: steps.app.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/ccache
+          key: ios-ccache-1-${{ hashFiles('mobile/package-lock.json') }}
+          restore-keys: ios-ccache-1-
       # Signed to run locally, as Xcode signs for the simulator: that puts the app's entitlements in its program, and
       # iOS's downloader takes background downloads only from an app with them (built unsigned, it refuses the app's
-      # connection). The Hermes compiler the build used is kept with the app, for the next run's new JavaScript. The
-      # build's own log is too long to read: the job's gets its errors, and where the time went, to make it faster.
+      # connection). Built for the simulator on this Mac's processor alone, without an index or separate debug symbols,
+      # which a test doesn't use; React Native puts ccache in front of the compiler when pod install sees USE_CCACHE.
+      # The Hermes compiler the build used is kept with the app, for the next run's new JavaScript. The build's own log
+      # is too long to read: the job's gets its errors, and where the time went.
       - name: Build the app
         if: steps.app.outputs.cache-hit != 'true'
         working-directory: mobile
         env: *internet
         run: |
+          command -v ccache > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install --quiet ccache
+          ccache --zero-stats > /dev/null
           time npx expo prebuild --platform ios --no-install
+          export USE_CCACHE=1
           cd ios && time pod install
           log="$RUNNER_TEMP/xcodebuild.log"
           time xcodebuild -workspace TinfoilKit.xcworkspace -scheme TinfoilKit -configuration Release -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build ARCHS=arm64 \
+            COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= -showBuildTimingSummary build > "$log" 2>&1 ||
             { grep -E -A 3 '(^| )error: ' "$log" | head -n 200; tail -n 40 "$log"; exit 1; }
-          sed -n '/Build Timing Summary/,$p' "$log"
+          sed -n '/Build Timing Summary/,$p' "$log" | grep -v '^note: ' || true
           echo "Steps by target:" && grep -o "(in target '[^']*'" "$log" | sort | uniq -c | sort -rn | head -n 25
+          echo "ccache:" && ccache --show-stats --verbose | head -n 40
           codesign --display --entitlements - "build/Build/Products/Release-iphonesimulator/TinfoilKit.app" 2>&1 | tail -n 20
           cp "$(ls Pods/hermes-engine/destroot/bin/hermesc 2> /dev/null || echo ../node_modules/hermes-compiler/hermesc/osx-bin/hermesc)" build/hermesc
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -301,6 +333,11 @@ jobs:
             mobile/ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
             mobile/ios/build/hermesc
           key: ${{ steps.app.outputs.cache-primary-key }}
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.app.outputs.cache-hit != 'true' && steps.ccache.outputs.cache-hit != 'true'
+        with:
+          path: ~/Library/Caches/ccache
+          key: ${{ steps.ccache.outputs.cache-primary-key }}
       - name: Put the new JavaScript in the app
         if: steps.app.outputs.cache-hit == 'true'
         working-directory: mobile
