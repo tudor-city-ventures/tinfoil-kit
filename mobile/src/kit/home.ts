@@ -1,13 +1,20 @@
-// A kit at home: a Tinfoil Kit shared on this Wi-Fi, whose books the phone copies without the internet. The kit asks
-// for its access code, the one Share with family shows on its computer, which the phone sends with each request
-// (gate.go takes it as a Bearer token). Its notes server lists what a phone can copy (/data/files) and hands over
-// each file, whole or in parts.
+// A kit at home: a Tinfoil Kit shared on this Wi-Fi, whose books and map the phone copies without the internet. The
+// kit asks for its access code, the one Share with family shows on its computer, which the phone sends with each
+// request (gate.go takes it as a Bearer token). Its notes server lists what a phone can copy (/data/files) and hands
+// over each file, whole or in parts.
 import { catalog, editions } from "./catalog";
+import { places, type Place } from "./places";
+import type { Box } from "./pmtiles";
 
 export type KitFile = { path: string; bytes: number; sha256?: string };
 export type KitPart = { id: string; title: string; group: string; why: string; files: KitFile[] };
-export type KitListing = { name: string; books: KitPart[]; map: KitPart | null };
+// The kit's map: the areas it has in street detail, the day of the world map it's from (20261120), and the folder of
+// its fonts and icons. A kit from before phones could copy maps has none of them.
+export type KitMap = KitPart & { areas?: Box[]; day?: string; assets?: string };
+export type KitListing = { name: string; books: KitPart[]; map: KitMap | null };
 export type HomeKit = { name: string; address: string; code: string }; // address: host:port
+// A map the phone cuts from the kit's: its file there, and what the listing said of it
+export type KitMapFrom = { path: string; day?: string; assets?: string };
 
 export type Problem = "code" | "tries" | "unreachable" | "old";
 
@@ -21,6 +28,9 @@ export class KitError extends Error {
 }
 
 const PORT = 8000; // share_port's own
+
+export const FORGOTTEN = "The kit at home was forgotten. Find it again in Get more.";
+export const NEW_CODE = "The kit's access code has changed. Type the new one in Get more, Kit at home.";
 
 const WAIT = 10_000; // for the kit to answer
 
@@ -97,4 +107,28 @@ export function zimOf(part: KitPart): KitFile | undefined {
 
 export function fileName(path: string): string {
   return path.slice(path.lastIndexOf("/") + 1);
+}
+
+const NEAR = 1e-6; // degrees: the same box, as the kit and this app each have it from regions.json
+
+// The places whose map the phone can cut from the kit's: the kit's own, whose areas its map has, and the place the
+// phone's map is of when it's inside them
+export function kitPlaces(map: KitMap | null, mine?: string): Place[] {
+  const areas = map?.areas ?? [];
+  if (!kitMapFile(map)) return [];
+  const same = (b: Box) => areas.some((a) => a.every((x, i) => Math.abs(x - b[i]) < NEAR));
+  const inside = (b: Box) =>
+    areas.some((a) => b[0] >= a[0] - NEAR && b[1] >= a[1] - NEAR && b[2] <= a[2] + NEAR && b[3] <= a[3] + NEAR);
+  return places.filter((p) => same(p.bbox) || (p.id === mine && inside(p.bbox)));
+}
+
+// Where the phone cuts its map from: the kit's map file, with what the listing said of it
+export function kitMapFrom(map: KitMap | null): KitMapFrom | undefined {
+  const file = kitMapFile(map);
+  if (!map || !file) return undefined;
+  return { path: file.path, ...(map.day && { day: map.day }), ...(map.assets && { assets: map.assets }) };
+}
+
+function kitMapFile(map: KitMap | null): KitFile | undefined {
+  return map?.files.find((f) => f.path.endsWith(".pmtiles"));
 }

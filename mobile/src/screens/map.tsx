@@ -145,7 +145,7 @@ function Downloading({ d }: { d: MapDownload }) {
             <Pill text={`${Math.floor((100 * d.received) / d.total)}%`} />
           ) : undefined
         }
-        onPress={failed ? () => store.getMap(d.place) : undefined}
+        onPress={failed ? () => store.getMap(d.place, d.from) : undefined}
       />
       <Row testID="map-stop" title="Stop" onPress={() => store.stopMap()} />
     </Group>
@@ -269,7 +269,7 @@ function Shown({
         {download ? (
           <Pressable
             testID="map-download"
-            onPress={download.status === "failed" ? () => store.getMap(download.place) : undefined}
+            onPress={download.status === "failed" ? () => store.getMap(download.place, download.from) : undefined}
             style={[styles.note, { backgroundColor: c.cell }]}
           >
             <Text style={{ color: c.ink }}>

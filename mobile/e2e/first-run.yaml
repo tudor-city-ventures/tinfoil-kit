@@ -1,6 +1,6 @@
-# The first screen, the try-it kit, Get more, copying a book from a kit at home, the map, Ask and reading a book, on a
-# fresh install: CI runs it on an iPhone simulator and an Android emulator (.github/workflows/mobile.yml), with
-# e2e/internet.py standing in for Kiwix, serving the test books tests/make_zims.py makes, for Protomaps, serving a
+# The first screen, the try-it kit, the map, Get more, copying a book and a map from a kit at home, Ask and reading a
+# book, on a fresh install: CI runs it on an iPhone simulator and an Android emulator (.github/workflows/mobile.yml),
+# with e2e/internet.py standing in for Kiwix, serving the test books tests/make_zims.py makes, for Protomaps, serving a
 # piece of the real world map around Huntsville, and for the kit at home.
 # Locally: install the app afresh, then maestro test mobile/e2e. CI installs it just before; clearState would
 # reinstall it on iOS, under another folder name.
@@ -19,10 +19,21 @@ appId: com.tinfoilkit.app
     timeout: 120000
 - assertNotVisible: "Nothing yet"
 - takeScreenshot: 3-downloaded
+# The map of where you live: picked from the kit's places, cut from the world map on the phone, then drawn
+- tapOn: "Map"
+- assertVisible: "Where do you live.*"
+- takeScreenshot: 4-places
+- tapOn:
+    id: "place-us/alabama"
+- extendedWaitUntil:
+    visible: "Map of Alabama"
+    timeout: 120000
+- takeScreenshot: 5-map
 - tapOn: "Get more"
 - assertVisible: "Use mobile data"
-- takeScreenshot: 4-get-more
-# A kit at home, typed in (the emulator can't see the Wi-Fi's Bonjour), let in with its code: a book copied from it
+- takeScreenshot: 6-get-more
+# A kit at home, typed in (the emulator can't see the Wi-Fi's Bonjour), let in with its code: a book copied from it,
+# and its map, which is from a newer world map than the phone's
 - tapOn:
     id: "kit-at-home"
 - tapOn:
@@ -43,25 +54,23 @@ appId: com.tinfoilkit.app
 - extendedWaitUntil:
     visible: "Its books"
     timeout: 30000
-- takeScreenshot: 5-kit-at-home
+- assertVisible: "Newer than this phone's"
+- takeScreenshot: 7-kit-at-home
 - tapOn:
     id: "copy-get-ready.gov_en_all"
+- tapOn:
+    id: "copy-map-get-us/alabama"
+- extendedWaitUntil:
+    visible:
+      id: "map-ready-us/alabama"
+    timeout: 120000
+- takeScreenshot: 8-kit-copied
 - tapOn: "Library"
 - extendedWaitUntil:
     visible:
       id: "ready-ready.gov_en_all"
     timeout: 120000
-- takeScreenshot: 6-copied
-# The map of where you live: picked from the kit's places, cut from the world map on the phone, then drawn
-- tapOn: "Map"
-- assertVisible: "Where do you live.*"
-- takeScreenshot: 7-places
-- tapOn:
-    id: "place-us/alabama"
-- extendedWaitUntil:
-    visible: "Map of Alabama"
-    timeout: 120000
-- takeScreenshot: 8-map
+- takeScreenshot: 9-copied
 # Ask: Search finds the best passages in the books on this phone, and one opens its page, read from the book's file
 - tapOn: "Ask"
 - tapOn:
@@ -73,13 +82,13 @@ appId: com.tinfoilkit.app
     visible: "Best passages from your library"
     timeout: 30000
 - assertVisible: ".*dark urine.*"
-- takeScreenshot: 9-ask
+- takeScreenshot: 10-ask
 - tapOn:
     id: "passage-0"
 - extendedWaitUntil:
     visible: ".*Oral rehydration solution.*"
     timeout: 30000
-- takeScreenshot: 10-reading
+- takeScreenshot: 11-reading
 # The book's home page
 - tapOn:
     id: "book-home"
@@ -96,7 +105,7 @@ appId: com.tinfoilkit.app
 - extendedWaitUntil:
     visible: ".*Oral rehydration solution.*"
     timeout: 30000
-- takeScreenshot: 11-found
+- takeScreenshot: 12-found
 - tapOn:
     id: "book-back"
 - extendedWaitUntil:

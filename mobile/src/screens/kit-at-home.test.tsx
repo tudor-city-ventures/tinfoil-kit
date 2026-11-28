@@ -2,6 +2,7 @@ import { afterEach, expect, jest, test } from "@jest/globals";
 import { act, render, screen, userEvent } from "@testing-library/react-native";
 
 import { catalog } from "@/kit/catalog";
+import { place } from "@/kit/places";
 import { store } from "@/kit/store";
 
 import { KitAtHome } from "./kit-at-home";
@@ -24,7 +25,16 @@ const listing = {
       files: [{ path: "downloads/library/x.zim", bytes: 1 }],
     },
   ],
-  map: null,
+  map: {
+    id: "map",
+    title: "Map with directions",
+    group: "Maps",
+    why: "Streets and places in Alabama.",
+    files: [{ path: "downloads/maps/tiles/basemap.pmtiles", bytes: 3e9, sha256: "ab".repeat(32) }],
+    areas: [place("us/alabama")!.bbox],
+    day: "20261120",
+    assets: "downloads/maps/viewer/basemaps-assets/2026-11-01/basemaps-assets-1a2b3c",
+  },
 };
 const asked: { url: string; auth?: string }[] = [];
 global.fetch = jest.fn(async (url: string, init?: RequestInit) => {
@@ -35,7 +45,12 @@ global.fetch = jest.fn(async (url: string, init?: RequestInit) => {
     : new Response(JSON.stringify({ error: "this needs the kit's access code" }), { status: 401 });
 }) as unknown as typeof fetch;
 
-afterEach(() => act(() => store.setHome(undefined)));
+afterEach(() =>
+  act(() => {
+    store.stopMap();
+    store.setHome(undefined);
+  }),
+);
 
 test("a kit found on the Wi-Fi lets the phone in with its code, then its books copy with a tap", async () => {
   const user = userEvent.setup();
@@ -56,6 +71,21 @@ test("a kit found on the Wi-Fi lets the phone in with its code, then its books c
 
   await user.press(screen.getByTestId(`copy-get-${book.id}`));
   expect(store.get().items[book.id]).toMatchObject({ status: "queued", total: 7e7, from: zim });
+
+  // its map, of where the kit is, cut to fit this phone
+  expect(screen.getByText("Map of Alabama")).toBeOnTheScreen();
+  await user.press(screen.getByTestId("copy-map-get-us/alabama"));
+  expect(store.get().mapDownload).toMatchObject({
+    place: "us/alabama",
+    status: "queued",
+    from: { path: "downloads/maps/tiles/basemap.pmtiles", day: "20261120", assets: listing.map.assets },
+  });
+  expect(screen.getByText("Copying")).toBeOnTheScreen();
+  await act(async () => store.mapReady("us/alabama", "us-alabama-20261120.pmtiles"));
+  expect(screen.getByTestId("map-ready-us/alabama")).toBeOnTheScreen();
+  // the phone's own map from an older world map: the kit's is newer
+  await act(async () => store.mapReady("us/alabama", "us-alabama-20261001.pmtiles"));
+  expect(screen.getByText("Newer than this phone's")).toBeOnTheScreen();
 });
 
 test("a kit typed in: its address, or the link from Share with family, which has the code", async () => {

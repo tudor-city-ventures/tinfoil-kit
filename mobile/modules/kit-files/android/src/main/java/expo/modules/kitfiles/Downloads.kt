@@ -19,6 +19,7 @@ class DownloadOptions : Record {
   @Field val url: String = ""
   @Field val path: String = ""
   @Field val cellular: Boolean = false
+  @Field val headers: Map<String, String> = emptyMap() // a kit at home's access code
   @Field val offset: Double? = null
   @Field val length: Double? = null
   @Field val at: Double? = null
@@ -82,6 +83,7 @@ class Downloads(private val context: () -> Context?) {
       conn.readTimeout = 30_000
       conn.useCaches = false
       conn.setRequestProperty("Accept-Encoding", "identity") // the file's own bytes, never unzipped ones
+      o.headers.forEach { (name, value) -> conn.setRequestProperty(name, value) }
       if (range != null) conn.setRequestProperty("Range", "bytes=${range.first}-${range.second}")
       val status = conn.responseCode
       if (range != null) {

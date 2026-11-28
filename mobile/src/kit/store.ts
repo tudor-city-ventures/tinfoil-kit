@@ -2,7 +2,7 @@
 import { File, Paths } from "expo-file-system";
 import { useSyncExternalStore } from "react";
 
-import type { HomeKit, KitFile } from "./home";
+import type { HomeKit, KitFile, KitMapFrom } from "./home";
 
 export type Status = "queued" | "downloading" | "checking" | "ready" | "failed";
 export type Item = {
@@ -23,6 +23,7 @@ export type MapDownload = {
   total: number;
   waiting?: "wifi" | "internet"; // until the phone is on Wi-Fi, or online again
   error?: string;
+  from?: KitMapFrom; // cut from the kit at home's map, not Protomaps'
 };
 export type State = {
   welcomed: boolean; // past the first screen
@@ -95,8 +96,8 @@ export function createStore(storage: Storage) {
     setCellular(cellular: boolean) {
       set({ ...state, cellular });
     },
-    getMap(place: string) {
-      set({ ...state, mapDownload: { place, status: "queued", received: 0, total: 0 } });
+    getMap(place: string, from?: KitMapFrom) {
+      set({ ...state, mapDownload: { place, status: "queued", received: 0, total: 0, ...(from && { from }) } });
     },
     updateMap(m: Partial<MapDownload>) {
       if (state.mapDownload) set({ ...state, mapDownload: { ...state.mapDownload, ...m } });

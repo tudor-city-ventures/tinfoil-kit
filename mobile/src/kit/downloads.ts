@@ -20,7 +20,7 @@ import {
 import { closeBook } from "@/kit/books";
 import { catalog } from "@/kit/catalog";
 import { size } from "@/kit/format";
-import { fileName, fileUrl, headers } from "@/kit/home";
+import { FORGOTTEN, fileName, fileUrl, headers } from "@/kit/home";
 import { checksum, findFile, type ZimFile } from "@/kit/kiwix";
 import { store as kitStore, type Store } from "@/kit/store";
 
@@ -116,7 +116,7 @@ export function createDownloads(store: Store, phone: Phone) {
     const { items, home } = store.get();
     const from = items[id]?.from;
     if (from) {
-      if (!home) return "The kit at home was forgotten. Find it again in Get more.";
+      if (!home) return FORGOTTEN;
       const file = { url: fileUrl(home, from.path), file: fileName(from.path), bytes: from.bytes };
       return { ...file, ...(from.sha256 && { sha256: from.sha256 }), headers: headers(home) };
     }

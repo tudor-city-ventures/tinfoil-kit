@@ -13,6 +13,7 @@ import {
   STYLE_FILES,
   type MapPhone,
 } from "./maps";
+import { fileUrl, FORGOTTEN, NEW_CODE } from "./home";
 import { place } from "./places";
 import { tileId, wanted, type Area } from "./pmtiles";
 import { createStore, type State } from "./store";
@@ -21,6 +22,12 @@ import { tile, world } from "./test-map";
 const WORLD_MAP = world(7, { leafSize: 300, gzip: true });
 const OPTIONS = { world: 3, detail: 7, part: 100, wait: async () => {} };
 const BUILD = `${BUILD_BASE}/20261127.pmtiles`;
+const KIT = { name: "Kitchen Mac", address: "192.168.1.20:8000", code: "48217736" };
+const KIT_MAP = {
+  path: "downloads/maps/tiles/basemap.pmtiles",
+  day: "20261120",
+  assets: "downloads/maps/viewer/basemaps-assets/2026-11-01/basemaps-assets-1a2b3c",
+};
 
 const coded = (code: string) => Object.assign(new Error(code), { code });
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -35,6 +42,9 @@ function fakePhone(files = new Map<string, Uint8Array>()) {
   const sources = new Map<string, Uint8Array>([
     [BUILD, WORLD_MAP],
     ...STYLE_FILES.map((f): [string, Uint8Array] => [`${ASSETS}/${encodeURI(f)}`, strToU8(f)]),
+    // the kit at home's map, cut from the same world map, and its fonts and icons
+    [fileUrl(KIT, KIT_MAP.path), WORLD_MAP],
+    ...STYLE_FILES.map((f): [string, Uint8Array] => [fileUrl(KIT, `${KIT_MAP.assets}/${f}`), strToU8(f)]),
   ]);
   const t = {
     files,
@@ -53,7 +63,14 @@ function fakePhone(files = new Map<string, Uint8Array>()) {
     damage: (_k: number, _offset: number) => false, // parts that land as zeros, by count from the first or offset
     count: 0,
     held: [] as { go: () => void; stop: (e: unknown) => void }[],
-    requests: [] as { url: string; cellular: boolean; offset?: number; at?: number }[],
+    requests: [] as {
+      url: string;
+      cellular: boolean;
+      headers?: Record<string, string>;
+      offset?: number;
+      at?: number;
+    }[],
+    kitCode: KIT.code, // the kit at home's, now
     release() {
       t.allow = Infinity;
       for (const h of t.held.splice(0)) h.go();
@@ -68,8 +85,10 @@ function fakePhone(files = new Map<string, Uint8Array>()) {
       if (url !== BUILDS) throw coded("ERR_HTTP_404");
       return t.builds;
     },
-    async download({ url, path, cellular, offset, length, at }) {
-      t.requests.push({ url, cellular, offset, at });
+    async download({ url, path, cellular, headers, offset, length, at }) {
+      t.requests.push({ url, cellular, headers, offset, at });
+      if (url.startsWith(`http://${KIT.address}/`) && headers?.Authorization !== `Bearer ${t.kitCode}`)
+        throw coded("ERR_HTTP_401");
       if (!t.online) throw coded(OFFLINE);
       if (!t.wifi && !cellular) throw coded(NOT_ON_WIFI);
       const src = t.sources.get(url);
@@ -381,4 +400,62 @@ test("the map's style: the file on the phone, the fonts and icons beside it, lab
   expect(STYLE_FILES).toContain("sprites/v4/light@2x.png");
   expect(JSON.stringify(style.layers)).toContain('"name:it"');
   expect(JSON.stringify(mapStyle("/d", "x.pmtiles", ["xx"]).layers)).not.toContain('"name:xx"'); // one Protomaps lacks
+});
+
+const fromKit = (r: { url: string; cellular: boolean; headers?: Record<string, string> }) =>
+  r.url.startsWith(`http://${KIT.address}/data/files/`) &&
+  !r.cellular &&
+  r.headers?.Authorization === "Bearer 48217736";
+
+test("a map cut from the kit at home's: its file, fonts and icons, over its Wi-Fi only, with its code", async () => {
+  const { phone, t } = fakePhone();
+  t.sources.forEach((_, url) => url.startsWith(fileUrl(KIT, "")) || t.sources.delete(url)); // no internet
+  const { store } = await newStore({ home: KIT, cellular: true });
+  createMaps(store, phone, OPTIONS).start();
+  store.getMap("us/alabama", KIT_MAP);
+  await until(() => !store.get().mapDownload);
+  expect(store.get().map).toEqual({ place: "us/alabama", file: "us-alabama-20261120.pmtiles" });
+  expectMap(t.files.get("/maps/us-alabama-20261120.pmtiles"), "us/alabama");
+  for (const f of STYLE_FILES) expect(strFromU8(t.files.get(`/maps/style/${f}`)!)).toBe(f);
+  expect(t.requests.length).toBeGreaterThan(STYLE_FILES.length);
+  expect(t.requests.every(fromKit)).toBe(true); // mobile data allowed, yet the kit's over its Wi-Fi
+  expect(leftovers(t.files)).toEqual([]);
+});
+
+test("a map from the kit says when its code has changed, or the kit was forgotten", async () => {
+  const { phone, t } = fakePhone();
+  t.kitCode = "11112222";
+  const { store } = await newStore({ home: KIT });
+  createMaps(store, phone, OPTIONS).start();
+  store.getMap("us/alabama", KIT_MAP);
+  await until(() => store.get().mapDownload?.status === "failed");
+  expect(store.get().mapDownload?.error).toBe(NEW_CODE);
+
+  store.setHome(undefined);
+  store.getMap("us/alabama", KIT_MAP);
+  await until(() => store.get().mapDownload?.status === "failed");
+  expect(store.get().mapDownload?.error).toBe(FORGOTTEN);
+});
+
+test("switching a place's map between Protomaps and the kit starts it again from the other", async () => {
+  const { phone, t } = fakePhone();
+  const { store } = await newStore({ home: KIT });
+  createMaps(store, phone, OPTIONS).start();
+  t.allow = 3;
+  store.getMap("us/alabama");
+  await until(() => t.held.length > 0);
+  const before = t.requests.length;
+  store.getMap("us/alabama", KIT_MAP);
+  t.release();
+  await until(() => !store.get().mapDownload);
+  expect(store.get().map).toEqual({ place: "us/alabama", file: "us-alabama-20261120.pmtiles" });
+  expectMap(t.files.get("/maps/us-alabama-20261120.pmtiles"), "us/alabama");
+  // after the switch, only the kit: its map planned afresh, not Protomaps' parts with its code
+  expect(
+    t.requests
+      .slice(before)
+      .filter((r) => r.at !== undefined)
+      .every(fromKit),
+  ).toBe(true);
+  expect(leftovers(t.files)).toEqual([]);
 });

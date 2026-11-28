@@ -5,6 +5,7 @@ struct DownloadOptions: Record {
   @Field var url: String = ""
   @Field var path: String = ""
   @Field var cellular: Bool = false
+  @Field var headers: [String: String] = [:]  // a kit at home's access code
   @Field var offset: Double? = nil
   @Field var length: Double? = nil
   @Field var at: Double? = nil
@@ -50,6 +51,7 @@ final class Downloads: NSObject, URLSessionDataDelegate {
     request.allowsExpensiveNetworkAccess = o.cellular  // a phone's hotspot, too
     request.allowsConstrainedNetworkAccess = o.cellular  // Low Data Mode
     request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")  // the file's own bytes, never unzipped ones
+    for (name, value) in o.headers { request.setValue(value, forHTTPHeaderField: name) }
     var range: (from: Int64, to: Int64)?
     if let offset = o.offset, let length = o.length, length > 0 {
       range = (Int64(offset), Int64(offset) + Int64(length) - 1)

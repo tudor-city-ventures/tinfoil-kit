@@ -1,5 +1,6 @@
 // The map of where the person lives: their area of Protomaps' world map, cut out on the phone as the kit does it
-// (pmtiles.ts), with the kit page's fonts and icons.
+// (pmtiles.ts), with the kit page's fonts and icons. Or cut from a kit at home's map, with its fonts and icons, over
+// its Wi-Fi, without the internet.
 //
 // A map downloads only while the app is open. It's parts of one 120 GB file, and after a dropped connection the
 // phones' background downloaders ask for the rest of the file from where they stopped: here, the rest of the world.
@@ -15,9 +16,10 @@ import { AppState, Platform } from "react-native";
 import { download, excludeFromBackup, stopDownloads } from "../../modules/kit-files";
 
 import { size } from "@/kit/format";
+import { FORGOTTEN, NEW_CODE, fileUrl, headers } from "@/kit/home";
 import { place } from "@/kit/places";
 import { head, plan } from "@/kit/pmtiles";
-import { store as kitStore, type Store } from "@/kit/store";
+import { store as kitStore, type MapDownload, type Store } from "@/kit/store";
 
 export const WORLD = 7; // every place on earth up to this zoom: countries, towns, main roads
 export const DETAIL = 15; // the area up to this zoom: every street, path and building, as the kit has it
@@ -67,6 +69,7 @@ export type MapPhone = {
     url: string;
     path: string;
     cellular: boolean;
+    headers?: Record<string, string>;
     offset?: number;
     length?: number;
     at?: number;
@@ -94,6 +97,17 @@ type Next = {
   parts: [offset: number, length: number][]; // the world map's bytes it needs: one after another, they're its tiles
   done: number[]; // parts on the phone
   gzip: boolean; // every tile starts with gzip's two bytes, which the check looks for
+  kit?: boolean; // cut from the kit at home's map
+};
+
+// Where a map's bytes come from: Protomaps and the fonts' site, or the kit at home
+type Source = {
+  kit: boolean;
+  map?: string; // the kit's map; Protomaps' newest otherwise
+  day?: string; // the kit's map's
+  style(file: string): string; // where a font or icon comes from
+  // How to ask for a file: the kit's over its Wi-Fi only, with its access code, which goes nowhere else
+  over(url: string): { url: string; cellular: boolean; headers?: Record<string, string> };
 };
 
 const AT_ONCE = 4; // parts downloading at the same time
@@ -138,12 +152,28 @@ export function createMaps(
     phone.remove(nextFile);
   }
 
-  // How far this place's map got, if it's the one under way
-  function load(id: string): Next | undefined {
+  // How far this place's map got, if it's the one under way, from the same source
+  function load(id: string, kit: boolean): Next | undefined {
     const next = saved();
-    if (next?.place === id && phone.size(path(next.partial)) >= next.head) return next;
+    if (next?.place === id && !!next.kit === kit && phone.size(path(next.partial)) >= next.head) return next;
     forget();
     return undefined;
+  }
+
+  function source(d: MapDownload): Source {
+    const { cellular, home } = store.get();
+    const internet = (f: string) => `${ASSETS}/${encodeURI(f)}`;
+    if (!d.from) return { kit: false, style: internet, over: (url) => ({ url, cellular }) };
+    if (!home) throw new Error(FORGOTTEN);
+    const kit = `http://${home.address}/`;
+    const { assets } = d.from;
+    return {
+      kit: true,
+      map: fileUrl(home, d.from.path),
+      day: d.from.day,
+      style: (f) => (assets ? fileUrl(home, `${assets}/${f}`) : internet(f)),
+      over: (url) => (url.startsWith(kit) ? { url, cellular: false, headers: headers(home) } : { url, cellular }),
+    };
   }
 
   // Where each part goes in the map file
@@ -153,16 +183,21 @@ export function createMaps(
   }
 
   // Each plan writes files of its own, so a download stopped too late to cancel can only land in its own plan's
-  async function prepare(id: string, cellular: boolean): Promise<Next> {
+  async function prepare(id: string, src: Source): Promise<Next> {
     const p = place(id);
     if (!p) throw new Error("This version of the app doesn't know that place");
-    const build = latest(await phone.json(BUILDS));
-    const url = `${BUILD_BASE}/${build}`;
+    let url = src.map;
+    let day = src.day || "kit";
+    if (!url) {
+      const build = latest(await phone.json(BUILDS));
+      url = `${BUILD_BASE}/${build}`;
+      day = build.replace(/\.pmtiles$/, "");
+    }
     const stamp = Date.now().toString(36);
     const scratch = path(`read-${stamp}.bin`);
     const area = { world, detail, boxes: [p.bbox] };
     const read = async (offset: number, length: number) => {
-      const n = await phone.download({ url, path: scratch, cellular, offset, length });
+      const n = await phone.download({ ...src.over(url), path: scratch, offset, length });
       return phone.read(scratch, 0, n);
     };
     const pl = await plan(read, area, part).finally(() => phone.remove(scratch));
@@ -171,13 +206,14 @@ export function createMaps(
       throw new Error(`Not enough free space for its ${size(top.length + pl.bytes)}`);
     const next: Next = {
       place: id,
-      file: `${id.replace(/[^a-z0-9]+/gi, "-")}-${build.replace(/\.pmtiles$/, "")}.pmtiles`,
+      file: `${id.replace(/[^a-z0-9]+/gi, "-")}-${day}.pmtiles`,
       partial: `next-${stamp}.pmtiles`,
       url,
       head: top.length,
       parts: pl.parts.map((q) => [pl.header.dataOffset + q.offset, q.length]),
       done: [],
       gzip: pl.header.tileCompression === 2,
+      ...(src.kit && { kit: true }),
     };
     await phone.write(path(next.partial), top);
     phone.save(nextFile, JSON.stringify(next));
@@ -208,16 +244,16 @@ export function createMaps(
   }
 
   // The kit page's fonts and icons, once
-  async function style(cellular: boolean, live: () => boolean) {
+  async function style(src: Source, live: () => boolean) {
     const todo = STYLE_FILES.map((f) => path(`style/${f}`)).filter((to) => phone.size(to) <= 0);
     await each(todo, live, async (to) => {
       const f = to.slice(path("style/").length);
-      await phone.download({ url: `${ASSETS}/${encodeURI(f)}`, path: `${to}.part`, cellular });
+      await phone.download({ ...src.over(src.style(f)), path: `${to}.part` });
       if (live()) phone.move(`${to}.part`, to);
     });
   }
 
-  async function parts(next: Next, cellular: boolean, live: () => boolean) {
+  async function parts(next: Next, src: Source, live: () => boolean) {
     const at = positions(next);
     const done = new Set(next.done);
     let received = next.done.reduce((n, i) => n + next.parts[i][1], next.head);
@@ -226,10 +262,10 @@ export function createMaps(
     try {
       await each(todo, live, async (i) => {
         const [offset, length] = next.parts[i];
+        // the kit's map from where the kit is now: the same file, should its address have changed
         const n = await phone.download({
-          url: next.url,
+          ...src.over(src.map ?? next.url),
           path: path(next.partial),
-          cellular,
           offset,
           length,
           at: at[i],
@@ -280,23 +316,25 @@ export function createMaps(
     busy = d.place;
     const me = ++run;
     const live = () => run === me && current()?.place === d.place;
-    const { cellular } = store.get();
+    const kit = !!d.from;
+    let src: Source;
     const fresh = async () => {
       store.updateMap({ status: "planning", waiting: undefined, error: undefined, received: 0, total: 0 });
-      return prepare(d.place, cellular);
+      return prepare(d.place, src);
     };
     phone.awake(true);
     try {
-      let next = load(d.place);
+      src = source(d);
+      let next = load(d.place, kit);
       let newest = !next; // planned from the newest world map in this go
       let rechecked = false;
       next ??= await fresh();
       for (;;) {
         if (!live()) return;
         store.updateMap({ status: "downloading", waiting: undefined, error: undefined, total: total(next) });
-        await style(cellular, live); // outside: a missing font isn't the world map gone
+        await style(src, live); // outside: a missing font isn't the world map gone
         try {
-          await parts(next, cellular, live);
+          await parts(next, src, live);
         } catch (e) {
           if (newest || !GONE.test(code(e))) throw e;
           newest = true; // that day's world map is no longer there: start over from the newest
@@ -319,6 +357,9 @@ export function createMaps(
         const c = code(e);
         if (c === NOT_ON_WIFI) store.updateMap({ waiting: "wifi" });
         else if (c === OFFLINE || !active) store.updateMap({ waiting: "internet" });
+        else if (kit && c === "ERR_HTTP_401") store.updateMap({ status: "failed", error: NEW_CODE });
+        else if (kit && GONE.test(c))
+          store.updateMap({ status: "failed", error: "The kit's map isn't there any more" });
         else store.updateMap({ status: "failed", error: e instanceof Error ? e.message : String(e) });
       }
     } finally {
@@ -343,8 +384,9 @@ export function createMaps(
     seen = { d, cellular };
     if (d === was.d && cellular === was.cellular) return;
     if (busy) {
-      // stopped, another place, or mobile data switched, which the phone fixes as each part starts: stop, then go on
-      if (!d || d.place !== busy || cellular !== was.cellular) halt();
+      // stopped, another place or source, or mobile data switched, which the phone fixes as each part starts: stop,
+      // then go on
+      if (!d || d.place !== busy || cellular !== was.cellular || d.from !== was.d?.from) halt();
     } else if (!d) {
       if (was.d) forget();
     } else if (d.status === "queued" || (d.waiting && cellular !== was.cellular)) void go();

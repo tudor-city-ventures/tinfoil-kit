@@ -75,6 +75,7 @@ export type DownloadOptions = {
   url: string;
   path: string;
   cellular: boolean; // false: Wi-Fi only, never a phone's hotspot
+  headers?: Record<string, string>; // a kit at home's access code
   offset?: number;
   length?: number;
   at?: number;

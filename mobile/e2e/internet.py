@@ -7,8 +7,9 @@ medical one for medical books); otherwise a small file.
 Protomaps: given a folder from src/kit/protomaps.test.ts (E2E_MAP), its piece of the world map, answering range
 requests as build.protomaps.com does, and the kit page's fonts and icons.
 
-A kit at home, shared with the access code 48217736: its list of what a phone can copy (/data/files), one book, and
-the book itself, as the kit's gate and notes server answer. The app reaches it when the address is typed in.
+A kit at home, shared with the access code 48217736: its list of what a phone can copy (/data/files), one book and
+the book itself, and, given the piece of the world map, a map of Alabama from the next day's world map, with the
+fonts and icons, as the kit's gate and notes server answer. The app reaches it when the address is typed in.
 
 python3 mobile/e2e/internet.py [PORT [BOOKS [MAP]]], and build the app with
 EXPO_PUBLIC_KIWIX_CATALOG=http://localhost:PORT/catalog/v2/entries
@@ -21,6 +22,7 @@ import hashlib
 import json
 import re
 import sys
+from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -32,6 +34,33 @@ MAP = Path(sys.argv[3]) if len(sys.argv) > 3 else None
 
 CODE = "48217736"
 KIT_BOOK = "downloads/library/ready.gov_en_all_2026-04.zim"  # a book the try-it kit doesn't have
+KIT_MAP = "downloads/maps/tiles/basemap.pmtiles"
+KIT_ASSETS = "downloads/maps/viewer/basemaps-assets/2026-11-01/basemaps-assets-main"
+REGIONS = Path(__file__).resolve().parents[2] / "site" / "regions.json"
+
+
+def world_map() -> Path | None:
+    """The piece of the world map, named for its day"""
+    return MAP / json.loads((MAP / "builds.json").read_text())[0]["key"] if MAP else None
+
+
+def kit_map() -> dict | None:
+    """The kit at home's map: Alabama's, from the day after the piece's world map, so it's newer than the phone's"""
+    world = world_map()
+    if not world:
+        return None
+    alabama = next(r for r in json.loads(REGIONS.read_text())["regions"] if r["id"] == "us/alabama")
+    day = date(int(world.name[:4]), int(world.name[4:6]), int(world.name[6:8])) + timedelta(days=1)
+    return {
+        "id": "map",
+        "title": "Map",
+        "group": "Maps",
+        "why": "Streets and places in Alabama.",
+        "files": [{"path": KIT_MAP, "bytes": world.stat().st_size}],
+        "areas": [alabama["bbox"]],
+        "day": day.strftime("%Y%m%d"),
+        "assets": KIT_ASSETS,
+    }
 
 
 def content(file: str) -> bytes:
@@ -110,16 +139,23 @@ class Internet(BaseHTTPRequestHandler):
         if self.headers.get("Authorization") != f"Bearer {CODE}":
             return self.send(b'{"error": "this needs the kit\'s access code"}', "application/json", 401)
         book = content("survival")
+        path = unquote(path)
         if path == "/data/files":
             files = [{"path": KIT_BOOK, "bytes": len(book), "sha256": hashlib.sha256(book).hexdigest()}]
             listing = {
                 "name": "Kitchen Mac",
                 "books": [{"id": "ready.gov_en_all", "title": "Ready.gov", "group": "", "why": "", "files": files}],
-                "map": None,
+                "map": kit_map(),
             }
             return self.send(json.dumps(listing).encode(), "application/json")
         if path == f"/data/files/{KIT_BOOK}" and BOOKS:
             return self.send_file(BOOKS / "testsurvival_en_2026-05.zim", "application/octet-stream")
+        world = world_map()
+        if path == f"/data/files/{KIT_MAP}" and world:
+            return self.send_file(world, "application/octet-stream")
+        style = path.removeprefix(f"/data/files/{KIT_ASSETS}/")
+        if MAP and style != path and ".." not in style and (MAP / "assets" / style).is_file():
+            return self.send_file(MAP / "assets" / style, "application/octet-stream")
         return self.send(b'{"error": "Nothing here."}', "application/json", 404)
 
 

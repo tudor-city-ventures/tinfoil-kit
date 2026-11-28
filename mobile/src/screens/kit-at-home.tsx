@@ -22,6 +22,8 @@ import { size } from "@/kit/format";
 import {
   cleanCode,
   KitError,
+  kitMapFrom,
+  kitPlaces,
   listKit,
   pageUrl,
   phoneBook,
@@ -38,6 +40,9 @@ const LOOK = 4; // seconds to look for kits on the Wi-Fi
 const byId = new Map(catalog.map((b) => [b.id, b]));
 
 const why = (e: unknown) => (e instanceof KitError ? e.message : "Something went wrong. Try again.");
+
+// The day of the world map a map was cut from (20261120), from its file's name
+const dayOf = (file?: string) => /-(\d{8})\.pmtiles$/.exec(file ?? "")?.[1];
 
 // A kit at home: found on the Wi-Fi or typed in, let in with its access code, then its books to copy
 export function KitAtHome() {
@@ -180,10 +185,10 @@ function Connect() {
   );
 }
 
-// The kit's books, each copied to the phone with a tap, and its page in the browser
+// The kit's books and map, each copied to the phone with a tap, and its page in the browser
 function Copy({ kit }: { kit: HomeKit }) {
   const c = useColors();
-  const { items } = useKit();
+  const { items, map, mapDownload } = useKit();
   const [listing, setListing] = useState<KitListing>();
   const [problem, setProblem] = useState<KitError | Error>();
   const [tries, setTries] = useState(0);
@@ -203,6 +208,8 @@ function Copy({ kit }: { kit: HomeKit }) {
     const zim = zimOf(part);
     return id && zim ? [{ id, zim, title: byId.get(id)?.title ?? part.title }] : [];
   });
+  const from = kitMapFrom(listing?.map ?? null);
+  const places = kitPlaces(listing?.map ?? null, mapDownload?.place ?? map?.place);
 
   function forget() {
     Alert.alert(`Forget ${kit.name}?`, "Books you copied from it stay on this phone.", [
@@ -261,6 +268,48 @@ function Copy({ kit }: { kit: HomeKit }) {
                       accessibilityLabel={`Copy ${b.title}`}
                       hitSlop={12}
                       onPress={() => store.copy(b.id, b.zim)}
+                    >
+                      <Icon name="add" color={c.accent} size={24} />
+                    </Pressable>
+                  )
+                }
+              />
+            );
+          })}
+        </Group>
+      ) : null}
+      {listing && from ? (
+        <Group
+          label="Its map"
+          footer={
+            places.length
+              ? "Every street, path and building, cut from the kit's map. It takes the place of the map on this phone."
+              : "The kit's map is of a place this app doesn't know."
+          }
+        >
+          {places.map((p) => {
+            const going = mapDownload?.place === p.id;
+            const mine = map?.place === p.id && !going;
+            // the phone's map of the place, unless the kit's is from a newer world map
+            const here = mine && (dayOf(map?.file) ?? "") >= (from.day ?? "");
+            return (
+              <Row
+                key={p.id}
+                testID={`copy-map-${p.id}`}
+                title={`Map of ${p.name}`}
+                detail={here ? "On this phone" : going ? "Copying" : mine ? "Newer than this phone's" : undefined}
+                right={
+                  here || going ? (
+                    <View testID={here ? `map-ready-${p.id}` : undefined}>
+                      <Icon name={here ? "ready" : "download"} color={c.mute} size={22} />
+                    </View>
+                  ) : (
+                    <Pressable
+                      testID={`copy-map-get-${p.id}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Copy the map of ${p.name}`}
+                      hitSlop={12}
+                      onPress={() => store.getMap(p.id, from)}
                     >
                       <Icon name="add" color={c.accent} size={24} />
                     </Pressable>
