@@ -1,7 +1,7 @@
-# The first screen, the try-it kit, the map, Get more, copying a book and a map from a kit at home, Ask and reading a
-# book, on a fresh install: CI runs it on an iPhone simulator and an Android emulator (.github/workflows/mobile.yml),
-# with e2e/internet.py standing in for Kiwix, serving the test books tests/make_zims.py makes, for Protomaps, serving a
-# piece of the real world map around Huntsville, and for the kit at home.
+# The first screen, the try-it kit, the map, Get more, copying a book and a map from a kit at home, Ask, reading a
+# book and sharing with a phone, on a fresh install: CI runs it on an iPhone simulator and an Android emulator
+# (.github/workflows/mobile.yml), with e2e/internet.py standing in for Kiwix, serving the test books tests/make_zims.py
+# makes, for Protomaps, serving a piece of the real world map around Huntsville, and for the kit at home.
 # Locally: install the app afresh, then maestro test mobile/e2e. CI installs it just before; clearState would
 # reinstall it on iOS, under another folder name.
 appId: com.tinfoilkit.app
@@ -116,3 +116,21 @@ appId: com.tinfoilkit.app
 - extendedWaitUntil:
     visible: "When to seek urgent help"
     timeout: 30000
+# Share with a phone: this phone shared like a kit at home, as another phone on its Wi-Fi sees it (e2e/share.js). The
+# app starts again, so Get more opens at its own screen.
+- launchApp
+- tapOn: "Get more"
+- tapOn:
+    id: "share-phone"
+- tapOn:
+    text: "Allow" # iOS asks to find devices on the local network, where it shows the question
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "share-on"
+    timeout: 30000
+- takeScreenshot: 13-share
+- copyTextFrom:
+    id: "share-code"
+- runScript: share.js
+- assertTrue: ${output.shared == "ok"}

@@ -1,7 +1,7 @@
 // The bits of native code Expo lacks: book downloads that are checked and filed in the library with the app closed,
 // keeping books out of iOS backups, downloads that take exactly the part of a file asked for, the view that shows a
 // book's pages, asking the app for each file they need and reaching nothing else, finding a kit shared on the Wi-Fi,
-// and the AI built into the phone.
+// sharing this phone like one, and the AI built into the phone.
 import { requireNativeView, requireOptionalNativeModule } from "expo";
 import type { ComponentType, Ref } from "react";
 import type { ViewProps } from "react-native";
@@ -16,6 +16,10 @@ const native = requireOptionalNativeModule<{
   forgetBook(id: string): void;
   books(): Promise<NativeBook[]>;
   findKits(seconds: number): Promise<FoundKit[]>;
+  startSharing(o: ShareOptions): Promise<number>;
+  stopSharing(): void;
+  sharing(): Sharing;
+  newCode(): string;
   aiState?(): string; // iOS only, for now
   aiAnswer?(instructions: string, prompt: string): Promise<string>;
 }>("KitFiles");
@@ -127,13 +131,51 @@ export function bookView(): ComponentType<BookViewProps> | undefined {
   return view;
 }
 
-// A kit shared on this Wi-Fi: its computer's name, and where it answers
-export type FoundKit = { name: string; host: string; port: number };
+// A kit shared on this Wi-Fi, or a phone shared like one: its name, and where it answers
+export type FoundKit = { name: string; host: string; port: number; phone: boolean };
 
-// The kits shared on this Wi-Fi, found in that many seconds by the name each gives itself on the network (Bonjour).
-// The first search asks the person to let the app find devices on the local network.
+// The kits shared on this Wi-Fi, and phones shared like one, found in that many seconds by the name each gives itself
+// on the network (Bonjour). The first search asks the person to let the app find devices on the local network.
 export async function findKits(seconds: number): Promise<FoundKit[]> {
   return native ? native.findKits(seconds) : [];
+}
+
+export type ShareOptions = {
+  name: string; // what other phones see
+  code: string;
+  listing: string; // what /data/files answers: the books and the map, as a kit lists them
+  files: Record<string, string>; // each file's path in the listing, and the file on this phone
+  folders: Record<string, string>; // a folder's path in it (the map's fonts and icons), and this phone's
+};
+
+export type Sharing = {
+  on: boolean;
+  port: number;
+  addresses: string[]; // this phone's on the Wi-Fi
+  sent: number; // bytes
+  copying: number; // requests being answered
+  stopped: "" | "tries" | "failed"; // why it stopped by itself: too many wrong codes, or the network
+};
+
+// This phone shared like a kit at home, for another phone on the Wi-Fi to copy from: it answers only with the code,
+// and serves only the listing and the files it names. Resolves with the port it listens on.
+export function startSharing(o: ShareOptions): Promise<number> {
+  if (!native) return Promise.reject(new Error("Sharing works in the phone app"));
+  return native.startSharing(o);
+}
+
+export function stopSharing() {
+  native?.stopSharing();
+}
+
+export function sharing(): Sharing {
+  return native?.sharing() ?? { on: false, port: 0, addresses: [], sent: 0, copying: 0, stopped: "" };
+}
+
+// The code another phone types: 8 digits from the phone's secure random numbers
+export function newCode(): string {
+  if (!native) throw new Error("Sharing works in the phone app");
+  return native.newCode();
 }
 
 // The AI built into the phone, where there is one: Apple Intelligence on iPhones from iOS 26. "off" until the person

@@ -44,18 +44,19 @@ const why = (e: unknown) => (e instanceof KitError ? e.message : "Something went
 // The day of the world map a map was cut from (20261120), from its file's name
 const dayOf = (file?: string) => /-(\d{8})\.pmtiles$/.exec(file ?? "")?.[1];
 
-// A kit at home: found on the Wi-Fi or typed in, let in with its access code, then its books to copy
+// A kit at home, or a phone shared like one: found on the Wi-Fi or typed in, let in with its code, then its books and
+// map to copy
 export function KitAtHome() {
   const { home } = useKit();
   return (
     <>
-      <Stack.Screen options={{ title: home ? home.name : "Kit at home", headerLargeTitle: false }} />
+      <Stack.Screen options={{ title: home ? home.name : "Copy from a kit or phone", headerLargeTitle: false }} />
       {home ? <Copy kit={home} /> : <Connect />}
     </>
   );
 }
 
-// Finds the kits on this Wi-Fi, or takes a typed address, then asks for the access code
+// Finds the kits and phones sharing on this Wi-Fi, or takes a typed address, then asks for the code
 function Connect() {
   const c = useColors();
   const [found, setFound] = useState<FoundKit[]>();
@@ -86,8 +87,9 @@ function Connect() {
     setBusy(true);
     setProblem(undefined);
     try {
-      const listing = await listKit({ address: where, code: theCode });
-      store.setHome({ name: picked?.name ?? listing.name, address: where, code: theCode });
+      const listing = await listKit({ address: where, code: theCode, phone: picked?.phone });
+      const name = picked?.name ?? listing.name;
+      store.setHome({ name, address: where, code: theCode, ...(listing.phone && { phone: true }) });
     } catch (e) {
       setProblem(why(e));
     } finally {
@@ -98,11 +100,11 @@ function Connect() {
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled">
       <Group
-        label="Kits on this Wi-Fi"
+        label="On this Wi-Fi"
         footer={
           found?.length === 0
-            ? "None found. On the kit's computer, open the kit, then More, then Share with family. A kit on Windows " +
-              "doesn't show here: type its address."
+            ? "None found. On a kit's computer, open the kit, then More, then Share with family. On a phone, in Get " +
+              "more, tap Share with a phone. A kit on Windows doesn't show here: type its address."
             : undefined
         }
       >
@@ -111,7 +113,7 @@ function Connect() {
           <Row
             key={`${k.name}${k.host}`}
             testID={`kit-${k.name}`}
-            icon="drive"
+            icon={k.phone ? "phone" : "drive"}
             title={k.name}
             detail={k.host}
             accent={picked === k}
@@ -156,7 +158,10 @@ function Connect() {
         <Group
           label="Access code"
           footer={
-            problem ?? "The 8 digits on the kit's computer, under More, then Share with family. You type it once."
+            problem ??
+            (picked?.phone
+              ? "The 8 digits on the other phone's screen. You type it once."
+              : "The 8 digits on the kit's computer, under More, then Share with family. You type it once.")
           }
         >
           <TextInput
@@ -185,9 +190,11 @@ function Connect() {
   );
 }
 
-// The kit's books and map, each copied to the phone with a tap, and its page in the browser
+// The kit's books and map, each copied to the phone with a tap, and its page in the browser. A phone's the same, with
+// no page.
 function Copy({ kit }: { kit: HomeKit }) {
   const c = useColors();
+  const what = kit.phone ? "phone" : "kit";
   const { items, map, mapDownload } = useKit();
   const [listing, setListing] = useState<KitListing>();
   const [problem, setProblem] = useState<KitError | Error>();
@@ -238,7 +245,7 @@ function Copy({ kit }: { kit: HomeKit }) {
       ) : null}
       {!listing && !problem ? (
         <Group>
-          <Row title="Asking the kit…" right={<ActivityIndicator color={c.mute} />} />
+          <Row title={`Asking the ${what}…`} right={<ActivityIndicator color={c.mute} />} />
         </Group>
       ) : null}
       {listing ? (
@@ -247,7 +254,7 @@ function Copy({ kit }: { kit: HomeKit }) {
           footer={
             books.length
               ? `Copies come over the Wi-Fi, without the internet. This phone has ${freeSpace()} free.`
-              : "This kit has no books this app can open yet."
+              : `This ${what} has no books this app can open yet.`
           }
         >
           {books.map((b) => {
@@ -283,8 +290,9 @@ function Copy({ kit }: { kit: HomeKit }) {
           label="Its map"
           footer={
             places.length
-              ? "Every street, path and building, cut from the kit's map. It takes the place of the map on this phone."
-              : "The kit's map is of a place this app doesn't know."
+              ? `Every street, path and building, cut from the ${what}'s map. It takes the place of the map on this ` +
+                "phone."
+              : `The ${what}'s map is of a place this app doesn't know.`
           }
         >
           {places.map((p) => {
@@ -320,11 +328,13 @@ function Copy({ kit }: { kit: HomeKit }) {
           })}
         </Group>
       ) : null}
-      <Group footer="The kit's AI, maps and whole library, in this phone's browser, while you're on its Wi-Fi.">
-        <Row icon="drive" title="Open the kit" testID="kit-open" onPress={() => void Linking.openURL(pageUrl(kit))} />
-      </Group>
+      {kit.phone ? null : (
+        <Group footer="The kit's AI, maps and whole library, in this phone's browser, while you're on its Wi-Fi.">
+          <Row icon="drive" title="Open the kit" testID="kit-open" onPress={() => void Linking.openURL(pageUrl(kit))} />
+        </Group>
+      )}
       <Group>
-        <Row title="Forget this kit" testID="kit-forget" onPress={forget} />
+        <Row title={`Forget this ${what}`} testID="kit-forget" onPress={forget} />
       </Group>
       <Text style={[styles.address, { color: c.mute }]}>{kit.address}</Text>
     </ScrollView>

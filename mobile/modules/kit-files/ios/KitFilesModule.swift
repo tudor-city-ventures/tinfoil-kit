@@ -59,9 +59,29 @@ public class KitFilesModule: Module {
       Books.shared.list(promise)
     }
 
-    // The kits shared on this Wi-Fi: see Home.swift
+    // The kits shared on this Wi-Fi, and phones shared like one: see Home.swift
     AsyncFunction("findKits") { (seconds: Double) async -> [[String: Any]] in
-      await KitFinder.find(seconds: seconds).map { ["name": $0.name, "host": $0.host, "port": $0.port] }
+      await KitFinder.find(seconds: seconds).map {
+        ["name": $0.name, "host": $0.host, "port": $0.port, "phone": $0.phone]
+      }
+    }
+
+    // This phone shared like a kit at home, for another phone to copy from: see Home.swift
+    AsyncFunction("startSharing") { (o: ShareOptions, promise: Promise) in
+      Sharing.shared.start(o, promise: promise)
+    }
+
+    Function("stopSharing") {
+      Sharing.shared.stop()
+    }
+
+    Function("sharing") { () -> [String: Any] in
+      Sharing.shared.state()
+    }
+
+    // The code another phone types: 8 digits from the system's secure random numbers
+    Function("newCode") { () -> String in
+      (0..<8).map { _ in String(Int.random(in: 0...9)) }.joined()
     }
 
     // The AI built into the phone (Apple Intelligence, from iOS 26): whether it can answer now ("off" until the person

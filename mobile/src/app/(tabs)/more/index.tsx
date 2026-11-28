@@ -38,20 +38,24 @@ export default function GetMore() {
         />
       </Group>
       <Group
-        label="Kit at home"
-        footer={
-          home
-            ? undefined
-            : "Copy books from a Tinfoil Kit on this Wi-Fi: faster than the internet, and works without it."
-        }
+        label="Nearby"
+        footer="Books and the map over the Wi-Fi, from a Tinfoil Kit or another phone: faster than the internet, and it works without it."
       >
         <Row
           testID="kit-at-home"
-          icon="drive"
-          title={home ? home.name : "Copy from a kit at home"}
-          detail={home ? "Copy its books, or open it" : undefined}
+          icon={home?.phone ? "phone" : "drive"}
+          title={home ? home.name : "Copy from a kit or phone"}
+          detail={home ? (home.phone ? "Copy its books and map" : "Copy its books and map, or open it") : undefined}
           right={<Icon name="forward" color={c.mute} />}
           onPress={() => router.push("/more/home")}
+        />
+        <Row
+          testID="share-phone"
+          icon="wifi"
+          title="Share with a phone"
+          detail="Let another phone copy this one's books and map"
+          right={<Icon name="forward" color={c.mute} />}
+          onPress={() => router.push("/more/share")}
         />
       </Group>
       {groups.map((g) => (

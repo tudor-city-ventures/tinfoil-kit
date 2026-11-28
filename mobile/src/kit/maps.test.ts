@@ -422,6 +422,31 @@ test("a map cut from the kit at home's: its file, fonts and icons, over its Wi-F
   expect(leftovers(t.files)).toEqual([]);
 });
 
+test("a map cut from another phone's: from the map that phone cut itself, the same tiles, its fonts and icons", async () => {
+  const one = fakePhone();
+  const first = await newStore();
+  createMaps(first.store, one.phone, OPTIONS).start();
+  first.store.getMap("us/alabama");
+  await until(() => !first.store.get().mapDownload);
+  const { file } = first.store.get().map!;
+
+  // the other phone, without the internet, cuts its map from this one's, as this one shares it (share.ts)
+  const PHONE = { name: "iPhone", address: "192.168.1.31:8000", code: "48217736", phone: true };
+  const two = fakePhone();
+  two.t.sources.clear();
+  two.t.sources.set(fileUrl(PHONE, `maps/${file}`), one.t.files.get(`/maps/${file}`)!);
+  for (const f of STYLE_FILES)
+    two.t.sources.set(fileUrl(PHONE, `maps/style/${f}`), one.t.files.get(`/maps/style/${f}`)!);
+  const second = await newStore({ home: PHONE });
+  createMaps(second.store, two.phone, OPTIONS).start();
+  second.store.getMap("us/alabama", { path: `maps/${file}`, day: "20261127", assets: "maps/style" });
+  await until(() => !second.store.get().mapDownload);
+  expect(second.store.get().map).toEqual({ place: "us/alabama", file });
+  expectMap(two.t.files.get(`/maps/${file}`), "us/alabama");
+  for (const f of STYLE_FILES) expect(strFromU8(two.t.files.get(`/maps/style/${f}`)!)).toBe(f);
+  expect(leftovers(two.t.files)).toEqual([]);
+});
+
 test("a map from the kit says when its code has changed, or the kit was forgotten", async () => {
   const { phone, t } = fakePhone();
   t.kitCode = "11112222";

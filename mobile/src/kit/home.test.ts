@@ -68,6 +68,13 @@ test("what the kit has, asked with its code, and what to do when that fails", as
   expect(await told()).not.toMatch(/mobile data/);
   mockNetwork = "CELLULAR"; // on a Wi-Fi without the internet, an Android phone may use mobile data instead
   expect(await told()).toMatch(/turn off mobile data while you copy/);
+  mockNetwork = "WIFI";
+
+  // a phone shared like a kit: where its code is, and where it shares, are on the phone
+  const phone = { ...kit, phone: true };
+  const said = (get: typeof fetch) => listKit(phone, get).catch((e: KitError) => e.message);
+  expect(await said(answer(401, { error: "this needs the phone's code" }))).toMatch(/on the other phone/);
+  expect(await said(offline)).toMatch(/Share with a phone/);
 });
 
 test("a kit's book is the phone's own, in whichever edition the kit has", () => {

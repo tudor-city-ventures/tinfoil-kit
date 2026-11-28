@@ -190,6 +190,7 @@ jobs:
         run: |
           python3 mobile/e2e/internet.py 19100 "$RUNNER_TEMP/zim" "$RUNNER_TEMP/protomaps" > "$RUNNER_TEMP/internet.log" 2>&1 &
           adb reverse tcp:19100 tcp:19100    # the emulator's localhost:19100 is the runner's
+          adb forward tcp:8000 tcp:8000      # and the runner's localhost:8000 the emulator's: the phone, shared
           maestro test mobile/e2e --test-output-dir e2e-output
       # What was on screen when a test failed, what the app asked of the stand-in internet, and the app's log
       - name: Show what went wrong
@@ -244,7 +245,7 @@ jobs:
   ios:
     needs: check
     runs-on: macos-26
-    timeout-minutes: 75 # a full build takes 30 to 40 minutes
+    timeout-minutes: 75 # a full build takes about 30 minutes, less once its compiled files are kept
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

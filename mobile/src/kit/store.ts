@@ -31,7 +31,8 @@ export type State = {
   items: Record<string, Item>;
   map?: { place: string; file: string }; // the map on this phone, a file in the maps folder
   mapDownload?: MapDownload;
-  home?: HomeKit; // the kit at home, once its code worked
+  home?: HomeKit; // the kit at home, or a phone shared like one, once its code worked
+  shareCode?: string; // the code another phone types to copy from this one
 };
 
 export type Storage = { read(): Promise<string | null>; write(text: string): Promise<void> };
@@ -84,6 +85,9 @@ export function createStore(storage: Storage) {
     },
     setHome(home: HomeKit | undefined) {
       set({ ...state, home });
+    },
+    setShareCode(shareCode: string) {
+      set({ ...state, shareCode });
     },
     update,
     retry(id: string) {

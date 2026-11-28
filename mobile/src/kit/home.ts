@@ -1,7 +1,7 @@
 // A kit at home: a Tinfoil Kit shared on this Wi-Fi, whose books and map the phone copies without the internet. The
 // kit asks for its access code, the one Share with family shows on its computer, which the phone sends with each
 // request (gate.go takes it as a Bearer token). Its notes server lists what a phone can copy (/data/files) and hands
-// over each file, whole or in parts.
+// over each file, whole or in parts. Another phone shared like a kit (share.ts) answers the same way, with its code.
 import { getNetworkStateAsync, NetworkStateType } from "expo-network";
 
 import { catalog, editions } from "./catalog";
@@ -13,8 +13,8 @@ export type KitPart = { id: string; title: string; group: string; why: string; f
 // The kit's map: the areas it has in street detail, the day of the world map it's from (20261120), and the folder of
 // its fonts and icons. A kit from before phones could copy maps has none of them.
 export type KitMap = KitPart & { areas?: Box[]; day?: string; assets?: string };
-export type KitListing = { name: string; books: KitPart[]; map: KitMap | null };
-export type HomeKit = { name: string; address: string; code: string }; // address: host:port
+export type KitListing = { name: string; phone?: boolean; books: KitPart[]; map: KitMap | null };
+export type HomeKit = { name: string; address: string; code: string; phone?: boolean }; // address: host:port
 // A map the phone cuts from the kit's: its file there, and what the listing said of it
 export type KitMapFrom = { path: string; day?: string; assets?: string };
 
@@ -31,8 +31,8 @@ export class KitError extends Error {
 
 const PORT = 8000; // share_port's own
 
-export const FORGOTTEN = "The kit at home was forgotten. Find it again in Get more.";
-export const NEW_CODE = "The kit's access code has changed. Type the new one in Get more, Kit at home.";
+export const FORGOTTEN = "The kit or phone this came from was forgotten. Find it again in Get more.";
+export const NEW_CODE = "The code for the kit or phone this comes from has changed. Type the new one in Get more.";
 
 const WAIT = 10_000; // for the kit to answer
 
@@ -69,8 +69,12 @@ export function pageUrl(kit: HomeKit): string {
   return `http://${kit.address}/?code=${kit.code}`;
 }
 
-// What the kit has for a phone to copy. Its errors say what to do, in the person's words.
-export async function listKit(kit: Pick<HomeKit, "address" | "code">, get: typeof fetch = fetch): Promise<KitListing> {
+// What the kit, or a phone shared like one, has for this phone to copy. Its errors say what to do, in the person's
+// words.
+export async function listKit(
+  kit: Pick<HomeKit, "address" | "code" | "phone">,
+  get: typeof fetch = fetch,
+): Promise<KitListing> {
   const stop = new AbortController();
   const timer = setTimeout(() => stop.abort(), WAIT);
   let answer: Response;
@@ -81,15 +85,23 @@ export async function listKit(kit: Pick<HomeKit, "address" | "code">, get: typeo
     const cellular = (await getNetworkStateAsync().catch(() => undefined))?.type === NetworkStateType.CELLULAR;
     throw new KitError(
       "unreachable",
-      "Can't reach the kit. Check that this phone is on the same Wi-Fi, and that the kit is shared: on its computer, " +
-        "More, then Share with family." +
+      (kit.phone
+        ? "Can't reach that phone. Check that both phones are on the same Wi-Fi, and that it's still on Share with " +
+          "a phone."
+        : "Can't reach the kit. Check that this phone is on the same Wi-Fi, and that the kit is shared: on its " +
+          "computer, More, then Share with family.") +
         (cellular ? " If the Wi-Fi has no internet, turn off mobile data while you copy." : ""),
     );
   } finally {
     clearTimeout(timer);
   }
   if (answer.status === 401)
-    throw new KitError("code", "That code didn't work. It's on the kit's computer: More, then Share with family.");
+    throw new KitError(
+      "code",
+      kit.phone
+        ? "That code didn't work. It's on the other phone, under Share with a phone."
+        : "That code didn't work. It's on the kit's computer: More, then Share with family.",
+    );
   if (answer.status === 429) throw new KitError("tries", "Too many tries. Wait a few minutes, then try again.");
   const listing = answer.ok ? await answer.json().catch(() => undefined) : undefined;
   if (!listing || !Array.isArray(listing.books))

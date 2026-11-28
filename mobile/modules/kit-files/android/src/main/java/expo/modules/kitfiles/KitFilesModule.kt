@@ -3,6 +3,7 @@ package expo.modules.kitfiles
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.security.SecureRandom
 
 class KitFilesModule : Module() {
   private val downloads = Downloads { appContext.reactContext }
@@ -43,10 +44,29 @@ class KitFilesModule : Module() {
       books().list()
     }
 
-    // The kits shared on this Wi-Fi: see Home.kt
+    // The kits shared on this Wi-Fi, and phones shared like one: see Home.kt
     AsyncFunction("findKits") { seconds: Double, promise: Promise ->
       val context = appContext.reactContext ?: return@AsyncFunction promise.resolve(emptyList<Any>())
       KitFinder(context).find(seconds) { promise.resolve(it) }
+    }
+
+    // This phone shared like a kit at home, for another phone to copy from: see Home.kt
+    AsyncFunction("startSharing") { o: ShareOptions ->
+      Sharing.start(appContext.reactContext ?: throw IllegalStateException("The app isn't running"), o)
+    }
+
+    Function("stopSharing") {
+      Sharing.stop()
+    }
+
+    Function("sharing") {
+      Sharing.state(appContext.reactContext ?: throw IllegalStateException("The app isn't running"))
+    }
+
+    // The code another phone types: 8 digits from the system's secure random numbers
+    Function("newCode") {
+      val random = SecureRandom()
+      (1..8).joinToString("") { random.nextInt(10).toString() }
     }
 
     // A view's functions run on the main thread

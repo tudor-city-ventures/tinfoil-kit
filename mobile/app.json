@@ -13,7 +13,7 @@
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocalNetworkUsageDescription": "Tinfoil Kit looks for a kit on your home network, so you can copy books and maps from it without the internet.",
+        "NSLocalNetworkUsageDescription": "Tinfoil Kit finds kits and phones on your Wi-Fi to copy books and maps from, and shares this phone's when you ask, without the internet.",
         "NSLocationWhenInUseUsageDescription": "Tinfoil Kit shows where you are on its map when you ask. Your location never leaves this phone.",
         "NSBonjourServices": ["_tinfoilkit._tcp"]
       }
