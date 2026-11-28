@@ -480,6 +480,100 @@ func TestShareSwitch(t *testing.T) {
 	}
 }
 
+// What a phone at home can copy from the kit (Tinfoil Kit for iPhone and Android), through the gate with the access
+// code: the books and the map, whole or a part at a time, and nothing else.
+func TestPhoneFiles(t *testing.T) {
+	t.Setenv("KIT_LAN_IP", "192.168.1.20")
+	kit := t.TempDir()
+	book, tiles := []byte("ZIM\x04 field medicine"), []byte("PMTiles\x03 Huntsville")
+	sum := func(b []byte) string { s := sha256.Sum256(b); return hex.EncodeToString(s[:]) }
+	write := func(rel string, data []byte) {
+		p := filepath.Join(kit, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("data/kit.json", []byte(`{"library": [{"zim": "medicine_en_all", "priority": 1, "note": "Field medicine (~5 MB)"}]}`))
+	write("data/.kit/state.json", []byte(fmt.Sprintf(`{"version": 1, "items": {
+		"library/medicine_en_all": {"version": "2026-10", "dest": "library",
+			"files": {"medicine_en_all_2026-10.zim": {"size": %d, "sha256": %q}}},
+		"maps/tiles": {"version": "20261120", "dest": "maps/tiles",
+			"files": {"basemap.pmtiles": {"size": %d, "sha256": %q}}}}}`, len(book), sum(book), len(tiles), sum(tiles))))
+	write("downloads/library/medicine_en_all_2026-10.zim", book)
+	write("downloads/maps/tiles/basemap.pmtiles", tiles)
+	write("data/notes.txt", []byte("the spare key is under the mat"))
+	if err := saveAccess(kit, access{Code: "48217736", Key: "ab"}); err != nil {
+		t.Fatal(err)
+	}
+	n, err := newNotesServer(filepath.Join(kit, "data"), 0, 18888, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.ln.Close()
+	n.kit = kit
+	go n.serve()
+	g, err := newGate(kit, 0, map[string]int{"data": n.port})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.ln.Close()
+	phone := func(target, code string, header ...string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", target, nil)
+		r.Host, r.RemoteAddr = fmt.Sprintf("192.168.1.20:%d", g.port), "192.168.1.31:50000"
+		if code != "" {
+			r.Header.Set("Authorization", "Bearer "+code)
+		}
+		for i := 0; i+1 < len(header); i += 2 {
+			r.Header.Set(header[i], header[i+1])
+		}
+		w := httptest.NewRecorder()
+		g.ServeHTTP(w, r)
+		return w
+	}
+
+	if w := phone("/data/files", ""); w.Code != 401 {
+		t.Errorf("without the access code, a phone learns nothing: %d", w.Code)
+	}
+	w := phone("/data/files", "4821 7736")
+	var got struct {
+		Name  string
+		Books []struct {
+			ID, Title string
+			Files     []struct {
+				Path   string
+				Bytes  int
+				Sha256 string
+			}
+		}
+		Map struct{ Files []struct{ Path string } }
+	}
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != 200 || got.Name == "" || len(got.Books) != 1 || got.Books[0].ID != "medicine_en_all" ||
+		got.Books[0].Title != "medicine_en_all" || len(got.Books[0].Files) != 1 || len(got.Map.Files) != 1 {
+		t.Fatalf("with it, the books and the map: %d %s", w.Code, w.Body)
+	}
+	if f := got.Books[0].Files[0]; f.Path != "downloads/library/medicine_en_all_2026-10.zim" || f.Bytes != len(book) ||
+		f.Sha256 != sum(book) || got.Map.Files[0].Path != "downloads/maps/tiles/basemap.pmtiles" {
+		t.Errorf("each file with its size and the sum it downloaded with: %s", w.Body)
+	}
+	if w := phone("/data/files/downloads/library/medicine_en_all_2026-10.zim", "48217736"); w.Code != 200 ||
+		!bytes.Equal(w.Body.Bytes(), book) {
+		t.Errorf("a book, whole: %d %q", w.Code, w.Body)
+	}
+	if w := phone("/data/files/downloads/maps/tiles/basemap.pmtiles", "48217736", "Range", "bytes=8-10"); w.Code != 206 ||
+		w.Body.String() != string(tiles[8:11]) || w.Header().Get("Content-Range") != fmt.Sprintf("bytes 8-10/%d", len(tiles)) {
+		t.Errorf("the map, a part at a time: %d %q %v", w.Code, w.Body, w.Header())
+	}
+	for _, target := range []string{"/data/files/data/notes.txt", "/data/files/downloads/library/../../data/notes.txt",
+		"/data/files/downloads/library/..%2F..%2Fdata%2Fnotes.txt", "/data/files/downloads/library/x.zim",
+		"/data/files/downloads/maps/tiles/../../library/medicine_en_all_2026-10.zim", "/data/files/data/.kit/share.json"} {
+		if w := phone(target, "48217736"); w.Code != 404 || strings.Contains(w.Body.String(), "mat") {
+			t.Errorf("nothing but the books and the map (%s): %d %q", target, w.Code, w.Body)
+		}
+	}
+}
+
 func TestSettings(t *testing.T) {
 	conf := filepath.Join(t.TempDir(), "kit.json")
 	os.WriteFile(conf, []byte("{\r\n  \"settings\": {\r\n    \"default_model\": \"Inkling-2-Mini\",\r\n"+

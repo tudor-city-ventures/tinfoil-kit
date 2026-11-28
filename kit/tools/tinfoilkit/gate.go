@@ -34,6 +34,7 @@ import (
 	"syscall"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 // ----------------------------------------------------------------------------- the access code and the address
@@ -874,7 +875,8 @@ func startGate(kit, logPath string, port int, ports map[string]int) (*gate, erro
 		return nil, err
 	}
 	fmt.Fprintf(out, "Sharing on port %d: %s\n", g.port, describePorts(ports))
-	g.release = stayAwake()
+	awake, told := stayAwake(), advertise(g.port)
+	g.release = func() { told(); awake() }
 	go func() {
 		g.serve(out)
 		if logf != nil {
@@ -882,6 +884,56 @@ func startGate(kit, logPath string, port int, ports map[string]int) (*gate, erro
 		}
 	}()
 	return g, nil
+}
+
+// kitService is the kit's Bonjour type, which Tinfoil Kit for iPhone and Android looks for (its app.json lists it).
+const kitService = "_tinfoilkit._tcp"
+
+// advertise tells the phones on the home network that the kit is shared here, by this computer's name, as a printer
+// says it's there: Tinfoil Kit for iPhone and Android lists the kits it finds, then asks for the access code. The
+// computer's own Bonjour does it, with dns-sd on a Mac and avahi-publish on Linux where Avahi runs. On Windows, or
+// without them, phones type the kit's address instead. It returns what stops it.
+func advertise(port int) (stop func()) {
+	var cmd *exec.Cmd
+	name, p := computerName(), strconv.Itoa(port)
+	switch {
+	case mac:
+		cmd = exec.Command("dns-sd", "-R", name, kitService, "local", p, "v=1")
+	case !windows:
+		if avahi, err := exec.LookPath("avahi-publish"); err == nil {
+			cmd = exec.Command(avahi, "-s", name, kitService, p, "v=1")
+		}
+	}
+	if cmd == nil || cmd.Start() != nil {
+		return func() {}
+	}
+	done := make(chan struct{})
+	go func() { cmd.Wait(); close(done) }()
+	return func() {
+		cmd.Process.Kill()
+		<-done
+	}
+}
+
+// computerName is what phones list the kit by: this computer's name, as its owner set it (Travis's MacBook Pro).
+func computerName() string {
+	name := ""
+	if mac {
+		out, _ := exec.Command("scutil", "--get", "ComputerName").Output()
+		name = strings.TrimSpace(string(out))
+	}
+	if name == "" {
+		h, _ := os.Hostname()
+		name = strings.SplitN(h, ".", 2)[0]
+	}
+	if name == "" {
+		name = "Tinfoil Kit"
+	}
+	for len(name) > 63 { // Bonjour's longest name, in bytes
+		_, size := utf8.DecodeLastRuneInString(name)
+		name = name[:len(name)-size]
+	}
+	return name
 }
 
 // sharer turns sharing on and off while the kit runs, for the kit page on this computer (the notes server's PUT
@@ -1048,6 +1100,7 @@ func runGate(args []string) int {
 	}
 	fmt.Printf("Sharing on port %d: %s\n", g.port, describePorts(want))
 	stayAwake()
+	defer advertise(g.port)()
 	if err := g.serve(os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

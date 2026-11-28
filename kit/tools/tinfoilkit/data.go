@@ -9,7 +9,8 @@ package main
 // devices at home that have the access code reach it at /data/. It also tells the kit page on this computer how
 // others get in when the kit is shared (/share), which only the gate knows otherwise, and turns sharing on and off for
 // that page and ./kit share, never for a device through the gate. On its own address, never the kit page's, it serves
-// Make a copy's page and makes copies for it (/copy, copy.go).
+// Make a copy's page and makes copies for it (/copy, copy.go). And it lists the books and map a phone can copy, and
+// hands them over (/files), for Tinfoil Kit for iPhone and Android through the gate.
 
 import (
 	"bytes"
@@ -361,6 +362,10 @@ func (n *notesServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		n.reply(w, r, 403, map[string]any{"error": copyHereOnly}, "")
 		return
 	}
+	if rel, ok := strings.CutPrefix(r.URL.Path, "/files/"); ok && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		n.sendFile(w, r, rel)
+		return
+	}
 	if r.Method == http.MethodOptions {
 		n.reply(w, r, 204, nil, origin)
 		return
@@ -401,7 +406,7 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 	}
 	switch {
 	case path == "/" && reading:
-		return 200, map[string]any{"name": "Tinfoil Kit", "notes": "/notes", "places": "/places"}, nil
+		return 200, map[string]any{"name": "Tinfoil Kit", "notes": "/notes", "places": "/places", "files": "/files"}, nil
 	case path == "/notes" && reading:
 		v, err := st.getNotes()
 		return 200, v, err
@@ -419,6 +424,8 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 			return 0, nil, &turnedDown{403, "Only the computer the kit runs on can change sharing.", nil}
 		}
 		return withBody(n.setShare)
+	case path == "/files" && reading:
+		return n.phoneFiles()
 	case path == "/copy/info" && reading:
 		return n.copyAnswer(r.URL.Query(), false)
 	case path == "/copy/plan" && reading:
@@ -442,10 +449,65 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 		v, err := st.deletePin(id)
 		return 200, v, err
 	case isPin || path == "/" || path == "/notes" || path == "/places" || path == "/places/home" || path == "/share" ||
-		path == "/copy/info" || path == "/copy/plan" || path == "/copy/job":
+		path == "/files" || path == "/copy/info" || path == "/copy/plan" || path == "/copy/job":
 		return 405, map[string]any{"error": "Not that way."}, nil
 	}
 	return 404, map[string]any{"error": "Nothing here."}, nil
+}
+
+// copyable is a file a phone may copy from the kit: a book or the map, once it has finished downloading.
+var copyable = regexp.MustCompile(`^downloads/(library/[A-Za-z0-9][A-Za-z0-9._-]*\.zim|maps/tiles/basemap\.pmtiles)$`)
+
+// phoneFiles is what Tinfoil Kit for iPhone and Android can copy from this kit: its books and its map, each file with
+// its size, and the SHA-256 it downloaded with, which the phone checks its copy against.
+func (n *notesServer) phoneFiles() (int, any, error) {
+	if n.kit == "" {
+		return 404, map[string]any{"error": "Nothing here."}, nil
+	}
+	books, theMap := []any{}, any(nil)
+	for _, p := range copyParts(n.kit, loadState(n.kit), loadConfig(n.kit)) {
+		files := []any{}
+		for _, f := range p.files {
+			if !f.dir && copyable.MatchString(f.to) {
+				file := map[string]any{"path": f.to, "bytes": f.size}
+				if f.sum != "" {
+					file["sha256"] = f.sum
+				}
+				files = append(files, file)
+			}
+		}
+		part := map[string]any{"id": p.id, "title": p.title, "group": p.group, "why": p.why, "files": files}
+		switch {
+		case len(files) == 0:
+		case p.id == "map":
+			theMap = part
+		case isBook(p):
+			books = append(books, part)
+		}
+	}
+	return 200, map[string]any{"name": computerName(), "books": books, "map": theMap}, nil
+}
+
+// sendFile hands a phone a book or the map, whole or the part it asks for (a Range), to copy.
+func (n *notesServer) sendFile(w http.ResponseWriter, r *http.Request, rel string) {
+	nothing := func() { n.reply(w, r, 404, map[string]any{"error": "Nothing here."}, "") }
+	if n.kit == "" || !copyable.MatchString(rel) {
+		nothing()
+		return
+	}
+	f, err := os.Open(filepath.Join(n.kit, filepath.FromSlash(rel)))
+	if err != nil {
+		nothing()
+		return
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil || !st.Mode().IsRegular() {
+		nothing()
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	http.ServeContent(w, r, "", st.ModTime(), f)
 }
 
 // share is how other devices get in, when the gate is running: the address it answers at on the home network, the
