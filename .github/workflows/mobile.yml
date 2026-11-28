@@ -9,6 +9,11 @@ on:
     branches: [main]
     paths: ["mobile/**", "site/kit.json", "site/sources.json", "tests/make_zims.py", ".github/workflows/mobile.yml"]
   workflow_dispatch:
+    inputs:
+      map_sizes:
+        description: "Only measure the phone map's real sizes for a few places, from Protomaps' newest world map"
+        type: boolean
+        default: false
 permissions:
   contents: read
 # A push to main never cancels another's run: each tests its own commit. A pull request's newer push does.
@@ -23,6 +28,7 @@ env:
   MAESTRO_CLI_NO_ANALYTICS: "1"
 jobs:
   check:
+    if: ${{ !inputs.map_sizes }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -44,6 +50,25 @@ jobs:
       - run: npm run check
         env:
           ZIM_FIXTURES: ${{ runner.temp }}/zim
+
+  map-sizes:
+    if: ${{ inputs.map_sizes }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npx jest src/kit/map-sizes.test.ts
+        env:
+          MAP_SIZES: "1"
 
   android:
     needs: check
