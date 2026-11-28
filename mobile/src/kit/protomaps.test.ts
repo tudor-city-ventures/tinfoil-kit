@@ -19,22 +19,34 @@ const PLACES = ["us/rhode-island", "us/new-jersey", "us/alabama", "us/new-york",
 const WORLDS = [5, 6, 7];
 const DETAILS = [14, 15];
 
-function get(url: string, headers: Record<string, string> = {}): Promise<Buffer> {
+// A download, given up when nothing comes for 30 s and tried again a few times: one that stalls would otherwise hold
+// the job until its time runs out
+async function get(url: string, headers: Record<string, string> = {}, tries = 4): Promise<Buffer> {
+  try {
+    return await once(url, headers);
+  } catch (e) {
+    if (tries <= 1) throw e;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    return get(url, headers, tries - 1);
+  }
+}
+
+function once(url: string, headers: Record<string, string>): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    (url.startsWith("https:") ? https : http)
-      .request(url, { headers }, (res) => {
-        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          res.resume();
-          return resolve(get(new URL(res.headers.location, url).toString(), headers));
-        }
-        if (res.statusCode !== 200 && res.statusCode !== 206) return reject(new Error(`${url}: ${res.statusCode}`));
-        const chunks: Buffer[] = [];
-        res.on("data", (c: Buffer) => chunks.push(c));
-        res.on("end", () => resolve(Buffer.concat(chunks)));
-        res.on("error", reject);
-      })
-      .on("error", reject)
-      .end();
+    const req = (url.startsWith("https:") ? https : http).request(url, { headers, timeout: 30_000 }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        return resolve(once(new URL(res.headers.location, url).toString(), headers));
+      }
+      if (res.statusCode !== 200 && res.statusCode !== 206) return reject(new Error(`${url}: ${res.statusCode}`));
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () => (res.complete ? resolve(Buffer.concat(chunks)) : reject(new Error(`${url}: cut short`))));
+      res.on("error", reject);
+    });
+    req.on("timeout", () => req.destroy(new Error(`${url}: nothing for 30 s`)));
+    req.on("error", reject);
+    req.end();
   });
 }
 
