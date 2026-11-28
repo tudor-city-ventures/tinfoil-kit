@@ -62,6 +62,8 @@ jobs:
       # with the debug key, for the emulator's processor only.
       - name: Build the app
         working-directory: mobile
+        env:
+          EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
         run: |
           npx expo prebuild --platform android --no-install
           cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --console=plain
@@ -96,7 +98,10 @@ jobs:
           unzip -q "$f" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/maestro/bin" >> "$GITHUB_PATH"
       - name: Test the app
-        run: maestro test mobile/e2e --test-output-dir e2e-output
+        run: |
+          python3 mobile/e2e/kiwix.py 19100 > "$RUNNER_TEMP/kiwix.log" 2>&1 &
+          adb reverse tcp:19100 tcp:19100    # the emulator's localhost:19100 is the runner's
+          maestro test mobile/e2e --test-output-dir e2e-output
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -124,6 +129,8 @@ jobs:
       # A simulator build needs no signing.
       - name: Build the app
         working-directory: mobile
+        env:
+          EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
         run: |
           npx expo prebuild --platform ios --no-install
           cd ios && pod install
@@ -140,7 +147,9 @@ jobs:
       - name: Install Maestro
         run: *maestro
       - name: Test the app
-        run: maestro test mobile/e2e --test-output-dir e2e-output
+        run: |
+          python3 mobile/e2e/kiwix.py 19100 > "$RUNNER_TEMP/kiwix.log" 2>&1 &
+          maestro test mobile/e2e --test-output-dir e2e-output
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

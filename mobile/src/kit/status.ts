@@ -3,15 +3,18 @@ import type { Item } from "@/kit/store";
 
 // One line for a book's state on this phone.
 export function statusLine(item: Item, onWifi: boolean, cellular: boolean): string {
+  const sofar = item.received && item.total ? `${size(item.received)} of ${size(item.total)}` : "";
   switch (item.status) {
     case "ready":
       return item.total ? `Ready · ${size(item.total)}` : "Ready";
     case "failed":
-      return item.error ? `Stopped: ${item.error}` : "Stopped";
-    case "downloading":
-      return item.total ? `${size(item.received)} of ${size(item.total)}` : "Starting";
+      return `Stopped: ${(item.error || "something went wrong").replace(/\.$/, "")}. Tap to try again.`;
+    case "checking":
+      return "Checking the download";
     default:
-      return onWifi || cellular ? "Waiting to download" : "Waiting for Wi-Fi";
+      if (!onWifi && !cellular) return sofar ? `Waiting for Wi-Fi · ${sofar}` : "Waiting for Wi-Fi";
+      if (item.status === "queued") return "Waiting to download";
+      return sofar || "Starting";
   }
 }
 

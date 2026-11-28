@@ -2,8 +2,16 @@
 import { File, Paths } from "expo-file-system";
 import { useSyncExternalStore } from "react";
 
-export type Status = "queued" | "downloading" | "ready" | "failed";
-export type Item = { status: Status; received: number; total: number; edition?: string; error?: string };
+export type Status = "queued" | "downloading" | "checking" | "ready" | "failed";
+export type Item = {
+  status: Status;
+  received: number;
+  total: number;
+  file?: string; // Kiwix's file, e.g. wikipedia_en_medicine_mini_2026-10.zim
+  sha256?: string; // what Kiwix says it should be
+  task?: string; // the phone's download of it
+  error?: string;
+};
 export type State = {
   welcomed: boolean; // past the first screen
   cellular: boolean; // big downloads may use mobile data: off until the person turns it on
@@ -23,6 +31,11 @@ export function createStore(storage: Storage) {
     state = next;
     listeners.forEach((l) => l());
     storage.write(JSON.stringify(state)).catch(() => {}); // the next change writes it again
+  }
+
+  function update(id: string, item: Partial<Item>) {
+    const now = state.items[id];
+    if (now) set({ ...state, items: { ...state.items, [id]: { ...now, ...item } } });
   }
 
   return {
@@ -49,9 +62,9 @@ export function createStore(storage: Storage) {
       if (state.items[id]) return;
       set({ ...state, items: { ...state.items, [id]: { status: "queued", received: 0, total: 0 } } });
     },
-    update(id: string, item: Partial<Item>) {
-      const now = state.items[id];
-      if (now) set({ ...state, items: { ...state.items, [id]: { ...now, ...item } } });
+    update,
+    retry(id: string) {
+      if (state.items[id]?.status === "failed") update(id, { status: "queued", received: 0, error: undefined });
     },
     remove(id: string) {
       const { [id]: _, ...items } = state.items;

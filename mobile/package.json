@@ -8,8 +8,8 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "web": "expo start --web",
-    "lint": "eslint . && prettier --check src app.json eslint.config.js metro.config.js",
-    "fix": "eslint --fix . && prettier --write src app.json eslint.config.js metro.config.js",
+    "lint": "eslint . && prettier --check src modules app.json eslint.config.js metro.config.js",
+    "fix": "eslint --fix . && prettier --write src modules app.json eslint.config.js metro.config.js",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "check": "npm run typecheck && npm run lint && npm test -- --ci",
@@ -22,7 +22,9 @@
     "preset": "jest-expo"
   },
   "dependencies": {
+    "@kesha-antonov/react-native-background-downloader": "5.1.0",
     "expo": "58.0.26",
+    "expo-build-properties": "58.0.12",
     "expo-constants": "58.0.16",
     "expo-file-system": "58.0.14",
     "expo-linking": "58.0.17",

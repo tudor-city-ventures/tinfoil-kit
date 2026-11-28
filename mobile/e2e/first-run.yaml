@@ -1,5 +1,5 @@
 # The first screen, the try-it kit and Get more, on a fresh install: CI runs it on an iPhone simulator and an Android
-# emulator (.github/workflows/mobile.yml). Locally: maestro test mobile/e2e
+# emulator (.github/workflows/mobile.yml), with e2e/kiwix.py standing in for Kiwix. Locally: maestro test mobile/e2e
 appId: com.tinfoilkit.app
 ---
 - launchApp:
@@ -8,9 +8,14 @@ appId: com.tinfoilkit.app
 - assertVisible: "Field medicine books"
 - takeScreenshot: 1-first-screen
 - tapOn: "Get the try-it kit"
-- assertVisible: "Downloading"
 - assertVisible: "On this phone"
 - takeScreenshot: 2-library
+# Every book downloads in the background, is checked and moves to On this phone
+- extendedWaitUntil:
+    notVisible: "Downloading"
+    timeout: 120000
+- assertNotVisible: "Nothing yet"
+- takeScreenshot: 3-downloaded
 - tapOn: "Get more"
 - assertVisible: "Use mobile data"
-- takeScreenshot: 3-get-more
+- takeScreenshot: 4-get-more

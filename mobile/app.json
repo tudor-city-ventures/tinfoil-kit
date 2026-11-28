@@ -19,6 +19,7 @@
     },
     "android": {
       "package": "com.tinfoilkit.app",
+      "allowBackup": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F3F0E6"
@@ -29,6 +30,8 @@
     },
     "plugins": [
       "expo-router",
+      "@kesha-antonov/react-native-background-downloader",
+      ["expo-build-properties", { "android": { "usesCleartextTraffic": true } }],
       [
         "expo-splash-screen",
         {

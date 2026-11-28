@@ -3,11 +3,12 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
+import { startDownloads } from "@/kit/downloads";
 import { store, useKit, useLoaded } from "@/kit/store";
 import { useColors } from "@/theme";
 
 SplashScreen.preventAutoHideAsync();
-store.load();
+store.load().then(startDownloads);
 
 export default function RootLayout() {
   const loaded = useLoaded();

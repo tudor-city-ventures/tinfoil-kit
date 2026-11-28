@@ -4,13 +4,14 @@ import { ScrollView } from "react-native";
 import { Group, Pill, Row } from "@/components/group";
 import { catalog } from "@/kit/catalog";
 import { percent, statusLine } from "@/kit/status";
-import { useKit } from "@/kit/store";
+import { store, useKit } from "@/kit/store";
 
 const byId = new Map(catalog.map((b) => [b.id, b]));
 
 export default function Library() {
   const { items, cellular } = useKit();
-  const onWifi = useNetworkState().type === NetworkStateType.WIFI;
+  const net = useNetworkState().type;
+  const onWifi = net === NetworkStateType.WIFI || net === NetworkStateType.ETHERNET;
   const mine = Object.entries(items).filter(([id]) => byId.has(id));
   const getting = mine.filter(([, it]) => it.status !== "ready");
   const ready = mine.filter(([, it]) => it.status === "ready");
@@ -28,6 +29,7 @@ export default function Library() {
               title={byId.get(id)!.title}
               detail={statusLine(it, onWifi, cellular)}
               right={it.status === "downloading" ? <Pill text={`${percent(it)}%`} /> : undefined}
+              onPress={it.status === "failed" ? () => store.retry(id) : undefined}
             />
           ))}
         </Group>
@@ -35,7 +37,13 @@ export default function Library() {
       <Group label="On this phone">
         {ready.length > 0 ? (
           ready.map(([id, it]) => (
-            <Row key={id} icon="book" title={byId.get(id)!.title} detail={statusLine(it, onWifi, cellular)} />
+            <Row
+              key={id}
+              testID={`ready-${id}`}
+              icon="book"
+              title={byId.get(id)!.title}
+              detail={statusLine(it, onWifi, cellular)}
+            />
           ))
         ) : (
           <Row title="Nothing yet" detail="Books you get show up here, ready without the internet." />
