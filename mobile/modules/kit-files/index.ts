@@ -1,6 +1,6 @@
 // The bits of native code Expo lacks: book downloads that are checked and filed in the library with the app closed,
-// keeping books out of iOS backups, downloads that take exactly the part of a file asked for, and the view that shows
-// a book's pages, asking the app for each file they need and reaching nothing else.
+// keeping books out of iOS backups, downloads that take exactly the part of a file asked for, the view that shows a
+// book's pages, asking the app for each file they need and reaching nothing else, and the AI built into the phone.
 import { requireNativeView, requireOptionalNativeModule } from "expo";
 import type { ComponentType, Ref } from "react";
 import type { ViewProps } from "react-native";
@@ -14,6 +14,8 @@ const native = requireOptionalNativeModule<{
   stopBook(id: string): void;
   forgetBook(id: string): void;
   books(): Promise<NativeBook[]>;
+  aiState?(): string; // iOS only, for now
+  aiAnswer?(instructions: string, prompt: string): Promise<string>;
 }>("KitFiles");
 
 export type BookOptions = {
@@ -119,4 +121,19 @@ export function bookView(): ComponentType<BookViewProps> | undefined {
   if (!native) return undefined;
   view ??= requireNativeView<BookViewProps>("KitFiles");
   return view;
+}
+
+// The AI built into the phone, where there is one: Apple Intelligence on iPhones from iOS 26. "off" until the person
+// turns it on in Settings, "downloading" while its model comes.
+export type AIState = "ready" | "off" | "downloading" | "none";
+
+export function aiState(): AIState {
+  const s = native?.aiState?.();
+  return s === "ready" || s === "off" || s === "downloading" ? s : "none";
+}
+
+// Its answer to a prompt, following the instructions
+export function aiAnswer(instructions: string, prompt: string): Promise<string> {
+  if (!native?.aiAnswer) return Promise.reject(new Error("This phone has no AI built in"));
+  return native.aiAnswer(instructions, prompt);
 }

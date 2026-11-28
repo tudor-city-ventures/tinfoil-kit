@@ -1,4 +1,7 @@
 import ExpoModulesCore
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 public class KitFilesModule: Module {
   private let downloads = Downloads()
@@ -54,6 +57,32 @@ public class KitFilesModule: Module {
 
     AsyncFunction("books") { (promise: Promise) in
       Books.shared.list(promise)
+    }
+
+    // The AI built into the phone (Apple Intelligence, from iOS 26): whether it can answer now ("off" until the person
+    // turns it on in Settings, "downloading" while its model comes), and its answer
+    Function("aiState") { () -> String in
+      #if canImport(FoundationModels)
+      if #available(iOS 26.0, *) {
+        switch SystemLanguageModel.default.availability {
+        case .available: return "ready"
+        case .unavailable(.appleIntelligenceNotEnabled): return "off"
+        case .unavailable(.modelNotReady): return "downloading"
+        default: return "none"
+        }
+      }
+      #endif
+      return "none"
+    }
+
+    AsyncFunction("aiAnswer") { (instructions: String, prompt: String) async throws -> String in
+      #if canImport(FoundationModels)
+      if #available(iOS 26.0, *) {
+        let session = LanguageModelSession(instructions: instructions)
+        return try await session.respond(to: prompt).content
+      }
+      #endif
+      throw Exception(name: "NoAI", description: "This phone has no AI built in")
     }
 
     View(BookView.self) {

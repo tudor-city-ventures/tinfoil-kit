@@ -19,7 +19,14 @@ const mockSurvival = book([
   { ns: "C", path: "Fire", body: "<p>Keep a fire small and out of the wind.</p>" },
 ]);
 
+let mockAI = "none"; // what the phone's AI can do
+const mockAnswer = jest.fn<(instructions: string, prompt: string) => Promise<string>>();
+
 jest.mock("expo-router", () => ({ router: { push: (to: unknown) => mockPush(to) } }));
+jest.mock("../../modules/kit-files", () => ({
+  aiState: () => mockAI,
+  aiAnswer: (instructions: string, prompt: string) => mockAnswer(instructions, prompt),
+}));
 jest.mock("@/kit/downloads", () => ({ libraryPath: () => "/library" }));
 jest.mock("@/kit/books", () => {
   const { Zim } = jest.requireActual<typeof import("@/kit/zim")>("@/kit/zim");
@@ -43,7 +50,7 @@ test("a question finds the best passages in the books on this phone, and each op
   await user.press(screen.getByRole("button", { name: "Search" }));
   expect(await screen.findByText("Best passages from your library")).toBeOnTheScreen();
   expect(mockOpened).toContain("/library/survival.zim");
-  expect(screen.getByText("Water purification")).toBeOnTheScreen();
+  expect(screen.getByText("1. Water purification")).toBeOnTheScreen();
   expect(screen.getByText(starter[0].title)).toBeOnTheScreen();
   expect(screen.getByText(/rolling boil/)).toBeOnTheScreen();
   expect(screen.getByText(/^Done in \d+\.\ds\.$/)).toBeOnTheScreen();
@@ -55,4 +62,30 @@ test("a question finds the best passages in the books on this phone, and each op
   await user.type(screen.getByTestId("ask-question"), "quantum chromodynamics");
   await user.press(screen.getByRole("button", { name: "Search" }));
   expect(await screen.findByText("Nothing found")).toBeOnTheScreen();
+  expect(screen.queryByRole("button", { name: "Ask the AI" })).toBeNull();
+});
+
+test("on a phone with AI built in, it answers from the passages, citing them", async () => {
+  mockAI = "ready";
+  mockAnswer.mockResolvedValueOnce("**Boil it** for 1 minute [1].");
+  const user = userEvent.setup();
+  await render(<Ask />);
+  await user.type(screen.getByTestId("ask-question"), "How do I purify water?");
+  await user.press(screen.getByRole("button", { name: "Ask the AI" }));
+  expect(await screen.findByText("Boil it for 1 minute [1].")).toBeOnTheScreen();
+  expect(screen.getByText("Sources from your library")).toBeOnTheScreen();
+  expect(screen.getByText("1. Water purification")).toBeOnTheScreen();
+  const [instructions, prompt] = mockAnswer.mock.calls[0];
+  expect(instructions).toContain("offline emergency kit");
+  expect(prompt).toContain('[1] "Water purification"');
+  expect(prompt).toContain("Question: How do I purify water?");
+
+  // Search first, then the AI answers from the same passages; when it can't, the passages stay
+  mockAnswer.mockRejectedValueOnce(new Error("guardrail"));
+  await user.press(screen.getByRole("button", { name: "Search" }));
+  expect(await screen.findByText("Best passages from your library")).toBeOnTheScreen();
+  await user.press(screen.getByRole("button", { name: "Have the AI answer from these" }));
+  expect(await screen.findByText(/didn't answer this one/)).toBeOnTheScreen();
+  expect(screen.getByText("1. Water purification")).toBeOnTheScreen();
+  expect(mockAnswer).toHaveBeenCalledTimes(2);
 });
