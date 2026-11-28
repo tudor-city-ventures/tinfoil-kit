@@ -213,6 +213,8 @@ jobs:
             logs 'process == "nsurlsessiond" AND (eventMessage CONTAINS[c] "tinfoil" OR messageType == error OR messageType == fault)' 80
             echo "== Crash reports"
             ls -t ~/Library/Logs/DiagnosticReports 2> /dev/null | head -n 5 || true
+            echo "== What's busy on the Mac"
+            top -l 2 -s 1 -n 8 -o cpu -stats pid,command,cpu,mem | tail -n 9 || true
           else
             adb shell pm list packages com.tinfoilkit.app || true
             adb logcat -d -b crash | tail -n 60
@@ -221,12 +223,13 @@ jobs:
           # Last, so the end of the job's log has them
           echo "== The last steps, and the one that failed"    # from Maestro's reports of each flow (commands.json)
           find e2e-output ~/.maestro/tests -name 'commands*.json' -exec python3 -c '
-          import json, sys
+          import json, sys, time
           steps = [(c.get("metadata") or c, c.get("command")) for c in json.load(open(sys.argv[1]))]
           done = [i for i, (m, _) in enumerate(steps) if m.get("status")]
           end = next((i for i in done if steps[i][0]["status"] == "FAILED"), done[-1] if done else 0)
           for m, command in steps[max(0, end - 8) : end + 1]:
-              print(m.get("status"), json.dumps(command)[:300])
+              at = time.strftime("%H:%M:%S", time.gmtime(m.get("timestamp", 0) / 1000))  # the logs above are in UTC too
+              print(at, "%.1f s" % (m.get("duration", 0) / 1000), m.get("status"), json.dumps(command)[:300])
               if m.get("status") == "FAILED":  # dict(): find puts the file name in place of every empty pair of braces
                   print((m.get("error") or dict()).get("message"))' {} \; || true
           echo "== On screen"
