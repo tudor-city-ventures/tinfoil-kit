@@ -749,59 +749,70 @@ def packet_times(path):
     return [float(x) for x in out.split() if re.fullmatch(r"[0-9.]+", x)]
 
 
+def recorded_frames(raw, folder):
+    """RAW's frames as pictures in FOLDER, in order, each with its time from the first. The iPhone simulator's
+    recorder writes decode times minutes behind its frames' own times, and once a frame comes out of the decoder out
+    of order, ffmpeg times the rest by those: its videos came out jumbled. ffprobe reports each frame's own time.
+    Also how many frames ffmpeg would have timed otherwise."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-of", "csv=p=0", "-show_entries"]
+        + ["frame=pts_time,best_effort_timestamp_time", str(raw)],
+        capture_output=True,
+        text=True,
+    ).stdout
+    times, guessed = [], 0
+    for line in out.splitlines():
+        own, guess = (line.split(",") + ["", ""])[:2]
+        if re.fullmatch(r"-?[0-9.]+", own):
+            times.append(float(own))
+            guessed += guess != own
+        elif own == "N/A":  # none of its own: ffmpeg's guess
+            times.append(float(guess) if re.fullmatch(r"-?[0-9.]+", guess) else times[-1] if times else 0.0)
+    shutil.rmtree(folder, ignore_errors=True)
+    folder.mkdir()
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(raw), "-map", "0:v:0", "-fps_mode", "passthrough", "-q:v", "2"]
+        + [str(folder / "%05d.jpg")],
+        check=True,
+    )
+    pictures = sorted(folder.glob("*.jpg"))
+    if not times or len(pictures) != len(times):
+        print(f"(ffmpeg made {len(pictures)} pictures of the {len(times)} frames ffprobe found, so ffmpeg times them)")
+        return [], 0
+    shots = sorted(zip(times, pictures))
+    return [(t - shots[0][0], p) for t, p in shots], guessed
+
+
 def clock(seconds):
     return f"{int(seconds // 60)}:{int(seconds % 60):02d}"
 
 
-def screen_text(path, at):
-    """The words on a frame, read by tesseract when it's installed."""
+def screen_text(path, at=None):
+    """The words on a picture, or on a video's frame AT seconds in, read by tesseract when it's installed."""
     if not shutil.which("tesseract"):
         return ""
+    seek = ["-ss", f"{int(at * 100) / 100:.2f}"] if at is not None else []  # not past it: seeking finds the next
     png = subprocess.run(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-ss",
-            f"{at:.1f}",
-            "-i",
-            str(path),
-            "-frames:v",
-            "1",
-            "-f",
-            "image2",
-            "-c:v",
-            "png",
-            "-",
-        ],
+        ["ffmpeg", "-v", "error", *seek, "-i", str(path), "-frames:v", "1", "-f", "image2", "-c:v", "png", "-"],
         capture_output=True,
     ).stdout
     text = subprocess.run(["tesseract", "-", "-"], input=png, capture_output=True).stdout.decode("utf-8", "replace")
     return "\n".join(line.rstrip() for line in text.splitlines() if len(line.strip()) > 2)
 
 
-def ascii_frame(path, at, width=110, rows=33):
-    """A frame as text, for the job log: whoever can read the log but not download the video can still check
-    that windows were on screen."""
-    raw = subprocess.run(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-ss",
-            f"{at:.1f}",
-            "-i",
-            str(path),
-            "-frames:v",
-            "1",
-            "-vf",
-            f"scale={width}:{rows},format=gray",
-            "-f",
-            "rawvideo",
-            "-",
-        ],
+def gray(path, at, width, rows):
+    """A video's frame AT seconds in (or a picture, when AT is None), as WIDTH by ROWS gray bytes."""
+    seek = ["-ss", f"{at:.2f}"] if at is not None else []
+    return subprocess.run(
+        ["ffmpeg", "-v", "error", *seek, "-i", str(path), "-frames:v", "1", "-vf", f"scale={width}:{rows},format=gray"]
+        + ["-f", "rawvideo", "-"],
         capture_output=True,
     ).stdout
+
+
+def ascii_frame(raw, width):
+    """A frame's gray bytes as text, for the job log: whoever can read the log but not download the video can still
+    check what was on screen."""
     ramp = " .:-=+*#%@"
     if raw and sum(raw) > 128 * len(raw):  # a light screen, like a phone's: dark ink drawn, not the paper
         ramp = ramp[::-1]
@@ -844,16 +855,30 @@ def make_videos(folder):
             continue
         rows = [line.split("\t", 1) for line in steps.read_text(encoding="utf-8").splitlines() if "\t" in line]
         began, ended = float(rows[0][0]), float(rows[-1][0])
+        phone = name in PHONES
+        # A phone's screen recorder writes a frame only when the screen changes: each one shows until the next
+        shots, guessed = recorded_frames(raw, steps.parent / f"{name}-frames") if phone else ([], 0)
+        frames = [t for t, _ in shots] or sorted(packet_times(raw))
+        length = max(length, frames[-1] + 0.1) if shots else length  # a container can end before its last frame
         # The captions are placed by the clock, from the video's first frame
-        frames = sorted(packet_times(raw))
         marks = [(min(max(0.0, float(t) - began), length), text) for t, text in rows[1:] if text]
         still = [f"{clock(a)} to {clock(b)}" for a, b in zip(frames, frames[1:]) if b - a >= 10]
         print(
-            f"{name}: the recording ran {ended - began:.0f} s and the video is {length:.0f} s, with {len(frames)} frames;"
-            " the screen stayed the same from " + (", ".join(still) or "nowhere for 10 s")
+            f"{name}: the recording ran {ended - began:.0f} s and the video is {length:.0f} s, with {len(frames)} frames"
+            + (f", {guessed} of which ffmpeg alone would have timed otherwise" if guessed else "")
+            + "; the screen stayed the same from "
+            + (", ".join(still) or "nowhere for 10 s")
         )
+        if shots:
+            ends = [t for t, _ in shots[1:]] + [length]
+            listed = [
+                f"file '{p.parent.name}/{p.name}'\nduration {max(b - t, 0.001):.3f}\n" for (t, p), b in zip(shots, ends)
+            ]
+            # The concat demuxer shows the last picture for its duration only when it's listed again
+            steps.with_suffix(".frames").write_text(
+                "".join(listed) + listed[-1].split("\n")[0] + "\n", encoding="utf-8"
+            )
         run = " ".join(x for x in (os.environ.get("GITHUB_SHA", "")[:7], time.strftime("%Y-%m-%d")) if x)
-        phone = name in PHONES
         # What it is, at the top for the first seconds; then each step at the bottom until the next.
         srt = [
             f"1\n{srt_time(0)} --> {srt_time(min(8.0, length))}\n"
@@ -879,8 +904,7 @@ def make_videos(folder):
                 "-loglevel",
                 "error",
                 "-y",
-                "-i",
-                raw.name,
+                *(["-f", "concat", "-i", f"{name}.frames"] if shots else ["-i", raw.name]),
                 "-an",
                 "-vf",
                 f"fps={20 if phone else 10},{fit}:flags=lanczos,subtitles={name}.srt:force_style='{style}'",
@@ -905,10 +929,18 @@ def make_videos(folder):
         for i, (t, text) in enumerate(shown[:40]):
             end = shown[i + 1][0] if i + 1 < len(shown) else length
             at = min(max(t + 1, end - 1.5), max(length - 0.5, 0))  # how the step ended
-            frame = ascii_frame(mp4, at, 60, 64) if phone else ascii_frame(mp4, at)
-            # The words from the frame on screen then, the last before: seeking finds the next
-            since = frames[max(bisect.bisect_right(frames, at) - 1, 0)] if frames else at
-            print(f"\n---- {clock(at)}, the end of: {text}\n{frame}\n{screen_text(raw, since)}")
+            width, height = (60, 64) if phone else (110, 33)
+            seen = gray(mp4, at, width, height)
+            # The recording's frame on screen then: the last before, as seeking finds the next
+            k = max(bisect.bisect_right(frames, at) - 1, 0)
+            if shots:
+                was, top = gray(shots[k][1], None, width, height), width * (height - 10)  # above the captions
+                off = sum(abs(a - b) for a, b in zip(seen[:top], was[:top])) * 100 // (255 * top)
+                print(f"\n---- {clock(at)}, the end of: {text} (the video's frame is {off}% off the recording's)")
+                print(f"{ascii_frame(seen, width)}\n{screen_text(shots[k][1])}")
+            else:
+                print(f"\n---- {clock(at)}, the end of: {text}\n{ascii_frame(seen, width)}")
+                print(screen_text(raw, frames[k] if frames else at))
 
 
 def srt_time(t):
