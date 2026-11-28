@@ -1,7 +1,7 @@
 // Books download in the background: each goes to the phone's own downloader (iOS's background transfers, Android's
 // download manager), so it carries on with the app closed, and the app's native code checks it against Kiwix's
 // SHA-256 and files it in the library as it lands, also with the app closed. It waits for Wi-Fi unless the person
-// allows mobile data.
+// allows mobile data. A book copied from the kit at home comes the same way, from the kit, over its Wi-Fi only.
 import { Directory, File, Paths } from "expo-file-system";
 import { addNetworkStateListener } from "expo-network";
 import { AppState, Platform } from "react-native";
@@ -20,6 +20,7 @@ import {
 import { closeBook } from "@/kit/books";
 import { catalog } from "@/kit/catalog";
 import { size } from "@/kit/format";
+import { fileName, fileUrl, headers } from "@/kit/home";
 import { checksum, findFile, type ZimFile } from "@/kit/kiwix";
 import { store as kitStore, type Store } from "@/kit/store";
 
@@ -42,6 +43,9 @@ const EVERY = 1000; // how often to look at the downloads while one is going
 const SPARE = 5e8; // room a download leaves free on the phone
 
 const byId = new Map(catalog.map((b) => [b.id, b]));
+
+// A book's file, where to get it, and what it must add up to
+type Source = { url: string; file: string; bytes: number; sha256?: string; headers?: Record<string, string> };
 
 export function createDownloads(store: Store, phone: Phone) {
   const busy = new Set<string>(); // books being looked up and started
@@ -89,7 +93,7 @@ export function createDownloads(store: Store, phone: Phone) {
         continue;
       }
       seen.add(b.book);
-      if (b.state === "downloading" && b.cellular !== cellular) {
+      if (b.state === "downloading" && b.cellular !== (cellular && !it.from)) {
         phone.stop(b.id);
         store.update(b.book, { status: "queued", received: 0, task: undefined });
       } else if (b.state === "downloading") {
@@ -107,34 +111,50 @@ export function createDownloads(store: Store, phone: Phone) {
     return seen;
   }
 
+  // Where a book comes from: Kiwix, which may not publish it now, or the kit at home
+  async function source(id: string, editions: string[]): Promise<Source | string> {
+    const { items, home } = store.get();
+    const from = items[id]?.from;
+    if (from) {
+      if (!home) return "The kit at home was forgotten. Find it again in Get more.";
+      const file = { url: fileUrl(home, from.path), file: fileName(from.path), bytes: from.bytes };
+      return { ...file, ...(from.sha256 && { sha256: from.sha256 }), headers: headers(home) };
+    }
+    const zim = await phone.find(editions); // throws when Kiwix doesn't answer
+    if (!zim) return "Kiwix doesn't publish it at the moment";
+    const sha256 = await phone.checksum(zim.url);
+    return { url: zim.url, file: zim.file, bytes: zim.bytes, ...(sha256 && { sha256 }) };
+  }
+
   async function begin(id: string) {
     const book = byId.get(id);
     if (!book) return; // not in this version of the app
     busy.add(id);
     try {
-      const zim = await phone.find(book.editions);
-      if (!zim) return store.update(id, { status: "failed", error: "Kiwix doesn't publish it at the moment" });
-      const sha256 = await phone.checksum(zim.url);
-      const { items, cellular } = store.get();
+      const got = await source(id, book.editions);
+      if (typeof got === "string") return store.update(id, { status: "failed", error: got });
+      const { items } = store.get();
       if (items[id]?.status !== "queued") return; // removed while looking
       const owed = Object.values(items).reduce(
         (n, it) => n + (it.status === "downloading" ? it.total - it.received : 0),
         0,
       );
-      if (phone.free() - owed < zim.bytes + SPARE)
-        return store.update(id, { status: "failed", error: `Not enough free space for its ${size(zim.bytes)}` });
+      if (phone.free() - owed < got.bytes + SPARE)
+        return store.update(id, { status: "failed", error: `Not enough free space for its ${size(got.bytes)}` });
       const task = `${id}@${Date.now()}`;
-      store.update(id, { status: "downloading", file: zim.file, sha256, received: 0, total: zim.bytes, task });
+      const { sha256 } = got;
+      store.update(id, { status: "downloading", file: got.file, sha256, received: 0, total: got.bytes, task });
       try {
         await phone.start({
           id: task,
           book: id,
           title: book.title,
-          url: zim.url,
-          incoming: `${phone.library}/incoming/${zim.file}`,
-          path: `${phone.library}/${zim.file}`,
+          url: got.url,
+          incoming: `${phone.library}/incoming/${got.file}`,
+          path: `${phone.library}/${got.file}`,
           ...(sha256 && { sha256 }),
-          cellular,
+          cellular: store.get().cellular && !got.headers, // the kit at home is on the Wi-Fi
+          ...(got.headers && { headers: got.headers }),
         });
       } catch (e) {
         store.update(id, { status: "failed", error: e instanceof Error ? e.message : String(e), task: undefined });

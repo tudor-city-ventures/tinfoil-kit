@@ -1,4 +1,5 @@
 import { Paths } from "expo-file-system";
+import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
 
 import { Group, Row } from "@/components/group";
@@ -17,7 +18,7 @@ function freeSpace(): string {
 }
 
 export default function GetMore() {
-  const { items, cellular } = useKit();
+  const { items, cellular, home } = useKit();
   const c = useColors();
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic">
@@ -34,6 +35,23 @@ export default function GetMore() {
               trackColor={{ true: c.accent }}
             />
           }
+        />
+      </Group>
+      <Group
+        label="Kit at home"
+        footer={
+          home
+            ? undefined
+            : "Copy books from a Tinfoil Kit on this Wi-Fi: faster than the internet, and works without it."
+        }
+      >
+        <Row
+          testID="kit-at-home"
+          icon="drive"
+          title={home ? home.name : "Copy from a kit at home"}
+          detail={home ? "Copy its books, or open it" : undefined}
+          right={<Icon name="forward" color={c.mute} />}
+          onPress={() => router.push("/more/home")}
         />
       </Group>
       {groups.map((g) => (

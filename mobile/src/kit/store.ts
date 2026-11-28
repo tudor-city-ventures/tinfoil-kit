@@ -2,6 +2,8 @@
 import { File, Paths } from "expo-file-system";
 import { useSyncExternalStore } from "react";
 
+import type { HomeKit, KitFile } from "./home";
+
 export type Status = "queued" | "downloading" | "checking" | "ready" | "failed";
 export type Item = {
   status: Status;
@@ -11,6 +13,7 @@ export type Item = {
   sha256?: string; // what Kiwix says it should be
   task?: string; // the phone's download of it
   error?: string;
+  from?: KitFile; // copied from the kit at home, not downloaded from Kiwix
 };
 // A map being downloaded: of a new place, or the same place from a newer world map
 export type MapDownload = {
@@ -27,6 +30,7 @@ export type State = {
   items: Record<string, Item>;
   map?: { place: string; file: string }; // the map on this phone, a file in the maps folder
   mapDownload?: MapDownload;
+  home?: HomeKit; // the kit at home, once its code worked
 };
 
 export type Storage = { read(): Promise<string | null>; write(text: string): Promise<void> };
@@ -72,6 +76,13 @@ export function createStore(storage: Storage) {
     queue(id: string) {
       if (state.items[id]) return;
       set({ ...state, items: { ...state.items, [id]: { status: "queued", received: 0, total: 0 } } });
+    },
+    copy(id: string, from: KitFile) {
+      if (state.items[id]) return;
+      set({ ...state, items: { ...state.items, [id]: { status: "queued", received: 0, total: from.bytes, from } } });
+    },
+    setHome(home: HomeKit | undefined) {
+      set({ ...state, home });
     },
     update,
     retry(id: string) {

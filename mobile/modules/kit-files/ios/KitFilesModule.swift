@@ -59,6 +59,11 @@ public class KitFilesModule: Module {
       Books.shared.list(promise)
     }
 
+    // The kits shared on this Wi-Fi: see Home.swift
+    AsyncFunction("findKits") { (seconds: Double) async -> [[String: Any]] in
+      await KitFinder.find(seconds: seconds).map { ["name": $0.name, "host": $0.host, "port": $0.port] }
+    }
+
     // The AI built into the phone (Apple Intelligence, from iOS 26): whether it can answer now ("off" until the person
     // turns it on in Settings, "downloading" while its model comes), and its answer
     Function("aiState") { () -> String in

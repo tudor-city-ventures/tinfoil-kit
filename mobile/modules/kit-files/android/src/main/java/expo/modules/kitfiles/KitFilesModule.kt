@@ -43,6 +43,12 @@ class KitFilesModule : Module() {
       books().list()
     }
 
+    // The kits shared on this Wi-Fi: see Home.kt
+    AsyncFunction("findKits") { seconds: Double, promise: Promise ->
+      val context = appContext.reactContext ?: return@AsyncFunction promise.resolve(emptyList<Any>())
+      KitFinder(context).find(seconds) { promise.resolve(it) }
+    }
+
     // A view's functions run on the main thread
     View(BookView::class) {
       Events("onAsk", "onPage", "onLeave", "onOpen")

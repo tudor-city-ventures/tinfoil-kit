@@ -244,3 +244,29 @@ test("a book comes off the phone with its file, and one still downloading stops"
   expect(store.get().items[b.id]).toBeUndefined();
   expect(phone.stopped).toEqual([ob.id]);
 });
+
+test("a book from the kit at home comes from the kit, with its code, over its Wi-Fi only, checked by its sum", async () => {
+  const home = { name: "Kitchen Mac", address: "192.168.1.20:8000", code: "48217736" };
+  const { store, phone, downloads } = await setup({ home, cellular: true });
+  await downloads.start();
+  const from = { path: "downloads/library/medicine_en_all_2026-10.zim", bytes: 7e7, sha256: "cd".repeat(32) };
+  store.copy(b.id, from);
+  await settle();
+  const [o] = phone.started;
+  expect(o).toMatchObject({
+    book: b.id,
+    url: "http://192.168.1.20:8000/data/files/downloads/library/medicine_en_all_2026-10.zim",
+    path: "/docs/library/medicine_en_all_2026-10.zim",
+    sha256: from.sha256,
+    cellular: false, // though mobile data is allowed: the kit is on the Wi-Fi
+    headers: { Authorization: "Bearer 48217736" },
+  });
+  expect(store.get().items[b.id]).toMatchObject({ status: "downloading", total: 7e7, from });
+  await later();
+  expect(phone.stopped).toEqual([]); // and it isn't started again for mobile data
+
+  store.setHome(undefined);
+  store.copy(c.id, from);
+  await settle();
+  expect(store.get().items[c.id]).toMatchObject({ status: "failed", error: expect.stringMatching(/forgotten/) });
+});

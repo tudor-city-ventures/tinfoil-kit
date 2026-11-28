@@ -15,6 +15,7 @@ struct BookOptions: Record {
   @Field var path: String = ""  // where it goes once it's checked
   @Field var sha256: String? = nil
   @Field var cellular: Bool = false
+  @Field var headers: [String: String] = [:]  // a kit at home's access code
 }
 
 // A book's download: carried in its task's description, so it outlives the app, and kept as a file from when it
@@ -106,6 +107,7 @@ final class Books: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {  
       request.allowsCellularAccess = o.cellular
       request.allowsExpensiveNetworkAccess = o.cellular
       request.allowsConstrainedNetworkAccess = o.cellular
+      for (name, value) in o.headers { request.setValue(value, forHTTPHeaderField: name) }
       task = session.downloadTask(with: request)
     }
     task.taskDescription = String(decoding: try JSONEncoder().encode(book), as: UTF8.self)
@@ -123,6 +125,14 @@ final class Books: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {  
           try? FileManager.default.removeItem(at: self.resumeFile(book))
         }
       }
+    }
+  }
+
+  private static func message(_ status: Int) -> String {
+    switch status {
+    case 401: return "The kit's access code has changed"
+    case 404, 410: return "The file isn't there any more"
+    default: return "The server said \(status)"
     }
   }
 
@@ -180,9 +190,7 @@ final class Books: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {  
     let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0
     do {
       guard status == 200 || status == 206 else {
-        throw Failure(
-          message: status == 404 || status == 410
-            ? "Kiwix doesn't have this file any more" : "Kiwix's server said \(status)")
+        throw Failure(message: Self.message(status))
       }
       // the file is iOS's only until this returns
       let incoming = URL(fileURLWithPath: book.incoming)

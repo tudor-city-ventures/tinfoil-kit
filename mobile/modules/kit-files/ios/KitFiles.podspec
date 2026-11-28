@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
   s.name           = 'KitFiles'
   s.version        = '1.0.0'
-  s.summary        = "The phone app's downloads, book files and the phone's own AI"
+  s.summary        = "The phone app's downloads, book files, the kit at home and the phone's own AI"
   s.homepage       = 'https://tinfoilkit.com'
   s.license        = 'MIT'
   s.author         = 'Tinfoil Kit'

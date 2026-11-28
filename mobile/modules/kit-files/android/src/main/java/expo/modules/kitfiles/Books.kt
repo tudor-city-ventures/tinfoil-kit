@@ -30,6 +30,7 @@ class BookOptions : Record {
   @Field val path: String = "" // where it goes once it's checked
   @Field val sha256: String? = null
   @Field val cellular: Boolean = false
+  @Field val headers: Map<String, String> = emptyMap() // a kit at home's access code
 }
 
 // A book's download, kept as a file from when it starts until the app has seen how it went
@@ -107,7 +108,8 @@ class Books private constructor(private val context: Context) {
     val incoming = File(o.incoming)
     incoming.parentFile?.mkdirs()
     incoming.delete() // the downloader won't write over a file
-    val request = DownloadManager.Request(Uri.parse(mirror(o.url)))
+    val request = DownloadManager.Request(Uri.parse(if (o.headers.isEmpty()) mirror(o.url) else o.url))
+      .apply { o.headers.forEach { (name, value) -> addRequestHeader(name, value) } }
       .setDestinationUri(Uri.fromFile(incoming))
       .setAllowedOverMetered(o.cellular)
       .setAllowedOverRoaming(o.cellular)
@@ -220,12 +222,13 @@ class Books private constructor(private val context: Context) {
     }
 
   private fun message(reason: Int): String = when (reason) {
-    404, 410 -> "Kiwix doesn't have this file any more"
+    401 -> "The kit's access code has changed"
+    404, 410 -> "The file isn't there any more"
     DownloadManager.ERROR_INSUFFICIENT_SPACE -> "Not enough free space"
     DownloadManager.ERROR_CANNOT_RESUME -> "It couldn't pick up where it stopped"
     DownloadManager.ERROR_HTTP_DATA_ERROR -> "The connection kept dropping"
     -1 -> "The download was stopped"
-    in 400..599 -> "Kiwix's server said $reason"
+    in 400..599 -> "The server said $reason"
     else -> "The download failed ($reason)"
   }
 

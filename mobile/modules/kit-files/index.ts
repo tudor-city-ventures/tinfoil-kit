@@ -1,6 +1,7 @@
 // The bits of native code Expo lacks: book downloads that are checked and filed in the library with the app closed,
 // keeping books out of iOS backups, downloads that take exactly the part of a file asked for, the view that shows a
-// book's pages, asking the app for each file they need and reaching nothing else, and the AI built into the phone.
+// book's pages, asking the app for each file they need and reaching nothing else, finding a kit shared on the Wi-Fi,
+// and the AI built into the phone.
 import { requireNativeView, requireOptionalNativeModule } from "expo";
 import type { ComponentType, Ref } from "react";
 import type { ViewProps } from "react-native";
@@ -14,6 +15,7 @@ const native = requireOptionalNativeModule<{
   stopBook(id: string): void;
   forgetBook(id: string): void;
   books(): Promise<NativeBook[]>;
+  findKits(seconds: number): Promise<FoundKit[]>;
   aiState?(): string; // iOS only, for now
   aiAnswer?(instructions: string, prompt: string): Promise<string>;
 }>("KitFiles");
@@ -27,6 +29,7 @@ export type BookOptions = {
   path: string; // where it goes once it's checked
   sha256?: string;
   cellular: boolean; // false: Wi-Fi only, never a phone's hotspot
+  headers?: Record<string, string>; // a kit at home's access code
 };
 
 export type BookState = {
@@ -121,6 +124,15 @@ export function bookView(): ComponentType<BookViewProps> | undefined {
   if (!native) return undefined;
   view ??= requireNativeView<BookViewProps>("KitFiles");
   return view;
+}
+
+// A kit shared on this Wi-Fi: its computer's name, and where it answers
+export type FoundKit = { name: string; host: string; port: number };
+
+// The kits shared on this Wi-Fi, found in that many seconds by the name each gives itself on the network (Bonjour).
+// The first search asks the person to let the app find devices on the local network.
+export async function findKits(seconds: number): Promise<FoundKit[]> {
+  return native ? native.findKits(seconds) : [];
 }
 
 // The AI built into the phone, where there is one: Apple Intelligence on iPhones from iOS 26. "off" until the person
