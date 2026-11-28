@@ -85,6 +85,11 @@ appId: com.tinfoilkit.app
 - takeScreenshot: 10-ask
 - tapOn:
     id: "passage-0"
+# the book's page, not the passage's words on Ask
+- extendedWaitUntil:
+    visible:
+      id: "book-home"
+    timeout: 30000
 - extendedWaitUntil:
     visible: ".*Oral rehydration solution.*"
     timeout: 30000
