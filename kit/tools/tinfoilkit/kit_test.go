@@ -482,6 +482,18 @@ func TestShareSwitch(t *testing.T) {
 
 // What a phone at home can copy from the kit (Tinfoil Kit for iPhone and Android), through the gate with the access
 // code: the books and the map, whole or a part at a time, and nothing else.
+// A kit of several places has a list of areas; one cut before the map said its day has none.
+func TestBuiltMap(t *testing.T) {
+	state := newObj("items", newObj("maps/basemap", newObj("version", "custom",
+		"area", []any{[]any{[]any{-88.5, 30.1, -84.9, 35.0}, []any{-91.7, 28.9, -88.8, 33.1}}, 7.0, 15.0})))
+	if areas, day := builtMap(state); len(areas) != 2 || day != "" {
+		t.Errorf("several places: %v %q", areas, day)
+	}
+	if areas, day := builtMap(newObj("items", newObj())); len(areas) != 0 || day != "" {
+		t.Errorf("no map: %v %q", areas, day)
+	}
+}
+
 func TestPhoneFiles(t *testing.T) {
 	t.Setenv("KIT_LAN_IP", "192.168.1.20")
 	kit := t.TempDir()
@@ -498,10 +510,15 @@ func TestPhoneFiles(t *testing.T) {
 	write("data/.kit/state.json", []byte(fmt.Sprintf(`{"version": 1, "items": {
 		"library/medicine_en_all": {"version": "2026-10", "dest": "library",
 			"files": {"medicine_en_all_2026-10.zim": {"size": %d, "sha256": %q}}},
-		"maps/tiles": {"version": "20261120", "dest": "maps/tiles",
+		"maps/basemap": {"version": "20261120 Alabama", "dest": "maps/tiles", "area": [[-88.5, 30.1, -84.9, 35.0], 7, 15],
 			"files": {"basemap.pmtiles": {"size": %d, "sha256": %q}}}}}`, len(book), sum(book), len(tiles), sum(tiles))))
 	write("downloads/library/medicine_en_all_2026-10.zim", book)
 	write("downloads/maps/tiles/basemap.pmtiles", tiles)
+	assets := "downloads/maps/viewer/basemaps-assets/2026-11-01/basemaps-assets-1a2b3c"
+	write("downloads/maps/viewer/basemaps-assets/CURRENT", []byte("2026-11-01\n"))
+	write(assets+"/fonts/Noto Sans Regular/0-255.pbf", []byte("glyphs"))
+	write(assets+"/sprites/v4/light.json", []byte("{}"))
+	write(assets+"/README.md", []byte("basemaps-assets"))
 	write("data/notes.txt", []byte("the spare key is under the mat"))
 	if err := saveAccess(kit, access{Code: "48217736", Key: "ab"}); err != nil {
 		t.Fatal(err)
@@ -546,7 +563,12 @@ func TestPhoneFiles(t *testing.T) {
 				Sha256 string
 			}
 		}
-		Map struct{ Files []struct{ Path string } }
+		Map struct {
+			Files  []struct{ Path string }
+			Areas  [][]float64
+			Day    string
+			Assets string
+		}
 	}
 	json.Unmarshal(w.Body.Bytes(), &got)
 	if w.Code != 200 || got.Name == "" || len(got.Books) != 1 || got.Books[0].ID != "medicine_en_all" ||
@@ -556,6 +578,19 @@ func TestPhoneFiles(t *testing.T) {
 	if f := got.Books[0].Files[0]; f.Path != "downloads/library/medicine_en_all_2026-10.zim" || f.Bytes != len(book) ||
 		f.Sha256 != sum(book) || got.Map.Files[0].Path != "downloads/maps/tiles/basemap.pmtiles" {
 		t.Errorf("each file with its size and the sum it downloaded with: %s", w.Body)
+	}
+	if len(got.Map.Areas) != 1 || got.Map.Areas[0][0] != -88.5 || got.Map.Areas[0][3] != 35 || got.Map.Day != "20261120" {
+		t.Errorf("the map's areas in street detail, and the day of the world map it's from: %s", w.Body)
+	}
+	if got.Map.Assets != assets || len(got.Map.Files) != 1 {
+		t.Errorf("where its fonts and icons are, which aren't listed: %s", w.Body)
+	}
+	if w := phone("/data/files/"+assets+"/fonts/Noto%20Sans%20Regular/0-255.pbf", "48217736"); w.Code != 200 ||
+		w.Body.String() != "glyphs" {
+		t.Errorf("a font for the map's labels: %d %q", w.Code, w.Body)
+	}
+	if w := phone("/data/files/"+assets+"/README.md", "48217736"); w.Code != 404 {
+		t.Errorf("only the fonts and icons the phone's map uses: %d", w.Code)
 	}
 	if w := phone("/data/files/downloads/library/medicine_en_all_2026-10.zim", "48217736"); w.Code != 200 ||
 		!bytes.Equal(w.Body.Bytes(), book) {

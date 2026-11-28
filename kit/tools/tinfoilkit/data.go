@@ -458,14 +458,20 @@ func (n *notesServer) answer(r *http.Request, path string) (int, any, error) {
 // copyable is a file a phone may copy from the kit: a book or the map, once it has finished downloading.
 var copyable = regexp.MustCompile(`^downloads/(library/[A-Za-z0-9][A-Za-z0-9._-]*\.zim|maps/tiles/basemap\.pmtiles)$`)
 
+// styleFile is one of the map's fonts and icons that a phone's map needs too (the phone's maps.ts STYLE_FILES), so a
+// map copied without the internet has its labels: in basemaps-assets' folder (mapAssets), not listed, 772 of them.
+var styleFile = regexp.MustCompile(`^downloads/maps/viewer/basemaps-assets/[A-Za-z0-9][A-Za-z0-9._-]*/` +
+	`[A-Za-z0-9][A-Za-z0-9._-]*/(fonts/Noto Sans (Regular|Medium|Italic)/[0-9]+-[0-9]+\.pbf|sprites/v4/light(@2x)?\.(json|png))$`)
+
 // phoneFiles is what Tinfoil Kit for iPhone and Android can copy from this kit: its books and its map, each file with
-// its size, and the SHA-256 it downloaded with, which the phone checks its copy against.
+// its size, and the SHA-256 it downloaded with, which the phone checks its copy against. A phone cuts its own place's
+// map out of the kit's, so the map says which areas it has in street detail, and the day of the world map it's from.
 func (n *notesServer) phoneFiles() (int, any, error) {
 	if n.kit == "" {
 		return 404, map[string]any{"error": "Nothing here."}, nil
 	}
-	books, theMap := []any{}, any(nil)
-	for _, p := range copyParts(n.kit, loadState(n.kit), loadConfig(n.kit)) {
+	books, theMap, state := []any{}, any(nil), loadState(n.kit)
+	for _, p := range copyParts(n.kit, state, loadConfig(n.kit)) {
 		files := []any{}
 		for _, f := range p.files {
 			if !f.dir && copyable.MatchString(f.to) {
@@ -480,6 +486,8 @@ func (n *notesServer) phoneFiles() (int, any, error) {
 		switch {
 		case len(files) == 0:
 		case p.id == "map":
+			part["areas"], part["day"] = builtMap(state)
+			part["assets"] = mapAssets(n.kit)
 			theMap = part
 		case isBook(p):
 			books = append(books, part)
@@ -488,10 +496,54 @@ func (n *notesServer) phoneFiles() (int, any, error) {
 	return 200, map[string]any{"name": computerName(), "books": books, "map": theMap}, nil
 }
 
+// builtMap is the areas the kit's map file has in street detail (west, south, east, north), as it was cut, and the
+// day of Protomaps' world map it came from (20261120), or "".
+func builtMap(state *obj) ([]any, string) {
+	areas, built := []any{}, stateItems(state).child("maps/basemap")
+	if built == nil {
+		return areas, ""
+	}
+	if a := built.list("area"); len(a) > 0 {
+		boxes, _ := a[0].([]any)
+		if len(boxes) > 0 {
+			if _, several := boxes[0].([]any); !several {
+				boxes = []any{boxes}
+			}
+		}
+		for _, b := range boxes {
+			if box, err := floats(b); err == nil && len(box) == 4 {
+				areas = append(areas, box)
+			}
+		}
+	}
+	day, _, _ := strings.Cut(pyStr(orEmpty(built.get("version"))), " ")
+	if len(day) != 8 || !allDigits(day) {
+		day = ""
+	}
+	return areas, day
+}
+
+// mapAssets is the folder that holds the map's fonts and icons, as a phone asks for them, or "".
+func mapAssets(kit string) string {
+	ba := currentDir(kit, "maps/viewer/basemaps-assets")
+	if ba == "" {
+		return ""
+	}
+	fonts, _ := filepath.Glob(filepath.Join(globEscape(ba), "*", "fonts"))
+	if len(fonts) == 0 {
+		return ""
+	}
+	rel, err := filepath.Rel(kit, filepath.Dir(fonts[0]))
+	if rel = filepath.ToSlash(rel); err != nil || !styleFile.MatchString(rel+"/sprites/v4/light.json") {
+		return ""
+	}
+	return rel
+}
+
 // sendFile hands a phone a book or the map, whole or the part it asks for (a Range), to copy.
 func (n *notesServer) sendFile(w http.ResponseWriter, r *http.Request, rel string) {
 	nothing := func() { n.reply(w, r, 404, map[string]any{"error": "Nothing here."}, "") }
-	if n.kit == "" || !copyable.MatchString(rel) {
+	if n.kit == "" || !copyable.MatchString(rel) && !styleFile.MatchString(rel) {
 		nothing()
 		return
 	}
