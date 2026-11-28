@@ -103,11 +103,14 @@ jobs:
             mobile/android/app/build/outputs/apk/release/app-release.apk
             mobile/android/app/debug.keystore
           key: android-app-1-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/android/**', 'mobile/modules/*/expo-module.config.json', 'mobile/src/**', '!mobile/src/**/*.ts', '!mobile/src/**/*.tsx') }}
+      # A new package starts from the last run's downloads, so a build asks Maven Central only for what's new: it
+      # answers too many questions from GitHub's machines with 429
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: steps.app.outputs.cache-hit != 'true'
         with:
           path: ~/.gradle/caches
           key: gradle-${{ hashFiles('mobile/package-lock.json') }}
+          restore-keys: gradle-
       - run: npm ci --ignore-scripts
         working-directory: mobile
       # The native project comes from app.json each time (prebuild); the release build carries its JavaScript, signed
@@ -122,7 +125,8 @@ jobs:
           EXPO_PUBLIC_BASEMAPS_ASSETS: http://localhost:19100/assets
         run: |
           npx expo prebuild --platform android --no-install
-          cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --console=plain
+          cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --console=plain \
+            -Dorg.gradle.internal.repository.max.retries=6 -Dorg.gradle.internal.repository.initial.backoff=10000
       # Saved now, not when the job ends, so a failing test doesn't cost the next run its build
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: steps.app.outputs.cache-hit != 'true'
