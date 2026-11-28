@@ -3,6 +3,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
+import { startAdding } from "@/kit/add";
 import { startDownloads } from "@/kit/downloads";
 import { startMaps } from "@/kit/maps";
 import { store, useKit, useLoaded } from "@/kit/store";
@@ -10,7 +11,7 @@ import { useColors } from "@/theme";
 
 SplashScreen.preventAutoHideAsync();
 store.load().then(() => {
-  for (const start of [startDownloads, startMaps])
+  for (const start of [startDownloads, startMaps, startAdding])
     try {
       start();
     } catch (e) {

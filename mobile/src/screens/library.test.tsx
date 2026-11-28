@@ -8,14 +8,16 @@ import { store } from "@/kit/store";
 import { Library } from "./library";
 
 const mockRemove = jest.fn<(id: string) => void>();
+const mockShare = jest.fn<(url: string, o: object) => Promise<void>>(async () => {});
 jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
-jest.mock("@/kit/downloads", () => ({ removeBook: (id: string) => mockRemove(id) }));
+jest.mock("expo-sharing", () => ({ shareAsync: (url: string, o: object) => mockShare(url, o) }));
+jest.mock("@/kit/downloads", () => ({ libraryPath: () => "/library", removeBook: (id: string) => mockRemove(id) }));
 jest.mock("expo-network", () => ({
   NetworkStateType: { WIFI: "WIFI", ETHERNET: "ETHERNET" },
   useNetworkState: () => ({ type: "WIFI" }),
 }));
 
-test("touch and hold a book to take it off the phone, or to stop its download", async () => {
+test("touch and hold a book to send it to another phone or take it off this one, or to stop its download", async () => {
   const [a, b] = starter;
   await act(async () => {
     store.queue(a.id);
@@ -30,9 +32,13 @@ test("touch and hold a book to take it off the phone, or to stop its download", 
   };
   const user = userEvent.setup();
   await render(<Library />);
-  expect(screen.getByText("Touch and hold a book to remove it.")).toBeOnTheScreen();
+  expect(screen.getByText("Touch and hold a book to send it to another phone or remove it.")).toBeOnTheScreen();
 
   await user.longPress(screen.getByTestId(`ready-${a.id}`));
+  expect(alert.mock.calls.at(-1)!.slice(0, 2)).toEqual([a.title, "500 MB on this phone."]);
+  press("Send with AirDrop"); // the share sheet, where AirDrop is
+  expect(mockShare).toHaveBeenLastCalledWith("file:///library/a.zim", { dialogTitle: `Send ${a.title}` });
+  press("Remove from this phone");
   expect(alert.mock.calls.at(-1)!.slice(0, 2)).toEqual([
     `Remove ${a.title}?`,
     "It comes off this phone, freeing 500 MB. You can get it again in Get more.",

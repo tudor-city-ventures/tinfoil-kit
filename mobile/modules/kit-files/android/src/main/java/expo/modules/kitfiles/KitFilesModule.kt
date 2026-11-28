@@ -4,7 +4,9 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
 import java.security.SecureRandom
+import kotlin.concurrent.thread
 
 class KitFilesModule : Module() {
   private val downloads = Downloads { appContext.reactContext }
@@ -44,6 +46,28 @@ class KitFilesModule : Module() {
 
     AsyncFunction("books") {
       books().list()
+    }
+
+    // A book from a file, such as one sent with Quick Share: see Adding in Books.kt
+    AsyncFunction("addBook") { from: String, to: String, promise: Promise ->
+      val context = appContext.reactContext ?: throw IllegalStateException("The app isn't running")
+      thread(name = "adding") {
+        try {
+          promise.resolve(Adding.add(context, from, File(to)).toDouble())
+        } catch (e: Failure) {
+          promise.reject(e)
+        } catch (e: Exception) { // such as a file Android no longer lets the app read
+          promise.reject(Failure("ERR_FILE", e.message ?: e.toString()))
+        }
+      }
+    }
+
+    Function("adding") {
+      mapOf("done" to Adding.done.toDouble(), "total" to Adding.total.toDouble())
+    }
+
+    Function("moveBook") { from: String, to: String ->
+      Adding.move(from, to)
     }
 
     // The kits shared on this Wi-Fi, and phones shared like one: see Home.kt

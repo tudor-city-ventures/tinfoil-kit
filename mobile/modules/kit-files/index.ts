@@ -1,7 +1,7 @@
 // The bits of native code Expo lacks: book downloads that are checked and filed in the library with the app closed,
-// keeping books out of iOS backups, downloads that take exactly the part of a file asked for, the view that shows a
-// book's pages, asking the app for each file they need and reaching nothing else, finding a kit shared on the Wi-Fi,
-// sharing this phone like one, and the AI built into the phone.
+// books from a file checked the same way, keeping books out of iOS backups, downloads that take exactly the part of a
+// file asked for, the view that shows a book's pages, asking the app for each file they need and reaching nothing
+// else, finding a kit shared on the Wi-Fi, sharing this phone like one, and the AI built into the phone.
 import { requireNativeView, requireOptionalNativeModule } from "expo";
 import type { ComponentType, Ref } from "react";
 import type { ViewProps } from "react-native";
@@ -15,6 +15,9 @@ const native = requireOptionalNativeModule<{
   stopBook(id: string): void;
   forgetBook(id: string): void;
   books(): Promise<NativeBook[]>;
+  addBook(from: string, to: string): Promise<number>;
+  adding(): { done: number; total: number };
+  moveBook(from: string, to: string): void;
   findKits(seconds: number): Promise<FoundKit[]>;
   startSharing(o: ShareOptions): Promise<number>;
   stopSharing(): void;
@@ -74,6 +77,25 @@ export function forgetBook(id: string) {
 export async function books(): Promise<BookState[]> {
   if (!native) return [];
   return (await native.books()).map(({ error, ...b }) => (error ? { ...b, error } : b));
+}
+
+// A book from a file, such as one sent with AirDrop or Quick Share: moved (iOS, which gives the app its own copy) or
+// copied (Android) to `to`, and checked against the MD5 checksum that ends every ZIM file. Resolves with its size. Its
+// errors' codes: ERR_NOT_A_BOOK, ERR_DAMAGED (cut short or changed on the way), ERR_FILE.
+export function addBook(from: string, to: string): Promise<number> {
+  if (!native) return Promise.reject(new Error("Books are added in the phone app"));
+  return native.addBook(from, to);
+}
+
+// How much of the book being added is checked, in bytes
+export function adding(): { done: number; total: number } {
+  return native?.adding() ?? { done: 0, total: 0 };
+}
+
+// A checked book into its place in the library, over any file there
+export function moveBook(from: string, to: string) {
+  if (!native) throw new Error("Books are added in the phone app");
+  native.moveBook(from, to);
 }
 
 export type DownloadOptions = {

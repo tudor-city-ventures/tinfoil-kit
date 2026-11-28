@@ -1,28 +1,51 @@
 import { NetworkStateType, useNetworkState } from "expo-network";
 import { router } from "expo-router";
-import { Alert, ScrollView } from "react-native";
+import { shareAsync } from "expo-sharing";
+import { Alert, Platform, ScrollView, type AlertButton } from "react-native";
 
 import { Group, Pill, Row } from "@/components/group";
 import { catalog } from "@/kit/catalog";
-import { removeBook } from "@/kit/downloads";
+import { libraryPath, removeBook } from "@/kit/downloads";
 import { size } from "@/kit/format";
 import { percent, statusLine } from "@/kit/status";
 import { store, useKit, type Item } from "@/kit/store";
 
 const byId = new Map(catalog.map((b) => [b.id, b]));
 
-// Touch and hold: a book comes off the phone, or stops downloading
+const SEND = Platform.OS === "ios" ? "Send with AirDrop" : "Send with Quick Share";
+
+// The book's file, to another phone nearby, which adds it in Get more
+function send(title: string, file: string) {
+  shareAsync(encodeURI(`file://${libraryPath()}/${file}`), {
+    dialogTitle: `Send ${title}`,
+    ...(Platform.OS === "android" && { mimeType: "application/octet-stream" }),
+  }).catch(() => Alert.alert(`${title} couldn't be sent`, "Share this phone's books over the Wi-Fi in Get more."));
+}
+
+function remove(id: string, title: string, it: Item) {
+  Alert.alert(
+    `Remove ${title}?`,
+    `It comes off this phone, freeing ${size(it.total)}. You can get it again in Get more.`,
+    [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: () => removeBook(id) },
+    ],
+  );
+}
+
+// Touch and hold: a book goes to another phone or comes off this one, or stops downloading
 function offer(id: string, it: Item) {
   const title = byId.get(id)!.title;
-  if (it.status === "ready")
-    Alert.alert(
-      `Remove ${title}?`,
-      `It comes off this phone, freeing ${size(it.total)}. You can get it again in Get more.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Remove", style: "destructive", onPress: () => removeBook(id) },
-      ],
-    );
+  if (it.status === "ready" && it.file) {
+    const file = it.file;
+    const buttons: AlertButton[] = [
+      { text: SEND, onPress: () => send(title, file) },
+      { text: "Remove from this phone", style: "destructive", onPress: () => remove(id, title, it) },
+      { text: "Cancel", style: "cancel" },
+    ];
+    // On Android the last of three buttons is the main one, at the right, and the first sits apart at the left
+    Alert.alert(title, `${size(it.total)} on this phone.`, Platform.OS === "android" ? buttons.reverse() : buttons);
+  } else if (it.status === "ready") remove(id, title, it);
   else
     Alert.alert(`Stop downloading ${title}?`, "What has downloaded so far is deleted.", [
       { text: "Keep downloading", style: "cancel" },
@@ -58,7 +81,10 @@ export function Library() {
           ))}
         </Group>
       ) : null}
-      <Group label="On this phone" footer={ready.length > 0 ? "Touch and hold a book to remove it." : undefined}>
+      <Group
+        label="On this phone"
+        footer={ready.length > 0 ? "Touch and hold a book to send it to another phone or remove it." : undefined}
+      >
         {ready.length > 0 ? (
           ready.map(([id, it]) => (
             <Row

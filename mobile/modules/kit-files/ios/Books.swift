@@ -373,6 +373,96 @@ final class Books: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {  
   }
 }
 
+// A book from a file, such as one sent with AirDrop or picked in Files: the app's own copy of it (iOS copies a file
+// it opens with the app, and one picked in Files) moved to where the app says, then checked against the MD5 checksum
+// that ends every ZIM file, so a book that came through damaged or cut short never reaches the library. One at a time.
+final class Adding {
+  static let shared = Adding()
+  private let queue = DispatchQueue(label: "com.tinfoilkit.adding", qos: .userInitiated)
+  private let lock = NSLock()
+  private var done: Int64 = 0
+  private var total: Int64 = 0
+
+  private struct Refusal: Error {
+    let code: String
+    let message: String
+  }
+
+  func add(from: String, to: String, promise: Promise) {
+    queue.async {
+      let source = from.hasPrefix("file:") ? URL(string: from) ?? URL(fileURLWithPath: from) : URL(fileURLWithPath: from)
+      let dest = URL(fileURLWithPath: to)
+      self.progress(0, 0)
+      do {
+        try FileManager.default.createDirectory(
+          at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: dest)
+        let scoped = source.startAccessingSecurityScopedResource()
+        defer { if scoped { source.stopAccessingSecurityScopedResource() } }
+        do {
+          try FileManager.default.moveItem(at: source, to: dest)
+        } catch {
+          try FileManager.default.copyItem(at: source, to: dest)
+          try? FileManager.default.removeItem(at: source)
+        }
+        promise.resolve(try self.check(dest))
+      } catch let r as Refusal {
+        try? FileManager.default.removeItem(at: dest)
+        promise.reject(r.code, r.message)
+      } catch {
+        try? FileManager.default.removeItem(at: dest)
+        promise.reject("ERR_FILE", error.localizedDescription)
+      }
+    }
+  }
+
+  // How much of the book being added is checked, in bytes
+  func state() -> [String: Double] {
+    lock.lock()
+    defer { lock.unlock() }
+    return ["done": Double(done), "total": Double(total)]
+  }
+
+  private func progress(_ done: Int64, _ total: Int64) {
+    lock.lock()
+    (self.done, self.total) = (done, total)
+    lock.unlock()
+  }
+
+  // The header says where the checksum is: the last 16 bytes, the MD5 of all before them
+  private func check(_ url: URL) throws -> Double {
+    let handle = try FileHandle(forReadingFrom: url)
+    defer { try? handle.close() }
+    let size = Int64(try handle.seekToEnd())
+    try handle.seek(toOffset: 0)
+    guard let header = try handle.read(upToCount: 80), header.count == 80,
+      UInt32(littleEndian: header.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }) == 72_173_914
+    else { throw Refusal(code: "ERR_NOT_A_BOOK", message: "This file isn't a book") }
+    let end = Int64(UInt64(littleEndian: header.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 72, as: UInt64.self) }))
+    guard end >= 80, end + 16 == size else { throw Refusal(code: "ERR_DAMAGED", message: "It came through cut short") }
+    var md5 = Insecure.MD5()
+    md5.update(data: header)
+    var at: Int64 = 80
+    while at < end {
+      let chunk = try autoreleasepool { try handle.read(upToCount: Int(min(end - at, 4 << 20))) } ?? Data()
+      guard !chunk.isEmpty else { throw Refusal(code: "ERR_DAMAGED", message: "It came through cut short") }
+      md5.update(data: chunk)
+      at += Int64(chunk.count)
+      progress(at, size)
+    }
+    guard Data(md5.finalize()) == (try handle.read(upToCount: 16) ?? Data()) else {
+      throw Refusal(code: "ERR_DAMAGED", message: "It came through damaged")
+    }
+    return Double(size)
+  }
+
+  // A checked book into its place in the library, over any file there
+  static func move(_ from: String, to: String) throws {
+    try? FileManager.default.removeItem(atPath: to)
+    try FileManager.default.moveItem(atPath: from, toPath: to)
+  }
+}
+
 // iOS relaunches the app in the background when a book lands, and hands it the session's events through here
 public class KitFilesAppDelegate: ExpoAppDelegateSubscriber {
   public func application(

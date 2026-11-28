@@ -15,7 +15,27 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "Tinfoil Kit finds kits and phones on your Wi-Fi to copy books and maps from, and shares this phone's when you ask, without the internet.",
         "NSLocationWhenInUseUsageDescription": "Tinfoil Kit shows where you are on its map when you ask. Your location never leaves this phone.",
-        "NSBonjourServices": ["_tinfoilkit._tcp"]
+        "NSBonjourServices": ["_tinfoilkit._tcp"],
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "ZIM book",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": ["org.openzim.zim"]
+          }
+        ],
+        "UTImportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "org.openzim.zim",
+            "UTTypeDescription": "ZIM book",
+            "UTTypeConformsTo": ["public.data"],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": ["zim"],
+              "public.mime-type": ["application/x-zim"]
+            }
+          }
+        ],
+        "LSSupportsOpeningDocumentsInPlace": false
       }
     },
     "android": {

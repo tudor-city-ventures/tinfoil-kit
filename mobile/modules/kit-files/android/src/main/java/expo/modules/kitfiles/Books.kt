@@ -267,6 +267,75 @@ class Books private constructor(private val context: Context) {
     records.listFiles { f -> f.name.endsWith(".json") }?.mapNotNull { Book.parse(it.readText()) } ?: emptyList()
 }
 
+// A book from a file, such as one sent with Quick Share or picked in Downloads: copied to where the app says, and
+// checked as it comes against the MD5 checksum that ends every ZIM file, so a book that came through damaged or cut
+// short never reaches the library. One at a time.
+object Adding {
+  @Volatile var done = 0L // bytes of it copied and checked
+  @Volatile var total = 0L
+
+  fun add(context: Context, from: String, to: File): Long {
+    done = 0
+    total = 0
+    val uri = Uri.parse(from)
+    val input = (if (uri.scheme == "content") context.contentResolver.openInputStream(uri) else File(uri.path ?: from).inputStream())
+      ?: throw Failure("ERR_FILE", "The file couldn't be opened")
+    to.parentFile?.mkdirs()
+    try {
+      input.use { inp ->
+        to.outputStream().use { out ->
+          // The header says where the checksum is: the last 16 bytes, the MD5 of all before them
+          val header = ByteArray(80)
+          var got = 0
+          while (got < 80) got += inp.read(header, got, 80 - got).takeIf { it >= 0 } ?: break
+          if (got < 80 || le(header, 0, 4) != 72173914L) throw Failure("ERR_NOT_A_BOOK", "This file isn't a book")
+          val end = le(header, 72, 8)
+          if (end < 80) throw Failure("ERR_DAMAGED", "It came through damaged")
+          total = end + 16
+          val md5 = MessageDigest.getInstance("MD5")
+          md5.update(header)
+          out.write(header)
+          val want = ByteArray(16)
+          var kept = 0
+          var at = 80L
+          val buffer = ByteArray(1 shl 20)
+          while (true) {
+            val n = inp.read(buffer)
+            if (n < 0) break
+            out.write(buffer, 0, n)
+            val hashed = (end - at).coerceIn(0, n.toLong()).toInt()
+            md5.update(buffer, 0, hashed)
+            if (n > hashed) {
+              if (kept + n - hashed > 16) throw Failure("ERR_DAMAGED", "It came through damaged")
+              System.arraycopy(buffer, hashed, want, kept, n - hashed)
+              kept += n - hashed
+            }
+            at += n
+            done = at
+          }
+          if (at != end + 16) throw Failure("ERR_DAMAGED", "It came through cut short")
+          if (!md5.digest().contentEquals(want)) throw Failure("ERR_DAMAGED", "It came through damaged")
+          return at
+        }
+      }
+    } catch (e: Exception) {
+      to.delete()
+      if (e is Failure) throw e
+      throw Failure("ERR_FILE", e.message ?: e.toString())
+    }
+  }
+
+  // A checked book into its place in the library, over any file there
+  fun move(from: String, to: String) {
+    val target = File(to)
+    target.delete()
+    if (!File(from).renameTo(target)) throw Failure("ERR_FILE", "It couldn't be put in the library")
+  }
+
+  private fun le(b: ByteArray, at: Int, bytes: Int): Long =
+    (0 until bytes).fold(0L) { n, i -> n or ((b[at + i].toLong() and 0xff) shl (8 * i)) }
+}
+
 // Android's downloader says one is done, even with the app closed
 class BookDone : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {

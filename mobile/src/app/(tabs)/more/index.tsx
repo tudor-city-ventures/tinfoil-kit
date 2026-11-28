@@ -1,9 +1,11 @@
+import { getDocumentAsync } from "expo-document-picker";
 import { Paths } from "expo-file-system";
 import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from "react-native";
 
-import { Group, Row } from "@/components/group";
+import { Group, Pill, Row } from "@/components/group";
 import { Icon } from "@/components/icon";
+import { addFile, describe, useAdding } from "@/kit/add";
 import { catalog, groups } from "@/kit/catalog";
 import { size } from "@/kit/format";
 import { store, useKit } from "@/kit/store";
@@ -17,8 +19,18 @@ function freeSpace(): string {
   }
 }
 
+const NEARBY = Platform.OS === "ios" ? "AirDrop" : "Quick Share";
+
+// A book another phone sent, or one saved on this one, from the phone's own file picker
+async function pick() {
+  const got = await getDocumentAsync({ type: "*/*", copyToCacheDirectory: false }).catch(() => undefined);
+  const file = got && !got.canceled ? got.assets[0] : undefined;
+  if (file) Alert.alert(...describe(await addFile(file.uri, file.name, file.size)));
+}
+
 export default function GetMore() {
   const { items, cellular, home } = useKit();
+  const adding = useAdding();
   const c = useColors();
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic">
@@ -39,7 +51,7 @@ export default function GetMore() {
       </Group>
       <Group
         label="Nearby"
-        footer="Books and the map over the Wi-Fi, from a Tinfoil Kit or another phone: faster than the internet, and it works without it."
+        footer={`From a Tinfoil Kit or another phone, over the Wi-Fi or with ${NEARBY}: faster than the internet, and it works without it.`}
       >
         <Row
           testID="kit-at-home"
@@ -56,6 +68,19 @@ export default function GetMore() {
           detail="Let another phone copy this one's books and map"
           right={<Icon name="forward" color={c.mute} />}
           onPress={() => router.push("/more/share")}
+        />
+        <Row
+          testID="add-file"
+          icon="file"
+          title={adding ? "Adding a book" : "Add a book from a file"}
+          detail={
+            adding?.name ??
+            (Platform.OS === "ios"
+              ? "One sent with AirDrop, or saved in Files"
+              : "One sent with Quick Share, or saved in Downloads")
+          }
+          right={adding ? <Pill text={`${adding.percent}%`} /> : <Icon name="forward" color={c.mute} />}
+          onPress={adding ? undefined : pick}
         />
       </Group>
       {groups.map((g) => (

@@ -79,6 +79,10 @@ export function createStore(storage: Storage) {
       if (state.items[id]) return;
       set({ ...state, items: { ...state.items, [id]: { status: "queued", received: 0, total: 0 } } });
     },
+    // A book that's on the phone already, such as one added from a file
+    ready(id: string, file: string, bytes: number) {
+      set({ ...state, items: { ...state.items, [id]: { status: "ready", received: bytes, total: bytes, file } } });
+    },
     copy(id: string, from: KitFile) {
       if (state.items[id]) return;
       set({ ...state, items: { ...state.items, [id]: { status: "queued", received: 0, total: from.bytes, from } } });

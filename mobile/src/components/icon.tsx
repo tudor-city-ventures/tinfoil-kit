@@ -10,6 +10,7 @@ export const icons = {
   ready: { ios: "checkmark.circle.fill", android: "check_circle", web: "check_circle" },
   failed: { ios: "exclamationmark.circle.fill", android: "error", web: "error" },
   add: { ios: "plus.circle.fill", android: "add_circle", web: "add_circle" },
+  file: { ios: "doc.badge.plus", android: "note_add", web: "note_add" },
   drive: { ios: "externaldrive.fill", android: "storage", web: "storage" },
   wifi: { ios: "wifi", android: "wifi", web: "wifi" },
   cellular: { ios: "antenna.radiowaves.left.and.right", android: "cell_tower", web: "cell_tower" },

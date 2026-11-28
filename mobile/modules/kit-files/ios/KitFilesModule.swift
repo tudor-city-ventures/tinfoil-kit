@@ -59,6 +59,19 @@ public class KitFilesModule: Module {
       Books.shared.list(promise)
     }
 
+    // A book from a file, such as one sent with AirDrop: see Adding in Books.swift
+    AsyncFunction("addBook") { (from: String, to: String, promise: Promise) in
+      Adding.shared.add(from: from, to: to, promise: promise)
+    }
+
+    Function("adding") { () -> [String: Double] in
+      Adding.shared.state()
+    }
+
+    Function("moveBook") { (from: String, to: String) in
+      try Adding.move(from, to: to)
+    }
+
     // The kits shared on this Wi-Fi, and phones shared like one: see Home.swift
     AsyncFunction("findKits") { (seconds: Double) async -> [[String: Any]] in
       await KitFinder.find(seconds: seconds).map {
