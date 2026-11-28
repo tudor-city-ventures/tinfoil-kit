@@ -2,6 +2,8 @@
 // kit asks for its access code, the one Share with family shows on its computer, which the phone sends with each
 // request (gate.go takes it as a Bearer token). Its notes server lists what a phone can copy (/data/files) and hands
 // over each file, whole or in parts.
+import { getNetworkStateAsync, NetworkStateType } from "expo-network";
+
 import { catalog, editions } from "./catalog";
 import { places, type Place } from "./places";
 import type { Box } from "./pmtiles";
@@ -75,10 +77,13 @@ export async function listKit(kit: Pick<HomeKit, "address" | "code">, get: typeo
   try {
     answer = await get(`http://${kit.address}/data/files`, { headers: headers(kit), signal: stop.signal });
   } catch {
+    // On a Wi-Fi without the internet, Android uses mobile data where it can, and the kit isn't there
+    const cellular = (await getNetworkStateAsync().catch(() => undefined))?.type === NetworkStateType.CELLULAR;
     throw new KitError(
       "unreachable",
       "Can't reach the kit. Check that this phone is on the same Wi-Fi, and that the kit is shared: on its computer, " +
-        "More, then Share with family.",
+        "More, then Share with family." +
+        (cellular ? " If the Wi-Fi has no internet, turn off mobile data while you copy." : ""),
     );
   } finally {
     clearTimeout(timer);

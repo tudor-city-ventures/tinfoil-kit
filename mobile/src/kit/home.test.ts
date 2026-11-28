@@ -1,4 +1,4 @@
-import { expect, test } from "@jest/globals";
+import { expect, jest, test } from "@jest/globals";
 
 import { catalog } from "./catalog";
 import {
@@ -17,6 +17,11 @@ import {
 import { place } from "./places";
 
 const kit = { name: "Kitchen Mac", address: "192.168.1.20:8000", code: "48217736" };
+let mockNetwork = "WIFI";
+jest.mock("expo-network", () => ({
+  NetworkStateType: { CELLULAR: "CELLULAR", WIFI: "WIFI" },
+  getNetworkStateAsync: async () => ({ type: mockNetwork }),
+}));
 
 test("the kit's address as typed, or the link from Share with family with its code", () => {
   expect(readAddress("192.168.1.20")).toEqual({ address: "192.168.1.20:8000" });
@@ -57,9 +62,12 @@ test("what the kit has, asked with its code, and what to do when that fails", as
   expect(await problem(answer(401, { error: "this needs the kit's access code" }))).toBe("code");
   expect(await problem(answer(429))).toBe("tries");
   expect(await problem(answer(404, { error: "Nothing here." }))).toBe("old"); // a kit from before phones
-  expect(await problem((async () => Promise.reject(new TypeError("Network request failed"))) as typeof fetch)).toBe(
-    "unreachable",
-  );
+  const offline = (async () => Promise.reject(new TypeError("Network request failed"))) as typeof fetch;
+  expect(await problem(offline)).toBe("unreachable");
+  const told = () => listKit(kit, offline).catch((e: KitError) => e.message);
+  expect(await told()).not.toMatch(/mobile data/);
+  mockNetwork = "CELLULAR"; // on a Wi-Fi without the internet, an Android phone may use mobile data instead
+  expect(await told()).toMatch(/turn off mobile data while you copy/);
 });
 
 test("a kit's book is the phone's own, in whichever edition the kit has", () => {
