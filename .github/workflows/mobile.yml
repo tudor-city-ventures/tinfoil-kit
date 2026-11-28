@@ -175,6 +175,10 @@ jobs:
             sleep 5
           done
           adb install mobile/android/app/build/outputs/apk/release/app-release.apk
+          # The app's big downloads wait for Wi-Fi, which can come up long after the emulator starts, or not at all
+          adb shell svc wifi enable
+          for _ in $(seq 60); do adb shell cmd wifi status | grep -q "connected to" && break; sleep 2; done
+          adb shell cmd wifi status | grep -m 1 "connected to" || { adb shell cmd wifi status; exit 1; }
       - name: Install Maestro
         run: &maestro |
           f="$RUNNER_TEMP/maestro.zip"

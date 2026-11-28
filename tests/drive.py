@@ -20,6 +20,7 @@ For the videos of a run, which people watch to see the kit set up and used on ea
   drive.py summary NAME=URL...      the run page's list of videos, in Markdown
 """
 
+import bisect
 import codecs
 import http.client
 import json
@@ -846,10 +847,10 @@ def make_videos(folder):
         # The captions are placed by the clock, from the video's first frame
         frames = sorted(packet_times(raw))
         marks = [(min(max(0.0, float(t) - began), length), text) for t, text in rows[1:] if text]
-        gaps = sorted((b - a for a, b in zip(frames, frames[1:])), reverse=True)[:3]
+        still = [f"{clock(a)} to {clock(b)}" for a, b in zip(frames, frames[1:]) if b - a >= 10]
         print(
-            f"{name}: the recording ran {ended - began:.0f} s and the video is {length:.0f} s, with {len(frames)} frames,"
-            " the longest gaps between them " + ", ".join(f"{g:.1f} s" for g in gaps)
+            f"{name}: the recording ran {ended - began:.0f} s and the video is {length:.0f} s, with {len(frames)} frames;"
+            " the screen stayed the same from " + (", ".join(still) or "nowhere for 10 s")
         )
         run = " ".join(x for x in (os.environ.get("GITHUB_SHA", "")[:7], time.strftime("%Y-%m-%d")) if x)
         phone = name in PHONES
@@ -905,7 +906,9 @@ def make_videos(folder):
             end = shown[i + 1][0] if i + 1 < len(shown) else length
             at = min(max(t + 1, end - 1.5), max(length - 0.5, 0))  # how the step ended
             frame = ascii_frame(mp4, at, 60, 64) if phone else ascii_frame(mp4, at)
-            print(f"\n---- {clock(at)}, the end of: {text}\n{frame}\n{screen_text(raw, at)}")
+            # The words from the frame on screen then, the last before: seeking finds the next
+            since = frames[max(bisect.bisect_right(frames, at) - 1, 0)] if frames else at
+            print(f"\n---- {clock(at)}, the end of: {text}\n{frame}\n{screen_text(raw, since)}")
 
 
 def srt_time(t):
