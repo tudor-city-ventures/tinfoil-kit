@@ -1,6 +1,6 @@
 // A book from a file, such as one another phone sent with AirDrop or Quick Share, or one saved in Files: checked, named
 // and filed in the library like a downloaded one. Only the app's own books: the name a book gives itself says which.
-import { Directory, Paths } from "expo-file-system";
+import { Directory } from "expo-file-system";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Platform } from "react-native";
 
@@ -10,6 +10,7 @@ import { closeBook, openBook } from "@/kit/books";
 import { catalog } from "@/kit/catalog";
 import { libraryPath, removeBook } from "@/kit/downloads";
 import { size } from "@/kit/format";
+import { spaceLeft } from "@/kit/qa";
 import { store } from "@/kit/store";
 import type { Zim } from "@/kit/zim";
 
@@ -125,8 +126,7 @@ export async function addFile(from: string, name: string, bytes?: number): Promi
 async function take(from: string, name: string, bytes?: number): Promise<Outcome> {
   const library = libraryPath();
   // Android copies it, which takes room; iOS moves its own copy
-  if (Platform.OS === "android" && bytes && Paths.availableDiskSpace < bytes + SPARE)
-    return { refused: "space", bytes };
+  if (Platform.OS === "android" && bytes && spaceLeft() < bytes + SPARE) return { refused: "space", bytes };
   const folder = `${library}/adding`;
   clear(folder);
   const incoming = `${folder}/${Date.now()}.zim`;

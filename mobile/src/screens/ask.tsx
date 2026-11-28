@@ -2,9 +2,9 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { aiAnswer, aiDownload, aiState, type AIState } from "../../modules/kit-files";
 import { Button } from "@/components/button";
 import { Group, Row } from "@/components/group";
+import { aiAnswer, aiDownload, aiState, type AIState } from "@/kit/ai";
 import { plain, prompt } from "@/kit/answer";
 import { openBook } from "@/kit/books";
 import { catalog } from "@/kit/catalog";

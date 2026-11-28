@@ -1,4 +1,3 @@
-import { Paths } from "expo-file-system";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -32,6 +31,7 @@ import {
   type HomeKit,
   type KitListing,
 } from "@/kit/home";
+import { spaceLeft } from "@/kit/qa";
 import { store, useKit } from "@/kit/store";
 import { space, useColors } from "@/theme";
 
@@ -343,7 +343,7 @@ function Copy({ kit }: { kit: HomeKit }) {
 
 function freeSpace(): string {
   try {
-    return size(Paths.availableDiskSpace);
+    return size(spaceLeft());
   } catch {
     return "some";
   }

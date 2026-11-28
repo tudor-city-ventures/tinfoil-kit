@@ -8,16 +8,19 @@ import { Icon } from "@/components/icon";
 import { addFile, describe, useAdding } from "@/kit/add";
 import { catalog, groups } from "@/kit/catalog";
 import { size } from "@/kit/format";
+import { spaceLeft, tapper, useFakes } from "@/kit/qa";
 import { store, useKit } from "@/kit/store";
 import { useColors } from "@/theme";
 
 function freeSpace(): string {
   try {
-    return `${size(Paths.availableDiskSpace)} free of ${size(Paths.totalDiskSpace)}`;
+    return `${size(spaceLeft())} free of ${size(Paths.totalDiskSpace)}`;
   } catch {
     return "";
   }
 }
+
+const openTesting = tapper(() => router.push("/more/testing"));
 
 const NEARBY = Platform.OS === "ios" ? "AirDrop" : "Quick Share";
 
@@ -31,11 +34,15 @@ async function pick() {
 export default function GetMore() {
   const { items, cellular, home } = useKit();
   const adding = useAdding();
+  useFakes(); // shows the room left again when the testing menu pretends the phone is full
   const c = useColors();
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic">
       <Group footer="Big downloads wait for Wi-Fi unless you allow mobile data, which can cost money.">
-        <Row icon="phone" title="This phone" detail={freeSpace()} />
+        {/* Seven taps in a row open the testing menu. A tap shows nothing, as the menu is hidden. */}
+        <Pressable testID="this-phone" onPress={openTesting}>
+          <Row icon="phone" title="This phone" detail={freeSpace()} />
+        </Pressable>
         <Row
           icon="cellular"
           title="Use mobile data"

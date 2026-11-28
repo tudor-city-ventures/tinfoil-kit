@@ -178,3 +178,25 @@ appId: com.tinfoilkit.app
     id: "share-code"
 - runScript: share.js
 - assertTrue: ${output.shared == "ok"}
+# The hidden testing menu: seven taps on This phone open it, and Reset everything leaves the app as a fresh install has
+# it
+- launchApp
+- tapOn: "Get more"
+- tapOn:
+    id: "this-phone"
+    repeat: 7
+    delay: 150
+    label: "The testing menu: seven taps on This phone"
+- scrollUntilVisible:
+    element:
+      id: "reset-all"
+    timeout: 20000
+- takeScreenshot: 14-testing
+- tapOn:
+    id: "reset-all"
+    label: "Reset everything, as a fresh install"
+- tapOn: "(?i)reset"
+- extendedWaitUntil:
+    visible:
+      id: "get-try-it"
+    timeout: 30000

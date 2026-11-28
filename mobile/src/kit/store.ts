@@ -116,6 +116,14 @@ export function createStore(storage: Storage) {
     stopMap() {
       set({ ...state, mapDownload: undefined });
     },
+    // The map off the phone, and any download of one; whoever calls this deletes its file
+    forgetMap() {
+      set({ ...state, map: undefined, mapDownload: undefined });
+    },
+    // The testing menu's: the first screen again, keeping what's on the phone, or all as a fresh install has it
+    startOver(keep: boolean) {
+      set(keep ? { ...state, welcomed: false } : initial);
+    },
   };
 }
 

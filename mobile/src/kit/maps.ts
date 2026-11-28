@@ -19,6 +19,7 @@ import { size } from "@/kit/format";
 import { FORGOTTEN, NEW_CODE, fileUrl, headers } from "@/kit/home";
 import { place } from "@/kit/places";
 import { head, plan } from "@/kit/pmtiles";
+import { FAILED, faked, spaceLeft } from "@/kit/qa";
 import { store as kitStore, type MapDownload, type Store } from "@/kit/store";
 
 export const WORLD = 7; // every place on earth up to this zoom: countries, towns, main roads
@@ -456,7 +457,7 @@ function phone(): MapPhone {
       if (!res.ok) throw new Error(`Protomaps said ${res.status}`);
       return res.json();
     },
-    download,
+    download: (o) => (faked().failing ? Promise.reject(new Error(FAILED)) : download(o)),
     stop: stopDownloads,
     list: () =>
       new Directory(`file://${dir}`)
@@ -484,7 +485,7 @@ function phone(): MapPhone {
     remove(path) {
       if (file(path).exists) file(path).delete();
     },
-    free: () => Paths.availableDiskSpace,
+    free: spaceLeft,
     awake: (on) => void (on ? activateKeepAwakeAsync("map") : deactivateKeepAwake("map")).catch(() => {}),
   };
 }

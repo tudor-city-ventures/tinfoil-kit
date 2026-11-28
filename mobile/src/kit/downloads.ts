@@ -22,6 +22,7 @@ import { catalog } from "@/kit/catalog";
 import { size } from "@/kit/format";
 import { FORGOTTEN, fileName, fileUrl, headers } from "@/kit/home";
 import { checksum, findFile, type ZimFile } from "@/kit/kiwix";
+import { FAILED, faked, spaceLeft } from "@/kit/qa";
 import { store as kitStore, type Store } from "@/kit/store";
 
 // What this needs from the phone, so the tests can stand in for it.
@@ -216,13 +217,13 @@ export function libraryPath(): string {
 function phone(): Phone {
   return {
     library: libraryPath(),
-    start: startBook,
+    start: (o) => (faked().failing ? Promise.reject(new Error(FAILED)) : startBook(o)),
     stop: stopBook,
     forget: forgetBook,
     books,
     find: findFile,
     checksum,
-    free: () => Paths.availableDiskSpace,
+    free: spaceLeft,
     exists: (path) => new File(`file://${path}`).exists,
     delete(path) {
       closeBook(path);

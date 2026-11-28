@@ -1,7 +1,8 @@
 name: phone app
 # The phone app (mobile/): its checks, then a build of each app with a test on an iPhone simulator and an Android
-# emulator, filmed: the videos job links the videos from the run's page. GitHub's runners cost nothing for a public
-# repo. Signing and the stores come later, from a workflow of their own.
+# emulator, filmed: the videos job links the videos from the run's page, and each build job links a build of the app to
+# try by hand. GitHub's runners cost nothing for a public repo. Signing and the stores come later, from a workflow of
+# their own.
 on:
   pull_request:
     paths: ["mobile/**", "site/kit.json", "site/sources.json", "tests/make_zims.py", "tests/drive.py", ".github/workflows/mobile.yml"]
@@ -102,7 +103,7 @@ jobs:
           path: |
             mobile/android/app/build/outputs/apk/release/app-release.apk
             mobile/android/app/debug.keystore
-          key: android-app-1-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/android/**', 'mobile/modules/*/expo-module.config.json', 'mobile/src/**', '!mobile/src/**/*.ts', '!mobile/src/**/*.tsx') }}
+          key: android-app-2-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/android/**', 'mobile/modules/*/expo-module.config.json', 'mobile/src/**', '!mobile/src/**/*.ts', '!mobile/src/**/*.tsx') }}
       # A new package or library starts from the last run's downloads, so a build asks Maven Central only for what's
       # new: it answers too many questions from GitHub's machines with 429
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -114,7 +115,7 @@ jobs:
       - run: npm ci --ignore-scripts
         working-directory: mobile
       # The native project comes from app.json each time (prebuild); the release build carries its JavaScript, signed
-      # with the debug key, for the emulator's processor only.
+      # with the debug key, for the emulator's processor and phones'.
       - name: Build the app
         if: steps.app.outputs.cache-hit != 'true'
         working-directory: mobile
@@ -123,9 +124,10 @@ jobs:
           EXPO_PUBLIC_PROTOMAPS_BUILDS: http://localhost:19100/protomaps/builds.json
           EXPO_PUBLIC_PROTOMAPS_BUILD_BASE: http://localhost:19100/protomaps
           EXPO_PUBLIC_BASEMAPS_ASSETS: http://localhost:19100/assets
+          EXPO_PUBLIC_COMMIT: ${{ github.sha }} # for the testing menu (src/kit/qa.ts)
         run: |
           npx expo prebuild --platform android --no-install
-          cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --console=plain \
+          cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64,arm64-v8a --no-daemon --console=plain \
             -Dorg.gradle.internal.repository.max.retries=6 -Dorg.gradle.internal.repository.initial.backoff=10000
       # Saved now, not when the job ends, so a failing test doesn't cost the next run its build
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -141,9 +143,9 @@ jobs:
         if: steps.app.outputs.cache-hit == 'true'
         working-directory: mobile
         env: *internet
-        run: |
+        run: &bundle |
           apk=android/app/build/outputs/apk/release/app-release.apk
-          w="$RUNNER_TEMP/js" && mkdir -p "$w/assets"
+          w=$(mktemp -d) && mkdir -p "$w/assets"
           npx expo export:embed --platform android --dev false --minify false --reset-cache \
             --bundle-output "$w/index.android.js" --assets-dest "$w/res"
           node_modules/hermes-compiler/hermesc/linux64-bin/hermesc -emit-binary -O \
@@ -153,7 +155,27 @@ jobs:
           tools=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
           "$tools/zipalign" -f -p 4 "$w/app.apk" "$w/aligned.apk"
           "$tools/apksigner" sign --ks android/app/debug.keystore --ks-pass pass:android --key-pass pass:android \
-            --out "$apk" "$w/aligned.apk"
+            --out "${OUT:-$apk}" "$w/aligned.apk"
+      # The same app to try by hand on a phone or an emulator, from the real internet, with a link on the run's page.
+      # Made before the test, so a test that fails doesn't take it away.
+      - name: Make a build to try
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_COMMIT: ${{ github.sha }}
+          OUT: ${{ runner.temp }}/tinfoil-kit-android.apk
+        run: *bundle
+      - id: try
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ runner.temp }}/tinfoil-kit-android.apk
+          archive: false
+          retention-days: 7
+      - name: Link the build to try
+        env:
+          URL: ${{ steps.try.outputs.artifact-url }}
+        run: |
+          echo "### Try this build on an Android phone: [tinfoil-kit-android.apk]($URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "In Get more, tap This phone seven times for the testing menu." >> "$GITHUB_STEP_SUMMARY"
       - name: Start an Android emulator
         timeout-minutes: 15
         run: |
@@ -390,6 +412,34 @@ jobs:
         if: steps.app.outputs.cache-hit == 'true'
         working-directory: mobile/ios/build/Build/Products/Release-iphonesimulator
         run: codesign --force --sign - --timestamp=none TinfoilKit.app
+      # The same app to try by hand in an iPhone simulator on a Mac with Apple's chips, from the real internet, zipped,
+      # with a link on the run's page. Made before the test, so a test that fails doesn't take it away.
+      - name: Make a build to try
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_COMMIT: ${{ github.sha }}
+        run: |
+          w=$(mktemp -d)
+          cp -R ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app "$w/"
+          app="$w/TinfoilKit.app"
+          rm -rf "$app/assets"
+          npx expo export:embed --platform ios --dev false --minify false --reset-cache \
+            --bundle-output "$w/main.js" --assets-dest "$app"
+          ios/build/hermesc -emit-binary -O -out "$app/main.jsbundle" "$w/main.js"
+          codesign --force --sign - --timestamp=none "$app"
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/tinfoil-kit-iphone-simulator.zip"
+      - id: try
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ runner.temp }}/tinfoil-kit-iphone-simulator.zip
+          archive: false
+          retention-days: 7
+      - name: Link the build to try
+        env:
+          URL: ${{ steps.try.outputs.artifact-url }}
+        run: |
+          echo "### Try this build in an iPhone simulator: [tinfoil-kit-iphone-simulator.zip]($URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Unzip it and drag TinfoilKit.app onto the simulator. In Get more, tap This phone seven times for the testing menu." >> "$GITHUB_STEP_SUMMARY"
       - name: Put the app on the simulator
         env:
           UDID: ${{ steps.simulator.outputs.udid }}
