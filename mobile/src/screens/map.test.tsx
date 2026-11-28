@@ -91,6 +91,16 @@ test("pick where you live, watch its map come, then see it, and pick another", a
   expect(screen.getByTestId("map")).toBeOnTheScreen();
 
   await user.press(screen.getByRole("button", { name: "Rhode Island" }));
+  expect(screen.getByText("Yours is from November 27, 2026.")).toBeOnTheScreen();
+  await user.press(screen.getByText("Rhode Island")); // its own place: back to its map, and nothing downloads
+  expect(store.get().mapDownload).toBeUndefined();
+  expect(screen.getByTestId("map")).toBeOnTheScreen();
+  await user.press(screen.getByRole("button", { name: "Rhode Island" }));
+  await user.press(screen.getByText("Get the newest map of Rhode Island"));
+  expect(store.get().mapDownload).toMatchObject({ place: "us/rhode-island", status: "queued" });
+  await act(() => store.stopMap());
+
+  await user.press(screen.getByRole("button", { name: "Rhode Island" }));
   await user.press(screen.getByText("Alabama"));
   expect(store.get().mapDownload).toMatchObject({ place: "us/alabama" });
   expect(screen.getByText("Alabama: Starting")).toBeOnTheScreen(); // over Rhode Island's map, until Alabama's is here

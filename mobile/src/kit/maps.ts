@@ -390,6 +390,14 @@ function code(e: unknown): string {
   return typeof e === "object" && e !== null && "code" in e ? String((e as { code: unknown }).code) : "";
 }
 
+// The day of the world map a map on the phone was cut from, as people write it
+export function mapDay(file: string): string | undefined {
+  const m = /-(\d{4})(\d{2})(\d{2})\.pmtiles$/.exec(file);
+  if (!m) return undefined;
+  const day = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return day.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
 // The folder maps go in, as a path
 export function mapsPath(): string {
   const maps = new Directory(Paths.document, "maps");

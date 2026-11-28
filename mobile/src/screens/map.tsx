@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Group, Pill, Row } from "@/components/group";
 import { Icon } from "@/components/icon";
-import { mapsPath, mapStyle, WORLD } from "@/kit/maps";
+import { mapDay, mapsPath, mapStyle, WORLD } from "@/kit/maps";
 import { findPlaces, place, type Place } from "@/kit/places";
 import { type Box } from "@/kit/pmtiles";
 import { mapLine } from "@/kit/status";
@@ -27,10 +27,18 @@ export function MapScreen() {
   const [picking, setPicking] = useState(false);
   if (map && !picking)
     return <Shown id={map.place} file={map.file} download={mapDownload} onChange={() => setPicking(true)} />;
-  return <Picker mine={map?.place} download={mapDownload} onDone={map ? () => setPicking(false) : undefined} />;
+  return <Picker mine={map} download={mapDownload} onDone={map ? () => setPicking(false) : undefined} />;
 }
 
-function Picker({ mine, download, onDone }: { mine?: string; download?: MapDownload; onDone?: () => void }) {
+function Picker({
+  mine,
+  download,
+  onDone,
+}: {
+  mine?: { place: string; file: string };
+  download?: MapDownload;
+  onDone?: () => void;
+}) {
   const c = useColors();
   const [typed, setTyped] = useState("");
   const groups = useMemo(() => {
@@ -38,10 +46,12 @@ function Picker({ mine, download, onDone }: { mine?: string; download?: MapDownl
     for (const p of findPlaces(typed)) by.set(p.group, [...(by.get(p.group) ?? []), p]);
     return [...by].map(([name, list]) => ({ name, list }));
   }, [typed]);
+  // The place already on the phone, or on its way, isn't downloaded again by a tap on its name
   const pick = (id: string) => {
-    store.getMap(id);
+    if (id !== mine?.place && id !== download?.place) store.getMap(id);
     onDone?.();
   };
+  const day = mine && mapDay(mine.file);
   return (
     <>
       <Stack.Screen
@@ -72,10 +82,26 @@ function Picker({ mine, download, onDone }: { mine?: string; download?: MapDownl
           download ? (
             <Downloading d={download} />
           ) : (
-            <Text style={[styles.intro, { color: c.mute }]}>
-              Where do you live? Its map has every street, path and building, and the rest of the world in less detail.
-              It works without the internet once it&apos;s on your phone.
-            </Text>
+            <>
+              <Text style={[styles.intro, { color: c.mute }]}>
+                Where do you live? Its map has every street, path and building, and the rest of the world in less
+                detail. It works without the internet once it&apos;s on your phone.
+              </Text>
+              {mine ? (
+                <Group footer={day ? `Yours is from ${day}.` : undefined}>
+                  <Row
+                    testID="map-update"
+                    icon="download"
+                    accent
+                    title={`Get the newest map of ${place(mine.place)?.name ?? mine.place}`}
+                    onPress={() => {
+                      store.getMap(mine.place);
+                      onDone?.();
+                    }}
+                  />
+                </Group>
+              ) : null}
+            </>
           )
         }
         renderItem={({ item }) => (
@@ -85,7 +111,7 @@ function Picker({ mine, download, onDone }: { mine?: string; download?: MapDownl
                 key={p.id}
                 testID={`place-${p.id}`}
                 title={p.name}
-                detail={p.id === download?.place ? "Downloading" : p.id === mine ? "On your phone" : undefined}
+                detail={p.id === download?.place ? "Downloading" : p.id === mine?.place ? "On your phone" : undefined}
                 onPress={() => pick(p.id)}
               />
             ))}
