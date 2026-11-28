@@ -21,10 +21,16 @@ const mockSurvival = book([
 
 let mockAI = "none"; // what the phone's AI can do
 const mockAnswer = jest.fn<(instructions: string, prompt: string) => Promise<string>>();
+const mockDownload = jest.fn<(cellular: boolean) => Promise<void>>();
 
-jest.mock("expo-router", () => ({ router: { push: (to: unknown) => mockPush(to) } }));
+jest.mock("expo-router", () => ({
+  router: { push: (to: unknown) => mockPush(to) },
+  useFocusEffect: (effect: () => () => void) =>
+    jest.requireActual<typeof import("react")>("react").useEffect(effect, [effect]),
+}));
 jest.mock("../../modules/kit-files", () => ({
-  aiState: () => mockAI,
+  aiState: async () => mockAI,
+  aiDownload: (cellular: boolean) => mockDownload(cellular),
   aiAnswer: (instructions: string, prompt: string) => mockAnswer(instructions, prompt),
 }));
 jest.mock("@/kit/downloads", () => ({ libraryPath: () => "/library" }));
@@ -74,7 +80,7 @@ test("on a phone with AI built in, it answers from the passages, citing them", a
   const user = userEvent.setup();
   await render(<Ask />);
   await user.type(screen.getByTestId("ask-question"), "How do I purify water?");
-  await user.press(screen.getByRole("button", { name: "Ask the AI" }));
+  await user.press(await screen.findByRole("button", { name: "Ask the AI" }));
   expect(await screen.findByText("Boil it for 1 minute [1].")).toBeOnTheScreen();
   expect(screen.getByText("Sources from your library")).toBeOnTheScreen();
   expect(screen.getByText("1. Water purification")).toBeOnTheScreen();
@@ -91,4 +97,23 @@ test("on a phone with AI built in, it answers from the passages, citing them", a
   expect(await screen.findByText(/didn't answer this one/)).toBeOnTheScreen();
   expect(screen.getByText("1. Water purification")).toBeOnTheScreen();
   expect(mockAnswer).toHaveBeenCalledTimes(2);
+});
+
+test("on an Android phone that can have Gemini Nano, it comes when the person asks, over Wi-Fi only", async () => {
+  mockAI = "downloadable";
+  mockDownload.mockRejectedValueOnce(Object.assign(new Error("Waiting for Wi-Fi"), { code: "ERR_NOT_ON_WIFI" }));
+  const user = userEvent.setup();
+  await render(<Ask />);
+  expect(await screen.findByText(/Google's Gemini Nano/)).toBeOnTheScreen();
+  await user.press(screen.getByRole("button", { name: "Get the phone's AI" }));
+  expect(mockDownload).toHaveBeenCalledWith(false); // no mobile data unless allowed
+  expect(await screen.findByText(/Connect to Wi-Fi to get the phone's AI/)).toBeOnTheScreen();
+
+  mockDownload.mockImplementationOnce(async () => {
+    mockAI = "ready";
+  });
+  await user.press(await screen.findByRole("button", { name: "Get the phone's AI" }));
+  expect(await screen.findByRole("button", { name: "Ask the AI" })).toBeOnTheScreen();
+  expect(screen.queryByText(/Connect to Wi-Fi/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Get the phone's AI" })).toBeNull();
 });

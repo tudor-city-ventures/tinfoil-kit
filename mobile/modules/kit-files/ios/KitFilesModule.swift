@@ -85,7 +85,7 @@ public class KitFilesModule: Module {
     }
 
     // The AI built into the phone (Apple Intelligence, from iOS 26): whether it can answer now ("off" until the person
-    // turns it on in Settings, "downloading" while its model comes), and its answer
+    // turns it on in Settings, "downloading" while its model comes), and its answer, at the kit page's temperature
     Function("aiState") { () -> String in
       #if canImport(FoundationModels)
       if #available(iOS 26.0, *) {
@@ -104,7 +104,7 @@ public class KitFilesModule: Module {
       #if canImport(FoundationModels)
       if #available(iOS 26.0, *) {
         let session = LanguageModelSession(instructions: instructions)
-        return try await session.respond(to: prompt).content
+        return try await session.respond(to: prompt, options: GenerationOptions(temperature: 0.3)).content
       }
       #endif
       throw Exception(name: "NoAI", description: "This phone has no AI built in")

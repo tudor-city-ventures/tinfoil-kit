@@ -20,7 +20,8 @@ const native = requireOptionalNativeModule<{
   stopSharing(): void;
   sharing(): Sharing;
   newCode(): string;
-  aiState?(): string; // iOS only, for now
+  aiState?(): string | Promise<string>; // a promise on Android
+  aiDownload?(cellular: boolean): Promise<void>; // Android only
   aiAnswer?(instructions: string, prompt: string): Promise<string>;
 }>("KitFiles");
 
@@ -178,13 +179,27 @@ export function newCode(): string {
   return native.newCode();
 }
 
-// The AI built into the phone, where there is one: Apple Intelligence on iPhones from iOS 26. "off" until the person
-// turns it on in Settings, "downloading" while its model comes.
-export type AIState = "ready" | "off" | "downloading" | "none";
+// The AI built into the phone, where there is one: Apple Intelligence on iPhones from iOS 26, Google's Gemini Nano on
+// the Android phones it runs on. "off" until the person turns Apple Intelligence on in Settings, "downloadable" while
+// Gemini Nano waits to be asked for (aiDownload), "downloading" while the model comes.
+export type AIState = "ready" | "off" | "downloadable" | "downloading" | "none";
 
-export function aiState(): AIState {
-  const s = native?.aiState?.();
-  return s === "ready" || s === "off" || s === "downloading" ? s : "none";
+const states = ["ready", "off", "downloadable", "downloading"];
+
+export async function aiState(): Promise<AIState> {
+  try {
+    const s = await native?.aiState?.();
+    return s && states.includes(s) ? (s as AIState) : "none";
+  } catch {
+    return "none";
+  }
+}
+
+// Android: asks for Gemini Nano, which the phone then downloads from Google, over Wi-Fi unless mobile data is allowed
+// (else ERR_NOT_ON_WIFI). Resolves once it's on the phone.
+export function aiDownload(cellular: boolean): Promise<void> {
+  if (!native?.aiDownload) return Promise.reject(new Error("This phone can't get an AI"));
+  return native.aiDownload(cellular);
 }
 
 // Its answer to a prompt, following the instructions

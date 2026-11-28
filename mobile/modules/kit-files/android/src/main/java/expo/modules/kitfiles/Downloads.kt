@@ -25,7 +25,7 @@ class DownloadOptions : Record {
   @Field val at: Double? = null
 }
 
-private class Failure(code: String, message: String) : CodedException(code, message, null)
+internal class Failure(code: String, message: String) : CodedException(code, message, null)
 
 // Downloads while the app is open, written into a file as they come: a whole file, or one part of one. A part is taken
 // only as asked for: a server that ignored the range would be sending the whole file, which for the world map is

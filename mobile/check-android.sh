@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Type-checks the phone app's native Android code (modules/*/android) in about a minute, without an Android build: a
-# few lines below stand in for the Expo types the code uses. It only compiles, and leaves the files in Expo's module
-# and view DSL (KitFilesModule.kt, BookView.kt) to CI's build. Needs a JDK, and Gradle or the app's packages (React
+# few lines below stand in for the Expo types the code uses, and for Google's ML Kit as its reference describes it,
+# which cloud machines can't download. It only compiles, and leaves the files in Expo's module and view DSL
+# (KitFilesModule.kt, BookView.kt) to CI's build. Needs a JDK, and Gradle or the app's packages (React
 # Native's Gradle downloads itself). The first run downloads the Kotlin compiler and, without the Android SDK,
 # Robolectric's copy of Android's classes: up to 300 MB.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 work="${TMPDIR:-/tmp}/tinfoilkit-check-android"
 expo="$work/stubs/expo/modules/kotlin"
-mkdir -p "$expo/exception" "$expo/records"
+mlkit="$work/stubs/com/google/mlkit/genai"
+mkdir -p "$expo/exception" "$expo/records" "$mlkit/common" "$mlkit/prompt"
 
 # Google's copy of Maven Central first: Maven Central itself often answers cloud machines with 429
 repos='maven("https://maven-central.storage-download.googleapis.com/maven2"); mavenCentral()'
@@ -24,7 +26,7 @@ EOF
 cat > "$work/build.gradle.kts" << EOF
 plugins { kotlin("jvm") version "2.2.0" }
 repositories { $repos }
-dependencies { compileOnly($android) }
+dependencies { compileOnly($android); compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2") }
 sourceSets["main"].kotlin.setSrcDirs(listOf("stubs", "$here/modules"))
 sourceSets["main"].kotlin.exclude("**/KitFilesModule.kt", "**/BookView.kt")
 // Android's target, whatever JDK runs this: Java and Kotlin must agree, and this Kotlin can't target the newest JDKs
@@ -56,6 +58,48 @@ cat > "$expo/records/Record.kt" << 'EOF'
 package expo.modules.kotlin.records
 interface Record
 annotation class Field(val key: String = "")
+EOF
+cat > "$mlkit/common/Common.kt" << 'EOF'
+package com.google.mlkit.genai.common
+class GenAiException(message: String?) : Exception(message) {
+  val errorCode: Int = 0
+  annotation class ErrorCode { companion object { const val BUSY = 9 } }
+}
+annotation class FeatureStatus {
+  companion object { const val UNAVAILABLE = 0; const val DOWNLOADABLE = 1; const val DOWNLOADING = 2; const val AVAILABLE = 3 }
+}
+sealed class DownloadStatus {
+  data class DownloadStarted(val bytesToDownload: Long) : DownloadStatus()
+  data class DownloadProgress(val totalBytesDownloaded: Long) : DownloadStatus()
+  object DownloadCompleted : DownloadStatus()
+  data class DownloadFailed(val e: GenAiException) : DownloadStatus()
+}
+EOF
+cat > "$mlkit/prompt/Prompt.kt" << 'EOF'
+package com.google.mlkit.genai.prompt
+import com.google.mlkit.genai.common.DownloadStatus
+import kotlinx.coroutines.flow.Flow
+class TextPart(val text: String)
+class Candidate(val text: String)
+class GenerateContentResponse(val candidates: List<Candidate>)
+class GenerateContentRequest {
+  class Builder(text: TextPart) {
+    var temperature: Float? = null
+    var topK: Int? = null
+    fun build() = GenerateContentRequest()
+  }
+}
+fun generateContentRequest(text: TextPart, init: GenerateContentRequest.Builder.() -> Unit) =
+  GenerateContentRequest.Builder(text).apply(init).build()
+interface GenerativeModel {
+  suspend fun checkStatus(): Int
+  fun download(): Flow<DownloadStatus>
+  suspend fun generateContent(request: GenerateContentRequest): GenerateContentResponse
+  fun close()
+}
+object Generation {
+  fun getClient(): GenerativeModel = throw NotImplementedError()
+}
 EOF
 gradle=gradle
 command -v gradle > /dev/null || gradle="$here/node_modules/@react-native/gradle-plugin/gradlew"

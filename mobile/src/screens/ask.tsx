@@ -1,8 +1,8 @@
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { aiAnswer, aiState } from "../../modules/kit-files";
+import { aiAnswer, aiDownload, aiState, type AIState } from "../../modules/kit-files";
 import { Button } from "@/components/button";
 import { Group, Row } from "@/components/group";
 import { plain, prompt } from "@/kit/answer";
@@ -30,12 +30,49 @@ const since = (started: number) => ((Date.now() - started) / 1000).toFixed(1);
 // and on a phone with AI built in, its answer from them.
 export function Ask() {
   const c = useColors();
-  const { items } = useKit();
-  const [ai] = useState(aiState);
+  const { items, cellular } = useKit();
+  const [ai, setAI] = useState<AIState>("none");
+  const [aiError, setAIError] = useState<string>();
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState<"searching" | "answering">();
   const [found, setFound] = useState<Found>();
   const books = Object.entries(items).filter(([id, it]) => it.status === "ready" && it.file && byId.has(id));
+
+  // What the phone's AI can do: again each time Ask shows, and every few seconds while its model downloads
+  useFocusEffect(
+    useCallback(() => {
+      let on = true;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const check = () =>
+        aiState().then((s) => {
+          if (!on) return;
+          setAI(s);
+          if (s === "downloading") timer = setTimeout(check, 5000);
+        });
+      check();
+      return () => {
+        on = false;
+        clearTimeout(timer);
+      };
+    }, []),
+  );
+
+  // Android: Gemini Nano, from Google
+  function getAI() {
+    setAIError(undefined);
+    setAI("downloading");
+    aiDownload(cellular)
+      .catch((e: { code?: string }) =>
+        setAIError(
+          e.code === "ERR_NOT_ON_WIFI"
+            ? "Connect to Wi-Fi to get the phone's AI, or allow mobile data in Get more."
+            : e.code === "ERR_OFFLINE"
+              ? "Connect to the internet to get the phone's AI."
+              : "The phone's AI didn't download. Try again later.",
+        ),
+      )
+      .finally(() => aiState().then(setAI));
+  }
 
   function answer(f: Found) {
     setBusy("answering");
@@ -94,14 +131,20 @@ export function Ask() {
       <View style={styles.buttons}>
         {ai === "ready" ? <Button title="Ask the AI" onPress={() => run(true)} testID="ask-ai" /> : null}
         <Button title="Search" plain={ai === "ready"} onPress={() => run(false)} testID="ask-search" />
+        {ai === "downloadable" ? <Button title="Get the phone's AI" plain onPress={getAI} testID="ask-get-ai" /> : null}
         <Text style={[styles.hint, { color: c.mute }]}>
           {ai === "ready"
             ? "Search: the best passages from your books in seconds, without the AI. It uses very little power.\n" +
               "Ask the AI: it reads your books and writes an answer, with sources. Slower, and it uses more power than Search."
             : "The best passages from your books in seconds, without the internet. It uses very little power." +
               (ai === "off" ? " Turn on Apple Intelligence in Settings and the AI can answer from them too." : "") +
+              (ai === "downloadable"
+                ? " Get the phone's own AI, Google's Gemini Nano, and it can answer from them too." +
+                  (cellular ? "" : " It downloads on Wi-Fi, unless you allow mobile data in Get more.")
+                : "") +
               (ai === "downloading" ? " The phone's AI can answer from them once it has downloaded." : "")}
         </Text>
+        {aiError ? <Text style={[styles.hint, { color: c.mute }]}>{aiError}</Text> : null}
       </View>
       {busy ? (
         <Group>

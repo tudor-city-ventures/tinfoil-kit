@@ -1,12 +1,14 @@
 package expo.modules.kitfiles
 
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.security.SecureRandom
 
 class KitFilesModule : Module() {
   private val downloads = Downloads { appContext.reactContext }
+  private val ai = AI { appContext.reactContext }
 
   private fun books() = Books.get(appContext.reactContext ?: throw IllegalStateException("The app isn't running"))
 
@@ -67,6 +69,23 @@ class KitFilesModule : Module() {
     Function("newCode") {
       val random = SecureRandom()
       (1..8).joinToString("") { random.nextInt(10).toString() }
+    }
+
+    // The AI built into the phone, where there is one: see AI.kt
+    AsyncFunction("aiState") Coroutine { ->
+      ai.state()
+    }
+
+    AsyncFunction("aiDownload") Coroutine { cellular: Boolean ->
+      ai.download(cellular)
+    }
+
+    AsyncFunction("aiAnswer") Coroutine { instructions: String, prompt: String ->
+      ai.answer(instructions, prompt)
+    }
+
+    OnDestroy {
+      ai.close()
     }
 
     // A view's functions run on the main thread

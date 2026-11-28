@@ -13,3 +13,8 @@ android {
     versionName "1.0.0"
   }
 }
+
+dependencies {
+  // The AI built into the phone (Gemini Nano): see AI.kt. Its betas after this one need a newer Kotlin than Expo's
+  implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
+}
