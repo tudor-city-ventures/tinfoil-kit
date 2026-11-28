@@ -1,65 +1,42 @@
 import { afterEach, beforeEach, expect, jest, test } from "@jest/globals";
 
+import type { BookOptions, BookState } from "../../modules/kit-files";
+
 import { catalog } from "./catalog";
-import { createDownloads, type Phone, type Task } from "./downloads";
+import { createDownloads, type Phone } from "./downloads";
 import { createStore } from "./store";
 
-jest.mock("@kesha-antonov/react-native-background-downloader", () => ({}));
-
-const [a, b] = catalog;
+const [a, b, c] = catalog;
 const SUM = "ab".repeat(32);
+const zim = (id: string) => `${catalog.find((x) => x.id === id)!.editions[0]}_2026-10.zim`;
 
-class FakeTask implements Task {
-  state = "PENDING";
-  bytesDownloaded = 0;
-  bytesTotal = 0;
-  stopped = false;
-  handlers: Record<string, (p: never) => void> = {};
-  constructor(
-    public id: string,
-    public metadata: Record<string, unknown>,
-    public path = "",
-  ) {}
-  progress(h: (p: { bytesDownloaded: number; bytesTotal: number }) => void) {
-    this.handlers.progress = h;
-    return this;
-  }
-  done(h: () => void) {
-    this.handlers.done = h;
-    return this;
-  }
-  error(h: (e: { error: string }) => void) {
-    this.handlers.error = h;
-    return this;
-  }
-  start() {
-    this.state = "DOWNLOADING";
-  }
-  async resume() {}
-  async stop() {
-    this.stopped = true;
-  }
-}
-
+// The phone's downloader and its records: what it has is what books() lists, until stopped or forgotten.
 function fakePhone() {
-  const files = new Map<string, string>(); // path: its SHA-256
-  const tasks: FakeTask[] = [];
   const phone = {
     library: "/docs/library",
     online: true,
     published: true,
     space: 100e9,
-    old: [] as FakeTask[],
-    tasks,
-    files,
-    completed: [] as string[],
-    download: (o: { id: string; path: string; book: string; cellular: boolean }) => {
-      const t = new FakeTask(o.id, { book: o.book, cellular: o.cellular }, o.path);
-      tasks.push(t);
-      return t;
+    failing: undefined as string | undefined, // why start() fails
+    started: [] as BookOptions[],
+    stopped: [] as string[],
+    forgotten: [] as string[],
+    has: new Map<string, BookState>(),
+    files: new Set<string>(),
+    start: async (o: BookOptions) => {
+      if (phone.failing) throw new Error(phone.failing);
+      phone.started.push(o);
+      phone.has.set(o.id, { id: o.id, book: o.book, state: "downloading", cellular: o.cellular, received: 0 });
     },
-    existing: async () => phone.old,
-    complete: (id: string) => void phone.completed.push(id),
+    stop: (id: string) => {
+      phone.stopped.push(id);
+      phone.has.delete(id);
+    },
+    forget: (id: string) => {
+      phone.forgotten.push(id);
+      phone.has.delete(id);
+    },
+    books: async () => [...phone.has.values()],
     find: async (editions: string[]) => {
       if (!phone.online) throw new TypeError("Network request failed");
       const name = editions[0];
@@ -69,18 +46,25 @@ function fakePhone() {
     },
     checksum: async () => SUM,
     free: () => phone.space,
-    exists: (p: string) => files.has(p),
-    sha256: async (p: string) => files.get(p)!,
-    move: async (from: string, to: string) => {
-      files.set(to, files.get(from)!);
-      files.delete(from);
-    },
-    remove: (p: string) => void files.delete(p),
+    exists: (p: string) => phone.files.has(p),
   };
   return phone;
 }
 
+type FakePhone = ReturnType<typeof fakePhone>;
+
 const settle = () => new Promise<void>((r) => setImmediate(() => r()));
+
+// Time passes, long enough for the app to look at the downloads again
+async function later(ms = 1000) {
+  await jest.advanceTimersByTimeAsync(ms);
+  await settle();
+}
+
+// The phone's downloader moves one on
+function set(phone: FakePhone, id: string, to: Partial<BookState>) {
+  phone.has.set(id, { ...phone.has.get(id)!, ...to });
+}
 
 async function setup(state = {}) {
   const store = createStore({ read: async () => JSON.stringify(state), write: async () => {} });
@@ -90,12 +74,6 @@ async function setup(state = {}) {
   return { store, phone, downloads };
 }
 
-// The task finishes: its file lands where it was told to go, with this checksum.
-function finish(phone: ReturnType<typeof fakePhone>, task: FakeTask, sum = SUM) {
-  phone.files.set(task.path, sum);
-  task.handlers.done(undefined as never);
-}
-
 beforeEach(() => {
   jest.useFakeTimers({ doNotFake: ["queueMicrotask", "nextTick", "setImmediate"] });
 });
@@ -103,42 +81,57 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
-test("a book downloads over Wi-Fi only, then is checked and put on the shelf", async () => {
+test("a book downloads over Wi-Fi only, then the phone checks it and puts it on the shelf", async () => {
   const { store, phone, downloads } = await setup();
   await downloads.start();
   store.queue(a.id);
   await settle();
-  const [task] = phone.tasks;
-  expect(task.metadata).toEqual({ book: a.id, cellular: false });
-  expect(task.path).toBe(`/docs/library/incoming/${a.editions[0]}_2026-10.zim`);
-  expect(task.state).toBe("DOWNLOADING");
-  expect(store.get().items[a.id]).toMatchObject({ status: "downloading", total: 5e8, sha256: SUM, task: task.id });
+  const [o] = phone.started;
+  expect(o).toMatchObject({
+    book: a.id,
+    title: a.title,
+    url: `https://k/${a.editions[0]}.zim`,
+    incoming: `/docs/library/incoming/${zim(a.id)}`,
+    path: `/docs/library/${zim(a.id)}`,
+    sha256: SUM,
+    cellular: false,
+  });
+  expect(store.get().items[a.id]).toMatchObject({ status: "downloading", total: 5e8, sha256: SUM, task: o.id });
 
-  task.handlers.progress({ bytesDownloaded: 2e8, bytesTotal: 4.9e8 } as never);
-  expect(store.get().items[a.id]).toMatchObject({ received: 2e8, total: 4.9e8 });
+  set(phone, o.id, { received: 2e8, total: 4.9e8 });
+  await later();
+  expect(store.get().items[a.id]).toMatchObject({ status: "downloading", received: 2e8, total: 4.9e8 });
 
-  finish(phone, task);
-  await settle();
-  const file = `${a.editions[0]}_2026-10.zim`;
-  expect(store.get().items[a.id]).toMatchObject({ status: "ready", received: 4.9e8, file });
-  expect([...phone.files.keys()]).toEqual([`/docs/library/${file}`]);
-  expect(phone.completed).toEqual([task.id]);
+  set(phone, o.id, { state: "downloaded" });
+  await later();
+  expect(store.get().items[a.id]).toMatchObject({ status: "checking", received: 4.9e8 });
+
+  set(phone, o.id, { state: "ready" });
+  await later();
+  expect(store.get().items[a.id]).toMatchObject({ status: "ready", received: 4.9e8, file: zim(a.id), task: undefined });
+  expect(phone.forgotten).toEqual([o.id]);
+  await later();
+  expect(jest.getTimerCount()).toBe(0); // nothing going: it stops looking
 });
 
-test("a damaged download is thrown away and can be tried again", async () => {
+test("a download that failed says why, and can be tried again", async () => {
   const { store, phone, downloads } = await setup();
   await downloads.start();
   store.queue(a.id);
   await settle();
-  finish(phone, phone.tasks[0], "00".repeat(32));
-  await settle();
-  expect(store.get().items[a.id]).toMatchObject({ status: "failed", error: "It came through damaged" });
-  expect(phone.files.size).toBe(0);
+  set(phone, phone.started[0].id, { state: "failed", error: "It came through damaged" });
+  await later();
+  expect(store.get().items[a.id]).toMatchObject({
+    status: "failed",
+    error: "It came through damaged",
+    task: undefined,
+  });
+  expect(phone.forgotten).toEqual([phone.started[0].id]);
 
   store.retry(a.id);
   await settle();
-  expect(phone.tasks).toHaveLength(2);
-  expect(store.get().items[a.id].status).toBe("downloading");
+  expect(phone.started).toHaveLength(2);
+  expect(store.get().items[a.id]).toMatchObject({ status: "downloading", task: phone.started[1].id });
 });
 
 test("a book waits while Kiwix can't be reached, and asks again", async () => {
@@ -151,10 +144,10 @@ test("a book waits while Kiwix can't be reached, and asks again", async () => {
   phone.online = true;
   store.queue(b.id); // other changes don't make it ask again straight away
   await settle();
-  expect(phone.tasks.map((t) => t.metadata.book)).toEqual([b.id]);
+  expect(phone.started.map((o) => o.book)).toEqual([b.id]);
   downloads.wake(); // back in the app, or another network
   await settle();
-  expect(phone.tasks.map((t) => t.metadata.book)).toEqual([b.id, a.id]);
+  expect(phone.started.map((o) => o.book)).toEqual([b.id, a.id]);
 });
 
 test("allowing mobile data starts the downloads again with it, and so does taking it away", async () => {
@@ -163,16 +156,26 @@ test("allowing mobile data starts the downloads again with it, and so does takin
   store.queue(a.id);
   await settle();
   store.setCellular(true);
-  await settle();
-  expect(phone.tasks[0].stopped).toBe(true);
-  expect(phone.tasks[1].metadata).toEqual({ book: a.id, cellular: true });
+  await later();
+  expect(phone.stopped).toEqual([phone.started[0].id]);
+  expect(phone.started[1]).toMatchObject({ book: a.id, cellular: true });
   store.setCellular(false);
-  await settle();
-  expect(phone.tasks[1].stopped).toBe(true);
-  expect(phone.tasks[2].metadata.cellular).toBe(false);
+  await later();
+  expect(phone.stopped).toEqual([phone.started[0].id, phone.started[1].id]);
+  expect(phone.started[2]).toMatchObject({ book: a.id, cellular: false });
 });
 
-test("what Kiwix doesn't publish, or doesn't fit, stops with the reason", async () => {
+test("a removed book's download stops", async () => {
+  const { store, phone, downloads } = await setup();
+  await downloads.start();
+  store.queue(a.id);
+  await settle();
+  store.remove(a.id);
+  await later();
+  expect(phone.stopped).toEqual([phone.started[0].id]);
+});
+
+test("what Kiwix doesn't publish, doesn't fit, or the phone can't start, stops with the reason", async () => {
   const { store, phone, downloads } = await setup();
   await downloads.start();
   phone.published = false;
@@ -184,31 +187,37 @@ test("what Kiwix doesn't publish, or doesn't fit, stops with the reason", async 
   store.queue(b.id);
   await settle();
   expect(store.get().items[b.id]).toMatchObject({ status: "failed", error: "Not enough free space for its 500 MB" });
-  expect(phone.tasks).toHaveLength(0);
+  phone.space = 100e9;
+  phone.failing = "Not a web address";
+  store.queue(c.id);
+  await settle();
+  expect(store.get().items[c.id]).toMatchObject({ status: "failed", error: "Not a web address", task: undefined });
+  expect(phone.started).toHaveLength(0);
 });
 
-test("on the next start: finished downloads are checked, lost ones start again, strays are stopped", async () => {
+test("on the next start: what finished while the app was closed is taken in, lost downloads start again", async () => {
   const item = { received: 1, total: 5e8, sha256: SUM };
   const { store, phone, downloads } = await setup({
     welcomed: true,
     cellular: false,
     items: {
-      [a.id]: { ...item, status: "downloading", file: "a_2026-10.zim", task: "a@1" },
-      [b.id]: { ...item, status: "downloading", file: "b_2026-10.zim", task: "b@1" },
+      [a.id]: { ...item, status: "downloading", file: zim(a.id), task: "a@2" },
+      [b.id]: { ...item, status: "downloading", file: zim(b.id), task: "b@1" },
+      [c.id]: { ...item, status: "checking", file: zim(c.id), task: "c@1" },
     },
   });
-  const done = new FakeTask("a@1", { book: a.id, cellular: false });
-  done.state = "DONE";
-  const stray = new FakeTask("x@1", { book: "gone", cellular: false });
-  stray.state = "DOWNLOADING";
-  phone.old = [done, stray];
-  phone.files.set("/docs/library/incoming/a_2026-10.zim", SUM);
+  const done = { book: a.id, cellular: false };
+  phone.has.set("a@2", { ...done, id: "a@2", state: "ready" });
+  phone.has.set("a@1", { ...done, id: "a@1", state: "failed", error: "Stopped" }); // an earlier try's outcome
+  phone.has.set("x@1", { id: "x@1", book: "gone", state: "downloading", cellular: false });
+  phone.files.add(`/docs/library/${zim(c.id)}`); // filed just before its record was written
 
   await downloads.start();
   await settle();
-  expect(store.get().items[a.id].status).toBe("ready");
-  expect(phone.files.has("/docs/library/a_2026-10.zim")).toBe(true);
-  expect(stray.stopped).toBe(true);
-  expect(phone.tasks.map((t) => t.metadata.book)).toEqual([b.id]); // b's download was lost: it starts over
-  expect(store.get().items[b.id]).toMatchObject({ status: "downloading", task: phone.tasks[0].id });
+  expect(store.get().items[a.id]).toMatchObject({ status: "ready", received: 5e8 });
+  expect(store.get().items[c.id]).toMatchObject({ status: "ready", received: 5e8 });
+  expect(phone.forgotten.sort()).toEqual(["a@1", "a@2"]);
+  expect(phone.stopped).toEqual(["x@1"]);
+  expect(phone.started.map((o) => o.book)).toEqual([b.id]); // b's download was lost: it starts over
+  expect(store.get().items[b.id]).toMatchObject({ status: "downloading", task: phone.started[0].id });
 });

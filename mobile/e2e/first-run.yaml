@@ -22,7 +22,8 @@ appId: com.tinfoilkit.app
 - takeScreenshot: 4-get-more
 # A book opens at its home page, read from its file on the phone
 - tapOn: "Library"
-- tapOn: "Field medicine books"
+# iOS reads the row as one: its icon, title and status
+- tapOn: ".*Field medicine books.*"
 - extendedWaitUntil:
     visible: "When to seek urgent help"
     timeout: 30000

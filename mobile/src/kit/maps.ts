@@ -5,10 +5,17 @@
 // phones' background downloaders ask for the rest of the file from where they stopped: here, the rest of the world.
 // So the app asks for each part itself, a few at a time, over Wi-Fi unless the person allows mobile data, and picks
 // up where it left off when it's next open.
+import { Directory, File, FileMode, Paths } from "expo-file-system";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
+import { addNetworkStateListener } from "expo-network";
+import { AppState, Platform } from "react-native";
+
+import { download, excludeFromBackup, stopDownloads } from "../../modules/kit-files";
+
 import { size } from "@/kit/format";
 import { place } from "@/kit/places";
 import { head, plan } from "@/kit/pmtiles";
-import type { Store } from "@/kit/store";
+import { store as kitStore, type Store } from "@/kit/store";
 
 export const WORLD = 7; // every place on earth up to this zoom: countries, towns, main roads
 export const DETAIL = 15; // the area up to this zoom: every street, path and building, as the kit has it
@@ -352,4 +359,68 @@ export function latest(builds: unknown): string {
 
 function code(e: unknown): string {
   return typeof e === "object" && e !== null && "code" in e ? String((e as { code: unknown }).code) : "";
+}
+
+// The folder maps go in, as a path
+export function mapsPath(): string {
+  const maps = new Directory(Paths.document, "maps");
+  return decodeURI(maps.uri.replace(/^file:\/\//, "")).replace(/\/$/, "");
+}
+
+function phone(): MapPhone {
+  const dir = mapsPath();
+  const file = (path: string) => new File(`file://${path}`);
+  return {
+    dir,
+    async json(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Protomaps said ${res.status}`);
+      return res.json();
+    },
+    download,
+    stop: stopDownloads,
+    list: () =>
+      new Directory(`file://${dir}`)
+        .list()
+        .filter((f) => f instanceof File)
+        .map((f) => f.name),
+    async read(path, at, length) {
+      const handle = file(path).open(FileMode.ReadOnly);
+      try {
+        handle.offset = at;
+        return handle.readBytesSync(length);
+      } finally {
+        handle.close();
+      }
+    },
+    async write(path, bytes) {
+      const f = file(path);
+      f.create({ intermediates: true, overwrite: true });
+      f.writeSync(bytes);
+    },
+    size: (path) => (file(path).exists ? file(path).size : -1),
+    text: (path) => (file(path).exists ? file(path).textSync() : null),
+    save: (path, text) => file(path).writeSync(text),
+    move: (from, to) => file(from).moveSync(file(to), { overwrite: true }),
+    remove(path) {
+      if (file(path).exists) file(path).delete();
+    },
+    free: () => Paths.availableDiskSpace,
+    awake: (on) => void (on ? activateKeepAwakeAsync("map") : deactivateKeepAwake("map")).catch(() => {}),
+  };
+}
+
+let started = false;
+
+// Called once the store has loaded.
+export function startMaps() {
+  if (started || Platform.OS === "web") return;
+  started = true;
+  const p = phone();
+  new Directory(`file://${p.dir}`).create({ intermediates: true, idempotent: true });
+  excludeFromBackup(p.dir);
+  const maps = createMaps(kitStore, p);
+  maps.start();
+  AppState.addEventListener("change", (s) => maps.shown(s === "active"));
+  addNetworkStateListener(() => maps.network());
 }

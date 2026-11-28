@@ -1,21 +1,95 @@
-// The bits of native code Expo lacks: keeping books out of iOS backups, a SHA-256 that reads a megabyte at a time, and
-// the view that shows a book's pages, asking the app for each file they need and reaching nothing else.
+// The bits of native code Expo lacks: book downloads that are checked and filed in the library with the app closed,
+// keeping books out of iOS backups, downloads that take exactly the part of a file asked for, and the view that shows
+// a book's pages, asking the app for each file they need and reaching nothing else.
 import { requireNativeView, requireOptionalNativeModule } from "expo";
-import { File } from "expo-file-system";
 import type { ComponentType, Ref } from "react";
 import type { ViewProps } from "react-native";
 
 const native = requireOptionalNativeModule<{
   excludeFromBackup?(path: string): void; // iOS only: app.json turns Android's backups off
-  sha256(path: string): Promise<string>;
+  download(o: DownloadOptions): Promise<number>;
+  stopDownloads(): void;
+  libraryPath(): string;
+  startBook(o: BookOptions): Promise<void>;
+  stopBook(id: string): void;
+  forgetBook(id: string): void;
+  books(): Promise<NativeBook[]>;
 }>("KitFiles");
+
+export type BookOptions = {
+  id: string; // this download's own id
+  book: string;
+  title: string; // Android shows it while it downloads
+  url: string;
+  incoming: string; // where it lands to be checked
+  path: string; // where it goes once it's checked
+  sha256?: string;
+  cellular: boolean; // false: Wi-Fi only, never a phone's hotspot
+};
+
+export type BookState = {
+  id: string;
+  book: string;
+  state: "downloading" | "downloaded" | "ready" | "failed"; // downloaded: being checked
+  cellular: boolean;
+  received?: number;
+  total?: number;
+  error?: string;
+};
+
+type NativeBook = Omit<BookState, "error"> & { error: string };
+
+// The folder books go in, as a path: on Android, the app's own folder on shared storage, where its downloader writes
+export function libraryPath(): string | undefined {
+  return native?.libraryPath();
+}
+
+// A book, downloaded by the phone (it carries on with the app closed), then checked against its SHA-256 and moved
+// into the library, also with the app closed. Its progress and outcome come from books().
+export function startBook(o: BookOptions): Promise<void> {
+  if (!native) return Promise.reject(new Error("Books download in the phone app"));
+  return native.startBook(o);
+}
+
+// Stops a book's download, or lets go of one that's being checked
+export function stopBook(id: string) {
+  native?.stopBook(id);
+}
+
+// Lets go of a finished download's outcome, once the app has it
+export function forgetBook(id: string) {
+  native?.forgetBook(id);
+}
+
+export async function books(): Promise<BookState[]> {
+  if (!native) return [];
+  return (await native.books()).map(({ error, ...b }) => (error ? { ...b, error } : b));
+}
+
+export type DownloadOptions = {
+  url: string;
+  path: string;
+  cellular: boolean; // false: Wi-Fi only, never a phone's hotspot
+  offset?: number;
+  length?: number;
+  at?: number;
+};
 
 export function excludeFromBackup(path: string) {
   native?.excludeFromBackup?.(path);
 }
 
-export function sha256(path: string): Promise<string> {
-  return native ? native.sha256(path) : new File(`file://${path}`).digest("SHA-256");
+// A file on the internet, or `length` bytes of it from `offset`, into a new file, or at `at` into one that's there
+// already, while the app is open. Resolves with how many bytes came. Its errors' codes: ERR_NOT_ON_WIFI (only mobile
+// data, and it isn't allowed), ERR_OFFLINE, ERR_HTTP_<status>, ERR_NO_RANGE (the server sent other bytes than those
+// asked for, and was stopped), ERR_GONE (the file to go into was deleted), ERR_STOPPED.
+export function download(o: DownloadOptions): Promise<number> {
+  if (!native) return Promise.reject(new Error("Maps download in the phone app"));
+  return native.download(o);
+}
+
+export function stopDownloads() {
+  native?.stopDownloads();
 }
 
 export type Page = { url: string; title: string; back: boolean; forward: boolean; loading: boolean; gone?: boolean };

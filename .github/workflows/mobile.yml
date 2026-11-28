@@ -110,7 +110,6 @@ jobs:
         working-directory: mobile
         env:
           EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
-          EXPO_PUBLIC_DOWNLOAD_LOGS: "1" # the downloader logs what it does, for Show what went wrong
         run: |
           npx expo prebuild --platform android --no-install
           cd android && ./gradlew assembleRelease -PreactNativeArchitectures=x86_64 --no-daemon --console=plain
@@ -129,7 +128,6 @@ jobs:
         working-directory: mobile
         env:
           EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries
-          EXPO_PUBLIC_DOWNLOAD_LOGS: "1"
         run: |
           apk=android/app/build/outputs/apk/release/app-release.apk
           w="$RUNNER_TEMP/js" && mkdir -p "$w/assets"
@@ -210,7 +208,7 @@ jobs:
           echo "== The app's log"
           if command -v xcrun > /dev/null; then
             logs() { xcrun simctl spawn booted log show --last 10m --style compact --info --predicate "$1" | tail -n "$2"; }
-            logs 'process == "TinfoilKit" AND (eventMessage CONTAINS "RNBD" OR eventMessage CONTAINS[c] "exception")' 60
+            logs 'process == "TinfoilKit" AND (subsystem == "com.tinfoilkit.app" OR eventMessage CONTAINS[c] "exception")' 60
             echo "== The app's networking errors"
             logs 'process == "TinfoilKit" AND subsystem == "com.apple.CFNetwork" AND (messageType == error OR messageType == fault)' 30
             echo "== iOS's downloader, on this app and its errors"
@@ -220,7 +218,7 @@ jobs:
           else
             adb shell pm list packages com.tinfoilkit.app || true
             adb logcat -d -b crash | tail -n 60
-            adb logcat -d | grep -E "ReactNativeJS|BackgroundDownload|AndroidRuntime|tinfoilkit" | tail -n 100
+            adb logcat -d | grep -E "ReactNativeJS|KitBooks|DownloadManager|AndroidRuntime|tinfoilkit" | tail -n 100
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -271,7 +269,6 @@ jobs:
         working-directory: mobile
         env:
           EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries # e2e/kiwix.py stands in for Kiwix
-          EXPO_PUBLIC_DOWNLOAD_LOGS: "1" # the downloader logs what it does, for Show what went wrong
         run: |
           npx expo prebuild --platform ios --no-install
           cd ios && pod install
@@ -292,7 +289,6 @@ jobs:
         working-directory: mobile
         env:
           EXPO_PUBLIC_KIWIX_CATALOG: http://localhost:19100/catalog/v2/entries
-          EXPO_PUBLIC_DOWNLOAD_LOGS: "1"
         run: |
           app=ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
           rm -rf "$app/assets"

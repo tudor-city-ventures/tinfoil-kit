@@ -1,9 +1,19 @@
-import CryptoKit
 import ExpoModulesCore
 
 public class KitFilesModule: Module {
+  private let downloads = Downloads()
+
   public func definition() -> ModuleDefinition {
     Name("KitFiles")
+
+    // A file, or part of one, into a file, while the app is open: see Downloads.swift
+    AsyncFunction("download") { (o: DownloadOptions, promise: Promise) in
+      self.downloads.start(o, promise: promise)
+    }
+
+    Function("stopDownloads") {
+      self.downloads.stop()
+    }
 
     // Books stay out of iCloud and computer backups (Apple's rule for downloads that can be downloaded again).
     // On a folder, it covers everything in it.
@@ -14,16 +24,34 @@ public class KitFilesModule: Module {
       try url.setResourceValues(values)
     }
 
-    // A file's SHA-256, a megabyte at a time: each read is let go before the next, so a book of many gigabytes
-    // never piles up in memory.
-    AsyncFunction("sha256") { (path: String) -> String in
-      let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
-      defer { try? handle.close() }
-      var hash = SHA256()
-      while let chunk = try autoreleasepool(invoking: { try handle.read(upToCount: 1 << 20) }), !chunk.isEmpty {
-        hash.update(data: chunk)
-      }
-      return hash.finalize().map { String(format: "%02x", $0) }.joined()
+    // Books download with the app closed, and are checked and filed in the library as they land: see Books.swift
+    OnCreate {
+      Books.shared.reconnect()
+    }
+
+    OnAppBecomesActive {
+      Books.shared.reconnect()
+    }
+
+    Function("libraryPath") { () -> String in
+      let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+      return documents.appendingPathComponent("library", isDirectory: true).path
+    }
+
+    AsyncFunction("startBook") { (o: BookOptions) in
+      try Books.shared.start(o)
+    }
+
+    Function("stopBook") { (id: String) in
+      Books.shared.stop(id)
+    }
+
+    Function("forgetBook") { (id: String) in
+      Books.shared.forget(id)
+    }
+
+    AsyncFunction("books") { (promise: Promise) in
+      Books.shared.list(promise)
     }
 
     View(BookView.self) {

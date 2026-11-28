@@ -1,26 +1,45 @@
 package expo.modules.kitfiles
 
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.io.File
-import java.security.MessageDigest
 
 class KitFilesModule : Module() {
+  private val downloads = Downloads { appContext.reactContext }
+
+  private fun books() = Books.get(appContext.reactContext ?: throw IllegalStateException("The app isn't running"))
+
   override fun definition() = ModuleDefinition {
     Name("KitFiles")
 
-    // A file's SHA-256, a megabyte at a time
-    AsyncFunction("sha256") { path: String ->
-      val digest = MessageDigest.getInstance("SHA-256")
-      File(path).inputStream().use { input ->
-        val buffer = ByteArray(1 shl 20)
-        while (true) {
-          val n = input.read(buffer)
-          if (n < 0) break
-          digest.update(buffer, 0, n)
-        }
-      }
-      digest.digest().joinToString("") { "%02x".format(it) }
+    // A file, or part of one, into a file, while the app is open: see Downloads.kt
+    AsyncFunction("download") { o: DownloadOptions, promise: Promise ->
+      downloads.start(o, promise)
+    }
+
+    Function("stopDownloads") {
+      downloads.stop()
+    }
+
+    // Books download with the app closed, and are checked and filed in the library as they land: see Books.kt
+    Function("libraryPath") {
+      books().library.path
+    }
+
+    AsyncFunction("startBook") { o: BookOptions ->
+      books().start(o)
+    }
+
+    Function("stopBook") { id: String ->
+      books().stop(id)
+    }
+
+    Function("forgetBook") { id: String ->
+      books().forget(id)
+    }
+
+    AsyncFunction("books") {
+      books().list()
     }
 
     // A view's functions run on the main thread

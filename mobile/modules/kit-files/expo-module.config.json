@@ -1,7 +1,8 @@
 {
   "platforms": ["apple", "android"],
   "apple": {
-    "modules": ["KitFilesModule"]
+    "modules": ["KitFilesModule"],
+    "appDelegateSubscribers": ["KitFilesAppDelegate"]
   },
   "android": {
     "modules": ["expo.modules.kitfiles.KitFilesModule"]

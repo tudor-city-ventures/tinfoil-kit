@@ -4,11 +4,15 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
 import { startDownloads } from "@/kit/downloads";
+import { startMaps } from "@/kit/maps";
 import { store, useKit, useLoaded } from "@/kit/store";
 import { useColors } from "@/theme";
 
 SplashScreen.preventAutoHideAsync();
-store.load().then(startDownloads);
+store.load().then(() => {
+  startDownloads();
+  startMaps();
+});
 
 export default function RootLayout() {
   const loaded = useLoaded();
