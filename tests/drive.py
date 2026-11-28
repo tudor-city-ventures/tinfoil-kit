@@ -480,6 +480,7 @@ class Parts:
 
     def __init__(self, prefix, log):
         self.prefix, self.log, self.done, self.returncode = prefix, log, threading.Event(), None
+        self.starts = []  # (part, when it began): a part ends at its last change of screen, not when the next begins
         self.thread = threading.Thread(target=self.film, daemon=True)
         self.thread.start()
 
@@ -490,6 +491,7 @@ class Parts:
         for n in range(100, 1000):
             if self.done.is_set():
                 return
+            self.starts.append((n, time.time()))
             # The phone's screen at half size, a multiple of 16 its encoder takes
             code = self.adb(
                 "shell", "screenrecord", "--size", "576x1280", "--bit-rate", "2000000", f"/sdcard/film-{n}.mp4"
@@ -511,6 +513,7 @@ class Parts:
         listed = subprocess.run(["adb", "shell", "ls", "/sdcard"], capture_output=True, text=True).stdout.split()
         for f in sorted(x for x in listed if re.fullmatch(r"film-\d+\.mp4", x)):
             self.adb("pull", f"/sdcard/{f}", f"{self.prefix}-{f[5:]}")
+        Path(f"{self.prefix}.starts").write_text("".join(f"{n}\t{t:.2f}\n" for n, t in self.starts), encoding="utf-8")
 
     def wait(self, timeout=None):
         self.thread.join(timeout)
@@ -793,9 +796,18 @@ def make_videos(folder):
     folder = Path(folder)
     for steps in sorted(folder.rglob("*.steps")):
         parts = sorted(steps.parent.glob(f"{steps.stem}-[0-9]*.mp4"))
-        if parts:  # an Android phone's, in parts: joined as they were recorded
+        if parts:  # an Android phone's, in parts: joined as they were recorded, each at the time it began
+            timing = steps.with_suffix(".starts")
+            text = timing.read_text(encoding="utf-8") if timing.exists() else ""
+            began = {n: float(t) for n, t in (line.split("\t") for line in text.splitlines() if "\t" in line)}
+            listed = []
+            for p, after in zip(parts, [*parts[1:], None]):
+                n, m = p.stem.rsplit("-", 1)[1], after and after.stem.rsplit("-", 1)[1]
+                listed.append(f"file '{p.name}'\n")
+                if n in began and m in began:
+                    listed.append(f"duration {began[m] - began[n]:.3f}\n")
             joined = steps.with_suffix(".parts")
-            joined.write_text("".join(f"file '{p.name}'\n" for p in parts), encoding="utf-8")
+            joined.write_text("".join(listed), encoding="utf-8")
             subprocess.run(
                 ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-i", joined.name]
                 + ["-c", "copy", f"{steps.stem}.mkv"],
