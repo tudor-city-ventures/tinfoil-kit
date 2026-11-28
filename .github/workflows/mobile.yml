@@ -243,7 +243,7 @@ jobs:
   ios:
     needs: check
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 75 # a full build takes 30 to 40 minutes
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -271,22 +271,27 @@ jobs:
           path: |
             mobile/ios/build/Build/Products/Release-iphonesimulator/TinfoilKit.app
             mobile/ios/build/hermesc
-          key: ios-app-2-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/ios/**', 'mobile/modules/*/expo-module.config.json') }}
+          key: ios-app-3-${{ hashFiles('mobile/package-lock.json', 'mobile/app.json', 'mobile/assets/**', 'mobile/modules/*/ios/**', 'mobile/modules/*/expo-module.config.json') }}
       - run: npm ci --ignore-scripts
         working-directory: mobile
       # Signed to run locally, as Xcode signs for the simulator: that puts the app's entitlements in its program, and
       # iOS's downloader takes background downloads only from an app with them (built unsigned, it refuses the app's
-      # connection). The Hermes compiler the build used is kept with the app, for the next run's new JavaScript.
+      # connection). The Hermes compiler the build used is kept with the app, for the next run's new JavaScript. The
+      # build's own log is too long to read: the job's gets its errors, and where the time went, to make it faster.
       - name: Build the app
         if: steps.app.outputs.cache-hit != 'true'
         working-directory: mobile
         env: *internet
         run: |
-          npx expo prebuild --platform ios --no-install
-          cd ios && pod install
-          xcodebuild -workspace TinfoilKit.xcworkspace -scheme TinfoilKit -configuration Release -sdk iphonesimulator \
+          time npx expo prebuild --platform ios --no-install
+          cd ios && time pod install
+          log="$RUNNER_TEMP/xcodebuild.log"
+          time xcodebuild -workspace TinfoilKit.xcworkspace -scheme TinfoilKit -configuration Release -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
-            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= -quiet build
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= -showBuildTimingSummary build > "$log" 2>&1 ||
+            { grep -E -A 3 '(^| )error: ' "$log" | head -n 200; tail -n 40 "$log"; exit 1; }
+          sed -n '/Build Timing Summary/,$p' "$log"
+          echo "Steps by target:" && grep -o "(in target '[^']*'" "$log" | sort | uniq -c | sort -rn | head -n 25
           codesign --display --entitlements - "build/Build/Products/Release-iphonesimulator/TinfoilKit.app" 2>&1 | tail -n 20
           cp "$(ls Pods/hermes-engine/destroot/bin/hermesc 2> /dev/null || echo ../node_modules/hermes-compiler/hermesc/osx-bin/hermesc)" build/hermesc
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
